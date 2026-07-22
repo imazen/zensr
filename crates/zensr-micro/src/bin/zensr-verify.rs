@@ -146,6 +146,24 @@ fn main() {
         std::process::exit(1);
     }
 
+    // Arbitrary-dim torch goldens: scalar + simd + tiled must all match.
+    for (gh, gw) in [(7usize, 5usize), (1, 9), (17, 18)] {
+        let gi = read_f32(&dir.join(format!("spanf_in_{gh}x{gw}.raw")));
+        let gg = read_f32(&dir.join(format!("spanf_gold_{gh}x{gw}.raw")));
+        let a = spanf_x4(&gi, gh, gw, &w);
+        let b = spanf_x4_simd(&gi, gh, gw, &w);
+        let model_g = zensr_micro::SpanfModel::new(wbuf.clone()).expect("model");
+        let t = zensr_micro::spanf_x4_tiled(&model_g, &gi, gh, gw, 2, 32);
+        let (ma, _) = diff_stats(&a, &gg);
+        let (mb, _) = diff_stats(&b, &gg);
+        let (mt, _) = diff_stats(&t, &gg);
+        println!("golden {gh}x{gw}: scalar={ma:.3e} simd={mb:.3e} tiled={mt:.3e}");
+        if ma > 1e-3 || mb > 1e-3 || mt > 1e-3 {
+            eprintln!("FAIL: arbitrary-dim golden {gh}x{gw} exceeded tolerance");
+            std::process::exit(1);
+        }
+    }
+
     // Tiled path vs golden: tile=48 on a 64x64 input forces a 2x2 grid with
     // interior seams; must match whole-image within fp-association noise.
     let model = zensr_micro::SpanfModel::new(wbuf.clone()).expect("model");

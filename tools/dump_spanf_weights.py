@@ -62,6 +62,17 @@ def main():
     print(f"golden: in {x.shape} -> out {y.shape}, "
           f"range [{y.min():.4f},{y.max():.4f}]")
 
+    # Arbitrary-dim goldens: tiny/odd shapes ground the Rust oracle in torch.
+    for (gh, gw) in [(7, 5), (1, 9), (17, 18)]:
+        ng = 3 * gh * gw
+        gi = (np.arange(ng, dtype=np.int64) % 251).astype("<f4") / 251.0
+        gx = torch.from_numpy(gi.reshape(1, 3, gh, gw).copy())
+        with torch.no_grad():
+            gy = m(gx).numpy().astype("<f4")
+        gi.tofile(os.path.join(OUT, f"spanf_in_{gh}x{gw}.raw"))
+        gy.tofile(os.path.join(OUT, f"spanf_gold_{gh}x{gw}.raw"))
+        print(f"golden {gh}x{gw} -> {gy.shape}")
+
 
 if __name__ == "__main__":
     main()

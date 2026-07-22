@@ -18,6 +18,7 @@ full model/runtime survey). Two crates:
 | TSR / EFDN / NanoSR via tract | 2.0 / 1.1 / 1.25 MP-out/s (128²) |
 | **micro-v4x vs tract, interleaved paired bench (quiet box)** | **128²: 57.6 vs 71.5 ms (1.24× faster); 256²: 233 vs 292 ms (1.25×); 64²: 18.0 vs 16.2 ms (near-parity)** |
 | AVX-512 v4x vs AVX2 v3 (same kernels) | **1.33–1.42× speedup** |
+| **Multithreaded tiling (512²→2048², tile 112-128, exact 16-px halo)** | **15.5 MP-out/s @8 threads · 17.8 @16 · 18.2 @24 (230 ms for a 16.8 MP ×4 output)** |
 | zensr-micro-abi cdylib, scalar-only | 271,432 B (265 KB) |
 | **zensr-micro-abi cdylib, full SIMD dispatch** | **381,816 B (373 KB)** (v4x AVX-512 + v3 AVX2 + mandatory scalar fallback; `tier_v4` feature off by default; `incant!` always links scalar) |
 | correctness vs PyTorch golden (every tier v3/v4/v4x) | max_abs 8.6e-6 (PASS) |
@@ -75,13 +76,31 @@ the interleaved paired shootout (benchmarks/shootout_2026-07-22.txt, load ~4.4, 
 
 AVX-512 (v4x, f32x16) vs AVX2 (v3, f32x8) on identical kernel source: **1.33–1.42×**.
 
+## Multithreaded tiling (landed 2026-07-22)
+
+`SpanfModel` (packed once, `Sync`) + per-thread `Scratch` + `spanf_x4_tiled(model, input,
+h, w, threads, tile /*0=auto(128)*/)`. Exact 16-px halo (= receptive field: 16 chained 3x3
+convs); tiled output matches whole-image at the identical 6.557e-6 vs golden; seam test
+covers non-multiple dims at 1+3 threads. std::thread::scope + atomic tile counter + mutex
+paste — zero new deps. Sweep (512² in → 2048² out, quiet box, min):
+
+| tile | grid | t=1 | t=4 | t=8 | t=16 | t=24 |
+|---|---|---|---|---|---|---|
+| 112 | 5×5 | 2.63 MP/s | 9.44 | 15.50 | 17.75 | **18.21** |
+| 128 | 4×4 | **3.01** | **9.87** | 15.05 | 17.37 | 16.56 |
+| 224 | 3×3 | 2.98 | 7.86 | 9.10 (granularity-starved) | 9.41 | 8.95 |
+
+Small tiles win on cache (per-thread scratch: 26 MB @160-ext vs 66 MB @256-ext) AND
+granularity. Practical: a 1 MP image → 16 MP ×4 output in ~230-240 ms on this 7950X
+(vs ~3.7 s single-thread untiled). Note: tract could be externally tiled the same way —
+the engine-level single-thread comparison (micro 1.25× faster) is the apples-to-apples one.
+
 ## Remaining headroom (queued)
 
-1. Hoist Packed::build + buffer allocs into a reusable context (fixes the 64² gap; tiles
-   in a real pipeline are exactly this size).
-2. Fuse SiLU/gate into conv stores; pixelshuffle straight from the conv2 tile.
-3. Plane-stride padding (+16 floats) to break L1-set aliasing at power-of-2 sizes.
-4. Tile-parallel multithread scaling; cargo-bloat diet toward sub-300 KB full-SIMD.
+1. Fuse SiLU/gate into conv stores; pixelshuffle straight from the conv2 tile.
+2. Plane-stride padding (+16 floats) to break L1-set aliasing at power-of-2 sizes.
+3. cargo-bloat diet toward sub-300 KB full-SIMD; single-tier builds for known fleets.
+4. Row-band tiling (halo only left/right) for lower halo tax on wide images.
 5. If int8 compute is ever wanted: QAT via MAI recipe, or switch arch to ECBSR/ETDS class.
 
 Status honestly stated: correctness (all tiers), size menu, f16 path, and the tract

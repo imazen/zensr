@@ -531,6 +531,53 @@ mod tests {
     }
 
     #[test]
+    fn arbitrary_dims_simd_vs_scalar() {
+        // Adversarial shapes: below/at/above the f32x8 (W=8) and f32x16 (W=16)
+        // vector thresholds, 1-px strips, primes, non-squares.
+        let wbuf = lcg(TOTAL_FLOATS, 777, 0.12);
+        let w = SpanfWeights::parse(&wbuf).unwrap();
+        for &(h, wd) in &[
+            (1usize, 1usize), (1, 9), (2, 3), (3, 17), (5, 18), (8, 19),
+            (17, 2), (7, 33), (13, 13), (61, 47), (16, 16), (18, 18),
+        ] {
+            let input = lcg(3 * h * wd, (h * 131 + wd) as u32, 1.0);
+            let a = spanf_x4(&input, h, wd, &w);
+            let b = spanf_x4_simd(&input, h, wd, &w);
+            assert_close_finite(&b, &a, 5e-4, &format!("dims {h}x{wd}"));
+        }
+    }
+
+    #[test]
+    fn tiled_arbitrary_dims_and_edges() {
+        let wbuf = lcg(TOTAL_FLOATS, 555, 0.12);
+        let model = SpanfModel::new(wbuf.clone()).unwrap();
+        let w = SpanfWeights::parse(&wbuf).unwrap();
+        // (h, w, tile): clamped edge tiles down to 1-px cores (65 % 32 = 1),
+        // tile larger than the image, tiny images.
+        for &(h, wd, tile) in &[
+            (65usize, 33usize, 32usize), // 1-px core column+row at the edges
+            (33, 65, 32),
+            (40, 40, 64),                // single tile > image
+            (5, 90, 32),                 // short strip, many tiles
+            (90, 5, 32),                 // narrow strip
+            (17, 17, 32),                // tiny single tile
+            (1, 90, 32),                 // 1-row image split across tiles
+        ] {
+            let input = lcg(3 * h * wd, (h * 977 + wd) as u32, 1.0);
+            let whole = spanf_x4_simd(&input, h, wd, &w);
+            for threads in [1usize, 3] {
+                let tiled = spanf_x4_tiled(&model, &input, h, wd, threads, tile);
+                assert_close_finite(
+                    &tiled,
+                    &whole,
+                    1e-4,
+                    &format!("tiled {h}x{wd} tile{tile} t{threads}"),
+                );
+            }
+        }
+    }
+
+    #[test]
     fn tiled_matches_whole_image() {
         let wbuf = lcg(TOTAL_FLOATS, 12345, 0.12);
         let model = SpanfModel::new(wbuf.clone()).unwrap();
