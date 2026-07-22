@@ -8,61 +8,6 @@
 use crate::{SpanfWeights, CAT_CH, FC, NEAR_CH, S2};
 use archmage::prelude::*;
 
-/// Repack a [cout][cin][3][3] conv weight into quad-major iteration order:
-/// per output-channel-quad q, per (ic, ky): 12 floats [ob0 t0,t1,t2, ob1 t0,..].
-/// The hot loop then reads one contiguous 12-float chunk per (ic, ky).
-fn pack_conv3x3(wts: &[f32], cin: usize, cout: usize) -> Vec<f32> {
-    let mut out = Vec::with_capacity(cout * cin * 9);
-    for q in 0..cout / 4 {
-        for ic in 0..cin {
-            for ky in 0..3 {
-                for ob in 0..4 {
-                    let base = ((q * 4 + ob) * cin + ic) * 9 + ky * 3;
-                    out.extend_from_slice(&wts[base..base + 3]);
-                }
-            }
-        }
-    }
-    out
-}
-
-/// Repack a [cout][cin] 1x1 conv weight into quad-major [wi][4] order.
-fn pack_conv1x1(wts: &[f32], cin_total: usize, cout: usize) -> Vec<f32> {
-    let mut out = Vec::with_capacity(cout * cin_total);
-    for q in 0..cout / 4 {
-        for wi in 0..cin_total {
-            for ob in 0..4 {
-                out.push(wts[(q * 4 + ob) * cin_total + wi]);
-            }
-        }
-    }
-    out
-}
-
-/// Per-inference packed weights (built once per call; ~150K floats, trivial).
-struct Packed {
-    blocks: [[Vec<f32>; 3]; 5],
-    conv_cat: Vec<f32>,
-    conv2: Vec<f32>,
-}
-
-impl Packed {
-    fn build(w: &SpanfWeights) -> Self {
-        let blocks = core::array::from_fn(|bi| {
-            let cin0 = if bi == 0 { 3 } else { FC };
-            core::array::from_fn(|ci| {
-                let cin = if ci == 0 { cin0 } else { FC };
-                pack_conv3x3(w.blocks[bi][ci].0, cin, FC)
-            })
-        });
-        Packed {
-            blocks,
-            conv_cat: pack_conv1x1(w.conv_cat_w, CAT_CH, FC),
-            conv2: pack_conv3x3(w.conv2_w, FC, NEAR_CH),
-        }
-    }
-}
-
 macro_rules! define_kernels {
     ($modname:ident, $vec:ident, $bnd:ident, $w:expr) => {
         pub(crate) mod $modname {
@@ -421,7 +366,7 @@ macro_rules! define_kernels {
                 }
             }
 
-            /// Whole SPANF forward into `out` ([3, 4h, 4w]).
+            /// Whole SPANF forward into `out` ([3, 4h, 4w]) using caller scratch.
             #[inline(always)]
             pub(crate) fn forward<T: Backend>(
                 token: T,
@@ -429,49 +374,51 @@ macro_rules! define_kernels {
                 h: usize,
                 wd: usize,
                 w: &SpanfWeights,
+                pk: &crate::SpanfModel,
+                sc: &mut crate::Scratch,
                 out: &mut [f32],
             ) {
                 let plane = h * wd;
-                let mut near = vec![0.0f32; NEAR_CH * plane];
-                conv_near(token, input, w.conv_near, &mut near, h, wd);
-                crate::nan_debug("near", &near);
+                debug_assert!(sc.h == h && sc.w == wd, "scratch shape mismatch");
+                conv_near(token, input, w.conv_near, &mut sc.near, h, wd);
+                crate::nan_debug("near", &sc.near);
 
-                let packed = crate::simd::Packed::build(w);
-                let pb: [[(&[f32], &[f32]); 3]; 5] = core::array::from_fn(|bi| {
-                    core::array::from_fn(|ci| {
-                        (packed.blocks[bi][ci].as_slice(), w.blocks[bi][ci].1)
-                    })
-                });
-                let mut b1 = vec![0.0f32; FC * plane];
-                let mut tmp = vec![0.0f32; FC * plane];
-                spab(token, input, &pb[0], 3, &mut b1, &mut tmp, h, wd);
-                crate::nan_debug("b1", &b1);
+                spab(
+                    token, input,
+                    &[(&pk.packed_blocks[0][0], w.blocks[0][0].1),
+                      (&pk.packed_blocks[0][1], w.blocks[0][1].1),
+                      (&pk.packed_blocks[0][2], w.blocks[0][2].1)],
+                    3, &mut sc.b1, &mut sc.tmp, h, wd,
+                );
+                crate::nan_debug("b1", &sc.b1);
 
-                let mut b_out = vec![0.0f32; FC * plane];
-                b_out.copy_from_slice(&b1);
-                let mut cur = vec![0.0f32; FC * plane];
+                sc.b_out[..FC * plane].copy_from_slice(&sc.b1[..FC * plane]);
                 for bi in 1..5 {
-                    spab(token, &b_out, &pb[bi], FC, &mut cur, &mut tmp, h, wd);
-                    core::mem::swap(&mut b_out, &mut cur);
-                    crate::nan_debug("block", &b_out);
+                    spab(
+                        token, &sc.b_out,
+                        &[(&pk.packed_blocks[bi][0], w.blocks[bi][0].1),
+                          (&pk.packed_blocks[bi][1], w.blocks[bi][1].1),
+                          (&pk.packed_blocks[bi][2], w.blocks[bi][2].1)],
+                        FC, &mut sc.cur, &mut sc.tmp, h, wd,
+                    );
+                    core::mem::swap(&mut sc.b_out, &mut sc.cur);
+                    crate::nan_debug("block", &sc.b_out);
                 }
 
-                let mut catd = vec![0.0f32; FC * plane];
                 conv1x1_multi(
                     token,
-                    &[(&near[..], NEAR_CH), (&b_out[..], FC), (&b1[..], FC)],
-                    &packed.conv_cat,
+                    &[(&sc.near[..], NEAR_CH), (&sc.b_out[..], FC), (&sc.b1[..], FC)],
+                    &pk.packed_cat,
                     w.conv_cat_b,
-                    &mut catd,
+                    &mut sc.catd,
                     FC,
                     CAT_CH,
                     plane,
                 );
-                crate::nan_debug("catd", &catd);
-                let mut pre = vec![0.0f32; NEAR_CH * plane];
-                conv3x3(token, &catd, FC, &packed.conv2, w.conv2_b, &mut pre, NEAR_CH, h, wd);
-                crate::nan_debug("pre", &pre);
-                crate::pixel_shuffle4_pub(&pre, out, h, wd);
+                crate::nan_debug("catd", &sc.catd);
+                conv3x3(token, &sc.catd, FC, &pk.packed_conv2, w.conv2_b, &mut sc.pre, NEAR_CH, h, wd);
+                crate::nan_debug("pre", &sc.pre);
+                crate::pixel_shuffle4_pub(&sc.pre, out, h, wd);
             }
         }
     };
@@ -480,46 +427,6 @@ macro_rules! define_kernels {
 define_kernels!(k8, f32x8, F32x8Convert, 8);
 #[cfg(feature = "avx512")]
 define_kernels!(k16, f32x16, F32x16Convert, 16);
-
-// f32x8 family: v3 = AVX2+FMA native 256-bit; neon/wasm128 polyfill 2x128;
-// scalar polyfills lane-wise. (v4/v4x are AVX-512 tiers — handled below on f32x16.)
-#[magetypes(v3, neon, wasm128, scalar)]
-fn spanf_forward_impl(
-    token: Token,
-    input: &[f32],
-    h: usize,
-    wd: usize,
-    w: &SpanfWeights,
-    out: &mut [f32],
-) {
-    k8::forward(token, input, h, wd, w, out);
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-fn spanf_forward_impl_v4(
-    token: X64V4Token,
-    input: &[f32],
-    h: usize,
-    wd: usize,
-    w: &SpanfWeights,
-    out: &mut [f32],
-) {
-    k16::forward(token, input, h, wd, w, out);
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn spanf_forward_impl_v4x(
-    token: X64V4xToken,
-    input: &[f32],
-    h: usize,
-    wd: usize,
-    w: &SpanfWeights,
-    out: &mut [f32],
-) {
-    k16::forward(token, input, h, wd, w, out);
-}
 
 // --- kernel-level dispatch shims for parity tests -------------------------
 
@@ -552,7 +459,7 @@ fn conv3x3_only_impl(
     h: usize,
     wd: usize,
 ) {
-    let packed = pack_conv3x3(wts, cin, cout);
+    let packed = crate::pack_conv3x3(wts, cin, cout);
     k8::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
 }
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
@@ -569,10 +476,10 @@ fn conv3x3_only_impl_v4x(
     h: usize,
     wd: usize,
 ) {
-    let packed = pack_conv3x3(wts, cin, cout);
+    let packed = crate::pack_conv3x3(wts, cin, cout);
     k16::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
 }
-/// conv3x3 through full dispatch (test/bisect entry).
+/// conv3x3 through full dispatch (test/bisect entry; takes RAW layout weights).
 #[allow(clippy::too_many_arguments)]
 pub fn conv3x3_dispatch(
     inp: &[f32],
@@ -590,16 +497,93 @@ pub fn conv3x3_dispatch(
     );
 }
 
-/// SIMD SPANF x4 forward with runtime dispatch (AVX-512x → AVX-512 → AVX2 →
-/// NEON → WASM128 → scalar-polyfill).
+// f32x8 family: v3 = AVX2+FMA native 256-bit; neon/wasm128 polyfill 2x128;
+// scalar polyfills lane-wise. (v4/v4x are AVX-512 tiers — below on f32x16.)
+#[magetypes(v3, neon, wasm128, scalar)]
+fn spanf_forward_impl(
+    token: Token,
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+    pk: &crate::SpanfModel,
+    sc: &mut crate::Scratch,
+    out: &mut [f32],
+) {
+    k8::forward(token, input, h, wd, w, pk, sc, out);
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn spanf_forward_impl_v4(
+    token: X64V4Token,
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+    pk: &crate::SpanfModel,
+    sc: &mut crate::Scratch,
+    out: &mut [f32],
+) {
+    k16::forward(token, input, h, wd, w, pk, sc, out);
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn spanf_forward_impl_v4x(
+    token: X64V4xToken,
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+    pk: &crate::SpanfModel,
+    sc: &mut crate::Scratch,
+    out: &mut [f32],
+) {
+    k16::forward(token, input, h, wd, w, pk, sc, out);
+}
+
+/// Dispatching whole-forward on caller-provided model + scratch (tiling entry).
+pub(crate) fn forward_dispatch(
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    model: &crate::SpanfModel,
+    sc: &mut crate::Scratch,
+    out: &mut [f32],
+) {
+    let w = model.weights();
+    incant!(
+        spanf_forward_impl(input, h, wd, &w, model, sc, out),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+    );
+}
+
+/// SIMD SPANF x4 forward with runtime dispatch. Convenience path: builds a
+/// transient model+scratch per call (use `SpanfModel` + `spanf_x4_tiled` or
+/// `forward_dispatch` for repeated/tiled inference).
 pub fn spanf_x4_simd(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32> {
     let plane = h * wd;
     assert_eq!(input.len(), 3 * plane);
+    // Rebuild the raw buffer from the borrowed views to construct the model.
+    let mut raw = Vec::with_capacity(crate::TOTAL_FLOATS);
+    raw.extend_from_slice(w.conv_near);
+    for b in &w.blocks {
+        for (cw, cb) in b {
+            raw.extend_from_slice(cw);
+            raw.extend_from_slice(cb);
+        }
+    }
+    raw.extend_from_slice(w.conv_cat_w);
+    raw.extend_from_slice(w.conv_cat_b);
+    raw.extend_from_slice(w.conv2_w);
+    raw.extend_from_slice(w.conv2_b);
+    let model = crate::SpanfModel::new(raw).expect("weights validated");
+    let mut sc = crate::Scratch::new(h, wd);
     let mut out = vec![0.0f32; 3 * plane * 16];
-    incant!(
-        spanf_forward_impl(input, h, wd, w, &mut out),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
-    );
+    forward_dispatch(input, h, wd, &model, &mut sc, &mut out);
     out
 }
 
@@ -608,8 +592,9 @@ pub fn spanf_x4_simd(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Ve
 pub fn spanf_x4_simd_force_v4x(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
     use archmage::prelude::*;
     let token = X64V4xToken::summon()?;
-    let mut out = vec![0.0f32; 3 * h * wd * 16];
-    spanf_forward_impl_v4x(token, input, h, wd, w, &mut out);
+    let (model, mut sc, mut out) = force_setup(w, h, wd);
+    let wv = model.weights();
+    spanf_forward_impl_v4x(token, input, h, wd, &wv, &model, &mut sc, &mut out);
     Some(out)
 }
 
@@ -617,17 +602,39 @@ pub fn spanf_x4_simd_force_v4x(input: &[f32], h: usize, wd: usize, w: &SpanfWeig
 pub fn spanf_x4_simd_force_v4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
     use archmage::prelude::*;
     let token = X64V4Token::summon()?;
-    let mut out = vec![0.0f32; 3 * h * wd * 16];
-    spanf_forward_impl_v4(token, input, h, wd, w, &mut out);
+    let (model, mut sc, mut out) = force_setup(w, h, wd);
+    let wv = model.weights();
+    spanf_forward_impl_v4(token, input, h, wd, &wv, &model, &mut sc, &mut out);
     Some(out)
 }
 
 #[cfg(target_arch = "x86_64")]
 pub fn spanf_x4_simd_force_v3(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
-    let mut out = vec![0.0f32; 3 * h * wd * 16];
+    let (model, mut sc, mut out) = force_setup(w, h, wd);
+    let wv = model.weights();
     incant!(
-        spanf_forward_impl(input, h, wd, w, &mut out),
+        spanf_forward_impl(input, h, wd, &wv, &model, &mut sc, &mut out),
         [v3, scalar]
     );
     Some(out)
+}
+
+#[cfg(target_arch = "x86_64")]
+fn force_setup(w: &SpanfWeights, h: usize, wd: usize) -> (crate::SpanfModel, crate::Scratch, Vec<f32>) {
+    let mut raw = Vec::with_capacity(crate::TOTAL_FLOATS);
+    raw.extend_from_slice(w.conv_near);
+    for b in &w.blocks {
+        for (cw, cb) in b {
+            raw.extend_from_slice(cw);
+            raw.extend_from_slice(cb);
+        }
+    }
+    raw.extend_from_slice(w.conv_cat_w);
+    raw.extend_from_slice(w.conv_cat_b);
+    raw.extend_from_slice(w.conv2_w);
+    raw.extend_from_slice(w.conv2_b);
+    let model = crate::SpanfModel::new(raw).expect("weights validated");
+    let sc = crate::Scratch::new(h, wd);
+    let out = vec![0.0f32; 3 * h * wd * 16];
+    (model, sc, out)
 }

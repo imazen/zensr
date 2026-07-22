@@ -33,6 +33,7 @@ fn main() -> TractResult<()> {
     println!("# interleaved rounds={rounds}; load {}", std::fs::read_to_string("/proc/loadavg").unwrap_or_default().trim());
 
     for (h, wd) in [(64usize, 64usize), (128, 128), (256, 256)] {
+        if rounds == 0 { break; }
         let onnx = dir.join(format!("SPANF_x4_{h}x{wd}.onnx"));
         let plan = tract_onnx::onnx()
             .model_for_path(&onnx)?
@@ -85,6 +86,33 @@ fn main() -> TractResult<()> {
                 "\tmicro-v3(AVX2) min={vmin:.2} med={vmed:.2} ({:.3} MP/s)\tv4x-vs-v3 speedup={:.2}x",
                 mp / (vmin / 1e3),
                 vmin / stats_min_helper(&[mmin])
+            );
+        }
+    }
+    // Multithreaded tiled scaling: 512^2 input -> 2048^2 out.
+    let (h, wd) = (512usize, 512usize);
+    let input: Vec<f32> = (0..3 * h * wd).map(|i| (i % 251) as f32 / 251.0).collect();
+    let model = zensr_micro::SpanfModel::new(read_f32(&dir.join("spanf_weights.raw")))
+        .expect("model");
+    let mp = (h * wd * 16) as f64 / 1e6;
+    println!("# tiled scaling {h}x{wd} -> {}x{}; grid = ceil(512/tile)^2 tiles", 4 * h, 4 * wd);
+    for tile in [112usize, 128, 160, 224] {
+        let grid = wd.div_ceil(tile);
+        for threads in [1usize, 4, 8, 16, 24] {
+            let mut ts = Vec::new();
+            let reps = if threads >= 8 { 5 } else { 3 };
+            for _ in 0..reps {
+                let t = Instant::now();
+                std::hint::black_box(zensr_micro::spanf_x4_tiled(
+                    &model, &input, h, wd, threads, tile,
+                ));
+                ts.push(t.elapsed().as_secs_f64() * 1e3);
+            }
+            let (mn, _md) = stats(ts);
+            println!(
+                "tile={tile} ({grid}x{grid}={} tiles)	threads={threads}	min={mn:.1}ms	{:.2} MP-out/s",
+                grid * grid,
+                mp / (mn / 1e3)
             );
         }
     }

@@ -7,7 +7,9 @@
 #![forbid(unsafe_code)]
 
 pub mod simd;
+pub mod tiled;
 pub use simd::spanf_x4_simd;
+pub use tiled::{spanf_x4_tiled, HALO};
 
 pub const FC: usize = 32; // feature channels
 pub const S2: usize = 16; // upscale^2
@@ -171,6 +173,100 @@ pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
         return Err("int8 file size mismatch".into());
     }
     Ok(out)
+}
+
+
+/// Repack a [cout][cin][3][3] conv weight into quad-major iteration order:
+/// per output-channel-quad q, per (ic, ky): 12 floats [ob0 t0,t1,t2, ob1 t0,..].
+pub(crate) fn pack_conv3x3(wts: &[f32], cin: usize, cout: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(cout * cin * 9);
+    for q in 0..cout / 4 {
+        for ic in 0..cin {
+            for ky in 0..3 {
+                for ob in 0..4 {
+                    let base = ((q * 4 + ob) * cin + ic) * 9 + ky * 3;
+                    out.extend_from_slice(&wts[base..base + 3]);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Repack a [cout][cin] 1x1 conv weight into quad-major [wi][4] order.
+pub(crate) fn pack_conv1x1(wts: &[f32], cin_total: usize, cout: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(cout * cin_total);
+    for q in 0..cout / 4 {
+        for wi in 0..cin_total {
+            for ob in 0..4 {
+                out.push(wts[(q * 4 + ob) * cin_total + wi]);
+            }
+        }
+    }
+    out
+}
+
+/// Owned, pre-packed model: build once, share across threads (`Sync`).
+pub struct SpanfModel {
+    raw: Vec<f32>,
+    pub(crate) packed_blocks: [[Vec<f32>; 3]; 5],
+    pub(crate) packed_cat: Vec<f32>,
+    pub(crate) packed_conv2: Vec<f32>,
+}
+
+impl SpanfModel {
+    pub fn new(raw: Vec<f32>) -> Result<Self, String> {
+        let w = SpanfWeights::parse(&raw)?;
+        let packed_blocks = core::array::from_fn(|bi| {
+            let cin0 = if bi == 0 { 3 } else { FC };
+            core::array::from_fn(|ci| {
+                let cin = if ci == 0 { cin0 } else { FC };
+                pack_conv3x3(w.blocks[bi][ci].0, cin, FC)
+            })
+        });
+        let packed_cat = pack_conv1x1(w.conv_cat_w, CAT_CH, FC);
+        let packed_conv2 = pack_conv3x3(w.conv2_w, FC, NEAR_CH);
+        drop(w);
+        Ok(SpanfModel { raw, packed_blocks, packed_cat, packed_conv2 })
+    }
+
+    pub fn from_f16_bytes(bytes: &[u8]) -> Result<Self, String> {
+        Self::new(decode_f16_weights(bytes)?)
+    }
+
+    pub(crate) fn weights(&self) -> SpanfWeights<'_> {
+        SpanfWeights::parse(&self.raw).expect("validated at construction")
+    }
+}
+
+/// Per-thread work buffers for one (h, w) tile shape.
+pub struct Scratch {
+    pub(crate) h: usize,
+    pub(crate) w: usize,
+    pub(crate) near: Vec<f32>,
+    pub(crate) b1: Vec<f32>,
+    pub(crate) tmp: Vec<f32>,
+    pub(crate) b_out: Vec<f32>,
+    pub(crate) cur: Vec<f32>,
+    pub(crate) catd: Vec<f32>,
+    pub(crate) pre: Vec<f32>,
+}
+
+impl Scratch {
+    pub fn new(h: usize, w: usize) -> Self {
+        let plane = h * w;
+        Scratch {
+            h,
+            w,
+            near: vec![0.0; NEAR_CH * plane],
+            b1: vec![0.0; FC * plane],
+            tmp: vec![0.0; FC * plane],
+            b_out: vec![0.0; FC * plane],
+            cur: vec![0.0; FC * plane],
+            catd: vec![0.0; FC * plane],
+            pre: vec![0.0; NEAR_CH * plane],
+        }
+    }
 }
 
 #[inline]
@@ -403,6 +499,20 @@ mod tests {
         let mut got = vec![0.0f32; cout * h * wd];
         simd::conv3x3_dispatch(&inp, cin, &wts, &bias, &mut got, cout, h, wd);
         assert_close_finite(&got, &want, 1e-4, "conv3x3");
+    }
+
+    #[test]
+    fn tiled_matches_whole_image() {
+        let wbuf = lcg(TOTAL_FLOATS, 12345, 0.12);
+        let model = SpanfModel::new(wbuf.clone()).unwrap();
+        let w = SpanfWeights::parse(&wbuf).unwrap();
+        let (h, wd) = (75usize, 90usize); // non-multiples: edge tiles + interior seams
+        let input = lcg(3 * h * wd, 4242, 1.0);
+        let whole = spanf_x4_simd(&input, h, wd, &w);
+        for threads in [1usize, 3] {
+            let tiled = spanf_x4_tiled(&model, &input, h, wd, threads, 40);
+            assert_close_finite(&tiled, &whole, 1e-4, &format!("tiled t{threads} vs whole"));
+        }
     }
 
     #[test]

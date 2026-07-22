@@ -84,8 +84,8 @@ AVX-512 (v4x, f32x16) vs AVX2 (v3, f32x8) on identical kernel source: **1.33–1
 4. Tile-parallel multithread scaling; cargo-bloat diet toward sub-300 KB full-SIMD.
 5. If int8 compute is ever wanted: QAT via MAI recipe, or switch arch to ECBSR/ETDS class.
 
-Status honestly stated: correctness (all tiers) + size menu + f16 path are proven; SIMD
-speed vs tract is UNMEASURED (load noise); nothing is product-wired (no zenpipe/imageflow
-integration, no zencodec surface). Weight licensing: NTIRE2025_ESR repo is MIT but per-team
-weight terms are unaffirmed — fine for experiments, diligence (or retrain on our corpora)
-before shipping.
+Status honestly stated: correctness (all tiers), size menu, f16 path, and the tract
+comparison are all measured; 64² still trails tract by 11% (per-call weight packing —
+fix queued); nothing is product-wired (no zenpipe/imageflow integration, no zencodec
+surface). Weight licensing: NTIRE2025_ESR repo is MIT but per-team weight terms are
+unaffirmed — fine for experiments, diligence (or retrain on our corpora) before shipping.

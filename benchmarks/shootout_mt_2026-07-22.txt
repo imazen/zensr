@@ -1,0 +1,36 @@
+# interleaved rounds=10; load 3.21 3.12 5.35 3/1575 2206552
+64x64	tract min=16.23 med=16.46 (4.038 MP/s)	micro-v4x min=18.04 med=18.66 (3.633 MP/s)	ratio(min) micro/tract=1.11x
+	micro-v3(AVX2) min=24.06 med=24.52 (2.724 MP/s)	v4x-vs-v3 speedup=1.33x
+128x128	tract min=68.40 med=72.85 (3.833 MP/s)	micro-v4x min=58.05 med=62.67 (4.516 MP/s)	ratio(min) micro/tract=0.85x
+	micro-v3(AVX2) min=81.26 med=88.06 (3.226 MP/s)	v4x-vs-v3 speedup=1.40x
+256x256	tract min=297.91 med=307.44 (3.520 MP/s)	micro-v4x min=237.94 med=250.72 (4.407 MP/s)	ratio(min) micro/tract=0.80x
+	micro-v3(AVX2) min=337.66 med=358.07 (3.105 MP/s)	v4x-vs-v3 speedup=1.42x
+# tiled scaling 512x512 -> 2048x2048 (tile 224 + 16 halo)
+threads=1	min=1323.0ms med=1323.6ms	3.17 MP-out/s	speedup-vs-t1 printed after t1
+threads=2	min=789.3ms med=813.6ms	5.31 MP-out/s	speedup-vs-t1 printed after t1
+threads=4	min=519.4ms med=567.9ms	8.07 MP-out/s	speedup-vs-t1 printed after t1
+threads=8	min=430.3ms med=475.6ms	9.75 MP-out/s	speedup-vs-t1 printed after t1
+threads=12	min=451.6ms med=457.4ms	9.29 MP-out/s	speedup-vs-t1 printed after t1
+threads=16	min=436.7ms med=467.0ms	9.61 MP-out/s	speedup-vs-t1 printed after t1
+# interleaved rounds=0; load 4.93 3.86 5.18 2/1575 2212706
+# tiled scaling 512x512 -> 2048x2048; grid = ceil(512/tile)^2 tiles
+tile=112 (5x5=25 tiles)	threads=1	min=1597.0ms	2.63 MP-out/s
+tile=112 (5x5=25 tiles)	threads=4	min=444.1ms	9.44 MP-out/s
+tile=112 (5x5=25 tiles)	threads=8	min=270.7ms	15.50 MP-out/s
+tile=112 (5x5=25 tiles)	threads=16	min=236.3ms	17.75 MP-out/s
+tile=112 (5x5=25 tiles)	threads=24	min=230.3ms	18.21 MP-out/s
+tile=128 (4x4=16 tiles)	threads=1	min=1392.7ms	3.01 MP-out/s
+tile=128 (4x4=16 tiles)	threads=4	min=424.8ms	9.87 MP-out/s
+tile=128 (4x4=16 tiles)	threads=8	min=278.8ms	15.05 MP-out/s
+tile=128 (4x4=16 tiles)	threads=16	min=241.4ms	17.37 MP-out/s
+tile=128 (4x4=16 tiles)	threads=24	min=253.4ms	16.56 MP-out/s
+tile=160 (4x4=16 tiles)	threads=1	min=1460.2ms	2.87 MP-out/s
+tile=160 (4x4=16 tiles)	threads=4	min=483.9ms	8.67 MP-out/s
+tile=160 (4x4=16 tiles)	threads=8	min=379.8ms	11.04 MP-out/s
+tile=160 (4x4=16 tiles)	threads=16	min=307.6ms	13.64 MP-out/s
+tile=160 (4x4=16 tiles)	threads=24	min=310.3ms	13.52 MP-out/s
+tile=224 (3x3=9 tiles)	threads=1	min=1405.9ms	2.98 MP-out/s
+tile=224 (3x3=9 tiles)	threads=4	min=533.9ms	7.86 MP-out/s
+tile=224 (3x3=9 tiles)	threads=8	min=460.7ms	9.10 MP-out/s
+tile=224 (3x3=9 tiles)	threads=16	min=445.7ms	9.41 MP-out/s
+tile=224 (3x3=9 tiles)	threads=24	min=468.4ms	8.95 MP-out/s

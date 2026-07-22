@@ -146,6 +146,17 @@ fn main() {
         std::process::exit(1);
     }
 
+    // Tiled path vs golden: tile=48 on a 64x64 input forces a 2x2 grid with
+    // interior seams; must match whole-image within fp-association noise.
+    let model = zensr_micro::SpanfModel::new(wbuf.clone()).expect("model");
+    let tiled = zensr_micro::spanf_x4_tiled(&model, &input, 64, 64, 4, 48);
+    let (mxt, _) = diff_stats(&tiled, &gold);
+    println!("tiled (2x2 grid, 4 threads) vs golden: max_abs={mxt:.3e}");
+    if mxt > 1e-3 {
+        eprintln!("FAIL: tiled path exceeds tolerance");
+        std::process::exit(1);
+    }
+
     let i8b = std::fs::read(dir.join("spanf_weights_int8pc.raw")).expect("int8 weights");
     let wi8buf = zensr_micro::decode_int8pc_weights(&i8b).expect("int8 decode");
     let wi8 = SpanfWeights::parse(&wi8buf).unwrap();
