@@ -31,9 +31,18 @@ Models must compile to the zensr-micro op vocabulary — this is a feature, not 
 - channel concat; nearest-upsample residual*
 - (*) = small planned additions, Phase 0
 
-Budgets: fast tier ≤ ~0.20 M params (SPAN-class, ~4.5 MP-out/s/core today), quality tier
-≤ ~1.3 M params (Compact-class, ~16× fast-tier compute). Weights ship f16 (proven transparent,
-75–76 dB). Runtime perf discipline: **retime after every kernel-adjacent commit** (26x-incident
+**Three product tiers** (all within the op vocabulary; targets are single-thread on the
+7950X-class reference box, MT scales ~4-6× via tiling):
+
+| tier | params | compute (per MP-out, ×4-equiv) | speed target (1T) | role |
+|---|---|---|---|---|
+| **realtime** | ≤ 0.05 M | ~2–5 GFLOP (≈2–4× Lanczos cost) | ≥ 15 MP-out/s | previews, video stills, on-the-fly serving; ×2-first |
+| **fast** | ≤ 0.20 M | ~9–12 GFLOP | ≥ 3.5 MP-out/s | default imageflow upscale (SPAN-class) |
+| **quality** | ≤ 1.3 M | ~150 GFLOP | ≥ 0.25 MP-out/s | opt-in max quality (Compact-class) |
+
+Weights ship f16 (proven transparent, 75–76 dB). Scale priority is **×2 first, then ×4, ×1, ×3**
+— web traffic is dominated by ≤2× enlargement (thumbnail→retina); challenge culture over-indexes
+on ×4. Runtime perf discipline: **retime after every kernel-adjacent commit** (26x-incident
 lesson; see README post-mortem) — keep `#[arcane]`-adjacent bodies under the MIR inline cap.
 
 ## Degradation model (the science core)
@@ -72,6 +81,16 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
 - **S6 1× repair mode:** same pipeline, scale=1 (deblock/dering only) as an imageflow filter.
 - **S7 Quant-table features:** beyond q-banding, do cheap table-derived scalars (per-band quant
   energies) as broadcast input channels help at band boundaries?
+- **S8 Realtime frontier:** at the ≤0.05 M budget, which shape wins on degraded inputs:
+  (a) RVSR/RT4KSR-class reparam plain-conv stacks; (b) ZenoSR-class NTIRE param-champ
+  distillates; (c) a process-at-low-res shape (learned downscale → convs at ½ res → larger
+  PixelShuffle) — the Bicubic++ *pattern*, independently reimplemented and retrained (their
+  code is CC-NC; the architectural idea is not copyrightable — zero code reuse, own weights).
+  → locks the realtime tier arch.
+- **S9 Distillation ladder:** quality→fast→realtime teacher-student (feature + output
+  distillation, standard ESR-meta recipe). Hypothesis: distillation closes ≥30 % of the
+  realtime↔fast quality gap for free at inference. → becomes the default training topology
+  if confirmed.
 
 Discipline: every experiment lands in `benchmarks/` with commit + config + n; conclusions that
 inform shipped constants follow the workspace sweep/calibration rules (dense axes, held-out
@@ -123,7 +142,57 @@ Reports committed to `benchmarks/` with commit hashes.
   single-thread.
 - G3 (P4 quality tier): beats realesr-general-x4v3 on turbo+mozjpeg test sets at ≤ its compute,
   on zensim AND ssim2 medians, no p10 collapse.
+- G2rt (P4 realtime tier): ≥ 15 MP-out/s single-thread; beats Lanczos on degraded inputs by
+  ≥ 0.7 dB PSNR-equiv and ≥ 4 ssim2 median at q∈{50,70} on ≥ 6/8 subcorpora; ≤ 4× Lanczos cost.
 - G4: 4:2:0 chroma: measurable win from S5 or documented falsification.
+- G5 (P5.5): at least one top-3 sub-track placement (runtime/params/overall) in a public
+  challenge with shipped-identical models, or a documented near-miss analysis feeding P6.
+
+## Path to SOTA — definition, evidence, and the drive
+
+**The claim we are driving to** (falsifiable, scoped, honest): *"State of the art in CPU-budget
+super-resolution of real-encoder (libjpeg-turbo/mozjpeg) compressed web images: at each of
+three compute budgets, the best published quality on a public, reproducible benchmark — and
+competitive results in the corresponding public challenges."* We do NOT claim global SR SOTA
+(HAT/diffusion territory); we define and then dominate the niche that matches real web serving.
+
+**Evidence pillars (all three required before the word "SOTA" appears in any README):**
+1. **A public benchmark we release** — `webjpeg-sr-bench`: frozen public subcorpus (imazen-26 is
+   PD/licensed — publishable), pinned encoder versions + degradation spec, the eval harness, and
+   baseline numbers for every runnable competitor. A niche SOTA claim is only meaningful if
+   others can run the bench and disagree; releasing it is what makes the claim load-bearing.
+2. **The scoreboard, all green at matched compute** — competitors to beat at each tier on the
+   bench (medians AND p10, zensim + ssim2 + butteraugli + PSNR):
+   realtime: Lanczos/CatmullRom, RT4KSR, RVSR, bicubic++-pattern reimpl;
+   fast: SPAN/SPANF (bicubic-trained), ECBSR/ETDS retrained, ArtCNN-class community compacts;
+   quality: realesr-general-x4v3 + -wdn blend, animevideov3, best CC-BY community Compact/SPAN
+   dejpeg models on OpenModelDB (re-scored per-model licenses permitting).
+   The scoreboard lives in `benchmarks/SOTA-SCOREBOARD.md`, regenerated by the eval harness,
+   each cell carrying commit + date. SOTA = every cell green at ≤ matched compute.
+3. **External validation** — enter the public challenges with the shipping engine+models:
+   NTIRE Efficient SR (CVPR, submissions ~Jan–Mar) and the real-world/real-time tracks
+   (AIS/AIM RTSR; Mobile Real-World SR). Goal: top-3 in at least one sub-track (runtime or
+   params or overall) with the *same* models we ship, plus the engine story (400 KB Rust DLL)
+   in the factsheet. Challenge results are the third-party stamp no self-run bench provides.
+
+**Compute budget (order-of-magnitude, revisited per phase):** pilots ≈ 50–100 GPU-h (local
+RTX 5070, $0); S1–S4+S8–S9 matrix ≈ 20–30 runs × 8–24 GPU-h ≈ 300–600 GPU-h (vast.ai 4090-class
+via zenfleet, ≈ $150–400); production + distillation ladder ≈ 200–300 GPU-h (≈ $100–200).
+Total to first SOTA claim: **well under $1k of rented GPU** plus CPU fleet time for data
+generation. This is deliberately cheap — sub-0.2 M models train in hours; the moat is the
+degradation exactness + conditioning + engine, not brute compute.
+
+**Drive mechanics (how this reaches the end instead of parking):**
+- Every phase has a Definition-of-Done gate below; a phase without its gate met does not yield
+  to the next except by a written kill/pivot note in the appendix.
+- Every experiment run lands in `benchmarks/` same-day with commit + config; conclusions edit
+  PLAN.md in the same change (workspace DOCS discipline).
+- The scoreboard is regenerated at every P≥3 milestone; regressions block.
+- Kill criteria are pre-declared per science question (see S1–S9 falsification clauses) — a
+  falsified branch is recorded and never blocks the critical path (which is: data → q-banded
+  fast tier → realtime distillate → scoreboard → bench release → challenge entry).
+- Standing cadence once P2 lands: no idle GPU-week — there is always a queued experiment from
+  the S-list, and always a scoreboard delta to publish.
 
 ## Phases
 
@@ -136,12 +205,17 @@ Reports committed to `benchmarks/` with commit hashes.
   vs published numbers); first degradation fine-tune pilot on local GPU; export+golden loop
   proven end-to-end.
 - **P3 — Science:** S1–S4 (+S7) on fleet GPUs; decisions locked, falsifications recorded.
-- **P4 — Production models:** fast tier (q-banded per S2 outcome) + quality tier; ×1/×2/×4;
-  f16 ship files + goldens; full eval reports. Gates G2, G3.
-- **P5 — Product wiring:** imageflow/zenpipe integration (decode-metadata → band pick →
-  tiled upscale), size diet toward sub-300 KB, docs; publish decision (user-gated).
+- **P4 — Production models:** realtime (S8 winner + S9 distillation) + fast (q-banded per S2)
+  + quality tiers; ×2 first, then ×4/×1/×3; f16 ship files + goldens; full eval reports;
+  first complete `SOTA-SCOREBOARD.md`. Gates G2rt, G2, G3.
+- **P5 — Product wiring + bench release:** imageflow/zenpipe integration (decode-metadata →
+  band pick → tiled upscale), size diet toward sub-300 KB; **publish `webjpeg-sr-bench`**
+  (spec + harness + frozen subcorpus + all baseline numbers) — user-gated like any publish.
+- **P5.5 — Challenge entries:** NTIRE ESR + real-world/real-time track submissions with
+  shipping models (calendar-driven; prep starts when P4 models exist). Gate G5.
 - **P6 — Frontier (ongoing):** S5 native-plane models, PLKSR-Rep-class large-kernel port,
-  fusion-retry via per-tier `#[rite]` exp helpers, QAT-int8 if ever needed.
+  fusion-retry via per-tier `#[rite]` exp helpers, QAT-int8 if ever needed; scoreboard defense
+  as competitors move.
 
 ## Standing engineering rules for this repo
 
