@@ -16,6 +16,8 @@ full model/runtime survey). Two crates:
 |---|---|
 | SPANF x4 via tract 0.23.4 | 3.27 MP-out/s (128², 80 ms) · 3.33 (256², 315 ms) |
 | TSR / EFDN / NanoSR via tract | 2.0 / 1.1 / 1.25 MP-out/s (128²) |
+| **micro-v4x vs tract, interleaved paired bench (quiet box)** | **128²: 57.6 vs 71.5 ms (1.24× faster); 256²: 233 vs 292 ms (1.25×); 64²: 18.0 vs 16.2 ms (near-parity)** |
+| AVX-512 v4x vs AVX2 v3 (same kernels) | **1.33–1.42× speedup** |
 | zensr-micro-abi cdylib, scalar-only | 271,432 B (265 KB) |
 | **zensr-micro-abi cdylib, full SIMD dispatch** | **381,816 B (373 KB)** (v4x AVX-512 + v3 AVX2 + mandatory scalar fallback; `tier_v4` feature off by default; `incant!` always links scalar) |
 | correctness vs PyTorch golden (every tier v3/v4/v4x) | max_abs 8.6e-6 (PASS) |
@@ -59,20 +61,27 @@ just verify      # golden-gate zensr-micro + timing
 just size        # build + report micro-abi cdylib size
 ```
 
-## Next steps (QUIET-BOX perf pass — blocked on machine contention 2026-07-22 night)
+## Perf status (2026-07-22, RESOLVED on quiet box)
 
-The box ran at load 23-38 all evening (backup rsync + fleet jobexec + 2 other sessions);
-128² timings came out "slower" than 256² — incoherent, so per benchmarking discipline NO
-speed conclusions were drawn for the SIMD kernels. Three kernel structures are committed
-(scratch-row, register-acc, packed+register-acc — all golden-clean); on a quiet box:
+The decisive fix was the **overlapped final vector tile**: scalar edge columns had covered
+25% of width at 64² (each doing the full cin×ky reduction). With edges reduced to 2 columns,
+the interleaved paired shootout (benchmarks/shootout_2026-07-22.txt, load ~4.4, min-of-14):
 
-1. zenbench shootout: micro (3 structures × v3/v4x) vs tract vs scalar, sizes 64-512,
-   α+β·pixels fit. cargo-bloat attribution of the 373 KB.
-2. **Plane-stride padding**: at 128² the 64 KB power-of-2 plane stride maps all 112 conv1x1
-   input streams to the same L1 sets — pad plane stride by +16 floats to break aliasing.
-3. Fuse SiLU/gate into conv stores; skip materializing `pre` (pixelshuffle straight from the
-   conv2 tile); tile-parallel scaling across cores.
-4. Single-tier builds (e.g. v4x-only for known fleets) to push full-SIMD below 300 KB.
+| size | tract 0.23.4 | micro-v4x | ratio |
+|---|---|---|---|
+| 64²→256² | 16.2 ms (4.04 MP/s) | 18.0 ms (3.64) | 1.11× slower (per-call Packed::build) |
+| 128²→512² | 71.5 ms (3.67 MP/s) | **57.6 ms (4.55)** | **1.24× faster** |
+| 256²→1024² | 291.9 ms (3.59 MP/s) | **233.4 ms (4.49)** | **1.25× faster** |
+
+AVX-512 (v4x, f32x16) vs AVX2 (v3, f32x8) on identical kernel source: **1.33–1.42×**.
+
+## Remaining headroom (queued)
+
+1. Hoist Packed::build + buffer allocs into a reusable context (fixes the 64² gap; tiles
+   in a real pipeline are exactly this size).
+2. Fuse SiLU/gate into conv stores; pixelshuffle straight from the conv2 tile.
+3. Plane-stride padding (+16 floats) to break L1-set aliasing at power-of-2 sizes.
+4. Tile-parallel multithread scaling; cargo-bloat diet toward sub-300 KB full-SIMD.
 5. If int8 compute is ever wanted: QAT via MAI recipe, or switch arch to ECBSR/ETDS class.
 
 Status honestly stated: correctness (all tiers) + size menu + f16 path are proven; SIMD
