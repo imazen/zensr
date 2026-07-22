@@ -243,6 +243,9 @@ impl SpanfModel {
 pub struct Scratch {
     pub(crate) h: usize,
     pub(crate) w: usize,
+    /// channel stride (identity for this probe)
+    pub(crate) cs: usize,
+    pub(crate) inp3: Vec<f32>,
     pub(crate) near: Vec<f32>,
     pub(crate) b1: Vec<f32>,
     pub(crate) tmp: Vec<f32>,
@@ -255,16 +258,23 @@ pub struct Scratch {
 impl Scratch {
     pub fn new(h: usize, w: usize) -> Self {
         let plane = h * w;
+        // Channel stride. NOTE 2026-07-22: +16 padding at 4KiB-multiple planes
+        // was MEASURED 2x SLOWER at 128^2/256^2 (137 vs 68 ms) — the L1-set
+        // aliasing hypothesis is falsified for this access pattern. Identity
+        // stride; the cs plumbing stays (tiling/layout flexibility).
+        let cs = plane;
         Scratch {
             h,
             w,
-            near: vec![0.0; NEAR_CH * plane],
-            b1: vec![0.0; FC * plane],
-            tmp: vec![0.0; FC * plane],
-            b_out: vec![0.0; FC * plane],
-            cur: vec![0.0; FC * plane],
-            catd: vec![0.0; FC * plane],
-            pre: vec![0.0; NEAR_CH * plane],
+            cs,
+            inp3: vec![0.0; 3 * cs],
+            near: vec![0.0; NEAR_CH * cs],
+            b1: vec![0.0; FC * cs],
+            tmp: vec![0.0; FC * cs],
+            b_out: vec![0.0; FC * cs],
+            cur: vec![0.0; FC * cs],
+            catd: vec![0.0; FC * cs],
+            pre: vec![0.0; NEAR_CH * cs],
         }
     }
 }
@@ -397,6 +407,25 @@ fn spab(inp: &[f32], out: &mut [f32], tmp: &mut [f32], convs: &[(&[f32], &[f32])
 
 pub(crate) fn pixel_shuffle4_pub(inp: &[f32], out: &mut [f32], h: usize, wd: usize) {
     pixel_shuffle4(inp, out, h, wd)
+}
+
+pub(crate) fn pixel_shuffle4_strided(inp: &[f32], cstride: usize, out: &mut [f32], h: usize, wd: usize) {
+    let plane = h * wd;
+    let (oh, ow) = (h * 4, wd * 4);
+    for c in 0..3 {
+        for ry in 0..4 {
+            for rx in 0..4 {
+                let ip = &inp[(c * S2 + ry * 4 + rx) * cstride..][..plane];
+                for y in 0..h {
+                    let obase = c * oh * ow + (y * 4 + ry) * ow + rx;
+                    let irow = &ip[y * wd..(y + 1) * wd];
+                    for x in 0..wd {
+                        out[obase + x * 4] = irow[x];
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Stage-level non-finite reporting, active only with the `nan-debug` feature.

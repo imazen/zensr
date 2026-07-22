@@ -31,9 +31,9 @@ macro_rules! define_kernels {
                 wd: usize,
                 oy: usize,
                 oc0: usize,
+                cs: usize,
             ) {
                 const W: usize = $w;
-                let plane = h * wd;
                 // Valid vertical taps for this output row (zero padding).
                 let ky_lo = if oy == 0 { 1usize } else { 0 };
                 let ky_hi = if oy + 1 == h { 1usize } else { 2 };
@@ -43,7 +43,7 @@ macro_rules! define_kernels {
                 let mut rowtab: [&[f32]; 96] = [&[]; 96];
                 for ic in 0..cin {
                     for ky in ky_lo..=ky_hi {
-                        rowtab[ic * 3 + ky] = &inp[ic * plane + (oy + ky - 1) * wd..][..wd];
+                        rowtab[ic * 3 + ky] = &inp[ic * cs + (oy + ky - 1) * wd..][..wd];
                     }
                 }
                 let q = oc0 / 4;
@@ -74,7 +74,7 @@ macro_rules! define_kernels {
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
-                            [(oc0 + ob) * plane + oy * wd + x..(oc0 + ob) * plane + oy * wd + x + W])
+                            [(oc0 + ob) * cs + oy * wd + x..(oc0 + ob) * cs + oy * wd + x + W])
                             .try_into()
                             .unwrap();
                         acc[ob].store(dst);
@@ -108,7 +108,7 @@ macro_rules! define_kernels {
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
-                            [(oc0 + ob) * plane + oy * wd + xl..(oc0 + ob) * plane + oy * wd + xl + W])
+                            [(oc0 + ob) * cs + oy * wd + xl..(oc0 + ob) * cs + oy * wd + xl + W])
                             .try_into()
                             .unwrap();
                         acc[ob].store(dst);
@@ -132,7 +132,7 @@ macro_rules! define_kernels {
                                 }
                             }
                         }
-                        out[(oc0 + ob) * plane + oy * wd + xx] = s;
+                        out[(oc0 + ob) * cs + oy * wd + xx] = s;
                     }
                 }
             }
@@ -147,12 +147,12 @@ macro_rules! define_kernels {
                 out: &mut [f32],
                 h: usize,
                 wd: usize,
+                cs: usize,
             ) {
                 const W: usize = $w;
-                let plane = h * wd;
                 for oc in 0..NEAR_CH {
                     let ic = oc / S2;
-                    let ip = &inp[ic * plane..(ic + 1) * plane];
+                    let ip = &inp[ic * cs..ic * cs + h * wd];
                     let w9 = &wts[oc * 9..oc * 9 + 9];
                     for oy in 0..h {
                         let ky_lo = if oy == 0 { 1usize } else { 0 };
@@ -170,7 +170,7 @@ macro_rules! define_kernels {
                                 acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
-                                [oc * plane + oy * wd + x..oc * plane + oy * wd + x + W])
+                                [oc * cs + oy * wd + x..oc * cs + oy * wd + x + W])
                                 .try_into()
                                 .unwrap();
                             acc.store(dst);
@@ -189,7 +189,7 @@ macro_rules! define_kernels {
                                 acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
-                                [oc * plane + oy * wd + xl..oc * plane + oy * wd + xl + W])
+                                [oc * cs + oy * wd + xl..oc * cs + oy * wd + xl + W])
                                 .try_into()
                                 .unwrap();
                             acc.store(dst);
@@ -207,7 +207,7 @@ macro_rules! define_kernels {
                                     s += w9[ky * 3 + 2] * irow[xx + 1];
                                 }
                             }
-                            out[oc * plane + oy * wd + xx] = s;
+                            out[oc * cs + oy * wd + xx] = s;
                         }
                     }
                 }
@@ -226,6 +226,7 @@ macro_rules! define_kernels {
                 cout: usize,
                 cin_total: usize,
                 plane: usize,
+                cs: usize,
             ) {
                 const W: usize = $w;
                 let n = plane / W * W;
@@ -242,7 +243,7 @@ macro_rules! define_kernels {
                         let mut wi = 0usize;
                         for (src, cin) in srcs.iter() {
                             for ic in 0..*cin {
-                                let v = V::<T>::from_slice(token, &src[ic * plane + x..]);
+                                let v = V::<T>::from_slice(token, &src[ic * cs + x..]);
                                 let o = qbase + wi * 4;
                                 let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
                                 for ob in 0..4 {
@@ -253,7 +254,7 @@ macro_rules! define_kernels {
                         }
                         for ob in 0..4 {
                             let dst: &mut [f32; W] = (&mut out
-                                [(oc0 + ob) * plane + x..(oc0 + ob) * plane + x + W])
+                                [(oc0 + ob) * cs + x..(oc0 + ob) * cs + x + W])
                                 .try_into()
                                 .unwrap();
                             acc[ob].store(dst);
@@ -266,11 +267,11 @@ macro_rules! define_kernels {
                             let mut wi = 0usize;
                             for (src, cin) in srcs.iter() {
                                 for ic in 0..*cin {
-                                    s += wts[qbase + wi * 4 + ob] * src[ic * plane + xx];
+                                    s += wts[qbase + wi * 4 + ob] * src[ic * cs + xx];
                                     wi += 1;
                                 }
                             }
-                            out[(oc0 + ob) * plane + xx] = s;
+                            out[(oc0 + ob) * cs + xx] = s;
                         }
                     }
                 }
@@ -334,10 +335,11 @@ macro_rules! define_kernels {
                 cout: usize,
                 h: usize,
                 wd: usize,
+                cs: usize,
             ) {
                 for oc0 in (0..cout).step_by(4) {
                     for oy in 0..h {
-                        conv3x3_row4(token, inp, cin, wts, bias, out, h, wd, oy, oc0);
+                        conv3x3_row4(token, inp, cin, wts, bias, out, h, wd, oy, oc0, cs);
                     }
                 }
             }
@@ -353,16 +355,17 @@ macro_rules! define_kernels {
                 tmp: &mut [f32],
                 h: usize,
                 wd: usize,
+                cs: usize,
             ) {
-                let plane = h * wd;
-                conv3x3(token, inp, cin, convs[0].0, convs[0].1, out, FC, h, wd);
-                silu(token, &mut out[..FC * plane]);
-                conv3x3(token, &out[..FC * plane], FC, convs[1].0, convs[1].1, tmp, FC, h, wd);
-                silu(token, &mut tmp[..FC * plane]);
-                conv3x3(token, &tmp[..FC * plane], FC, convs[2].0, convs[2].1, out, FC, h, wd);
+                let span = (FC - 1) * cs + h * wd;
+                conv3x3(token, inp, cin, convs[0].0, convs[0].1, out, FC, h, wd, cs);
+                silu(token, &mut out[..span]);
+                conv3x3(token, &out[..span], FC, convs[1].0, convs[1].1, tmp, FC, h, wd, cs);
+                silu(token, &mut tmp[..span]);
+                conv3x3(token, &tmp[..span], FC, convs[2].0, convs[2].1, out, FC, h, wd, cs);
                 if cin == FC {
-                    tmp[..FC * plane].copy_from_slice(&out[..FC * plane]);
-                    gate(token, &tmp[..FC * plane], &inp[..FC * plane], &mut out[..FC * plane]);
+                    tmp[..span].copy_from_slice(&out[..span]);
+                    gate(token, &tmp[..span], &inp[..span], &mut out[..span]);
                 }
             }
 
@@ -379,27 +382,34 @@ macro_rules! define_kernels {
                 out: &mut [f32],
             ) {
                 let plane = h * wd;
+                let cs = sc.cs;
                 debug_assert!(sc.h == h && sc.w == wd, "scratch shape mismatch");
-                conv_near(token, input, w.conv_near, &mut sc.near, h, wd);
+                for c in 0..3 {
+                    sc.inp3[c * cs..c * cs + plane].copy_from_slice(&input[c * plane..(c + 1) * plane]);
+                }
+                let span3 = 2 * cs + plane;
+                let span_fc = (FC - 1) * cs + plane;
+                let span_near = (NEAR_CH - 1) * cs + plane;
+                conv_near(token, &sc.inp3[..span3], w.conv_near, &mut sc.near, h, wd, cs);
                 crate::nan_debug("near", &sc.near);
 
                 spab(
-                    token, input,
+                    token, &sc.inp3[..span3],
                     &[(&pk.packed_blocks[0][0], w.blocks[0][0].1),
                       (&pk.packed_blocks[0][1], w.blocks[0][1].1),
                       (&pk.packed_blocks[0][2], w.blocks[0][2].1)],
-                    3, &mut sc.b1, &mut sc.tmp, h, wd,
+                    3, &mut sc.b1, &mut sc.tmp, h, wd, cs,
                 );
                 crate::nan_debug("b1", &sc.b1);
 
-                sc.b_out[..FC * plane].copy_from_slice(&sc.b1[..FC * plane]);
+                sc.b_out[..span_fc].copy_from_slice(&sc.b1[..span_fc]);
                 for bi in 1..5 {
                     spab(
                         token, &sc.b_out,
                         &[(&pk.packed_blocks[bi][0], w.blocks[bi][0].1),
                           (&pk.packed_blocks[bi][1], w.blocks[bi][1].1),
                           (&pk.packed_blocks[bi][2], w.blocks[bi][2].1)],
-                        FC, &mut sc.cur, &mut sc.tmp, h, wd,
+                        FC, &mut sc.cur, &mut sc.tmp, h, wd, cs,
                     );
                     core::mem::swap(&mut sc.b_out, &mut sc.cur);
                     crate::nan_debug("block", &sc.b_out);
@@ -407,18 +417,19 @@ macro_rules! define_kernels {
 
                 conv1x1_multi(
                     token,
-                    &[(&sc.near[..], NEAR_CH), (&sc.b_out[..], FC), (&sc.b1[..], FC)],
+                    &[(&sc.near[..span_near], NEAR_CH), (&sc.b_out[..span_fc], FC), (&sc.b1[..span_fc], FC)],
                     &pk.packed_cat,
                     w.conv_cat_b,
                     &mut sc.catd,
                     FC,
                     CAT_CH,
                     plane,
+                    cs,
                 );
                 crate::nan_debug("catd", &sc.catd);
-                conv3x3(token, &sc.catd, FC, &pk.packed_conv2, w.conv2_b, &mut sc.pre, NEAR_CH, h, wd);
+                conv3x3(token, &sc.catd, FC, &pk.packed_conv2, w.conv2_b, &mut sc.pre, NEAR_CH, h, wd, cs);
                 crate::nan_debug("pre", &sc.pre);
-                crate::pixel_shuffle4_pub(&sc.pre, out, h, wd);
+                crate::pixel_shuffle4_strided(&sc.pre, cs, out, h, wd);
             }
         }
     };
@@ -460,7 +471,7 @@ fn conv3x3_only_impl(
     wd: usize,
 ) {
     let packed = crate::pack_conv3x3(wts, cin, cout);
-    k8::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
+    k8::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd, h * wd);
 }
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
@@ -477,7 +488,7 @@ fn conv3x3_only_impl_v4x(
     wd: usize,
 ) {
     let packed = crate::pack_conv3x3(wts, cin, cout);
-    k16::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
+    k16::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd, h * wd);
 }
 /// conv3x3 through full dispatch (test/bisect entry; takes RAW layout weights).
 #[allow(clippy::too_many_arguments)]
