@@ -1,0 +1,9 @@
+# zensr shootout — interleaved paired bench (tract-onnx 0.23.4 vs zensr-micro), host lilith, 2026-07-22T06:19Z
+# commit: ce83b70 + working copy; cmd: shootout models 14; single-thread; SPANF x4 fc=32
+# interleaved rounds=14; load 4.39 8.32 18.85 3/1594 2195096
+64x64	tract min=16.21 med=16.90 (4.042 MP/s)	micro-v4x min=18.02 med=19.12 (3.637 MP/s)	ratio(min) micro/tract=1.11x
+	micro-v3(AVX2) min=24.00 med=25.72 (2.731 MP/s)	v4x-vs-v3 speedup=1.33x
+128x128	tract min=71.45 med=74.21 (3.669 MP/s)	micro-v4x min=57.57 med=61.89 (4.554 MP/s)	ratio(min) micro/tract=0.81x
+	micro-v3(AVX2) min=81.98 med=87.86 (3.198 MP/s)	v4x-vs-v3 speedup=1.42x
+256x256	tract min=291.93 med=300.28 (3.592 MP/s)	micro-v4x min=233.43 med=247.01 (4.492 MP/s)	ratio(min) micro/tract=0.80x
+	micro-v3(AVX2) min=321.68 med=347.17 (3.260 MP/s)	v4x-vs-v3 speedup=1.38x

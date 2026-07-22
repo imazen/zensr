@@ -136,8 +136,42 @@ macro_rules! define_kernels {
                     }
                     x += W;
                 }
-                // Scalar edges: x = 0 and the right tail.
-                for xx in core::iter::once(0).chain(x..wd) {
+                // Overlapped final tile: cover up to wd-2 by re-running one
+                // tile ending at wd-1 (stores are idempotent overwrites).
+                if x < wd - 1 && wd >= W + 2 {
+                    let xl = wd - 1 - W;
+                    let mut acc = [
+                        V::<T>::splat(token, bias[oc0]),
+                        V::<T>::splat(token, bias[oc0 + 1]),
+                        V::<T>::splat(token, bias[oc0 + 2]),
+                        V::<T>::splat(token, bias[oc0 + 3]),
+                    ];
+                    for ic in 0..cin {
+                        for ky in ky_lo..=ky_hi {
+                            let irow = rowtab[ic * 3 + ky];
+                            let o = qbase + (ic * 3 + ky) * 12;
+                            let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
+                            let l = V::<T>::from_slice(token, &irow[xl - 1..]);
+                            let m = V::<T>::from_slice(token, &irow[xl..]);
+                            let r = V::<T>::from_slice(token, &irow[xl + 1..]);
+                            for ob in 0..4 {
+                                acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
+                                acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
+                                acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
+                            }
+                        }
+                    }
+                    for ob in 0..4 {
+                        let dst: &mut [f32; W] = (&mut out
+                            [(oc0 + ob) * plane + oy * wd + xl..(oc0 + ob) * plane + oy * wd + xl + W])
+                            .try_into()
+                            .unwrap();
+                        acc[ob].store(dst);
+                    }
+                    x = wd - 1;
+                }
+                // Scalar edges: x = 0, x = wd-1, plus any tail on tiny widths.
+                for xx in core::iter::once(0).chain(x.min(wd)..wd) {
                     for ob in 0..4 {
                         let mut s = bias[oc0 + ob];
                         for ic in 0..cin {
@@ -197,7 +231,26 @@ macro_rules! define_kernels {
                             acc.store(dst);
                             x += W;
                         }
-                        for xx in core::iter::once(0).chain(x..wd) {
+                        if x < wd - 1 && wd >= W + 2 {
+                            let xl = wd - 1 - W;
+                            let mut acc = V::<T>::zero(token);
+                            for ky in ky_lo..=ky_hi {
+                                let irow = &ip[(oy + ky - 1) * wd..][..wd];
+                                let l = V::<T>::from_slice(token, &irow[xl - 1..]);
+                                let m = V::<T>::from_slice(token, &irow[xl..]);
+                                let r = V::<T>::from_slice(token, &irow[xl + 1..]);
+                                acc = l.mul_add(V::<T>::splat(token, w9[ky * 3]), acc);
+                                acc = m.mul_add(V::<T>::splat(token, w9[ky * 3 + 1]), acc);
+                                acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
+                            }
+                            let dst: &mut [f32; W] = (&mut out
+                                [oc * plane + oy * wd + xl..oc * plane + oy * wd + xl + W])
+                                .try_into()
+                                .unwrap();
+                            acc.store(dst);
+                            x = wd - 1;
+                        }
+                        for xx in core::iter::once(0).chain(x.min(wd)..wd) {
                             let mut s = 0.0f32;
                             for ky in ky_lo..=ky_hi {
                                 let irow = &ip[(oy + ky - 1) * wd..][..wd];
