@@ -1,0 +1,13 @@
+# zensr tract-onnx 0.23.4 single-thread CPU bench, 2026-07-22T04:41Z, host lilith, commit pre-initial
+SPANF_x4_128x128	128x128	load_ms=2.0	opt_ms=19.1	min_ms=71.85	p50_ms=80.07	out_mp_s=3.274
+SPANF_x4_256x256	256x256	load_ms=1.6	opt_ms=21.5	min_ms=303.91	p50_ms=315.10	out_mp_s=3.328
+SPANF_x4_512x512	512x512	load_ms=2.6	opt_ms=97.1	min_ms=2613.75	p50_ms=3195.08	out_mp_s=1.313
+TSR_x4_128x128	128x128	load_ms=2.4	opt_ms=18.0	min_ms=117.03	p50_ms=129.47	out_mp_s=2.025
+TSR_x4_256x256	256x256	load_ms=1.7	opt_ms=29.5	min_ms=342.71	p50_ms=454.24	out_mp_s=2.308
+TSR_x4_512x512	512x512	load_ms=1.5	opt_ms=55.8	min_ms=2688.07	p50_ms=4855.32	out_mp_s=0.864
+EFDN_baseline_x4_128x128	128x128	load_ms=2.8	opt_ms=73.5	min_ms=208.74	p50_ms=232.65	out_mp_s=1.127
+EFDN_baseline_x4_256x256	256x256	load_ms=3.8	opt_ms=83.9	min_ms=978.32	p50_ms=1149.45	out_mp_s=0.912
+EFDN_baseline_x4_512x512	512x512	load_ms=3.5	opt_ms=118.3	min_ms=7982.82	p50_ms=11287.68	out_mp_s=0.372
+NanoSR_x4_128x128	128x128	load_ms=4.3	opt_ms=24.9	min_ms=203.58	p50_ms=209.55	out_mp_s=1.251
+NanoSR_x4_256x256	256x256	load_ms=6.5	opt_ms=38.1	min_ms=833.15	p50_ms=1970.19	out_mp_s=0.532
+NanoSR_x4_512x512	512x512	load_ms=3.3	opt_ms=99.6	min_ms=6997.91	p50_ms=10095.66	out_mp_s=0.415
