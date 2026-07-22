@@ -8,6 +8,61 @@
 use crate::{SpanfWeights, CAT_CH, FC, NEAR_CH, S2};
 use archmage::prelude::*;
 
+/// Repack a [cout][cin][3][3] conv weight into quad-major iteration order:
+/// per output-channel-quad q, per (ic, ky): 12 floats [ob0 t0,t1,t2, ob1 t0,..].
+/// The hot loop then reads one contiguous 12-float chunk per (ic, ky).
+fn pack_conv3x3(wts: &[f32], cin: usize, cout: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(cout * cin * 9);
+    for q in 0..cout / 4 {
+        for ic in 0..cin {
+            for ky in 0..3 {
+                for ob in 0..4 {
+                    let base = ((q * 4 + ob) * cin + ic) * 9 + ky * 3;
+                    out.extend_from_slice(&wts[base..base + 3]);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Repack a [cout][cin] 1x1 conv weight into quad-major [wi][4] order.
+fn pack_conv1x1(wts: &[f32], cin_total: usize, cout: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(cout * cin_total);
+    for q in 0..cout / 4 {
+        for wi in 0..cin_total {
+            for ob in 0..4 {
+                out.push(wts[(q * 4 + ob) * cin_total + wi]);
+            }
+        }
+    }
+    out
+}
+
+/// Per-inference packed weights (built once per call; ~150K floats, trivial).
+struct Packed {
+    blocks: [[Vec<f32>; 3]; 5],
+    conv_cat: Vec<f32>,
+    conv2: Vec<f32>,
+}
+
+impl Packed {
+    fn build(w: &SpanfWeights) -> Self {
+        let blocks = core::array::from_fn(|bi| {
+            let cin0 = if bi == 0 { 3 } else { FC };
+            core::array::from_fn(|ci| {
+                let cin = if ci == 0 { cin0 } else { FC };
+                pack_conv3x3(w.blocks[bi][ci].0, cin, FC)
+            })
+        });
+        Packed {
+            blocks,
+            conv_cat: pack_conv1x1(w.conv_cat_w, CAT_CH, FC),
+            conv2: pack_conv3x3(w.conv2_w, FC, NEAR_CH),
+        }
+    }
+}
+
 macro_rules! define_kernels {
     ($modname:ident, $vec:ident, $bnd:ident, $w:expr) => {
         pub(crate) mod $modname {
@@ -16,14 +71,15 @@ macro_rules! define_kernels {
             use magetypes::simd::generic::$vec as V;
 
             /// 3x3 conv for one output row `oy`, four output channels
-            /// `oc0..oc0+4`, accumulating over all `cin` input planes.
+            /// `oc0..oc0+4`. Quad accumulators live in REGISTERS across the
+            /// whole (ic, ky) reduction per x-tile; one store per tile.
             #[inline(always)]
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn conv3x3_row4<T: Backend>(
                 token: T,
                 inp: &[f32],
                 cin: usize,
-                wts: &[f32], // [cout][cin][9]
+                wts: &[f32], // PACKED quad-major (pack_conv3x3)
                 bias: &[f32],
                 out: &mut [f32],
                 h: usize,
@@ -33,60 +89,77 @@ macro_rules! define_kernels {
             ) {
                 const W: usize = $w;
                 let plane = h * wd;
-                for ob in 0..4 {
-                    out[(oc0 + ob) * plane + oy * wd..][..wd].fill(bias[oc0 + ob]);
-                }
-                for ic in 0..cin {
-                    let ip = &inp[ic * plane..(ic + 1) * plane];
-                    for ky in 0..3usize {
-                        let iy = oy + ky;
-                        if iy < 1 || iy > h {
-                            continue;
-                        }
-                        let irow = &ip[(iy - 1) * wd..iy * wd];
-                        let mut wk = [[0.0f32; 3]; 4];
-                        for ob in 0..4 {
-                            let base = ((oc0 + ob) * cin + ic) * 9 + ky * 3;
-                            wk[ob] = [wts[base], wts[base + 1], wts[base + 2]];
-                        }
+                // Valid vertical taps for this output row (zero padding).
+                let ky_lo = if oy == 0 { 1usize } else { 0 };
+                let ky_hi = if oy + 1 == h { 1usize } else { 2 };
 
-                        let mut x = 1usize;
-                        while x + W + 1 <= wd {
+                // Row-slice table for this output row: rowtab[ic*3+ky].
+                // Built once per (oy); empty slice marks an invalid ky.
+                let mut rowtab: [&[f32]; 96] = [&[]; 96];
+                for ic in 0..cin {
+                    for ky in ky_lo..=ky_hi {
+                        rowtab[ic * 3 + ky] = &inp[ic * plane + (oy + ky - 1) * wd..][..wd];
+                    }
+                }
+                let q = oc0 / 4;
+                let qbase = q * cin * 36; // cin * 3ky * 12
+
+                let mut x = 1usize;
+                while x + W + 1 <= wd {
+                    let mut acc = [
+                        V::<T>::splat(token, bias[oc0]),
+                        V::<T>::splat(token, bias[oc0 + 1]),
+                        V::<T>::splat(token, bias[oc0 + 2]),
+                        V::<T>::splat(token, bias[oc0 + 3]),
+                    ];
+                    for ic in 0..cin {
+                        for ky in ky_lo..=ky_hi {
+                            let irow = rowtab[ic * 3 + ky];
+                            let o = qbase + (ic * 3 + ky) * 12;
+                            let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
                             let l = V::<T>::from_slice(token, &irow[x - 1..]);
                             let m = V::<T>::from_slice(token, &irow[x..]);
                             let r = V::<T>::from_slice(token, &irow[x + 1..]);
                             for ob in 0..4 {
-                                let orow =
-                                    &mut out[(oc0 + ob) * plane + oy * wd..][..wd];
-                                let cur = V::<T>::from_slice(token, &orow[x..]);
-                                let mut acc =
-                                    l.mul_add(V::<T>::splat(token, wk[ob][0]), cur);
-                                acc = m.mul_add(V::<T>::splat(token, wk[ob][1]), acc);
-                                acc = r.mul_add(V::<T>::splat(token, wk[ob][2]), acc);
-                                let dst: &mut [f32; W] =
-                                    (&mut orow[x..x + W]).try_into().unwrap();
-                                acc.store(dst);
+                                acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
+                                acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
+                                acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
                             }
-                            x += W;
                         }
-                        for xx in core::iter::once(0).chain(x..wd) {
-                            for ob in 0..4 {
-                                let mut s = 0.0f32;
+                    }
+                    for ob in 0..4 {
+                        let dst: &mut [f32; W] = (&mut out
+                            [(oc0 + ob) * plane + oy * wd + x..(oc0 + ob) * plane + oy * wd + x + W])
+                            .try_into()
+                            .unwrap();
+                        acc[ob].store(dst);
+                    }
+                    x += W;
+                }
+                // Scalar edges: x = 0 and the right tail.
+                for xx in core::iter::once(0).chain(x..wd) {
+                    for ob in 0..4 {
+                        let mut s = bias[oc0 + ob];
+                        for ic in 0..cin {
+                            for ky in ky_lo..=ky_hi {
+                                let irow = rowtab[ic * 3 + ky];
+                                let o = qbase + (ic * 3 + ky) * 12 + ob * 3;
                                 if xx >= 1 {
-                                    s += wk[ob][0] * irow[xx - 1];
+                                    s += wts[o] * irow[xx - 1];
                                 }
-                                s += wk[ob][1] * irow[xx];
+                                s += wts[o + 1] * irow[xx];
                                 if xx + 1 < wd {
-                                    s += wk[ob][2] * irow[xx + 1];
+                                    s += wts[o + 2] * irow[xx + 1];
                                 }
-                                out[(oc0 + ob) * plane + oy * wd + xx] += s;
                             }
                         }
+                        out[(oc0 + ob) * plane + oy * wd + xx] = s;
                     }
                 }
             }
 
             /// Grouped conv_near: 48 out channels, ic = oc/16, no bias.
+            /// Register accumulator per x-tile over the <=3 vertical taps.
             #[inline(always)]
             pub(crate) fn conv_near<T: Backend>(
                 token: T,
@@ -102,54 +175,54 @@ macro_rules! define_kernels {
                     let ic = oc / S2;
                     let ip = &inp[ic * plane..(ic + 1) * plane];
                     let w9 = &wts[oc * 9..oc * 9 + 9];
-                    out[oc * plane..(oc + 1) * plane].fill(0.0);
                     for oy in 0..h {
-                        for ky in 0..3usize {
-                            let iy = oy + ky;
-                            if iy < 1 || iy > h {
-                                continue;
-                            }
-                            let irow = &ip[(iy - 1) * wd..iy * wd];
-                            let (w0, w1, w2) =
-                                (w9[ky * 3], w9[ky * 3 + 1], w9[ky * 3 + 2]);
-                            let mut x = 1usize;
-                            while x + W + 1 <= wd {
-                                let orow = &mut out[oc * plane + oy * wd..][..wd];
+                        let ky_lo = if oy == 0 { 1usize } else { 0 };
+                        let ky_hi = if oy + 1 == h { 1usize } else { 2 };
+                        let mut x = 1usize;
+                        while x + W + 1 <= wd {
+                            let mut acc = V::<T>::zero(token);
+                            for ky in ky_lo..=ky_hi {
+                                let irow = &ip[(oy + ky - 1) * wd..][..wd];
                                 let l = V::<T>::from_slice(token, &irow[x - 1..]);
                                 let m = V::<T>::from_slice(token, &irow[x..]);
                                 let r = V::<T>::from_slice(token, &irow[x + 1..]);
-                                let cur = V::<T>::from_slice(token, &orow[x..]);
-                                let mut acc = l.mul_add(V::<T>::splat(token, w0), cur);
-                                acc = m.mul_add(V::<T>::splat(token, w1), acc);
-                                acc = r.mul_add(V::<T>::splat(token, w2), acc);
-                                let dst: &mut [f32; W] =
-                                    (&mut orow[x..x + W]).try_into().unwrap();
-                                acc.store(dst);
-                                x += W;
+                                acc = l.mul_add(V::<T>::splat(token, w9[ky * 3]), acc);
+                                acc = m.mul_add(V::<T>::splat(token, w9[ky * 3 + 1]), acc);
+                                acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
                             }
-                            for xx in core::iter::once(0).chain(x..wd) {
-                                let mut s = 0.0f32;
+                            let dst: &mut [f32; W] = (&mut out
+                                [oc * plane + oy * wd + x..oc * plane + oy * wd + x + W])
+                                .try_into()
+                                .unwrap();
+                            acc.store(dst);
+                            x += W;
+                        }
+                        for xx in core::iter::once(0).chain(x..wd) {
+                            let mut s = 0.0f32;
+                            for ky in ky_lo..=ky_hi {
+                                let irow = &ip[(oy + ky - 1) * wd..][..wd];
                                 if xx >= 1 {
-                                    s += w0 * irow[xx - 1];
+                                    s += w9[ky * 3] * irow[xx - 1];
                                 }
-                                s += w1 * irow[xx];
+                                s += w9[ky * 3 + 1] * irow[xx];
                                 if xx + 1 < wd {
-                                    s += w2 * irow[xx + 1];
+                                    s += w9[ky * 3 + 2] * irow[xx + 1];
                                 }
-                                out[oc * plane + oy * wd + xx] += s;
                             }
+                            out[oc * plane + oy * wd + xx] = s;
                         }
                     }
                 }
             }
 
             /// conv1x1 over a virtual concat of sources (no materialized cat).
+            /// Weights are PACKED quad-major [q][wi][4] (pack_conv1x1).
             #[inline(always)]
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn conv1x1_multi<T: Backend>(
                 token: T,
                 srcs: &[(&[f32], usize)],
-                wts: &[f32], // [cout][cin_total]
+                wts: &[f32],
                 bias: &[f32],
                 out: &mut [f32],
                 cout: usize,
@@ -158,30 +231,48 @@ macro_rules! define_kernels {
             ) {
                 const W: usize = $w;
                 let n = plane / W * W;
-                for oc in 0..cout {
-                    let wrow = &wts[oc * cin_total..(oc + 1) * cin_total];
-                    let op = &mut out[oc * plane..(oc + 1) * plane];
-                    op.fill(bias[oc]);
-                    let mut wi = 0usize;
-                    for (src, cin) in srcs.iter() {
-                        for ic in 0..*cin {
-                            let wv = wrow[wi];
-                            wi += 1;
-                            let ip = &src[ic * plane..(ic + 1) * plane];
-                            let wv_v = V::<T>::splat(token, wv);
-                            let mut x = 0usize;
-                            while x < n {
-                                let cur = V::<T>::from_slice(token, &op[x..]);
-                                let acc = V::<T>::from_slice(token, &ip[x..])
-                                    .mul_add(wv_v, cur);
-                                let dst: &mut [f32; W] =
-                                    (&mut op[x..x + W]).try_into().unwrap();
-                                acc.store(dst);
-                                x += W;
+                for oc0 in (0..cout).step_by(4) {
+                    let qbase = (oc0 / 4) * cin_total * 4;
+                    let mut x = 0usize;
+                    while x < n {
+                        let mut acc = [
+                            V::<T>::splat(token, bias[oc0]),
+                            V::<T>::splat(token, bias[oc0 + 1]),
+                            V::<T>::splat(token, bias[oc0 + 2]),
+                            V::<T>::splat(token, bias[oc0 + 3]),
+                        ];
+                        let mut wi = 0usize;
+                        for (src, cin) in srcs.iter() {
+                            for ic in 0..*cin {
+                                let v = V::<T>::from_slice(token, &src[ic * plane + x..]);
+                                let o = qbase + wi * 4;
+                                let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
+                                for ob in 0..4 {
+                                    acc[ob] = v.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
+                                }
+                                wi += 1;
                             }
-                            for x in n..plane {
-                                op[x] += wv * ip[x];
+                        }
+                        for ob in 0..4 {
+                            let dst: &mut [f32; W] = (&mut out
+                                [(oc0 + ob) * plane + x..(oc0 + ob) * plane + x + W])
+                                .try_into()
+                                .unwrap();
+                            acc[ob].store(dst);
+                        }
+                        x += W;
+                    }
+                    for xx in n..plane {
+                        for ob in 0..4 {
+                            let mut s = bias[oc0 + ob];
+                            let mut wi = 0usize;
+                            for (src, cin) in srcs.iter() {
+                                for ic in 0..*cin {
+                                    s += wts[qbase + wi * 4 + ob] * src[ic * plane + xx];
+                                    wi += 1;
+                                }
                             }
+                            out[(oc0 + ob) * plane + xx] = s;
                         }
                     }
                 }
@@ -267,15 +358,10 @@ macro_rules! define_kernels {
             ) {
                 let plane = h * wd;
                 conv3x3(token, inp, cin, convs[0].0, convs[0].1, out, FC, h, wd);
-                crate::nan_debug("  spab.c1", &out[..FC * plane]);
                 silu(token, &mut out[..FC * plane]);
-                crate::nan_debug("  spab.silu1", &out[..FC * plane]);
                 conv3x3(token, &out[..FC * plane], FC, convs[1].0, convs[1].1, tmp, FC, h, wd);
-                crate::nan_debug("  spab.c2", &tmp[..FC * plane]);
                 silu(token, &mut tmp[..FC * plane]);
-                crate::nan_debug("  spab.silu2", &tmp[..FC * plane]);
                 conv3x3(token, &tmp[..FC * plane], FC, convs[2].0, convs[2].1, out, FC, h, wd);
-                crate::nan_debug("  spab.c3", &out[..FC * plane]);
                 if cin == FC {
                     tmp[..FC * plane].copy_from_slice(&out[..FC * plane]);
                     gate(token, &tmp[..FC * plane], &inp[..FC * plane], &mut out[..FC * plane]);
@@ -297,16 +383,22 @@ macro_rules! define_kernels {
                 conv_near(token, input, w.conv_near, &mut near, h, wd);
                 crate::nan_debug("near", &near);
 
+                let packed = crate::simd::Packed::build(w);
+                let pb: [[(&[f32], &[f32]); 3]; 5] = core::array::from_fn(|bi| {
+                    core::array::from_fn(|ci| {
+                        (packed.blocks[bi][ci].as_slice(), w.blocks[bi][ci].1)
+                    })
+                });
                 let mut b1 = vec![0.0f32; FC * plane];
                 let mut tmp = vec![0.0f32; FC * plane];
-                spab(token, input, &w.blocks[0], 3, &mut b1, &mut tmp, h, wd);
+                spab(token, input, &pb[0], 3, &mut b1, &mut tmp, h, wd);
                 crate::nan_debug("b1", &b1);
 
                 let mut b_out = vec![0.0f32; FC * plane];
                 b_out.copy_from_slice(&b1);
                 let mut cur = vec![0.0f32; FC * plane];
                 for bi in 1..5 {
-                    spab(token, &b_out, &w.blocks[bi], FC, &mut cur, &mut tmp, h, wd);
+                    spab(token, &b_out, &pb[bi], FC, &mut cur, &mut tmp, h, wd);
                     core::mem::swap(&mut b_out, &mut cur);
                     crate::nan_debug("block", &b_out);
                 }
@@ -315,7 +407,7 @@ macro_rules! define_kernels {
                 conv1x1_multi(
                     token,
                     &[(&near[..], NEAR_CH), (&b_out[..], FC), (&b1[..], FC)],
-                    w.conv_cat_w,
+                    &packed.conv_cat,
                     w.conv_cat_b,
                     &mut catd,
                     FC,
@@ -324,7 +416,7 @@ macro_rules! define_kernels {
                 );
                 crate::nan_debug("catd", &catd);
                 let mut pre = vec![0.0f32; NEAR_CH * plane];
-                conv3x3(token, &catd, FC, w.conv2_w, w.conv2_b, &mut pre, NEAR_CH, h, wd);
+                conv3x3(token, &catd, FC, &packed.conv2, w.conv2_b, &mut pre, NEAR_CH, h, wd);
                 crate::nan_debug("pre", &pre);
                 crate::pixel_shuffle4_pub(&pre, out, h, wd);
             }
@@ -407,7 +499,8 @@ fn conv3x3_only_impl(
     h: usize,
     wd: usize,
 ) {
-    k8::conv3x3(token, inp, cin, wts, bias, out, cout, h, wd);
+    let packed = pack_conv3x3(wts, cin, cout);
+    k8::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
 }
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
@@ -423,7 +516,8 @@ fn conv3x3_only_impl_v4x(
     h: usize,
     wd: usize,
 ) {
-    k16::conv3x3(token, inp, cin, wts, bias, out, cout, h, wd);
+    let packed = pack_conv3x3(wts, cin, cout);
+    k16::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd);
 }
 /// conv3x3 through full dispatch (test/bisect entry).
 #[allow(clippy::too_many_arguments)]
