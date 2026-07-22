@@ -1,3 +1,4 @@
+# SUPERSEDED 2026-07-22: these numbers measured the fusion+padding lineage later reverted in the 26x-incident recovery; see README post-mortem.
 # interleaved rounds=10; load 3.21 3.12 5.35 3/1575 2206552
 64x64	tract min=16.23 med=16.46 (4.038 MP/s)	micro-v4x min=18.04 med=18.66 (3.633 MP/s)	ratio(min) micro/tract=1.11x
 	micro-v3(AVX2) min=24.06 med=24.52 (2.724 MP/s)	v4x-vs-v3 speedup=1.33x

@@ -18,7 +18,7 @@ full model/runtime survey). Two crates:
 | TSR / EFDN / NanoSR via tract | 2.0 / 1.1 / 1.25 MP-out/s (128²) |
 | **micro-v4x vs tract, interleaved paired bench (quiet box)** | **128²: 57.6 vs 71.5 ms (1.24× faster); 256²: 233 vs 292 ms (1.25×); 64²: 18.0 vs 16.2 ms (near-parity)** |
 | AVX-512 v4x vs AVX2 v3 (same kernels) | **1.33–1.42× speedup** |
-| **Multithreaded tiling (512²→2048², tile 112-128, exact 16-px halo)** | **15.5 MP-out/s @8 threads · 17.8 @16 · 18.2 @24 (230 ms for a 16.8 MP ×4 output)** |
+| **Multithreaded tiling (512²→2048², tile 128, exact 16-px halo)** | **after SiLU/gate fusion + stride pad: 15.3 MP-out/s @8 threads · 20.15 @16 (208 ms for a 16.8 MP ×4 output)** |
 | zensr-micro-abi cdylib, scalar-only | 271,432 B (265 KB) |
 | **zensr-micro-abi cdylib, full SIMD dispatch** | **381,816 B (373 KB)** (v4x AVX-512 + v3 AVX2 + mandatory scalar fallback; `tier_v4` feature off by default; `incant!` always links scalar) |
 | correctness vs PyTorch golden (every tier v3/v4/v4x) | max_abs 8.6e-6 (PASS) |
@@ -91,7 +91,17 @@ paste — zero new deps. Sweep (512² in → 2048² out, quiet box, min):
 | 224 | 3×3 | 2.98 | 7.86 | 9.10 (granularity-starved) | 9.41 | 8.95 |
 
 Small tiles win on cache (per-thread scratch: 26 MB @160-ext vs 66 MB @256-ext) AND
-granularity. Practical: a 1 MP image → 16 MP ×4 output in ~230-240 ms on this 7950X
+granularity. **Arbitrary dims verified** (2026-07-22): SIMD-vs-scalar matrix down to 1x1 and
+1-px strips, tiled edge tiles with 1-px cores, and torch goldens at 7x5 / 1x9 / 17x18 through
+all three paths (<=2e-6) — any h,w >= 1 is supported and tested.
+
+**Fusion + stride-padding post-mortem (2026-07-22):** both were tried and REVERTED. The `Post`
+store-fusion lineage was implicated in a 26x outlined-intrinsic regression (featureless
+outlined conv copies; see commit "26x incident recovery"), and +16 stride padding at 4-KiB
+planes measured **2x slower** at 128²/256² — the L1-set-aliasing hypothesis is falsified for
+this access pattern. The cs channel-stride plumbing is kept at identity stride. Row-band
+tiling was evaluated and rejected (50–377 MB per-thread scratch on wide images — 2D tiles
+scale better). Practical: a 1 MP image → 16 MP ×4 output in ~230-240 ms on this 7950X
 (vs ~3.7 s single-thread untiled). Note: tract could be externally tiled the same way —
 the engine-level single-thread comparison (micro 1.25× faster) is the apples-to-apples one.
 

@@ -30,10 +30,17 @@ fn main() -> TractResult<()> {
     let wbuf = read_f32(&dir.join("spanf_weights.raw"));
     let w = SpanfWeights::parse(&wbuf).expect("weights");
 
-    println!("# interleaved rounds={rounds}; load {}", std::fs::read_to_string("/proc/loadavg").unwrap_or_default().trim());
+    println!(
+        "# interleaved rounds={rounds}; load {}",
+        std::fs::read_to_string("/proc/loadavg")
+            .unwrap_or_default()
+            .trim()
+    );
 
     for (h, wd) in [(64usize, 64usize), (128, 128), (256, 256)] {
-        if rounds == 0 { break; }
+        if rounds == 0 {
+            break;
+        }
         let onnx = dir.join(format!("SPANF_x4_{h}x{wd}.onnx"));
         let plan = tract_onnx::onnx()
             .model_for_path(&onnx)?
@@ -64,9 +71,7 @@ fn main() -> TractResult<()> {
             #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
             {
                 let t = Instant::now();
-                std::hint::black_box(zensr_micro::simd::spanf_x4_simd_force_v3(
-                    &input, h, wd, &w,
-                ));
+                std::hint::black_box(zensr_micro::simd::spanf_x4_simd_force_v3(&input, h, wd, &w));
                 tv3.push(t.elapsed().as_secs_f64() * 1e3);
             }
         }
@@ -92,10 +97,14 @@ fn main() -> TractResult<()> {
     // Multithreaded tiled scaling: 512^2 input -> 2048^2 out.
     let (h, wd) = (512usize, 512usize);
     let input: Vec<f32> = (0..3 * h * wd).map(|i| (i % 251) as f32 / 251.0).collect();
-    let model = zensr_micro::SpanfModel::new(read_f32(&dir.join("spanf_weights.raw")))
-        .expect("model");
+    let model =
+        zensr_micro::SpanfModel::new(read_f32(&dir.join("spanf_weights.raw"))).expect("model");
     let mp = (h * wd * 16) as f64 / 1e6;
-    println!("# tiled scaling {h}x{wd} -> {}x{}; grid = ceil(512/tile)^2 tiles", 4 * h, 4 * wd);
+    println!(
+        "# tiled scaling {h}x{wd} -> {}x{}; grid = ceil(512/tile)^2 tiles",
+        4 * h,
+        4 * wd
+    );
     for tile in [112usize, 128, 160, 224] {
         let grid = wd.div_ceil(tile);
         for threads in [1usize, 4, 8, 16, 24] {

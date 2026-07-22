@@ -10,7 +10,9 @@ use tract_onnx::prelude::*;
 
 fn main() -> TractResult<()> {
     let mut args = std::env::args().skip(1);
-    let path = args.next().expect("usage: zensr-bench model.onnx H W [iters]");
+    let path = args
+        .next()
+        .expect("usage: zensr-bench model.onnx H W [iters]");
     let h: usize = args.next().expect("H").parse().unwrap();
     let w: usize = args.next().expect("W").parse().unwrap();
     let iters: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);

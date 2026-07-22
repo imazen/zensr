@@ -1,0 +1,29 @@
+# SUPERSEDED 2026-07-22: these numbers measured the fusion+padding lineage later reverted in the 26x-incident recovery; see README post-mortem.
+# interleaved rounds=12; load 2.72 10.86 10.99 2/1576 2280952
+64x64	tract min=15.79 med=16.13 (4.149 MP/s)	micro-v4x min=17.54 med=17.77 (3.736 MP/s)	ratio(min) micro/tract=1.11x
+	micro-v3(AVX2) min=23.48 med=23.76 (2.792 MP/s)	v4x-vs-v3 speedup=1.34x
+128x128	tract min=68.10 med=69.29 (3.850 MP/s)	micro-v4x min=59.21 med=60.62 (4.427 MP/s)	ratio(min) micro/tract=0.87x
+	micro-v3(AVX2) min=84.57 med=86.32 (3.100 MP/s)	v4x-vs-v3 speedup=1.43x
+256x256	tract min=294.59 med=306.43 (3.559 MP/s)	micro-v4x min=230.20 med=240.74 (4.555 MP/s)	ratio(min) micro/tract=0.78x
+	micro-v3(AVX2) min=328.77 med=345.25 (3.189 MP/s)	v4x-vs-v3 speedup=1.43x
+# tiled scaling 512x512 -> 2048x2048; grid = ceil(512/tile)^2 tiles
+tile=112 (5x5=25 tiles)	threads=1	min=1499.1ms	2.80 MP-out/s
+tile=112 (5x5=25 tiles)	threads=4	min=446.4ms	9.40 MP-out/s
+tile=112 (5x5=25 tiles)	threads=8	min=275.3ms	15.24 MP-out/s
+tile=112 (5x5=25 tiles)	threads=16	min=208.8ms	20.08 MP-out/s
+tile=112 (5x5=25 tiles)	threads=24	min=224.1ms	18.72 MP-out/s
+tile=128 (4x4=16 tiles)	threads=1	min=1308.7ms	3.20 MP-out/s
+tile=128 (4x4=16 tiles)	threads=4	min=415.8ms	10.09 MP-out/s
+tile=128 (4x4=16 tiles)	threads=8	min=273.4ms	15.34 MP-out/s
+tile=128 (4x4=16 tiles)	threads=16	min=208.1ms	20.15 MP-out/s
+tile=128 (4x4=16 tiles)	threads=24	min=226.3ms	18.54 MP-out/s
+tile=160 (4x4=16 tiles)	threads=1	min=1322.1ms	3.17 MP-out/s
+tile=160 (4x4=16 tiles)	threads=4	min=448.1ms	9.36 MP-out/s
+tile=160 (4x4=16 tiles)	threads=8	min=337.7ms	12.42 MP-out/s
+tile=160 (4x4=16 tiles)	threads=16	min=254.8ms	16.46 MP-out/s
+tile=160 (4x4=16 tiles)	threads=24	min=249.5ms	16.81 MP-out/s
+tile=224 (3x3=9 tiles)	threads=1	min=1289.1ms	3.25 MP-out/s
+tile=224 (3x3=9 tiles)	threads=4	min=477.7ms	8.78 MP-out/s
+tile=224 (3x3=9 tiles)	threads=8	min=391.3ms	10.72 MP-out/s
+tile=224 (3x3=9 tiles)	threads=16	min=407.7ms	10.29 MP-out/s
+tile=224 (3x3=9 tiles)	threads=24	min=424.8ms	9.87 MP-out/s

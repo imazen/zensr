@@ -7,9 +7,13 @@ publish = false
 [dependencies]
 archmage = "0.9.28"
 magetypes = { version = "0.9.28", features = ["std"], default-features = false }
+zenpixels = { version = "0.2.14", optional = true }
+bytemuck = { version = "1.25.2", optional = true }
 
 [features]
-default = ["avx512"]
+default = ["avx512", "px"]
+# zenpixels-typed API (PixelSlice in, PixelBuffer out)
+px = ["dep:zenpixels", "dep:bytemuck"]
 avx512 = ["magetypes/avx512"]
 # AVX-512-baseline-without-v4x CPUs (Skylake-X era) get their own f32x16 tier.
 # Off by default: they fall back to v3/AVX2, saving ~50KB of duplicate kernels.

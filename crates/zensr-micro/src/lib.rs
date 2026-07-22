@@ -8,6 +8,10 @@
 
 pub mod simd;
 pub mod tiled;
+#[cfg(feature = "px")]
+pub mod px;
+#[cfg(feature = "px")]
+pub use px::{spanf_x4_px, PxError};
 pub use simd::spanf_x4_simd;
 pub use tiled::{spanf_x4_tiled, HALO};
 
@@ -575,6 +579,68 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[cfg(feature = "px")]
+    #[test]
+    fn px_strided_matches_tight_and_raw() {
+        use zenpixels::{PixelDescriptor, PixelSlice};
+        let wbuf = lcg(TOTAL_FLOATS, 4321, 0.12);
+        let model = SpanfModel::new(wbuf.clone()).unwrap();
+        let wv = SpanfWeights::parse(&wbuf).unwrap();
+        let (h, wd) = (23usize, 31usize);
+        let inter = lcg(3 * h * wd, 99, 1.0);
+        let mut planar = vec![0f32; 3 * h * wd];
+        for y in 0..h {
+            for x in 0..wd {
+                for c in 0..3 {
+                    planar[c * h * wd + y * wd + x] = inter[(y * wd + x) * 3 + c];
+                }
+            }
+        }
+        let want = spanf_x4_simd(&planar, h, wd, &wv);
+
+        let bytes: &[u8] = bytemuck::cast_slice(&inter);
+        let tight = PixelSlice::new(bytes, wd as u32, h as u32, wd * 12, PixelDescriptor::RGBF32)
+            .unwrap();
+        let out_t = px::spanf_x4_px(&model, &tight, 2, 32).unwrap();
+
+        // Same pixels behind a padded stride (5 extra px per row).
+        let sw = wd + 5;
+        let mut sdata = vec![0f32; 3 * sw * h];
+        for y in 0..h {
+            sdata[y * sw * 3..y * sw * 3 + wd * 3]
+                .copy_from_slice(&inter[y * wd * 3..(y + 1) * wd * 3]);
+        }
+        let sbytes: &[u8] = bytemuck::cast_slice(&sdata);
+        let strided = PixelSlice::new(
+            sbytes,
+            wd as u32,
+            h as u32,
+            sw * 12,
+            PixelDescriptor::RGBF32,
+        )
+        .unwrap();
+        let out_s = px::spanf_x4_px(&model, &strided, 2, 32).unwrap();
+
+        let (oh, ow) = (4 * h, 4 * wd);
+        let (vt, vs) = (out_t.as_slice(), out_s.as_slice());
+        assert_eq!(vt.width() as usize, ow);
+        assert_eq!(vt.rows() as usize, oh);
+        let mut max = 0f32;
+        for y in 0..oh {
+            let rt: &[f32] = bytemuck::cast_slice(vt.row(y as u32));
+            let rs: &[f32] = bytemuck::cast_slice(vs.row(y as u32));
+            assert_eq!(rt, rs, "strided vs tight must be byte-identical (row {y})");
+            for x in 0..ow {
+                for c in 0..3 {
+                    let d = (rt[3 * x + c] - want[c * oh * ow + y * ow + x]).abs();
+                    assert!(d.is_finite());
+                    max = max.max(d);
+                }
+            }
+        }
+        assert!(max < 1e-4, "px vs raw max {max}");
     }
 
     #[test]
