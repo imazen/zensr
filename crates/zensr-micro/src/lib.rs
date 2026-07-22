@@ -54,6 +54,125 @@ impl<'a> SpanfWeights<'a> {
     }
 }
 
+/// Tensor layout in dump order: (weight_floats, bias_floats) per conv.
+pub const TENSOR_LAYOUT: [(usize, usize); 17] = [
+    (NEAR_CH * 9, 0),      // conv_near (grouped, no bias)
+    (3 * FC * 9, FC),      // b1.c1
+    (FC * FC * 9, FC),     // b1.c2
+    (FC * FC * 9, FC),     // b1.c3
+    (FC * FC * 9, FC),     // b2.c1
+    (FC * FC * 9, FC),     // b2.c2
+    (FC * FC * 9, FC),     // b2.c3
+    (FC * FC * 9, FC),     // b3.c1
+    (FC * FC * 9, FC),     // b3.c2
+    (FC * FC * 9, FC),     // b3.c3
+    (FC * FC * 9, FC),     // b4.c1
+    (FC * FC * 9, FC),     // b4.c2
+    (FC * FC * 9, FC),     // b4.c3
+    (FC * FC * 9, FC),     // b5.c1
+    (FC * FC * 9, FC),     // b5.c2
+    (FC * FC * 9, FC),     // b5.c3
+    (CAT_CH * FC + 0, FC), // conv_cat (1x1); conv_2 handled below
+];
+/// conv_2 is the 18th tensor: (NEAR_CH*FC*9 weights, NEAR_CH bias).
+
+/// IEEE 754 half → f32 (safe, handles subnormals/inf/nan).
+#[inline]
+pub fn f16_to_f32(bits: u16) -> f32 {
+    let sign = ((bits >> 15) & 1) as u32;
+    let exp = ((bits >> 10) & 0x1f) as u32;
+    let man = (bits & 0x3ff) as u32;
+    let f = match (exp, man) {
+        (0, 0) => sign << 31,
+        (0, m) => {
+            // subnormal: normalize
+            let shift = m.leading_zeros() - 21;
+            let m2 = (m << (shift + 1)) & 0x3ff;
+            let e2 = 127 - 15 - shift;
+            (sign << 31) | (e2 << 23) | (m2 << 13)
+        }
+        (0x1f, 0) => (sign << 31) | 0x7f80_0000,
+        (0x1f, _) => (sign << 31) | 0x7fc0_0000,
+        (e, m) => (sign << 31) | ((e + 127 - 15) << 23) | (m << 13),
+    };
+    f32::from_bits(f)
+}
+
+fn tensor_dims() -> [(usize, usize); 18] {
+    let mut dims = [(0usize, 0usize); 18];
+    dims[..17].copy_from_slice(&TENSOR_LAYOUT);
+    dims[17] = (NEAR_CH * FC * 9, NEAR_CH);
+    dims
+}
+
+/// Decode the f16 weight dump (weights f16, biases f32) into the canonical
+/// TOTAL_FLOATS f32 buffer accepted by `SpanfWeights::parse`.
+pub fn decode_f16_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
+    let mut out = Vec::with_capacity(TOTAL_FLOATS);
+    let mut off = 0usize;
+    for (wn, bn) in tensor_dims() {
+        let wbytes = wn * 2;
+        if off + wbytes > bytes.len() {
+            return Err("f16 file truncated (weights)".into());
+        }
+        for c in bytes[off..off + wbytes].chunks_exact(2) {
+            out.push(f16_to_f32(u16::from_le_bytes([c[0], c[1]])));
+        }
+        off += wbytes;
+        let bbytes = bn * 4;
+        if off + bbytes > bytes.len() {
+            return Err("f16 file truncated (bias)".into());
+        }
+        for c in bytes[off..off + bbytes].chunks_exact(4) {
+            out.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        }
+        off += bbytes;
+    }
+    if off != bytes.len() || out.len() != TOTAL_FLOATS {
+        return Err(format!(
+            "f16 file size mismatch: consumed {off}/{} -> {} floats",
+            bytes.len(),
+            out.len()
+        ));
+    }
+    Ok(out)
+}
+
+/// Decode the int8-per-channel dump (per conv: cout f32 scales, then int8
+/// weights; biases f32) into the canonical f32 buffer. NOTE: accuracy study
+/// shows this is NOT production-viable for SPANF (~35 dB); kept for size demo.
+pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
+    let mut out = Vec::with_capacity(TOTAL_FLOATS);
+    let mut off = 0usize;
+    for (wn, bn) in tensor_dims() {
+        // cout = weights / (cin*9) — recover from layout: bias count equals
+        // cout except conv_near (48) — handle via explicit table instead.
+        let cout = if bn > 0 { bn } else { NEAR_CH };
+        let sbytes = cout * 4;
+        if off + sbytes + wn > bytes.len() {
+            return Err("int8 file truncated".into());
+        }
+        let scales: Vec<f32> = bytes[off..off + sbytes]
+            .chunks_exact(4)
+            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+        off += sbytes;
+        let per_oc = wn / cout;
+        for (i, &b) in bytes[off..off + wn].iter().enumerate() {
+            out.push((b as i8) as f32 * scales[i / per_oc]);
+        }
+        off += wn;
+        for c in bytes[off..off + bn * 4].chunks_exact(4) {
+            out.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        }
+        off += bn * 4;
+    }
+    if off != bytes.len() || out.len() != TOTAL_FLOATS {
+        return Err("int8 file size mismatch".into());
+    }
+    Ok(out)
+}
+
 #[inline]
 fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())

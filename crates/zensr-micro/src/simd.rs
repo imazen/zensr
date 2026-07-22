@@ -442,7 +442,7 @@ fn spanf_forward_impl(
     k8::forward(token, input, h, wd, w, out);
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
 #[arcane]
 fn spanf_forward_impl_v4(
     token: X64V4Token,
@@ -545,7 +545,7 @@ pub fn spanf_x4_simd(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Ve
     let mut out = vec![0.0f32; 3 * plane * 16];
     incant!(
         spanf_forward_impl(input, h, wd, w, &mut out),
-        [v4x(cfg(avx512)), v4(cfg(avx512)), v3, neon, wasm128, scalar]
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
     );
     out
 }
@@ -560,7 +560,7 @@ pub fn spanf_x4_simd_force_v4x(input: &[f32], h: usize, wd: usize, w: &SpanfWeig
     Some(out)
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
 pub fn spanf_x4_simd_force_v4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
     use archmage::prelude::*;
     let token = X64V4Token::summon()?;
@@ -574,7 +574,7 @@ pub fn spanf_x4_simd_force_v3(input: &[f32], h: usize, wd: usize, w: &SpanfWeigh
     let mut out = vec![0.0f32; 3 * h * wd * 16];
     incant!(
         spanf_forward_impl(input, h, wd, w, &mut out),
-        [v3]
+        [v3, scalar]
     );
     Some(out)
 }

@@ -1,7 +1,7 @@
 //! Thin C ABI over zensr-micro (zentract-abi pattern: FFI unsafe isolated here;
 //! the algorithm crate stays forbid(unsafe_code)). Size-probe target.
 
-use zensr_micro::{SpanfWeights, spanf_x4, TOTAL_FLOATS};
+use zensr_micro::{SpanfWeights, spanf_x4_simd, TOTAL_FLOATS};
 
 /// SPANF x4 on [3,h,w] f32 NCHW. `weights` = TOTAL_FLOATS f32, dump order.
 /// `out` must hold 3*h*w*16 f32. Returns 0 on success, negative on error.
@@ -25,7 +25,7 @@ pub unsafe extern "C" fn zensr_spanf_x4(
     let Ok(parsed) = SpanfWeights::parse(wbuf) else {
         return -2;
     };
-    let result = spanf_x4(input, h, w, &parsed);
+    let result = spanf_x4_simd(input, h, w, &parsed);
     out.copy_from_slice(&result);
     0
 }

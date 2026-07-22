@@ -11,4 +11,7 @@ magetypes = { version = "0.9.28", features = ["std"], default-features = false }
 [features]
 default = ["avx512"]
 avx512 = ["magetypes/avx512"]
+# AVX-512-baseline-without-v4x CPUs (Skylake-X era) get their own f32x16 tier.
+# Off by default: they fall back to v3/AVX2, saving ~50KB of duplicate kernels.
+tier_v4 = ["avx512"]
 nan-debug = []

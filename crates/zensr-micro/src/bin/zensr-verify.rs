@@ -87,6 +87,7 @@ fn main() {
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     for (name, out) in [
         ("v4x", zensr_micro::simd::spanf_x4_simd_force_v4x(&input, 64, 64, &w)),
+        #[cfg(feature = "tier_v4")]
         ("v4", zensr_micro::simd::spanf_x4_simd_force_v4(&input, 64, 64, &w)),
         ("v3", zensr_micro::simd::spanf_x4_simd_force_v3(&input, 64, 64, &w)),
     ] {
@@ -115,6 +116,44 @@ fn main() {
     println!(
         "micro-scalar-ref 128x128 x4: min={min_sc:.2}ms p50={p50_sc:.2}ms out_mp_s={:.3}",
         (128.0 * 128.0 * 16.0 / 1e6) / (p50_sc / 1e3)
+    );
+
+    // Compressed-weight paths: decode -> run -> PSNR vs the fp32-weight golden.
+    let psnr = |a: &[f32], b: &[f32]| {
+        let mse: f64 = a
+            .iter()
+            .zip(b.iter())
+            .map(|(x, y)| {
+                let d = (x.clamp(0.0, 1.0) - y.clamp(0.0, 1.0)) as f64;
+                d * d
+            })
+            .sum::<f64>()
+            / a.len() as f64;
+        -10.0 * mse.log10()
+    };
+    let f16b = std::fs::read(dir.join("spanf_weights_f16.raw")).expect("f16 weights");
+    let wf16buf = zensr_micro::decode_f16_weights(&f16b).expect("f16 decode");
+    let wf16 = SpanfWeights::parse(&wf16buf).unwrap();
+    let out_f16 = spanf_x4_simd(&input, 64, 64, &wf16);
+    let (mx16, _) = diff_stats(&out_f16, &gold);
+    println!(
+        "f16 weights ({} B file): max_abs_vs_gold={mx16:.3e} psnr={:.2} dB",
+        f16b.len(),
+        psnr(&out_f16, &gold)
+    );
+    if mx16 > 0.05 {
+        eprintln!("FAIL: f16 path exceeds tolerance");
+        std::process::exit(1);
+    }
+
+    let i8b = std::fs::read(dir.join("spanf_weights_int8pc.raw")).expect("int8 weights");
+    let wi8buf = zensr_micro::decode_int8pc_weights(&i8b).expect("int8 decode");
+    let wi8 = SpanfWeights::parse(&wi8buf).unwrap();
+    let out_i8 = spanf_x4_simd(&input, 64, 64, &wi8);
+    println!(
+        "int8pc weights ({} B file): psnr={:.2} dB (accuracy study: NOT viable for SPANF)",
+        i8b.len(),
+        psnr(&out_i8, &gold)
     );
 
     if max_ref > 1e-3 || max_simd > 1e-3 {
