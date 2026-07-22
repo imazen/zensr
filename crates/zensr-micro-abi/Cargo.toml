@@ -1,0 +1,11 @@
+[package]
+name = "zensr-micro-abi"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zensr-micro = { path = "../zensr-micro" }

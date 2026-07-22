@@ -1148,6 +1148,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zensr-micro"
+version = "0.0.1"
+
+[[package]]
+name = "zensr-micro-abi"
+version = "0.0.1"
+dependencies = [
+ "zensr-micro",
+]
+
+[[package]]
 name = "zerocopy"
 version = "0.8.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"

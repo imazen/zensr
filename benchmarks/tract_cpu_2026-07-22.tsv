@@ -11,3 +11,7 @@ EFDN_baseline_x4_512x512	512x512	load_ms=3.5	opt_ms=118.3	min_ms=7982.82	p50_ms=
 NanoSR_x4_128x128	128x128	load_ms=4.3	opt_ms=24.9	min_ms=203.58	p50_ms=209.55	out_mp_s=1.251
 NanoSR_x4_256x256	256x256	load_ms=6.5	opt_ms=38.1	min_ms=833.15	p50_ms=1970.19	out_mp_s=0.532
 NanoSR_x4_512x512	512x512	load_ms=3.3	opt_ms=99.6	min_ms=6997.91	p50_ms=10095.66	out_mp_s=0.415
+golden 64x64->256x256: max_abs_diff=5.662e-6 rmse=5.927e-7
+micro 64x64 x4: min=58.41ms p50=59.97ms
+micro 128x128 x4: min=210.32ms p50=215.35ms out_mp_s=1.217
+PASS

@@ -1,6 +1,22 @@
 [workspace]
 resolver = "2"
-members = ["crates/zensr-bench"]
+members = ["crates/zensr-bench", "crates/zensr-micro", "crates/zensr-micro-abi"]
 
 [profile.release]
 lto = "thin"
+
+# Size-probe profile for the micro-abi cdylib.
+[profile.release-min]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Speed build for the micro kernels (autovectorization needs opt3).
+[profile.release-fast]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
