@@ -1,7 +1,9 @@
-# zensr — SR-on-CPU experiments (bench harness + micro-runtime)
+# zensr — CPU super-resolution for web JPEGs
 
-Feasibility work from 2026-07-22 (see `~/work/zen/SR-MODELS-RUNTIMES-2026-07-21.md` for the
-full model/runtime survey). Two crates:
+**Long-term charter: [PLAN.md](PLAN.md)** — the science + training plan for being the best
+compact CPU engine at upscaling libjpeg-turbo/mozjpeg-encoded images (exact-encoder training,
+quant-table conditioning via zenjpeg, fidelity-first). Model/runtime survey that seeded this:
+`~/work/zen/SR-MODELS-RUNTIMES-2026-07-21.md`. Two crates today:
 
 - **`zensr-bench`** — tract-onnx CPU bench for fixed-shape SR ONNX exports
   (`tools/export_ntire25.py` exports NTIRE2025_ESR zoo checkpoints from
@@ -18,9 +20,9 @@ full model/runtime survey). Two crates:
 | TSR / EFDN / NanoSR via tract | 2.0 / 1.1 / 1.25 MP-out/s (128²) |
 | **micro-v4x vs tract, interleaved paired bench (quiet box)** | **128²: 57.6 vs 71.5 ms (1.24× faster); 256²: 233 vs 292 ms (1.25×); 64²: 18.0 vs 16.2 ms (near-parity)** |
 | AVX-512 v4x vs AVX2 v3 (same kernels) | **1.33–1.42× speedup** |
-| **Multithreaded tiling (512²→2048², tile 128, exact 16-px halo)** | **after SiLU/gate fusion + stride pad: 15.3 MP-out/s @8 threads · 20.15 @16 (208 ms for a 16.8 MP ×4 output)** |
+| **Multithreaded tiling (512²→2048², exact 16-px halo)** | **15.5 MP-out/s @8 threads · 17.8 @16 · 18.2 @24 (230 ms for a 16.8 MP ×4 output; tile 112-128)** |
 | zensr-micro-abi cdylib, scalar-only | 271,432 B (265 KB) |
-| **zensr-micro-abi cdylib, full SIMD dispatch** | **381,816 B (373 KB)** (v4x AVX-512 + v3 AVX2 + mandatory scalar fallback; `tier_v4` feature off by default; `incant!` always links scalar) |
+| **zensr-micro-abi cdylib, full SIMD dispatch** | **413,936 B (404 KB)** (post-recovery, unfused kernels + gate) (v4x AVX-512 + v3 AVX2 + mandatory scalar fallback; `tier_v4` feature off by default; `incant!` always links scalar) |
 | correctness vs PyTorch golden (every tier v3/v4/v4x) | max_abs 8.6e-6 (PASS) |
 | **f16 weights (297,696 B)** | **59.2 dB ramp / 75–76 dB photo PSNR vs fp32 — TRANSPARENT, ship it** |
 | int8-pc weights (152,400 B) | 16.8 dB ramp / 35–36 dB photo — **NOT viable** (see below) |
@@ -51,6 +53,26 @@ Full grids: `benchmarks/tract_cpu_2026-07-22.tsv`, `benchmarks/quant_accuracy_20
 - Archmage tier map (current, 0.9.28): v3 = AVX2+FMA (native 256), v4 = AVX-512 base,
   v4x = AVX-512 extended; `F32x8Convert` (transcendentals bound) is NOT implemented for v4/v4x
   tokens — use f32x16 there.
+
+
+## imazen-26 quality eval (2026-07-22, n=8/subcorpus, medians; SPANF vs Lanczos-up)
+
+| subcorpus | ΔPSNR | ΔSSIM2 | butteraugli n3 (lanczos→spanf, lower better) |
+|---|---|---|---|
+| documents | **+2.5 dB** | **+27.0** (−11.8→15.2) | 14.2→10.7 |
+| maps | **+2.7 dB** | +11.4 | 10.5→9.0 |
+| photos | +1.3 dB | +4.8 | 8.0→6.9 |
+| renders | +1.25 dB | +1.6 | 6.7→5.4 |
+| people | +0.9 dB | +3.8 | 6.4→5.6 |
+| art-scans | +0.9 dB | +6.6 | 7.2→7.5 (slightly worse) |
+| screen | +0.5 dB | +4.3 | 8.3→7.9 |
+| textures | **−1.2 dB** | −1.7 | 5.4→5.8 (SR loses on stochastic detail) |
+
+SPANF wins 7/8 subcorpora, dominating text/line content. Harness: `eval` bin
+(zenpng/zenjpeg decode → CatmullRom ×4 down → {spanf, lanczos, catmullrom} up →
+psnr/ssimulacra2/butteraugli-n3 vs HR). Caveat: LR degradation is linear-light
+CatmullRom, not SPANF's encoded-space-bicubic training distribution — SPANF
+scores are conservative. Full rows: `benchmarks/imazen26_eval_2026-07-22.tsv`.
 
 ## Reproduce
 
@@ -96,8 +118,14 @@ granularity. **Arbitrary dims verified** (2026-07-22): SIMD-vs-scalar matrix dow
 all three paths (<=2e-6) — any h,w >= 1 is supported and tested.
 
 **Fusion + stride-padding post-mortem (2026-07-22):** both were tried and REVERTED. The `Post`
-store-fusion lineage was implicated in a 26x outlined-intrinsic regression (featureless
-outlined conv copies; see commit "26x incident recovery"), and +16 stride padding at 4-KiB
+store-fusion caused a 26x regression, mechanism IR-verified: rustc strips `alwaysinline` from
+functions containing `#[target_feature]` calls (soundness interlock), so inlining into the
+arcane happens only in rustc's MIR inliner — whose size caps `#[inline(always)]` does not fully
+override. Fusion's exp polynomials pushed conv3x3's MIR over the cap → rejected → emitted
+featureless (`{ nonlazybind uwtable "target-cpu"="x86-64" }`, no alwaysinline) → LLVM legally
+cannot inline `+avx512f` intrinsics into it → `call _mm512_fmadd_ps` in the hot loop. Fast
+builds have no conv3x3 define in IR at all (fully MIR-inlined). Rule of thumb: keep
+arcane-adjacent kernel bodies small; hoist transcendental math into separate per-tier fns. And +16 stride padding at 4-KiB
 planes measured **2x slower** at 128²/256² — the L1-set-aliasing hypothesis is falsified for
 this access pattern. The cs channel-stride plumbing is kept at identity stride. Row-band
 tiling was evaluated and rejected (50–377 MB per-thread scratch on wide images — 2D tiles

@@ -126,10 +126,11 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "butteraugli"
-version = "0.9.4"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "914c4086ea33acfef5c3ea38393c6f5c0ec99d32155377818f1723ec1bd565e3"
 dependencies = [
  "archmage",
- "enough",
  "imgref",
  "magetypes",
  "rayon",
@@ -347,9 +348,10 @@ dependencies = [
 [[package]]
 name = "fast-ssim2"
 version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dcca2000fbfa5923eb54b5bedddadbe5f7c83f7ef65285ebe0ed10daa78d0f0"
 dependencies = [
  "archmage",
- "enough",
  "imgref",
  "magetypes",
  "num-traits",
@@ -1603,7 +1605,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.16"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "515b2d87c361de4a3c1e4131a1de03d9cceab59cf599ac48235d46e60ef1768d"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1672,6 +1676,8 @@ dependencies = [
 [[package]]
 name = "zenresize"
 version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0703679da7af627f10429532d0633b3d32fa0fd10d2b48ca94b5fcd0dbfd6e5a"
 dependencies = [
  "archmage",
  "imgref",
@@ -1745,11 +1751,3 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "zenjpeg"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "zenpng"
-version = "0.2.0"
