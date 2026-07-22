@@ -5,3 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
+archmage = "0.9.28"
+magetypes = { version = "0.9.28", features = ["std"], default-features = false }
+
+[features]
+default = ["avx512"]
+avx512 = ["magetypes/avx512"]
+nan-debug = []

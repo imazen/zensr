@@ -6,6 +6,9 @@
 //! if the size/speed answer justifies it.
 #![forbid(unsafe_code)]
 
+pub mod simd;
+pub use simd::spanf_x4_simd;
+
 pub const FC: usize = 32; // feature channels
 pub const S2: usize = 16; // upscale^2
 pub const NEAR_CH: usize = 3 * S2; // 48
@@ -177,6 +180,25 @@ fn spab(inp: &[f32], out: &mut [f32], tmp: &mut [f32], convs: &[(&[f32], &[f32])
     }
 }
 
+pub(crate) fn pixel_shuffle4_pub(inp: &[f32], out: &mut [f32], h: usize, wd: usize) {
+    pixel_shuffle4(inp, out, h, wd)
+}
+
+/// Stage-level non-finite reporting, active only with the `nan-debug` feature.
+#[cfg(feature = "nan-debug")]
+pub(crate) fn nan_debug(stage: &str, data: &[f32]) {
+    let bad = data.iter().filter(|v| !v.is_finite()).count();
+    let first = data.iter().position(|v| !v.is_finite());
+    let mx = data.iter().cloned().fold(0.0f32, |a, v| if v.is_finite() { a.max(v.abs()) } else { a });
+    eprintln!(
+        "nan-debug {stage}: nonfinite={bad}/{} first={first:?} max_abs={mx:.3e}",
+        data.len()
+    );
+}
+#[cfg(not(feature = "nan-debug"))]
+#[inline(always)]
+pub(crate) fn nan_debug(_stage: &str, _data: &[f32]) {}
+
 /// Full SPANF x4 forward. `input` is [3,h,w] NCHW f32; returns [3,4h,4w].
 pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32> {
     let plane = h * wd;
@@ -209,4 +231,72 @@ pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32
     let mut out = vec![0.0f32; 3 * plane * 16];
     pixel_shuffle4(&pre, &mut out, h, wd);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Deterministic LCG values in [-0.5, 0.5).
+    fn lcg(n: usize, seed: u32, scale: f32) -> Vec<f32> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((s >> 8) as f32 / (1u32 << 24) as f32 - 0.5) * scale
+            })
+            .collect()
+    }
+
+    fn assert_close_finite(a: &[f32], b: &[f32], tol: f32, what: &str) {
+        assert_eq!(a.len(), b.len());
+        let mut max = 0.0f32;
+        for (i, (x, y)) in a.iter().zip(b.iter()).enumerate() {
+            assert!(
+                x.is_finite() && y.is_finite(),
+                "{what}: non-finite at {i}: {x} vs {y}"
+            );
+            max = max.max((x - y).abs());
+        }
+        assert!(max < tol, "{what}: max diff {max} > {tol}");
+    }
+
+    #[test]
+    fn silu_dispatch_matches_scalar() {
+        let mut a = lcg(1000, 7, 20.0); // range ±10, covers both sigmoid tails
+        let mut b = a.clone();
+        for v in b.iter_mut() {
+            *v *= 1.0 / (1.0 + (-*v).exp());
+        }
+        simd::silu_dispatch(&mut a);
+        assert_close_finite(&a, &b, 2e-4, "silu");
+    }
+
+    #[test]
+    fn conv3x3_dispatch_matches_scalar() {
+        let (h, wd, cin, cout) = (9usize, 37usize, 5usize, 8usize);
+        let inp = lcg(cin * h * wd, 3, 2.0);
+        let wts = lcg(cout * cin * 9, 5, 0.5);
+        let bias = lcg(cout, 11, 0.5);
+        // scalar reference via the lib's own conv3x3
+        let mut want = vec![0.0f32; cout * h * wd];
+        conv3x3(&inp, &mut want, &wts, &bias, cin, cout, h, wd);
+        let mut got = vec![0.0f32; cout * h * wd];
+        simd::conv3x3_dispatch(&inp, cin, &wts, &bias, &mut got, cout, h, wd);
+        assert_close_finite(&got, &want, 1e-4, "conv3x3");
+    }
+
+    #[test]
+    fn simd_matches_scalar_reference() {
+        // Small weights keep activations bounded through 5 blocks.
+        let wbuf = lcg(TOTAL_FLOATS, 12345, 0.12);
+        let w = SpanfWeights::parse(&wbuf).unwrap();
+        let (h, wd) = (10usize, 24usize); // exercises vector interior + scalar edges
+        let input = lcg(3 * h * wd, 999, 1.0);
+
+        let a = spanf_x4(&input, h, wd, &w);
+        let b = spanf_x4_simd(&input, h, wd, &w);
+        // exp_midp vs libm exp: tiny per-element error, bounded through the net.
+        assert_close_finite(&b, &a, 5e-4, "full forward simd vs scalar");
+    }
 }
