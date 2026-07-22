@@ -6,6 +6,7 @@
 //! if the size/speed answer justifies it.
 #![forbid(unsafe_code)]
 
+pub mod adopted;
 pub mod simd;
 pub mod tiled;
 #[cfg(feature = "px")]
@@ -411,6 +412,48 @@ fn spab(inp: &[f32], out: &mut [f32], tmp: &mut [f32], convs: &[(&[f32], &[f32])
 
 pub(crate) fn pixel_shuffle4_pub(inp: &[f32], out: &mut [f32], h: usize, wd: usize) {
     pixel_shuffle4(inp, out, h, wd)
+}
+
+/// Scale-generic strided pixel shuffle: [3*s*s, h, w] (stride cs) -> [3, s*h, s*w].
+pub(crate) fn pixel_shuffle_s_strided(
+    inp: &[f32],
+    cstride: usize,
+    out: &mut [f32],
+    h: usize,
+    wd: usize,
+    s: usize,
+) {
+    let plane = h * wd;
+    let s2 = s * s;
+    let (oh, ow) = (h * s, wd * s);
+    for c in 0..3 {
+        for ry in 0..s {
+            for rx in 0..s {
+                let ip = &inp[(c * s2 + ry * s + rx) * cstride..][..plane];
+                for y in 0..h {
+                    let obase = c * oh * ow + (y * s + ry) * ow + rx;
+                    let irow = &ip[y * wd..(y + 1) * wd];
+                    for x in 0..wd {
+                        out[obase + x * s] = irow[x];
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// out ([3, s*h, s*w]) += nearest-neighbor upsample of base ([3, h, w] tight).
+pub(crate) fn nearest_add(base: &[f32], out: &mut [f32], h: usize, wd: usize, s: usize) {
+    let (oh, ow) = (h * s, wd * s);
+    for c in 0..3 {
+        for oy in 0..oh {
+            let brow = &base[c * h * wd + (oy / s) * wd..][..wd];
+            let orow = &mut out[c * oh * ow + oy * ow..][..ow];
+            for ox in 0..ow {
+                orow[ox] += brow[ox / s];
+            }
+        }
+    }
 }
 
 pub(crate) fn pixel_shuffle4_strided(inp: &[f32], cstride: usize, out: &mut [f32], h: usize, wd: usize) {

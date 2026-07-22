@@ -40,7 +40,8 @@ macro_rules! define_kernels {
 
                 // Row-slice table for this output row: rowtab[ic*3+ky].
                 // Built once per (oy); empty slice marks an invalid ky.
-                let mut rowtab: [&[f32]; 96] = [&[]; 96];
+                assert!(cin * 3 <= 192, "conv3x3: cin {cin} exceeds rowtab capacity");
+                let mut rowtab: [&[f32]; 192] = [&[]; 192];
                 for ic in 0..cin {
                     for ky in ky_lo..=ky_hi {
                         rowtab[ic * 3 + ky] = &inp[ic * cs + (oy + ky - 1) * wd..][..wd];
@@ -296,6 +297,35 @@ macro_rules! define_kernels {
                 }
             }
 
+            /// Per-channel PReLU: v -> max(v,0) + slope_c * min(v,0), planar layout.
+            #[inline(always)]
+            pub(crate) fn prelu<T: Backend>(
+                token: T,
+                data: &mut [f32],
+                slopes: &[f32],
+                channels: usize,
+                plane: usize,
+                cs: usize,
+            ) {
+                const W: usize = $w;
+                let zero = V::<T>::splat(token, 0.0);
+                for c in 0..channels {
+                    let a = V::<T>::splat(token, slopes[c]);
+                    let ch = &mut data[c * cs..c * cs + plane];
+                    let n = plane / W * W;
+                    let mut x = 0usize;
+                    while x < n {
+                        let v = V::<T>::from_slice(token, &ch[x..]);
+                        let dst: &mut [f32; W] = (&mut ch[x..x + W]).try_into().unwrap();
+                        (v.max(zero) + a * v.min(zero)).store(dst);
+                        x += W;
+                    }
+                    for v in &mut ch[n..] {
+                        *v = v.max(0.0) + slopes[c] * v.min(0.0);
+                    }
+                }
+            }
+
             /// out = (a + skip) * (sigmoid(a) - 0.5)
             #[inline(always)]
             pub(crate) fn gate<T: Backend>(
@@ -455,6 +485,199 @@ pub fn silu_dispatch(data: &mut [f32]) {
     incant!(
         silu_only_impl(data),
         [v4x(cfg(avx512)), v3, neon, wasm128, scalar]
+    );
+}
+
+#[magetypes(v3, neon, wasm128, scalar)]
+fn prelu_lay(
+    token: Token,
+    data: &mut [f32],
+    slopes: &[f32],
+    channels: usize,
+    plane: usize,
+    cs: usize,
+) {
+    k8::prelu(token, data, slopes, channels, plane, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+fn prelu_lay_v4(token: X64V4Token, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+    k16::prelu(token, data, slopes, channels, plane, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn prelu_lay_v4x(token: X64V4xToken, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+    k16::prelu(token, data, slopes, channels, plane, cs);
+}
+pub(crate) fn prelu_dispatch(data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+    incant!(
+        prelu_lay(data, slopes, channels, plane, cs),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+    );
+}
+
+// --- packed-weight kernel families for adopted graphs ----------------------
+
+#[magetypes(v3, neon, wasm128, scalar)]
+#[allow(clippy::too_many_arguments)]
+fn conv3x3_lay(
+    token: Token,
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k8::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv3x3_lay_v4(
+    token: X64V4Token,
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k16::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv3x3_lay_v4x(
+    token: X64V4xToken,
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k16::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
+}
+
+#[magetypes(v3, neon, wasm128, scalar)]
+fn gate_lay(token: Token, a: &[f32], skip: &[f32], out: &mut [f32]) {
+    k8::gate(token, a, skip, out);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+fn gate_lay_v4(token: X64V4Token, a: &[f32], skip: &[f32], out: &mut [f32]) {
+    k16::gate(token, a, skip, out);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn gate_lay_v4x(token: X64V4xToken, a: &[f32], skip: &[f32], out: &mut [f32]) {
+    k16::gate(token, a, skip, out);
+}
+
+#[magetypes(v3, neon, wasm128, scalar)]
+#[allow(clippy::too_many_arguments)]
+fn conv1x1_gen_lay(
+    token: Token,
+    srcs: &[(&[f32], usize)],
+    wts: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    cin_total: usize,
+    plane: usize,
+    cs: usize,
+) {
+    k8::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv1x1_gen_lay_v4(
+    token: X64V4Token,
+    srcs: &[(&[f32], usize)],
+    wts: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    cin_total: usize,
+    plane: usize,
+    cs: usize,
+) {
+    k16::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv1x1_gen_lay_v4x(
+    token: X64V4xToken,
+    srcs: &[(&[f32], usize)],
+    wts: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    cin_total: usize,
+    plane: usize,
+    cs: usize,
+) {
+    k16::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn conv3x3_packed_dispatch(
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    incant!(
+        conv3x3_lay(inp, cin, packed, bias, out, cout, h, wd, cs),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+    );
+}
+
+pub(crate) fn silu_all_dispatch(data: &mut [f32]) {
+    incant!(
+        silu_only_impl(data),
+        [v4x(cfg(avx512)), v3, neon, wasm128, scalar]
+    );
+}
+
+pub(crate) fn gate_all_dispatch(a: &[f32], skip: &[f32], out: &mut [f32]) {
+    incant!(
+        gate_lay(a, skip, out),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn conv1x1_gen_dispatch(
+    srcs: &[(&[f32], usize)],
+    wts: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    cin_total: usize,
+    plane: usize,
+    cs: usize,
+) {
+    incant!(
+        conv1x1_gen_lay(srcs, wts, bias, out, cout, cin_total, plane, cs),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
     );
 }
 

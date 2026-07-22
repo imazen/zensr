@@ -1,8 +1,11 @@
 # zensr — long-term plan: CPU super-resolution for web JPEGs
 
 **Mission:** be the best compact CPU engine at upscaling (and repairing) images encoded with
-**libjpeg-turbo and mozjpeg** — the encoders that produce the overwhelming majority of
-imageflow's real inputs. Fidelity-first, web-focused, shippable inside a .dll.
+**libjpeg-turbo primarily** (USER 2026-07-23: turbo-focus is fine), mozjpeg as a secondary
+eval axis and later fine-tune — the encoders behind the overwhelming majority of imageflow's
+real inputs. Fidelity-first, web-focused, shippable inside a .dll. **Severity-adaptive by
+design:** the core ships one small built-in model; an optional external "severity pack"
+provides degradation-strength adaptation without growing the core (see S2).
 
 **Unfair advantages this plan is built around:**
 1. **We own the decoder.** zenjpeg hands us exact quant tables, subsampling mode, progressive
@@ -66,10 +69,26 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
 - **S1 Encoder-match:** does training on turbo+mozjpeg beat simulated-JPEG (DiffJPEG-style) and
   single-encoder training, evaluated per-encoder? → decides degradation generator scope.
   *Falsified if* generic-JPEG training is within noise on both encoder test sets.
-- **S2 Conditioning:** blind vs (a) q-scalar input channel, (b) **q-banded weight swapping**
-  (2–4 models selected by decoded quant table; zero runtime cost, f16 files are 300–600 KB so
-  a 3-band zoo is ~1–2 MB), (c) FiLM scale/shift (within op vocab). Hypothesis: (b) captures
-  most of the win. → decides product shape.
+- **S2 Severity adaptation (USER 2026-07-23: adapt to severity WITHOUT model growth; optional
+  external model set is acceptable).** Severity signal = computed EXACTLY from decoded quant
+  tables (zenjpeg): map tables → equivalent IJG quality + subsampling flag → canonical severity
+  scalar (mozjpeg tables map too; recompressed files expose only the last encoder's tables —
+  a content-based correction is S7's job). Candidate mechanisms, all keeping the core small:
+  - **S2a input-conditioning:** severity as extra input channel(s) — single model, +O(100)
+    params; risk: soft compromise at extremes.
+  - **S2b banded external set:** N specialist fine-tunes selected by severity band; fast-tier
+    f16 = ~300 KB/model → 4-band pack ≈ 1.2 MB external, core ships the mid band. Zero runtime
+    cost; discrete boundaries.
+  - **S2d endpoint interpolation (production-proven: Real-ESRGAN wdn):** TWO endpoint
+    fine-tunes (light/severe) from a shared parent; runtime lerps weights by continuous
+    severity α, then packs — µs-scale, cacheable per bucket. Continuous control, 2 files
+    (~600 KB f16). Requires shared-basin fine-tunes — our warm-start topology gives this free.
+  - **S2e LoRA-style severity deltas:** base + per-severity low-rank conv deltas (rank 4–8 ≈
+    30–50 KB each, merged into weights at load, zero inference cost). Smallest pack; most
+    granular; slight training complexity.
+  Decision metric: quality-vs-severity curve (smoothness + endpoint quality) per pack size.
+  Hypothesis: S2d wins simplicity/quality; S2e wins if we want ≥6 severity points.
+  → locks the product shape: **built-in mid model + optional external severity pack**.
 - **S3 Pipeline-order coverage:** does joint training on (i)+(ii)+(iii) degrade the pure-(ii)
   CDN case vs a (ii)-specialist? → decides whether we ship one model or per-flow models.
 - **S4 Capacity/arch frontier:** SPANF-32 vs SPAN-48 vs Compact-16/32 at matched degradation
@@ -112,20 +131,52 @@ validation, no hand-distilled N=1 anchors). Falsified branches get recorded in P
 - **Splits:** by origin (even/odd convention like the canonical picker datasets) — no rendition
   leakage; per-subcorpus held-out test sets frozen before first training run.
 - **Canonical index:** this repo's `DATA.md` + an entry in `~/work/zen/DATA_PROVENANCE.md`.
-- **Compute:** degradation gen on CPU via **zenfleet** (never hand-rolled fleets); training on
-  local RTX 5070 (pilots) → vast.ai GPUs via zenfleet GPU executors (full runs); checkpoints to
-  R2 with pointer files in-repo (nothing > 30 KB binary in git).
+- **Compute (USER DIRECTIVE 2026-07-22): LAN nodes only — no rented cloud compute.** CPU data
+  generation and GPU training run on our own machines (this box: 7950X + RTX 5070 12 GB; plus
+  the other LAN nodes — P1 inventories them). All multi-node orchestration goes through
+  **zenfleet** (never hand-rolled); if zenfleet lacks a LAN/ssh provider for GPU training jobs,
+  that capability gets built INTO zenfleet per the workspace mandate.
+- **Storage reality check:** `/mnt/v` is 97 % full (≈68 GB free) — bulk HR + variants live
+  **Tower-primary** (`/mnt/tower/output/zensr-training/`, 3.2 TB free) with R2 mirror
+  (`s3://zentrain/zensr/`) and small hot caches locally; checkpoints to R2/Tower with pointer
+  files in-repo (nothing > 30 KB binary in git).
 
 ## Training stack
 
 - Base: **neosr** (Apache-2.0, local clone, supports SPAN + Compact archs, OTF degradations) —
   adapted with a real-encoder degradation hook (subprocess/FFI to pinned cjpeg + mozjpeg-rs;
   pre-generated variant pools to keep GPUs fed). Decision checkpoint P2: if adaptation fights
-  us, fall back to a minimal in-repo trainer (basicsr-style, ~1 kLoC).
+  us, fall back to a minimal in-repo trainer (basicsr-style, ~1 kLoC). Teacher pool for S9:
+  permissively-licensed heavyweights (e.g. Apache SwinIR-class) run OFFLINE on LAN GPUs to
+  produce distillation targets — teachers need not fit the op vocabulary, only ship models do.
 - Export path stays: torch → fixed-order weight dump → zensr-micro golden verification (every
   trained model gets torch goldens at 64² + tiny shapes, same gates as SPANF today).
 - Fidelity tier losses: Charbonnier + optional DISTS. Quality tier: + light UNet-GAN
   (Real-ESRGAN recipe) — clearly labeled, never the imageflow default.
+
+**GPU-efficiency levers (mandatory; these models are data-pipeline-bound, not FLOP-bound):**
+1. **Pre-packed training shards** — degraded pairs pre-generated and packed (LMDB/tar shards,
+   pre-cropped), sequential reads; never decode+degrade per training step. RAM-cache the hot set.
+2. **Warm-start everything** — bicubic-pretrained base checkpoint once per arch; S1/S2/S3/S7
+   are FINE-TUNES (1–3 h) not scratch runs (8–24 h). ~5× matrix compression.
+3. **Concurrent multi-model training** — a 0.15 M model uses <2 GB VRAM and a fraction of SM
+   capacity; run 3–6 experiments per GPU concurrently (separate processes/MPS). Multiplies
+   experiment throughput without new hardware.
+4. **Cached teacher targets** — S9 teachers run ONCE over the corpus, targets stored; students
+   train from disk. Distillation ≈ free per student.
+5. bf16 autocast + channels_last + torch.compile (+CUDA graphs on static shapes) — launch
+   overhead dominates tiny convs; fusion is worth more here than on big models.
+6. **ASHA-style early kill** — mini-val ssim2 every N steps; dominated runs die at 25 %.
+Net effect: the full S-matrix compresses from ~3–6 weeks to **~1–2 weeks on the single 5070,
+days if more LAN GPUs exist**.
+
+**Cloud burst (exists, user-gated, currently OFF per LAN-only directive):** zenfleet-vastai is
+already built; live prices 2026-07: 4090 ≈ $0.33/h, 5090-32GB ≈ $0.40/h, 4090 spot from
+~$0.14/h. The compressed program ≈ 150–300 GPU-h ⇒ **$50–120 total**, and 8 parallel boxes
+turn the matrix into ~2–3 days wall-clock. The saving is calendar time, not money; flipping
+this switch is the user's call, not a technical blocker. Managed AutoML platforms add nothing:
+none support image-restoration training; the domain's "cookie-cutter" is the OSS
+neosr/BasicSR stack we already adopted.
 
 ## Evaluation protocol (the bar)
 
@@ -147,6 +198,35 @@ Reports committed to `benchmarks/` with commit hashes.
 - G4: 4:2:0 chroma: measurable win from S5 or documented falsification.
 - G5 (P5.5): at least one top-3 sub-track placement (runtime/params/overall) in a public
   challenge with shipped-identical models, or a documented near-miss analysis feeding P6.
+
+## Adoption track (verified 2026-07-22; per-model licenses checked on live pages)
+
+Ship-v0 and scoreboard baselines come from existing models — adopted, not trained:
+
+| slot | model (author) | arch | license | note |
+|---|---|---|---|---|
+| **2× fast (our priority)** | 2xNomosUni_compact_multijpg(_ldl) + 2xNomosUni_span_multijpg(_ldl) (Phhofm) | Compact 64/16 · SPAN 48 | CC-BY-4.0 | the ONLY clean-license 2× web-JPEG photo models in existence |
+| 4× quality | realesr-general-x4v3 + wdn pair (xinntao) | Compact 64/32 | BSD-3 | denoise-strength interpolation knob |
+| 4× fast | 4xLSDIRCompactC3 / 4xNomosUni_span_multijpg (Phhofm) | Compact / SPAN | CC-BY-4.0 | JPEG 30–100 trained |
+| 4× max-realism (needs RealPLKSR port) | 4xNomosWebPhoto_RealPLKSR (Phhofm) | RealPLKSR 64/28/17ks | CC-BY-4.0 | true web lifecycle: multi-round JPEG **and WebP** + LUDVAE noise; ~25× Compact FLOPs |
+| 1× repair (needs RealPLKSR port) | 1xDeJPG_realplksr_otf (+_60) (Phhofm) | RealPLKSR | CC-BY-4.0 | pure dejpeg; the `_60` variant for lighter inputs |
+| anime | realesr-animevideov3 (BSD-3) · 2xHFA2k_compact_multijpg (CC-BY-4.0) | Compact | | |
+
+CC-BY-4.0 = commercial-OK with attribution (credit in docs/about). Blocked despite fit:
+Kim2091's UltraSharpV2-Lite/ClearReality (NC), AnimeJaNai Compacts incl. the 0.4 MB
+SuperUltraCompact (NC), alsa's quality-banded 1xJPG series (NC — but note: it independently
+validates our S2 q-banding idea). Avoid `_dysample` RealPLKSR variants (grid_sample).
+SPANPlus has zero released pretrains anywhere.
+
+**Verified gaps = our moat (every one survives adoption):** nothing trains on mozjpeg —
+every community pipeline bottoms out in cv2.imencode = libjpeg-turbo lineage (source-verified;
+one popular tool even defaults 4:2:2, not web-dominant 4:2:0); progressive + trellis artifacts
+unmodeled; no 2× multi-round web-lifecycle model; no quant-table/q-band conditioning anywhere;
+no permissive 2× RealPLKSR photo model.
+
+**Training-resource windfalls (fold into P1):** LUCID-CC0 v2 (2026-06, Phhofm) — 1.59 M tiles,
+199 GB, CC0 SISR training set → Tower-primary pull, licensing-gate trivially passes; plus CC0
+pretrain bases (musl 4x-realplksr-gan-pretrain, 4x-span-pretrain) for warm-starts.
 
 ## Path to SOTA — definition, evidence, and the drive
 
@@ -175,12 +255,15 @@ competitive results in the corresponding public challenges."* We do NOT claim gl
    params or overall) with the *same* models we ship, plus the engine story (400 KB Rust DLL)
    in the factsheet. Challenge results are the third-party stamp no self-run bench provides.
 
-**Compute budget (order-of-magnitude, revisited per phase):** pilots ≈ 50–100 GPU-h (local
-RTX 5070, $0); S1–S4+S8–S9 matrix ≈ 20–30 runs × 8–24 GPU-h ≈ 300–600 GPU-h (vast.ai 4090-class
-via zenfleet, ≈ $150–400); production + distillation ladder ≈ 200–300 GPU-h (≈ $100–200).
-Total to first SOTA claim: **well under $1k of rented GPU** plus CPU fleet time for data
-generation. This is deliberately cheap — sub-0.2 M models train in hours; the moat is the
-degradation exactness + conditioning + engine, not brute compute.
+**Budget & substrate (USER DIRECTIVE 2026-07-22):** the budget is *engineering time and AI
+tokens* — effectively uncapped: run the science program exhaustively, many sessions, deep
+ablations. Compute is **LAN nodes only** (CPU and GPU on our own hardware; no vast.ai/cloud
+GPU rental). Currency is therefore **GPU-nights**: on the RTX 5070 (12 GB) alone, sub-0.2 M
+models train in 2–8 h and Compact-class in 8–24 h → the full S1–S9 matrix (~30–40 runs) is
+3–6 weeks of continuous single-GPU utilization, linearly divided by every additional LAN GPU
+P1 finds. 12 GB VRAM comfortably fits every tier incl. the light-GAN quality runs (batch 32–64
+at 256² crops) and offline heavyweight-teacher inference for the S9 distillation ladder.
+The moat is degradation exactness + conditioning + the engine — not brute compute.
 
 **Drive mechanics (how this reaches the end instead of parking):**
 - Every phase has a Definition-of-Done gate below; a phase without its gate met does not yield
@@ -191,16 +274,21 @@ degradation exactness + conditioning + engine, not brute compute.
 - Kill criteria are pre-declared per science question (see S1–S9 falsification clauses) — a
   falsified branch is recorded and never blocks the critical path (which is: data → q-banded
   fast tier → realtime distillate → scoreboard → bench release → challenge entry).
-- Standing cadence once P2 lands: no idle GPU-week — there is always a queued experiment from
-  the S-list, and always a scoreboard delta to publish.
+- Standing cadence once P2 lands: **no idle GPU-night on any LAN node** — a persistent
+  experiment queue (zenfleet-local/LAN) always holds the next S-list run; every morning has a
+  result to log and a scoreboard delta or falsification to record. Machine-safety rules apply
+  on shared boxes (run-heavy, capped dataloader workers, serialize with other agents' heavy
+  jobs via the lockfile protocol).
 
 ## Phases
 
 - **P0 — Foundation (now):** this plan; engine additions (PReLU, nearest-residual, scale-param
   PixelShuffle, parametric fc/blocks); Compact + SPAN-48 graph ports with goldens; eval JPEG
   axis + zensim column; **baseline report**. Gate G1.
-- **P1 — Data:** HR corpus assembly + licensing gate; `zensr-degrade` + manifests + R2/Tower;
-  frozen test splits; DATA.md + workspace provenance entry.
+- **P1 — Data + LAN fleet:** HR corpus assembly + licensing gate; `zensr-degrade` + manifests
+  + Tower/R2; frozen test splits; DATA.md + workspace provenance entry; **LAN compute
+  inventory** (every node: cores/RAM/GPU/VRAM, ssh reachability) and zenfleet wiring for the
+  training queue (build the LAN provider into zenfleet if missing).
 - **P2 — Training bring-up:** neosr adaptation; reproduce SPANF-class bicubic training (sanity
   vs published numbers); first degradation fine-tune pilot on local GPU; export+golden loop
   proven end-to-end.
