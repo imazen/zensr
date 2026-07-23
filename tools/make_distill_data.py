@@ -21,7 +21,7 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dump_adopted import load_sd, merge_conv3xc, span_forward  # noqa: E402
+from dump_adopted import prepare_span_sd, span_forward  # noqa: E402
 
 ROOT = "/mnt/v/imazen-26"
 SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
@@ -46,9 +46,11 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     rng = random.Random(SEED)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    sd = load_sd("/mnt/tower/output/zensr-training/adopted-weights/2xNomosUni_span_multijpg.pth")
-    for p in ["conv_1", "conv_2"] + [f"block_{b}.{c}" for b in range(1, 7) for c in ("c1_r", "c2_r", "c3_r")]:
-        merge_conv3xc(sd, p)
+    # prepare_span_sd merges Conv3XC branches; span_forward normalizes input
+    # itself ((x-mean)*255, official). The first 14k-pair run predated the norm
+    # + inplace-SiLU concat fixes -> constant-gray teacher, fully discarded.
+    sd, _ = prepare_span_sd(
+        "/mnt/tower/output/zensr-training/adopted-weights/2xNomosUni_span_multijpg.pth")
     sd = {k: v.to(dev) for k, v in sd.items()}
 
     pool = []

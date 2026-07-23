@@ -115,14 +115,24 @@ def merge_conv3xc(sd, prefix):
     return d
 
 
+SPAN_MEAN = (0.4488, 0.4371, 0.4040)  # DIV2K rgb_mean, official SPAN default
+SPAN_IMG_RANGE = 255.0
+
+
 def span_forward(sd, x, scale):
+    # Input [0,1]; normalized HERE, matching official: conv zero-padding happens
+    # AFTER norm (border == mean gray). Folding the norm into conv_1 is NOT
+    # equivalent at image borders (zero-pad would mean black) — measured 0.32
+    # border error; do not re-attempt. Official SPAN uses SiLU(inplace=True),
+    # which mutates out1 in place -> the final concat sees SiLU(out1), not out1.
+    x = (x - torch.tensor(SPAN_MEAN).view(1, 3, 1, 1)) * SPAN_IMG_RANGE
     def spab(prefix, inp):
         o1 = conv3xc_eval(sd, f"{prefix}.c1_r", inp)
-        o = F.silu(o1)
-        o = F.silu(conv3xc_eval(sd, f"{prefix}.c2_r", o))
+        o1a = F.silu(o1)
+        o = F.silu(conv3xc_eval(sd, f"{prefix}.c2_r", o1a))
         o3 = conv3xc_eval(sd, f"{prefix}.c3_r", o)
         att = torch.sigmoid(o3) - 0.5
-        return (o3 + inp) * att, o1
+        return (o3 + inp) * att, o1a
 
     feat = conv3xc_eval(sd, "conv_1", x)
     b1, _ = spab("block_1", feat)
@@ -137,6 +147,19 @@ def span_forward(sd, x, scale):
     ups_w = sd["upsampler.0.weight"]
     out = F.conv2d(out, ups_w, sd["upsampler.0.bias"], padding=1)
     return F.pixel_shuffle(out, scale)
+
+
+SPAN_PREFIXES = ["conv_1", "conv_2"] + [
+    f"block_{b}.{c}" for b in range(1, 7) for c in ("c1_r", "c2_r", "c3_r")
+]
+
+
+def prepare_span_sd(path):
+    """Canonical span sd prep: merge every Conv3XC branch (checkpoint eval_conv
+    can be stale). span_forward normalizes input itself."""
+    sd = load_sd(path)
+    worst = max(merge_conv3xc(sd, p) for p in SPAN_PREFIXES)
+    return sd, worst
 
 
 def span_dump_order(sd):
@@ -162,25 +185,39 @@ def main():
         if not os.path.exists(path):
             print(f"MISSING {fname}")
             continue
-        sd = load_sd(path)
+        from spandrel import ModelLoader  # reference implementation — REQUIRED
+
+        ref_net = ModelLoader().load_from_file(path).model.eval()
         d = os.path.join(OUT, name)
         os.makedirs(d, exist_ok=True)
         if arch == "span48":
-            worst = max(
-                merge_conv3xc(sd, p)
-                for p in ["conv_1", "conv_2"]
-                + [f"block_{b}.{c}" for b in range(1, 7) for c in ("c1_r", "c2_r", "c3_r")]
-            )
+            assert ref_net.is_norm, f"{name}: expected is_norm SPAN checkpoint"
+            assert ref_net.img_range == SPAN_IMG_RANGE
+            assert torch.allclose(ref_net.mean.flatten(), torch.tensor(SPAN_MEAN)), \
+                f"{name}: nonstandard rgb_mean {ref_net.mean.flatten().tolist()}"
+            sd, worst = prepare_span_sd(path)
             print(f"{name}: branches merged+verified (worst diff {worst:.2e})")
             order = span_dump_order(sd)
             fwd = lambda x: span_forward(sd, x, scale)
             nf = sd["conv_1.eval_conv.weight"].shape[0]
             nc = 6
         else:
+            sd = load_sd(path)
             order = compact_dump_order(sd)
             fwd = lambda x: compact_forward(sd, x, scale)
             nf = sd["body.0.weight"].shape[0]
             nc = sum(1 for k in order if k.endswith(".weight") and sd[k].dim() == 4) - 2
+        # HARD GATE: my functional forward vs the reference implementation on
+        # random [0,1] input. Consistency goldens alone once hid a broken graph
+        # (constant-gray SPAN output) — never trust self-agreement again.
+        xr = torch.rand(1, 3, 33, 29, generator=torch.Generator().manual_seed(11))
+        with torch.no_grad():
+            ref_out = ref_net(xr)
+            my_out = fwd(xr)
+        rd = (ref_out - my_out).abs().max().item()
+        if rd > 2e-3:
+            raise SystemExit(f"{name}: reference cross-check FAILED (maxdiff {rd})")
+        print(f"{name}: spandrel cross-check OK (maxdiff {rd:.2e})")
         blobs, shapes = [], []
         for k in order:
             t = sd[k].detach().numpy().astype("<f4")
@@ -188,6 +225,9 @@ def main():
             shapes.append([k, list(t.shape)])
         with open(os.path.join(d, "weights.raw"), "wb") as f:
             f.write(b"".join(blobs))
+        # f16 ship file always regenerated with the f32 dump so they can't desync
+        np.frombuffer(b"".join(blobs), dtype="<f4").astype("<f2").tofile(
+            os.path.join(d, "weights_f16.raw"))
         total = sum(int(np.prod(s[1])) for s in shapes)
         for (h, wd) in [(40, 36), (17, 13)]:
             gi = ramp(3, h, wd)

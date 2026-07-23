@@ -141,9 +141,19 @@ impl AdoptedModel {
             Arch::Span48 => {
                 let fc = SPAN_FC;
                 let s2 = s * s;
+                // Official SPAN input norm: (x - rgb_mean) * 255, applied BEFORE the
+                // convs so zero-padding at image borders equals mean gray (folding the
+                // norm into conv_1 gets borders wrong — measured 0.32; don't re-attempt).
+                const SPAN_MEAN: [f32; 3] = [0.4488, 0.4371, 0.4040];
+                const SPAN_IMG_RANGE: f32 = 255.0;
                 let mut inp3 = vec![0.0f32; 3 * cs];
                 for c in 0..3 {
-                    inp3[c * cs..c * cs + plane].copy_from_slice(&input[c * plane..(c + 1) * plane]);
+                    for (d, sv) in inp3[c * cs..c * cs + plane]
+                        .iter_mut()
+                        .zip(&input[c * plane..(c + 1) * plane])
+                    {
+                        *d = (sv - SPAN_MEAN[c]) * SPAN_IMG_RANGE;
+                    }
                 }
                 let span3 = 2 * cs + plane;
                 let span_fc = (fc - 1) * cs + plane;
@@ -158,12 +168,13 @@ impl AdoptedModel {
                 let mut t2 = vec![0.0f32; fc * cs];
                 for blk in 0..6 {
                     let base = 1 + blk * 3;
-                    // c1 -> o1 (keep pre-activation for block 6)
                     conv3x3_packed_dispatch(&b_prev[..span_fc], fc, &self.packed[base], &self.biases[base], &mut t1, fc, h, w, cs);
+                    silu_all_dispatch(&mut t1[..span_fc]);
+                    // official SPAB uses SiLU(inplace=True): the out1 returned to the
+                    // final concat is the POST-activation tensor (keep for block 6)
                     if blk == 5 {
                         b6_o1[..span_fc].copy_from_slice(&t1[..span_fc]);
                     }
-                    silu_all_dispatch(&mut t1[..span_fc]);
                     conv3x3_packed_dispatch(&t1[..span_fc], fc, &self.packed[base + 1], &self.biases[base + 1], &mut t2, fc, h, w, cs);
                     silu_all_dispatch(&mut t2[..span_fc]);
                     conv3x3_packed_dispatch(&t2[..span_fc], fc, &self.packed[base + 2], &self.biases[base + 2], &mut t1, fc, h, w, cs);
