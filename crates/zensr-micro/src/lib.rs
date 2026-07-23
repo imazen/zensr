@@ -113,6 +113,15 @@ fn tensor_dims() -> [(usize, usize); 18] {
     dims
 }
 
+/// Decode an ALL-f16 weight file (every tensor f16) into f32 — the adopted-
+/// model ship format (halves file size; f16 weights measured transparent).
+pub fn decode_all_f16(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|c| f16_to_f32(u16::from_le_bytes([c[0], c[1]])))
+        .collect()
+}
+
 /// Decode the f16 weight dump (weights f16, biases f32) into the canonical
 /// TOTAL_FLOATS f32 buffer accepted by `SpanfWeights::parse`.
 pub fn decode_f16_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {

@@ -78,6 +78,30 @@ fn main() {
                 if ok { "OK" } else { "FAIL" }
             );
         }
+        // f16 ship-file check (loose tolerance; f16 measured transparent)
+        if let Ok(fb) = std::fs::read(d.join("weights_f16.raw")) {
+            let raw16 = zensr_micro::decode_all_f16(&fb);
+            let m16 = match arch.as_str() {
+                "compact" => AdoptedModel::load_compact(&raw16, nf, nc, scale),
+                _ => AdoptedModel::load_span48(&raw16, scale),
+            }
+            .unwrap();
+            let (h, w) = (40usize, 36usize);
+            let gi = read_f32(&d.join(format!("gold_in_{h}x{w}.raw")));
+            let go = read_f32(&d.join(format!("gold_out_{h}x{w}.raw")));
+            let mut out = vec![0.0f32; 3 * h * w * scale * scale];
+            m16.forward(&gi, h, w, &mut out);
+            let mut mx = 0.0f32;
+            for (x, y) in out.iter().zip(go.iter()) {
+                assert!(x.is_finite());
+                mx = mx.max((x - y).abs());
+            }
+            let ok16 = mx < 0.05;
+            if !ok16 {
+                fails += 1;
+            }
+            println!("{name} f16: max={mx:.2e} {}", if ok16 { "OK" } else { "FAIL" });
+        }
     }
     if fails > 0 {
         eprintln!("{fails} golden checks FAILED");

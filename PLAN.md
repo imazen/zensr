@@ -282,9 +282,13 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
 
 ## Phases
 
-- **P0 — Foundation (now):** this plan; engine additions (PReLU, nearest-residual, scale-param
-  PixelShuffle, parametric fc/blocks); Compact + SPAN-48 graph ports with goldens; eval JPEG
-  axis + zensim column; **baseline report**. Gate G1.
+- **P0 — Foundation: ✅ SUBSTANTIALLY DONE 2026-07-23** (10h director session): engine additions
+  (PReLU/nearest-residual/scale-param shuffle) landed; Compact + SPAN-48 ports golden-verified
+  (7 adopted models, incl. stale-eval_conv branch-merge fix); guard layer (residual clamp /
+  texture gate / round-trip fallback) property-tested; systems_eval with REAL turbo-jpeg axis;
+  SYSTEMS.md defines the five deployable systems; S-E realtime distillation pilot launched.
+  Remaining P0: zensim eval column (API is pipeline-shaped, deferred), G1 baseline report =
+  the systems_eval output being generated now.
 - **P1 — Data + LAN fleet:** HR corpus assembly + licensing gate; `zensr-degrade` + manifests
   + Tower/R2; frozen test splits; DATA.md + workspace provenance entry; **LAN compute
   inventory** (every node: cores/RAM/GPU/VRAM, ssh reachability) and zenfleet wiring for the
