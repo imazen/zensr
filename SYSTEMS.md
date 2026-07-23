@@ -245,3 +245,36 @@ conservatism (skin/face-aware guard alpha) now + ground-truth fidelity
 fine-tune under our exact degradation model at P2, shipped as an S2 band;
 (c) the audition harness is reusable for any future candidate in minutes
 (and its A2c rows cross-validate the systems_eval per-subcorpus numbers).
+
+### People fine-tune (P2-mini, 2026-07-24): the people gap is CLOSED by GT training
+
+Corpus: **zensr-people-v1** — 2,500 CC0 people photos (pxhere via HF dump,
+per-image URL provenance), frozen 64-image eval slice (shard-spread,
+`eval_ids.txt`), 24k GT crop pairs (image-level val split, q40–95 turbo).
+Two warm-started fine-tunes (20k steps each, ~25 min total GPU):
+
+| model | params | init | q35 SSIM2/butter/worse% | q75 SSIM2/butter/worse% |
+|---|---|---|---|---|
+| Lanczos | — | — | 30.3 / 3.19 / — | 57.9 / 2.19 / — |
+| A2c (incumbent) | 600K | — | 33.8 / 3.01 / 20 % | 56.4 / 2.23 / 70 % |
+| **P_rtc** | **45K** | rtc student | 33.5 / 2.92 / **8 %** | 59.8 / 1.97 / 25 % |
+| **P_a2c** | 600K | A2c | **39.8 / 2.67 / 5 %** | **62.6 / 1.88 / 14 %** |
+
+(frozen pxhere slice, n=64.) P_a2c is the first model to decisively win
+people at q75. P_rtc at 45K beats the 600K generalist at q50/q75 and fixes
+E_rt's people weakness (q75 59.8 vs 51.8). Clean stays route-to-resample
+on SSIM2 (P_a2c butteraugli actually ties Lanczos there).
+
+**Cross-source control** (imazen-26 unsplash-people, n=8, zero training
+exposure): P_a2c +3.3 over Lanczos at q35, +2.0 at q50, q75 tie (44.3 vs
+44.9; A2c was 40.6) — transfer confirmed, home-field inflates magnitude
+but not sign. n=8 caveat applies to the control, not the n=64 primary.
+
+Consequences: (a) the S2 external-band mechanism now has its first proven
+band — people — with P_a2c as the quality band and P_rtc as the realtime
+band; (b) GT fine-tuning on 2.5k targeted CC0 photos + 25 GPU-minutes
+moved a content class from "loses to Lanczos" to "wins at every quality"
+— this is the per-class recipe (textures and art-scans are next); (c) the
+n=8 people readout that motivated rung 4 was noise-pessimistic: at n=64
+A2c already won q35 people; per-class evals need n≥50 (sweep discipline
+held).
