@@ -136,3 +136,30 @@ in run 1 pass that same cross-check, so their numbers stand:
 4. **×4 blind upscaling is brutal**: SSIM2 medians are negative even for
    Lanczos on degraded inputs. ×4 claims should be framed against that
    reality — nothing "restores" q35 at ×4; the models only lose less.
+
+### S-E (rt_distill_2x) — pilot verdict
+
+45,156 params (180 KB f32 / 90 KB f16), distilled in 20 min (60k steps,
+GPU-resident set) from the S-A ×2 teacher on 13.5k imazen-26 turbo-JPEG
+pairs. Golden-verified in the runtime (≤4.8e-7, tiled exact).
+
+Quality (guarded, vs the same eval): at q35 it keeps **68 % of A2c's SSIM2
+gain over Lanczos** (+2.5 vs +3.7) at 13× fewer params; q50 marginal (+0.5);
+**q75 and clean lose to Lanczos** — the severity gate must route light/no
+degradation to A2c or a resampler. Worst-decile slightly below A2c
+(p10 6.9 vs 8.1 at q35). A real result for a first distillation pilot; the
+S9 ladder (more pairs, longer schedule, maybe nf32) is the obvious next rung.
+
+### Speed (quiet box, 5-rep min, benchmarks/systems_bench_2026-07-23.tsv)
+
+| system | 1T MP-out/s | 12T MP-out/s | note |
+|---|---|---|---|
+| S-A ×2 span | 0.24 | 1.31 | |
+| S-A ×4 span | 1.09 | 3.70 | |
+| S-B ×4 general | 0.35 | 0.98 | heaviest |
+| S-C ×1 (compact2x) | 0.19 | 0.99 | = 0.25 input-MP/s; expensive for a losing repair |
+| S-D ×4 anime | 0.84 | 2.75 | |
+| **S-E ×2 rt** | **3.07** | **21.93** | realtime-tier gate ✓ (≤0.05M params, ≥15 MP/s @12T) |
+
+Guard overhead is a flat 21–26 ms per output MP — negligible for S-A/B/C/D,
+but ~55 % of S-E's model time; SIMD-ifying `guards.rs` is the queued fix.

@@ -32,3 +32,14 @@ distill-data:
 
 distill-train steps="60000":
     python3 tools/train_distill.py {{steps}}
+
+ert-eval:
+    cargo build --profile release-fast -p zensr-bench --bin ert_eval
+    ./target/release-fast/ert_eval /mnt/v/imazen-26 benchmarks/systems_eval_$(date -u +%Y-%m-%d)_ert.tsv 8 12
+
+summarize tsv:
+    ./target/release-fast/systems_eval summarize {{tsv}}
+
+systems-bench:
+    cargo build --profile release-fast -p zensr-bench --bin systems_bench
+    ./target/release-fast/systems_bench 5

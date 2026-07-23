@@ -1,0 +1,14 @@
+# systems_bench quiet-box 2026-07-23; commit dfa1dc53+wip; host WSL2 7950X 28c; nice -n19; 5-rep min; models f32
+system	in	out_mp	threads	min_ms	mp_out_per_s	guard_ms
+S-A x2 span	512x512	1.05	1	4343.6	0.24	23.8
+S-A x2 span	512x512	1.05	12	801.6	1.31	22.6
+S-A x4 span	256x256	1.05	1	965.2	1.09	21.2
+S-A x4 span	256x256	1.05	12	283.8	3.70	21.4
+S-B x4 general	256x256	1.05	1	2999.6	0.35	21.2
+S-B x4 general	256x256	1.05	12	1064.9	0.98	21.3
+S-C x1 compact2x	512x512	1.05	1	5523.6	0.19	22.9
+S-C x1 compact2x	512x512	1.05	12	1056.4	0.99	26.1
+S-D x4 anime	256x256	1.05	1	1241.4	0.84	21.6
+S-D x4 anime	256x256	1.05	12	381.6	2.75	21.4
+S-E x2 rt	512x512	1.05	1	341.8	3.07	26.2
+S-E x2 rt	512x512	1.05	12	47.8	21.93	26.4
