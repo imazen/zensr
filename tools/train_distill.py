@@ -49,6 +49,10 @@ def main():
     n = lr_all.shape[0] - 512
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     val_tg = torch.from_numpy(tg_all[n:].astype(np.float32)).to(dev)
+    # GPU-resident train set (u8 0.37GB + f16 3.0GB): host-side gather/convert/H2D
+    # was the bottleneck (3.3 steps/s, GPU 32%); sample + convert on device instead.
+    lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dev)
+    tg_gpu = torch.from_numpy(tg_all[:n].copy()).to(dev)
 
     m = Student().to(dev)
     m = torch.compile(m)
@@ -57,9 +61,9 @@ def main():
     rng = np.random.default_rng(11)
     print(f"train n={n} steps={steps} batch={batch} params={sum(p.numel() for p in m.parameters())}", flush=True)
     for step in range(1, steps + 1):
-        idx = rng.integers(0, n, batch)
-        x = torch.from_numpy(lr_all[idx].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev, non_blocking=True)
-        y = torch.from_numpy(tg_all[idx].astype(np.float32)).to(dev, non_blocking=True)
+        idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
+        x = lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
+        y = tg_gpu[idx].float()
         with torch.autocast("cuda", dtype=torch.bfloat16):
             out = m(x)
             loss = charbonnier(out, y)
