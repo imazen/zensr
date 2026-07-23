@@ -116,6 +116,10 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
   at q35 (+2.5 SSIM2) — but lost at q75/clean (severity-route those away). Speed
   **21.9 MP-out/s @12T / 3.1 @1T** (systems_bench 2026-07-23). Hypothesis SUPPORTED at
   heavy degradation; next rung = more pairs + longer schedule + nf32 + q-banded students.
+  **Rungs 2+3 (same day): capacity FALSIFIED (nf32 = +0.5 SSIM2 for 2.7× compute); TEACHER
+  CHOICE DOMINANT — the A2c-teacher rtc_distill_2x at the same 45K matches the teacher's
+  butteraugli at every q, lands within 1.9 SSIM2 at q75, and halves the q35 worse-rate vs
+  the span-teacher student. S-E = rtc. Next levers: q-banded data emphasis, more pairs.**
   Ops lesson baked into tools/train_distill.py: keep the train set GPU-resident
   (host gather was 10× slower); teacher outputs get a sanity gate before any training.
 
