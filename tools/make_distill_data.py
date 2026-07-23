@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Generate distillation pairs for the realtime-2x student (S-E pilot).
+
+Input crops: HR from imazen-26 (SKIPPING each dir's first 8 sorted files —
+those are the frozen eval split), downscaled 2x (area) then JPEG-degraded via
+cv2 (libjpeg-turbo lineage) at q in [40,90], 4:2:0.
+Target: 2xNomosUni_span_multijpg (teacher) output on the degraded LR, computed
+on GPU with the same functional forward as dump_adopted.py (merged Conv3XC).
+
+Output shards: ~/tmp/zensr-distill/{lr_u8.npy, teacher_f16.npy, meta.json}
+(lr 96x96 u8 HWC, teacher 192x192 f16 CHW). Val split = last 512 pairs.
+"""
+import json
+import os
+import random
+import sys
+
+import cv2
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dump_adopted import load_sd, merge_conv3xc, span_forward  # noqa: E402
+
+ROOT = "/mnt/v/imazen-26"
+SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
+        "national-park-service", "unsplash-renders", "unsplash-textures", "office-documents"]
+OUT = os.path.expanduser("~/tmp/zensr-distill")
+N_PAIRS = 14000
+CROP = 192  # HR crop; LR = 96
+SEED = 20260723
+
+def list_train_files(sub):
+    d = os.path.join(ROOT, sub)
+    files = []
+    for base, _, names in os.walk(d):
+        for n in sorted(names):
+            if n.lower().endswith((".png", ".jpg", ".jpeg")):
+                files.append(os.path.join(base, n))
+    files.sort()
+    return files[8:]  # first 8 = frozen eval split
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    rng = random.Random(SEED)
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    sd = load_sd("/mnt/tower/output/zensr-training/adopted-weights/2xNomosUni_span_multijpg.pth")
+    for p in ["conv_1", "conv_2"] + [f"block_{b}.{c}" for b in range(1, 7) for c in ("c1_r", "c2_r", "c3_r")]:
+        merge_conv3xc(sd, p)
+    sd = {k: v.to(dev) for k, v in sd.items()}
+
+    pool = []
+    for s in SUBS:
+        fs = list_train_files(s)
+        pool += fs
+        print(f"{s}: {len(fs)} train files")
+    rng.shuffle(pool)
+
+    lr_all = np.zeros((N_PAIRS, 96, 96, 3), dtype=np.uint8)
+    tg_all = np.zeros((N_PAIRS, 3, 192, 192), dtype=np.float16)
+    made = 0
+    fi = 0
+    batch_lr = []
+    while made < N_PAIRS:
+        f = pool[fi % len(pool)]
+        fi += 1
+        img = cv2.imread(f, cv2.IMREAD_COLOR)  # BGR
+        if img is None or img.shape[0] < CROP or img.shape[1] < CROP:
+            continue
+        for _ in range(min(4, 1 + img.shape[0] * img.shape[1] // (CROP * CROP * 4))):
+            if made + len(batch_lr) >= N_PAIRS:
+                break
+            y = rng.randrange(0, img.shape[0] - CROP + 1)
+            x = rng.randrange(0, img.shape[1] - CROP + 1)
+            hr = img[y:y + CROP, x:x + CROP]
+            lr = cv2.resize(hr, (96, 96), interpolation=cv2.INTER_AREA)
+            q = rng.randrange(40, 91)
+            ok, enc = cv2.imencode(".jpg", lr, [cv2.IMWRITE_JPEG_QUALITY, q])
+            if not ok:
+                continue
+            lr = cv2.imdecode(enc, cv2.IMREAD_COLOR)
+            batch_lr.append(lr)
+        if len(batch_lr) >= 32 or (made + len(batch_lr) >= N_PAIRS and batch_lr):
+            arr = np.stack(batch_lr)  # B,96,96,3 BGR u8
+            rgb = arr[..., ::-1].astype(np.float32) / 255.0
+            t = torch.from_numpy(rgb.transpose(0, 3, 1, 2).copy()).to(dev)
+            with torch.no_grad():
+                out = span_forward(sd, t, 2).clamp(0, 1)
+            n = len(batch_lr)
+            lr_all[made:made + n] = arr[..., ::-1]  # store RGB u8
+            tg_all[made:made + n] = out.cpu().numpy().astype(np.float16)
+            made += n
+            batch_lr = []
+            if made % 1024 < 32:
+                print(f"{made}/{N_PAIRS}")
+    np.save(os.path.join(OUT, "lr_u8.npy"), lr_all)
+    np.save(os.path.join(OUT, "teacher_f16.npy"), tg_all)
+    json.dump({"n": N_PAIRS, "val_tail": 512, "teacher": "2xNomosUni_span_multijpg",
+               "degrade": "area-down2x + cv2 jpeg q40-90", "seed": SEED,
+               "eval_split_excluded": "first 8 sorted files per subdir"},
+              open(os.path.join(OUT, "meta.json"), "w"), indent=1)
+    print("DONE", lr_all.nbytes / 1e9, "GB +", tg_all.nbytes / 1e9, "GB")
+
+
+if __name__ == "__main__":
+    main()

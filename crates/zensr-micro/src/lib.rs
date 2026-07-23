@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod adopted;
+pub mod guards;
 pub mod simd;
 pub mod tiled;
 #[cfg(feature = "px")]
