@@ -174,3 +174,20 @@ NOT E_rt's bottleneck; the 45K shape stays the realtime pick. The gap to
 A2c at q75 tracks the *teacher's* q75 weakness (span 48.3 < A2c 50.3) —
 rung 3 tests an A2c-teacher distillate (E_rtc) on identical data settings.
 Guard after the separable rewrite: 9 ms/MP (was 26).
+
+### S9 rung 3 (teacher choice): CONFIRMED dominant — E_rtc ships as S-E
+
+rtc_distill_2x: identical 45K shape/data/recipe, teacher switched from
+span-2x to **A2c (2xNomosUni_compact)**. Ground-truth results vs E_rt:
+q75 SSIM2 **48.4 vs 45.8** (teacher 50.3 — the 45K student lands within
+1.9 of its 600K teacher); butteraugli **matches the teacher** at every
+quality (2.83/3.42/3.80 vs 2.82/3.34/3.67) and beats Lanczos at q35;
+worse-rate q35 **28 % vs 50 %**; clean 61.4 vs 58.8. Only q35 SSIM2 keeps
+a sliver of span-teacher advantage (29.5 vs 29.7 — noise-level).
+Speed identical to E_rt (same shape): 23 MP-out/s @12T, ~23× A2c.
+
+**S9 ladder conclusions (3 rungs, one session):** distillation transfers
+restoration behavior at 13× compression; capacity is not binding at 45K
+(rung 2 falsified); **teacher choice is the dominant lever — distill from
+the policy winner (worse-rate/butteraugli king), not the SSIM2-median
+king.** S-E ships rtc_distill_2x; rt/rt32 kept on Tower as ablation record.
