@@ -84,7 +84,7 @@ def main():
                 print(f"step {step} loss {loss.item():.5f} val_psnr_vs_teacher {np.mean(vps):.2f}", flush=True)
         if step % 10000 == 0 or step == steps:
             torch.save({"sd": m._orig_mod.state_dict(), "step": step},
-                       os.path.join(D, f"student_{step}.pth"))
+                       os.path.join(D, f"{OUT_NAME}_{step}.pth"))
 
     # export in compact dump order + goldens
     sd = {k: v.float().cpu() for k, v in m._orig_mod.state_dict().items()}

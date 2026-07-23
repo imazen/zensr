@@ -35,6 +35,7 @@ fn main() {
         ("S-C x1 compact2x", load("nomosuni_compact_2x", "compact", 64, 16, 2), 512),
         ("S-D x4 anime", load("animevideo_x4v3", "compact", 64, 16, 4), 256),
         ("S-E x2 rt", load("rt_distill_2x", "compact", 24, 8, 2), 512),
+        ("S-E2 x2 rt32", load("rt32_distill_2x", "compact", 32, 12, 2), 512),
     ];
     println!("system\tin\tout_mp\tthreads\tmin_ms\tmp_out_per_s\tguard_ms");
     for (name, m, n) in cases.iter_mut() {

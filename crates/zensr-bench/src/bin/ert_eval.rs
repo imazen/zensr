@@ -2,7 +2,7 @@
 //! Run after training exports; append output to the day's main TSV, then
 //! `systems_eval summarize <tsv>` for the combined table.
 //!
-//! Usage: ert_eval <corpus-root> <out-tsv> [per-sub=8] [threads=12]
+//! Usage: ert_eval <corpus-root> <out-tsv> [per-sub=8] [threads=12] [model-dir=rt_distill_2x] [label=E_rt]
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -14,7 +14,9 @@ fn main() {
     let out_path = PathBuf::from(args.next().expect("out tsv"));
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
-    let rt = load_adopted("rt_distill_2x").expect("rt_distill_2x (train first)");
+    let model_dir = args.next().unwrap_or_else(|| "rt_distill_2x".into());
+    let label = args.next().unwrap_or_else(|| "E_rt".into());
+    let rt = load_adopted(&model_dir).expect("student model dir (train first)");
     assert_eq!(rt.scale, 2);
 
     let mut tsv = String::new();
@@ -41,7 +43,7 @@ fn main() {
                 let s = score(&hr, &o);
                 let _ = writeln!(
                     tsv,
-                    "{sub}\t{fname}\tx2\t{deg}\tE_rt\t{:.3}\t{:.3}\t{:.4}",
+                    "{sub}\t{fname}\tx2\t{deg}\t{label}\t{:.3}\t{:.3}\t{:.4}",
                     s.psnr, s.ssim2, s.butter
                 );
             }
