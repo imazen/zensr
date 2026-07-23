@@ -420,9 +420,6 @@ fn spab(inp: &[f32], out: &mut [f32], tmp: &mut [f32], convs: &[(&[f32], &[f32])
     }
 }
 
-pub(crate) fn pixel_shuffle4_pub(inp: &[f32], out: &mut [f32], h: usize, wd: usize) {
-    pixel_shuffle4(inp, out, h, wd)
-}
 
 /// Scale-generic strided pixel shuffle: [3*s*s, h, w] (stride cs) -> [3, s*h, s*w].
 pub(crate) fn pixel_shuffle_s_strided(

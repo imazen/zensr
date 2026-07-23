@@ -110,6 +110,14 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
   distillation, standard ESR-meta recipe). Hypothesis: distillation closes ≥30 % of the
   realtime↔fast quality gap for free at inference. → becomes the default training topology
   if confirmed.
+  **PILOT RESULT (2026-07-23, rt_distill_2x):** 45,156-param Compact (nf24/nc8 ×2)
+  distilled 20 min from the span-2x teacher on 13.5k imazen-26 turbo-JPEG pairs kept
+  **68 % of A2c's q35 SSIM2 gain over Lanczos** (+2.5 of +3.7) and beat Lanczos outright
+  at q35 (+2.5 SSIM2) — but lost at q75/clean (severity-route those away). Speed
+  **21.9 MP-out/s @12T / 3.1 @1T** (systems_bench 2026-07-23). Hypothesis SUPPORTED at
+  heavy degradation; next rung = more pairs + longer schedule + nf32 + q-banded students.
+  Ops lesson baked into tools/train_distill.py: keep the train set GPU-resident
+  (host gather was 10× slower); teacher outputs get a sanity gate before any training.
 
 Discipline: every experiment lands in `benchmarks/` with commit + config + n; conclusions that
 inform shipped constants follow the workspace sweep/calibration rules (dense axes, held-out
@@ -194,6 +202,9 @@ Reports committed to `benchmarks/` with commit hashes.
 - G3 (P4 quality tier): beats realesr-general-x4v3 on turbo+mozjpeg test sets at ≤ its compute,
   on zensim AND ssim2 medians, no p10 collapse.
 - G2rt (P4 realtime tier): ≥ 15 MP-out/s single-thread; beats Lanczos on degraded inputs by
+  <!-- status 2026-07-23: rt_distill_2x = 21.9 MP/s @12T but 3.1 @1T (single-thread gate
+       NOT yet met — needs guard SIMD + maybe nf16 or ½-res shape); q35 ssim2 +2.5 ✓ at
+       one band; q50 +0.5 ✗; see SYSTEMS.md S-E verdict. -->
   ≥ 0.7 dB PSNR-equiv and ≥ 4 ssim2 median at q∈{50,70} on ≥ 6/8 subcorpora; ≤ 4× Lanczos cost.
 - G4: 4:2:0 chroma: measurable win from S5 or documented falsification.
 - G5 (P5.5): at least one top-3 sub-track placement (runtime/params/overall) in a public
