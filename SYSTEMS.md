@@ -191,3 +191,31 @@ restoration behavior at 13× compression; capacity is not binding at 45K
 (rung 2 falsified); **teacher choice is the dominant lever — distill from
 the policy winner (worse-rate/butteraugli king), not the SSIM2-median
 king.** S-E ships rtc_distill_2x; rt/rt32 kept on Tower as ablation record.
+
+### Per-subcorpus breakdown (n=8 each — medians noisy, wins/n is the honest read)
+
+Δ SSIM2-median vs baseline | per-image wins. Pattern across every track:
+**restoration wins on graphic/text/synthetic content (documents, maps,
+renders, screen) and loses on natural-texture content (people, textures,
+art-scans/halftone) except at heavy degradation.**
+
+x2 q35 (vs Lanczos): documents +5.7 (8/8), renders +10.1 (7/8), maps +4.7
+(8/8), screen +4.6 (7/8), photos +4.0 (6/8) — but art-scans −2.7, people
+−1.8, textures −0.9 (A2c). E_rtc mirrors it with a weaker tail (textures
+−5.3): the 45K student is weakest exactly on the stochastic class.
+
+x2 q75 (vs Lanczos): wins survive ONLY on screen +1.0 (7/8), maps +1.0
+(6/8), documents +0.9; photos/people/art-scans/textures all negative →
+at q75 the gate should be severity×content, not severity alone.
+
+x4 q50: D/B are huge on documents (+13.5/+15.6, 8/8), maps, renders;
+negative on people/screen/textures. x4 clean F_spanf: positive on ALL 8
+subcorpora (art-scans thinnest +0.8, 5/8) — the most robust single claim
+in the eval. x1 q35 repair: wins only maps +4.0 (8/8) and renders +5.4
+(7/8) — graphics deblocking; everything else ≤ identity.
+
+Policy consequence: the blind router needs a cheap content signal next to
+the quant-table severity signal — the guard's own texture-energy map is
+already computed and is the natural first feature (S7 ties in). Recorded
+as the next eval axis; n=8/subcorpus must grow before shipping per-class
+thresholds (sweep-discipline: ≥50/class).
