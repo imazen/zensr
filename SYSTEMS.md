@@ -56,3 +56,35 @@ numbers. Guard ablation: S-A ×2 runs guarded AND raw.
 See `benchmarks/systems_eval_2026-07-23.tsv` + the summary table committed
 alongside. (Filled by the session's eval run; the distilled S-E row lands when
 training completes.)
+
+### Eval run 1 (flawed SPAN, kept as `*_flawed-span.tsv`) — what it taught
+
+The first run shipped a **miswired SPAN-48 graph** (missing `(x−mean)·255`
+input norm + official's `SiLU(inplace=True)` concat semantics) that produced
+near-constant gray — caught because eval numbers, not goldens, went sideways;
+my consistency goldens agreed with my own broken torch reimplementation. Fix
+verified against spandrel (all 7 models ≤6e-6); the dump now hard-gates every
+model against the reference implementation. Compact-arch rows (A2c, B, D, C)
+in run 1 pass that same cross-check, so their numbers stand:
+
+1. **The guard did its job under total model failure** — the strongest
+   bounded-downside evidence we could have asked for, obtained by accident:
+   raw broken SPAN scored **9.4 dB PSNR / SSIM2 −357** (garbage), while the
+   guarded path held it at **25.7 dB / SSIM2 54** on clean ×2 (baseline
+   Lanczos 28.8 / 67). A catastrophically wrong model degraded blind output
+   to "slightly worse than bilinear", not to noise. (`A2_span` vs
+   `A2_span_raw`, run 1.)
+2. **Severity gating is mandatory policy, not a nice-to-have.** On clean
+   input every model loses to Lanczos (worse-than-baseline 77–98 %); at q50
+   and below the compact restore models win decisively (A2c 20–38 % worse
+   rate, i.e. better on 62–80 % of images; SSIM2 median +2–4 over Lanczos;
+   butteraugli better). Blind policy: detect JPEG quality from quant tables
+   → model only when degraded, resample when clean.
+3. **S-C ×1 repair via 2×-up→box-down loses to identity** at q35–q75 on all
+   three metrics (worse rate 44–89 %). Suspect the box blur; run 2 adds a
+   CatmullRom-down variant (`C_repair_cr`). If that still loses, the honest
+   verdict is that ×1 JPEG repair needs a native ×1 model (1xDeJPG /
+   RealPLKSR port), not a scale round-trip.
+4. **×4 blind upscaling is brutal**: SSIM2 medians are negative even for
+   Lanczos on degraded inputs. ×4 claims should be framed against that
+   reality — nothing "restores" q35 at ×4; the models only lose less.

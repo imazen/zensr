@@ -125,7 +125,8 @@ def span_forward(sd, x, scale):
     # equivalent at image borders (zero-pad would mean black) — measured 0.32
     # border error; do not re-attempt. Official SPAN uses SiLU(inplace=True),
     # which mutates out1 in place -> the final concat sees SiLU(out1), not out1.
-    x = (x - torch.tensor(SPAN_MEAN).view(1, 3, 1, 1)) * SPAN_IMG_RANGE
+    mean = torch.tensor(SPAN_MEAN, device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+    x = (x - mean) * SPAN_IMG_RANGE
     def spab(prefix, inp):
         o1 = conv3xc_eval(sd, f"{prefix}.c1_r", inp)
         o1a = F.silu(o1)

@@ -224,8 +224,15 @@ fn main() {
                 // ---- x1 repair track (jpeg the full-res image, restore at 1x)
                 if deg != "clean" {
                     let lr = degrade(&hr);
-                    let repaired = box_down2(&run_guarded(&compact2, &lr, threads, true));
-                    for (name, o) in [("identity", &lr), ("C_repair", &repaired)] {
+                    let sr2 = run_guarded(&compact2, &lr, threads, true);
+                    let repaired = box_down2(&sr2);
+                    // box-down softens; CatmullRom preserves more of the restored detail
+                    let repaired_cr = resize_rgb8(&sr2, lr.w, lr.h, zenresize::Filter::CatmullRom);
+                    for (name, o) in [
+                        ("identity", &lr),
+                        ("C_repair", &repaired),
+                        ("C_repair_cr", &repaired_cr),
+                    ] {
                         let s = score(&hr, o);
                         let _ = writeln!(tsv, "{sub}\t{fname}\tx1\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}", s.psnr, s.ssim2, s.butter);
                     }
