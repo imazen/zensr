@@ -325,3 +325,10 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
 - Row-band tiling: 50–377 MB/thread scratch on wide images.
 - int8 weights-only PTQ on SPAN-class: 35 dB photo — broken; QAT or int8-first arch only.
 - Bicubic++ / AnimeJaNai / eSR / RAISR / EchoSR / SAFMN / OmniSR / ABPN: license-blocked.
+- **Consistency-only goldens (torch-reimpl ↔ Rust)**: agreed on a broken SPAN graph
+  (missing input norm + inplace-SiLU concat semantics → constant gray) for a full eval +
+  a poisoned 14k-pair teacher run (2026-07-23). Goldens MUST be cross-checked against the
+  reference implementation (spandrel); `dump_adopted.py` now hard-gates this per model.
+- Folding SPAN's `(x−mean)·255` input norm into merged conv_1: exact in the interior,
+  wrong at image borders (official zero-pads AFTER norm ⇒ border=mean gray; folded
+  zero-pad ⇒ border=black; measured 0.32 max err). Normalize explicitly instead.

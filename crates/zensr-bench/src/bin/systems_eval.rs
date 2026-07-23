@@ -122,6 +122,13 @@ fn run_guarded(m: &AdoptedModel, lr: &Rgb8Img, threads: usize, guard: bool) -> R
     planar_to_rgb8(&sr, lr.w * m.scale, lr.h * m.scale)
 }
 
+fn run_guarded_spanf(m: &zensr_micro::SpanfModel, lr: &Rgb8Img, threads: usize) -> Rgb8Img {
+    let lp = to_planar_f32(lr);
+    let mut sr = zensr_micro::tiled::spanf_x4_tiled(m, &lp, lr.h, lr.w, threads, 0);
+    guarded_merge(&mut sr, &lp, lr.h, lr.w, 4, &GuardConfig::default());
+    planar_to_rgb8(&sr, lr.w * 4, lr.h * 4)
+}
+
 /// Box-downscale by 2 (for the x1 repair system).
 fn box_down2(img: &Rgb8Img) -> Rgb8Img {
     let (w, h) = (img.w / 2, img.h / 2);
@@ -153,6 +160,8 @@ fn main() {
     let gen_raw = read_f32_file(&PathBuf::from("models/adopted/general_x4v3/weights.raw"));
     let wdn_raw = read_f32_file(&PathBuf::from("models/adopted/general_wdn_x4v3/weights.raw"));
     let rt = load_adopted("rt_distill_2x"); // may not exist yet (training)
+    let spanf = zensr_micro::SpanfModel::new(read_f32_file(&PathBuf::from("models/spanf_weights.raw")))
+        .expect("spanf");
     // wdn severity blends keyed by degradation level
     let b_for = |deg: &str| -> AdoptedModel {
         let t = match deg {
@@ -213,6 +222,7 @@ fn main() {
                     let outs: Vec<(String, Rgb8Img)> = vec![
                         ("lanczos".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos)),
                         ("A4_span".into(), run_guarded(&span4, &lr, threads, true)),
+                        ("F_spanf".into(), run_guarded_spanf(&spanf, &lr, threads)),
                         ("B_quality".into(), run_guarded(&b_for(deg), &lr, threads, true)),
                         ("D_anime".into(), run_guarded(&anime4, &lr, threads, true)),
                     ];
