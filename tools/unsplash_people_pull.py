@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Supplemental people photos from Unsplash (user-authorized 2026-07-24).
 
+STATUS 2026-07-24: the keyless napi endpoint returns 401 for search — Unsplash
+locked it down. This script is KEPT for when an official API key exists
+(swap the napi URL for api.unsplash.com + Authorization: Client-ID header).
+Result of the attempt: kept=0; pxhere CC0 pool carries the corpus.
+
 Uses the site's public napi search endpoint (keyless) at a polite rate
 (1 req/s, ~300 photos). TRAIN-POOL ONLY — the redistributable eval slice
 stays pxhere-CC0 (Unsplash License permits commercial use but is not CC0;
