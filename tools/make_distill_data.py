@@ -21,12 +21,12 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dump_adopted import prepare_span_sd, span_forward  # noqa: E402
+from dump_adopted import compact_forward, load_sd, prepare_span_sd, span_forward  # noqa: E402
 
 ROOT = "/mnt/v/imazen-26"
 SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
         "national-park-service", "unsplash-renders", "unsplash-textures", "office-documents"]
-OUT = os.path.expanduser("~/tmp/zensr-distill")
+OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-distill"))
 N_PAIRS = 14000
 CROP = 192  # HR crop; LR = 96
 SEED = 20260723
@@ -46,11 +46,19 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     rng = random.Random(SEED)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    # Teacher selection (ZENSR_TEACHER): "span" = 2xNomosUni_span (SSIM2 king at
+    # q<=50), "compact" = 2xNomosUni_compact (q75 + butteraugli + worse-rate king).
     # prepare_span_sd merges Conv3XC branches; span_forward normalizes input
     # itself ((x-mean)*255, official). The first 14k-pair run predated the norm
     # + inplace-SiLU concat fixes -> constant-gray teacher, fully discarded.
-    sd, _ = prepare_span_sd(
-        "/mnt/tower/output/zensr-training/adopted-weights/2xNomosUni_span_multijpg.pth")
+    W = "/mnt/tower/output/zensr-training/adopted-weights"
+    teacher = os.environ.get("ZENSR_TEACHER", "span")
+    if teacher == "compact":
+        sd = load_sd(os.path.join(W, "2xNomosUni_compact_multijpg_ldl.pth"))
+        fwd = lambda t: compact_forward(sd, t, 2)
+    else:
+        sd, _ = prepare_span_sd(os.path.join(W, "2xNomosUni_span_multijpg.pth"))
+        fwd = lambda t: span_forward(sd, t, 2)
     sd = {k: v.to(dev) for k, v in sd.items()}
 
     pool = []
@@ -89,7 +97,7 @@ def main():
             rgb = arr[..., ::-1].astype(np.float32) / 255.0
             t = torch.from_numpy(rgb.transpose(0, 3, 1, 2).copy()).to(dev)
             with torch.no_grad():
-                out = span_forward(sd, t, 2).clamp(0, 1)
+                out = fwd(t).clamp(0, 1)
             n = len(batch_lr)
             lr_all[made:made + n] = arr[..., ::-1]  # store RGB u8
             tg_all[made:made + n] = out.cpu().numpy().astype(np.float16)

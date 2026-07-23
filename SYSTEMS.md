@@ -163,3 +163,14 @@ S9 ladder (more pairs, longer schedule, maybe nf32) is the obvious next rung.
 
 Guard overhead is a flat 21–26 ms per output MP — negligible for S-A/B/C/D,
 but ~55 % of S-E's model time; SIMD-ifying `guards.rs` is the queued fix.
+
+### S9 rung 2 (capacity): falsified — teacher choice is the next lever
+
+rt32_distill_2x (nf32/nc12, 115,756 params, same data/recipe/steps) closed
++0.85 dB of the val-vs-teacher gap but translated to only **+0.5 SSIM2**
+over the 45K student on ground truth (q35 30.2 vs 29.7; q75 46.3 vs 45.8)
+at **2.7× the compute** (8.5 vs 23.0 MP-out/s @12T). Verdict: capacity is
+NOT E_rt's bottleneck; the 45K shape stays the realtime pick. The gap to
+A2c at q75 tracks the *teacher's* q75 weakness (span 48.3 < A2c 50.3) —
+rung 3 tests an A2c-teacher distillate (E_rtc) on identical data settings.
+Guard after the separable rewrite: 9 ms/MP (was 26).

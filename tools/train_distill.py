@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-D = os.path.expanduser("~/tmp/zensr-distill")
+D = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-distill"))
 NF = int(os.environ.get("ZENSR_NF", "24"))
 NC = int(os.environ.get("ZENSR_NC", "8"))
 SCALE = 2
