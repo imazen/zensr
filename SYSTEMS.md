@@ -53,9 +53,57 @@ numbers. Guard ablation: S-A ×2 runs guarded AND raw.
 
 ## Results
 
-See `benchmarks/systems_eval_2026-07-23.tsv` + the summary table committed
-alongside. (Filled by the session's eval run; the distilled S-E row lands when
-training completes.)
+Data: `benchmarks/systems_eval_2026-07-23.tsv` (+ `.summary.txt`; regenerate
+with `systems_eval summarize <tsv>`). n=64 images (8 subcorpora × 8), real
+system-cjpeg degradation, medians unless noted. E_rt rows appended from
+`ert_eval` after the distillation finished.
+
+### Run 2 (fixed SPAN graph) — the five-system verdict
+
+**×2 (S-A / S-C-class models).** On clean input every model loses to Lanczos
+(SSIM2 62–63 vs 67; worse-rate 83–97 %) — resample clean images, full stop.
+On JPEG input the models win and the ranking is quality-dependent:
+
+| deg | best SSIM2 | best butteraugli | best worse-rate |
+|---|---|---|---|
+| q75 | A2c 50.3 (Lanczos 48.9) | A2c 2.82 (L 3.01) | A2c 56 % |
+| q50 | A2_span 39.1 (L 36.5) | A2c 3.34 (L 3.72) | A2c 38 % |
+| q35 | A2_span 32.9 (L 27.1) | A2c 3.67 (L 4.22) | A2c 20 % |
+
+The span model restores the most structure at heavy degradation (+5.8 SSIM2
+over Lanczos at q35) but its sharper hallucinations cost butteraugli; the
+compact model is the safer blind default (lowest worse-rate at every q,
+best butteraugli everywhere). Policy: **A2c for blind en-masse, A2_span for
+"restore harder" opt-in at q≤50.**
+
+**Guard ablation (A2_span vs A2_span_raw), now on a working model:** the
+guard costs ~1.2 SSIM2 median at q35 (32.9 vs 34.1) but improves worst-decile
+(p10 8.5 vs 7.5), worse-rate (27 % vs 41 %), and butteraugli (4.34 vs 4.89).
+On clean input the guard *raises* the median (62.1 vs 57.2): multijpg-trained
+models "fix" texture that isn't broken, and the bilinear anchor tempers it.
+Insurance that pays for itself everywhere except a small median cost at the
+degradation level where you'd opt into raw anyway.
+
+**×4.** Severity split is stark. Clean: **F_spanf (NTIRE clean-specialist)
+dominates** — SSIM2 32.9 vs Lanczos 29.6, worse-rate only 19 %, best
+butteraugli — while every restore-trained model loses to Lanczos. Degraded:
+F_spanf collapses (worse-rate 61–69 %) and **D_anime is the surprise blind
+winner** (worse-rate 23 % at q35/q50, best/near-best SSIM2 + butteraugli),
+with B_quality close behind; A4_span mid-pack. ×4 remains "lose less":
+SSIM2 medians are negative for everything on degraded input. Policy:
+**F_spanf on clean, D_anime (or B at q75) on JPEG input.**
+
+**×1 repair (S-C): honestly negative.** CatmullRom-down beats box-down
+slightly but still loses to identity at q50/q75 on all metrics (butteraugli
+identity 1.18–1.91 vs repair 1.60–2.07); at q35 it's a median tie (SSIM2
+59.8 vs 59.6, wins 58 % of images) — a weak positive only at the heaviest
+degradation. The 2×-up→down round trip is falsified as a ×1 strategy for
+q≥50; a native ×1 artifact model (1xDeJPG-class, needs the RealPLKSR port)
+is the queued replacement.
+
+**Cross-metric note:** butteraugli consistently prefers conservative output
+(A2c, identity); SSIM2 rewards restored structure (span). Both agree on
+severity gating and on every policy call above; report both, never one.
 
 ### Eval run 1 (flawed SPAN, kept as `*_flawed-span.tsv`) — what it taught
 
