@@ -17,6 +17,7 @@ imgref = "1.12.2"
 bytemuck = "1.25.2"
 enough = "0.4.4"
 rgb = "0.8.52"
+zensim = "0.2.7"
 
 [features]
 default = ["avx512"]

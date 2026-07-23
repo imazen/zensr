@@ -191,3 +191,17 @@ pub fn list_images(dir: &Path) -> Vec<PathBuf> {
     v.sort();
     v
 }
+
+/// zensim score (PreviewV0_2 default profile), 0-100-ish scale.
+pub fn zensim_score(a: &Rgb8Img, b: &Rgb8Img) -> f64 {
+    use zensim::source::RgbSlice;
+    use zensim::{Zensim, ZensimProfile};
+    let (ca, _) = a.px.as_chunks::<3>();
+    let (cb, _) = b.px.as_chunks::<3>();
+    let sa = RgbSlice::new(ca, a.w, a.h);
+    let sb = RgbSlice::new(cb, b.w, b.h);
+    match Zensim::new(ZensimProfile::PreviewV0_2).compute(&sa, &sb) {
+        Ok(r) => r.score(),
+        Err(_) => f64::NAN,
+    }
+}
