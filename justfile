@@ -50,3 +50,9 @@ people-pull n_shards="40" quota="2500":
 people-eval:
     cargo build --profile release-fast -p zensr-bench --bin systems_eval
     ./target/release-fast/systems_eval /mnt/v/input/zensr-people-eval-root benchmarks/people_eval_$(date -u +%Y-%m-%d).tsv 64 12
+
+people-gt-data:
+    ZENSR_PEOPLE_OUT=~/tmp/zensr-people-v1 ~/work/zen/scripts/run-heavy -- python3 tools/make_people_gt_data.py 24000
+
+unsplash-pull target="300":
+    nice -n 19 python3 tools/unsplash_people_pull.py {{target}}

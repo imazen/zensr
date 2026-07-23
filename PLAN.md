@@ -143,6 +143,9 @@ validation, no hand-distilled N=1 anchors). Falsified branches get recorded in P
 - **Splits:** by origin (even/odd convention like the canonical picker datasets) — no rendition
   leakage; per-subcorpus held-out test sets frozen before first training run.
 - **Canonical index:** this repo's `DATA.md` + an entry in `~/work/zen/DATA_PROVENANCE.md`.
+- **Storage (USER DIRECTIVE 2026-07-24): local disk OK for zensr data up to 400 GB total;**
+  cleaning `target/` dirs of unclaimed repos is authorized when space runs low (zenjpeg +
+  jxl-encoder targets = 291 G reclaimed same day; check `.workongoing` claims first).
 - **Compute (USER DIRECTIVE 2026-07-22): LAN nodes only — no rented cloud compute.** CPU data
   generation and GPU training run on our own machines (this box: 7950X + RTX 5070 12 GB; plus
   the other LAN nodes — P1 inventories them). All multi-node orchestration goes through
