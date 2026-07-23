@@ -205,3 +205,106 @@ pub fn zensim_score(a: &Rgb8Img, b: &Rgb8Img) -> f64 {
         Err(_) => f64::NAN,
     }
 }
+
+// ---- shared eval-system helpers (used by systems_eval, ert_eval) ----
+
+pub struct Scored {
+    pub psnr: f64,
+    pub ssim2: f64,
+    pub butter: f64,
+}
+
+pub fn score(hr: &Rgb8Img, out: &Rgb8Img) -> Scored {
+    Scored {
+        psnr: psnr_rgb8(hr, out),
+        ssim2: ssim2(hr, out),
+        butter: butter_n3(hr, out),
+    }
+}
+
+pub fn read_f32_file(p: &std::path::Path) -> Vec<f32> {
+    std::fs::read(p)
+        .unwrap()
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
+/// Load an adopted model dir (models/adopted/<dir>) via its meta.json.
+pub fn load_adopted(dir: &str) -> Option<zensr_micro::adopted::AdoptedModel> {
+    use zensr_micro::adopted::AdoptedModel;
+    let d = std::path::PathBuf::from("models/adopted").join(dir);
+    let meta = std::fs::read_to_string(d.join("meta.json")).ok()?;
+    let f = |k: &str| -> String {
+        let pat = format!("\"{k}\":");
+        match meta.find(&pat) {
+            Some(i) => meta[i + pat.len()..]
+                .trim_start()
+                .trim_start_matches('"')
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect(),
+            None => String::new(),
+        }
+    };
+    let raw = read_f32_file(&d.join("weights.raw"));
+    let scale: usize = f("scale").parse().ok()?;
+    match f("arch").as_str() {
+        "compact" => {
+            AdoptedModel::load_compact(&raw, f("nf").parse().ok()?, f("nc").parse().ok()?, scale)
+                .ok()
+        }
+        "span48" => AdoptedModel::load_span48(&raw, scale).ok(),
+        _ => None,
+    }
+}
+
+/// Real libjpeg-turbo round trip at quality q, 4:2:0 -optimize, via system cjpeg.
+/// Scratch under ~/tmp (never /tmp — see global CLAUDE.md ban).
+pub fn turbo_jpeg(img: &Rgb8Img, q: u32) -> Rgb8Img {
+    let home = std::env::var("HOME").expect("HOME");
+    let dir = std::path::PathBuf::from(home)
+        .join("tmp")
+        .join(format!("zensr-se-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ppm = dir.join("t.ppm");
+    let jpg = dir.join("t.jpg");
+    let mut buf = format!("P6\n{} {}\n255\n", img.w, img.h).into_bytes();
+    buf.extend_from_slice(&img.px);
+    std::fs::write(&ppm, &buf).unwrap();
+    let st = std::process::Command::new("cjpeg")
+        .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+        .arg(&jpg)
+        .arg(&ppm)
+        .status()
+        .expect("cjpeg");
+    assert!(st.success());
+    decode_any(&jpg).expect("decode turbo jpeg")
+}
+
+pub fn run_guarded(
+    m: &zensr_micro::adopted::AdoptedModel,
+    lr: &Rgb8Img,
+    threads: usize,
+    guard: bool,
+) -> Rgb8Img {
+    use zensr_micro::guards::{guarded_merge, GuardConfig};
+    let lp = to_planar_f32(lr);
+    let mut sr = m.upscale_tiled(&lp, lr.h, lr.w, threads, 0);
+    if guard {
+        guarded_merge(&mut sr, &lp, lr.h, lr.w, m.scale, &GuardConfig::default());
+    }
+    planar_to_rgb8(&sr, lr.w * m.scale, lr.h * m.scale)
+}
+
+/// imazen-26 eval subcorpora: (label, directory).
+pub const SUBCORPORA: &[(&str, &str)] = &[
+    ("photos", "lilith"),
+    ("people", "unsplash-people"),
+    ("screen", "screen"),
+    ("documents", "office-documents"),
+    ("art-scans", "internet-archive-scans"),
+    ("maps", "national-park-service"),
+    ("renders", "unsplash-renders"),
+    ("textures", "unsplash-textures"),
+];

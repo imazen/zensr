@@ -12,56 +12,9 @@
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
-use std::process::Command;
 use zensr_bench::*;
 use zensr_micro::adopted::AdoptedModel;
 use zensr_micro::guards::{guarded_merge, GuardConfig};
-
-const SUBCORPORA: &[(&str, &str)] = &[
-    ("photos", "lilith"),
-    ("people", "unsplash-people"),
-    ("screen", "screen"),
-    ("documents", "office-documents"),
-    ("art-scans", "internet-archive-scans"),
-    ("maps", "national-park-service"),
-    ("renders", "unsplash-renders"),
-    ("textures", "unsplash-textures"),
-];
-
-fn read_f32_file(p: &std::path::Path) -> Vec<f32> {
-    std::fs::read(p)
-        .unwrap()
-        .chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect()
-}
-
-fn load_adopted(dir: &str) -> Option<AdoptedModel> {
-    let d = PathBuf::from("models/adopted").join(dir);
-    let meta = std::fs::read_to_string(d.join("meta.json")).ok()?;
-    let f = |k: &str| -> String {
-        let pat = format!("\"{k}\":");
-        match meta.find(&pat) {
-            Some(i) => meta[i + pat.len()..]
-                .trim_start()
-                .trim_start_matches('"')
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect(),
-            None => String::new(),
-        }
-    };
-    let raw = read_f32_file(&d.join("weights.raw"));
-    let scale: usize = f("scale").parse().ok()?;
-    match f("arch").as_str() {
-        "compact" => {
-            AdoptedModel::load_compact(&raw, f("nf").parse().ok()?, f("nc").parse().ok()?, scale)
-                .ok()
-        }
-        "span48" => AdoptedModel::load_span48(&raw, scale).ok(),
-        _ => None,
-    }
-}
 
 /// Lerp two compact weight sets (wdn severity blend).
 fn lerp_compact(a: &[f32], b: &[f32], t: f32, nf: usize, nc: usize, s: usize) -> AdoptedModel {
@@ -71,55 +24,6 @@ fn lerp_compact(a: &[f32], b: &[f32], t: f32, nf: usize, nc: usize, s: usize) ->
         .map(|(x, y)| x * (1.0 - t) + y * t)
         .collect();
     AdoptedModel::load_compact(&mixed, nf, nc, s).unwrap()
-}
-
-/// Real libjpeg-turbo round trip at quality q, 4:2:0, via system cjpeg.
-fn turbo_jpeg(img: &Rgb8Img, q: u32) -> Rgb8Img {
-    let dir = std::env::temp_dir().join(format!("zensr-se-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let ppm = dir.join("t.ppm");
-    let jpg = dir.join("t.jpg");
-    let mut buf = format!("P6\n{} {}\n255\n", img.w, img.h).into_bytes();
-    buf.extend_from_slice(&img.px);
-    std::fs::write(&ppm, &buf).unwrap();
-    let st = Command::new("cjpeg")
-        .args([
-            "-quality",
-            &q.to_string(),
-            "-sample",
-            "2x2",
-            "-optimize",
-            "-outfile",
-        ])
-        .arg(&jpg)
-        .arg(&ppm)
-        .status()
-        .expect("cjpeg");
-    assert!(st.success());
-    decode_any(&jpg).expect("decode turbo jpeg")
-}
-
-struct Scored {
-    psnr: f64,
-    ssim2: f64,
-    butter: f64,
-}
-
-fn score(hr: &Rgb8Img, out: &Rgb8Img) -> Scored {
-    Scored {
-        psnr: psnr_rgb8(hr, out),
-        ssim2: ssim2(hr, out),
-        butter: butter_n3(hr, out),
-    }
-}
-
-fn run_guarded(m: &AdoptedModel, lr: &Rgb8Img, threads: usize, guard: bool) -> Rgb8Img {
-    let lp = to_planar_f32(lr);
-    let mut sr = m.upscale_tiled(&lp, lr.h, lr.w, threads, 0);
-    if guard {
-        guarded_merge(&mut sr, &lp, lr.h, lr.w, m.scale, &GuardConfig::default());
-    }
-    planar_to_rgb8(&sr, lr.w * m.scale, lr.h * m.scale)
 }
 
 fn run_guarded_spanf(m: &zensr_micro::SpanfModel, lr: &Rgb8Img, threads: usize) -> Rgb8Img {
@@ -148,7 +52,13 @@ fn box_down2(img: &Rgb8Img) -> Rgb8Img {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let root = PathBuf::from(args.next().expect("corpus root"));
+    let first = args.next().expect("corpus root | summarize <tsv>");
+    if first == "summarize" {
+        let tsv = std::fs::read_to_string(args.next().expect("tsv path")).expect("read tsv");
+        summarize(&tsv);
+        return;
+    }
+    let root = PathBuf::from(first);
     let out_path = PathBuf::from(args.next().expect("out tsv"));
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
