@@ -219,3 +219,29 @@ the quant-table severity signal — the guard's own texture-energy map is
 already computed and is the natural first feature (S7 ties in). Recorded
 as the next eval axis; n=8/subcorpus must grow before shipping per-class
 thresholds (sweep-discipline: ≥50/class).
+
+### S9 rung 4 (teacher adoption for people): FALSIFIED — no off-the-shelf heavyweight qualifies
+
+Audition (`tools/teacher_audition.py` + `audition_score`, x2-target protocol,
+frozen eval files, system-cjpeg degradations; TSV + summary in benchmarks/):
+RealESRNet_x4plus, RealESRGAN_x4plus (BSD-3, 17M RRDB), 4xNomosWebPhoto_
+RealPLKSR, 4xFaceUpDAT (CC-BY-4.0) vs the incumbent A2c teacher and Lanczos
+on people / textures / art-scans / photos.
+
+**Every candidate loses to BOTH Lanczos and A2c on people, textures, and
+art-scans at every quality.** FaceUpDAT — the face specialist — goes 0/8 on
+people at all four degradations (q35 SSIM2 11.2 vs Lanczos 21.6, A2c 20.1).
+RealESRGAN_x4plus is catastrophic (people q35 −1.4; art-scans −23.2).
+The one candidate bright spot: RealESRNet (fidelity RRDB) on photos q35
+(33.2, 6/8 wins — above A2c's 30.8) — but with much worse butteraugli
+(4.96 vs 3.86) and a total art-scans collapse (−4.5). n=8/slice.
+
+Interpretation: the community heavyweight zoo optimizes ×4 perceptual
+restoration (invented texture, no-GT aesthetics). Under fidelity metrics at
+×2 web-JPEG with ground truth, invention is penalized — the 600K JPEG-
+trained compact beats every 17M+ model. Consequences: (a) "adopt a bigger
+teacher" is closed as the people path; (b) people improvement = region-wise
+conservatism (skin/face-aware guard alpha) now + ground-truth fidelity
+fine-tune under our exact degradation model at P2, shipped as an S2 band;
+(c) the audition harness is reusable for any future candidate in minutes
+(and its A2c rows cross-validate the systems_eval per-subcorpus numbers).

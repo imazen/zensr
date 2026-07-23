@@ -40,11 +40,14 @@ DEGS = [("clean", 0), ("q75", 75), ("q50", 50), ("q35", 35)]
 
 
 def eval_files(d):
-    fs = sorted(
-        f for f in os.listdir(d)
-        if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
-    )
-    return fs[:8]
+    # recursive, sorted by relative path — matches zensr-bench list_images +
+    # the frozen first-8 eval split (lilith / art-scans use subdirectories)
+    fs = []
+    for root, _, files in os.walk(d):
+        for f in files:
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                fs.append(os.path.relpath(os.path.join(root, f), d))
+    return sorted(fs)[:8]
 
 
 def cjpeg_roundtrip(img_bgr, q):
@@ -79,7 +82,7 @@ def main():
             y0 = (img.shape[0] - 512) // 2
             x0 = (img.shape[1] - 512) // 2
             hr = img[y0:y0 + 512, x0:x0 + 512]
-            stem = f"{sub}__{os.path.splitext(fn)[0]}"
+            stem = f"{sub}__{os.path.splitext(fn)[0].replace(os.sep, '-')}"
             cv2.imwrite(os.path.join(OUT, "gt", f"{stem}.png"), hr)
             lr0 = cv2.resize(hr, (256, 256), interpolation=cv2.INTER_AREA)
             for deg, q in DEGS:
