@@ -43,3 +43,10 @@ summarize tsv:
 systems-bench:
     cargo build --profile release-fast -p zensr-bench --bin systems_bench
     ./target/release-fast/systems_bench 5
+
+people-pull n_shards="40" quota="2500":
+    nice -n 19 ionice -c 3 python3 tools/pxhere_people_pull.py {{n_shards}} {{quota}}
+
+people-eval:
+    cargo build --profile release-fast -p zensr-bench --bin systems_eval
+    ./target/release-fast/systems_eval /mnt/v/input/zensr-people-eval-root benchmarks/people_eval_$(date -u +%Y-%m-%d).tsv 64 12
