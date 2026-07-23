@@ -17,8 +17,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 D = os.path.expanduser("~/tmp/zensr-distill")
-OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", "rt_distill_2x")
-NF, NC, SCALE = 24, 8, 2
+NF = int(os.environ.get("ZENSR_NF", "24"))
+NC = int(os.environ.get("ZENSR_NC", "8"))
+SCALE = 2
+OUT_NAME = os.environ.get("ZENSR_OUT", "rt_distill_2x")
+OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)
 
 
 class Student(nn.Module):
