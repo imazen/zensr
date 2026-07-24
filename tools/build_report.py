@@ -406,7 +406,7 @@ on degraded input — nothing “restores” q35 at ×4. F_spanf (NTIRE clean-sp
 {deg_tabs("x1", ("q35", "q50", "q75"))}
 <div class="note win"><b>S6-v2 (zenjpeg-native, 4 encoders): deblock DISABLED wins; one model, no gating.</b>
 Directed follow-up: pairs re-generated through the deployment decoder (zenjpeg 0.9) across
-{libjpeg-turbo, mozjpeg 4.1.5, jpegli, zenjpeg} × {4:2:0, 4:4:4} × q∈U(10,96) + 5 % clean
+{{libjpeg-turbo, mozjpeg 4.1.5, jpegli, zenjpeg}} × {{4:2:0, 4:4:4}} × q∈U(10,96) + 5 % clean
 anchors, with a 2×2 deblock experiment (same encoded bytes, decoded with DeblockMode Off vs
 Auto, matched models trained per arm). Verdict: model-on-pixel-exact-decode 69.45 mean
 cell-median SSIM2 > cooperating model 68.64 > deblock-alone 66.70 > identity 66.22 — zenjpeg's
@@ -415,7 +415,13 @@ qboost-tuned model (dejpeg2b) beats identity at q15–90 on every encoder and bo
 (q15 mean +9.9 SSIM2); q93–96 dips are +0.01…+0.04 butteraugli on a 0.33–0.52 baseline —
 an order of magnitude under JND, guard-bounded. Fingerprint hookup validated at n=960:
 mozjpeg/jpegli 100 % family-stable, zenjpeg probes as jpegli-lineage (imazen/zenjpeg#189
-filed: encoder-embedded parameter record). Queued: S10 quantization-consistency projection
+filed: encoder-embedded parameter record). Sub-q15 probing (user-prompted) found the deblock verdict FLIPS at q≤8 on Annex-K encoders —
+Knusperli's coefficient-domain correction carries information pixel-space models can't see —
+and the flip survived in-distribution floor-5 retraining (structural). Shipping configuration:
+<b>dejpeg4_policy</b> — one policy-matched model on every image + a two-line probe rule
+(non-Cjpegli family, IJG/Mozjpeg scale, est-q ≤ 9 → Knusperli decode). End-to-end:
+low-q 21.23 ≈ cooperating specialist 21.26 (pure-off 20.77); standard grid 70.85 ≈ 70.89,
+0/40 cells under the best-of-both oracle. Queued: S10 quantization-consistency projection
 (per-coefficient DCT box ⇒ provable re-encode consistency) + S5b YCbCr-native models.</div>
 <div class="note win"><b>Round trip falsified → native model wins (v1).</b> The interim
 ×2-up→downscale round trip lost to doing nothing at q50/q75 (rows kept above as the
