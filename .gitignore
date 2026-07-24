@@ -4,3 +4,4 @@ target/
 models/
 *.onnx
 .cargo/
+.cargo/config.toml

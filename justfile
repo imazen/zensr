@@ -61,3 +61,7 @@ report:
     cargo build --profile release-fast -p zensr-bench --bin gallery_dump
     ./target/release-fast/gallery_dump ~/tmp/zensr-gallery/scenes.tsv ~/tmp/zensr-gallery 12
     python3 tools/build_report.py
+
+cargo-local:
+    mkdir -p .cargo
+    printf '[patch.crates-io]\nzenjpeg = { path = "/home/lilith/work/zen/zenjpeg/zenjpeg" }\n' > .cargo/config.toml
