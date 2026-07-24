@@ -310,3 +310,10 @@ claims transfer: P_a2c wins every degraded quality on all three metrics
 (q35 worse-rate 2 %); P_rtc at 45K beats Lanczos q35–q75 and the 600K
 generalist at q50/q75; clean stays route-to-resample. These are the
 citable people-band numbers.
+
+**Audit closure:** rtc retrained on the leak-free regen (`E_rtc2` rows in
+the day TSV): within ±0.25 SSIM2 of v1 at every quality including textures
+(clean marginally better than leaked, 13.9 vs 13.2 at q35 — both still lose
+the subcorpus) — the teresa leak was immaterial; verdicts unchanged. S-E now
+ships the clean weights; goldens ≤3e-7. Distill val is image-level (clean
+val 32.42 ≈ v1's crop-level 32.35 — old monitoring numbers were honest).
