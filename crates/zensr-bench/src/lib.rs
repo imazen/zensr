@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Rgb8Img {
     pub px: Vec<u8>, // interleaved RGB8
     pub w: usize,
