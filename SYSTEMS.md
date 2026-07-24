@@ -369,3 +369,22 @@ jpegli→CjpegliYcbcr 100 %, zenjpeg→CjpegliYcbcr 100 % (jpegli lineage —
 indistinguishable; zenjpeg#189 filed for an encoder-embedded parameter
 record), turbo -optimize→ImageMagick 80 % / Unknown 20 %. Family-level
 routing is reliable today; #189 upgrades zenjpeg files to ground truth.
+
+### S6-v2 qboost rung + the "any quality" verdict
+
+qboost (3× oversampling of q≥85+clean, 12k-step fine-tune) closes q85–90:
+q85 positive on all 8 enc×ss (+0.15…+2.72), q90 majority positive. q93–96
+remains metric-negative in 17/32 cells (worst −1.2 SSIM2) — but in
+butteraugli the entire q93+ downside is **+0.013…+0.038 on a 0.33–0.52
+baseline**, an order of magnitude under JND. At those tables the file is
+transparent; there is nothing to recover (the S10 view: per-band Q/2
+boxes are tiny, so any model perturbation is pure downside).
+
+**Deployment call: blind-always activation is defensible today** —
+guard-bounded, perceptual worst case nil. The principled closure of the
+q93+ tail is NOT more training and NOT encode-space gating: it is the
+**S10 quantization-consistency projection** (clamp model output into the
+per-coefficient DCT box), which scales the allowed correction with the
+tables themselves — continuous, exact, and zero-configuration. Queued
+next together with S5b YCbCr-native models (projection is tight in the
+decoder's YCbCr domain).
