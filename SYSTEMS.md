@@ -415,3 +415,28 @@ counter to the workspace low-q mandate. A q∈{5,8,12} probe (n=24, full
   no-gating call stands: Off+model everywhere is still hugely positive
   at every q (just leaves ~1–4 SSIM2 on the table at q5–8 IJG vs the
   cooperating path).
+
+### Floor-5 matched re-verdict (2026-07-25) — final S6-v2 quality-axis picture
+
+v3 arms (q∈U(5,96), qboost, warm from v2b/v2-auto) both improve at low q
+(off 19.49→20.77, auto 20.16→21.26 mean cell-median) and the standard
+grid HOLDS (off 70.89 > auto 70.17 > id_auto 67.49 > id_off 66.92 —
+no regression; v3_off ships as S6).
+
+**The q≤8 Knusperli advantage is STRUCTURAL, not a distribution
+artifact**: in-distribution, auto still wins q5–8 on IJG-family
+(turbo q5 −18.9 vs −23.2; mozjpeg q8 +0.4 vs −1.4) while AQ-family
+(jpegli/zenjpeg) stays off-favored at every q. Coefficient-domain
+correction carries information pixel-space models cannot see, exactly
+where quantization boxes are huge — third independent confirmation of
+the S10 thesis.
+
+**Deployment (final):** ship ONE model (dejpeg3_off) + deblock Off at
+all qualities — blind, no gating, wins everywhere except the q≤8
+IJG corner where it still beats identity by wide margins, just not by
+as much as the cooperating path (~2–4 SSIM2 left on the table in a
+regime where content is already destroyed, SSIM2 < 0). That corner is
+fingerprint-detectable (family + est-q from probe) if it ever matters
+commercially before S10; the principled closure is the S10
+coefficient-aware model, which subsumes Knusperli's advantage into the
+single-model story.
