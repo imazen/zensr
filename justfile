@@ -56,3 +56,8 @@ people-gt-data:
 
 unsplash-pull target="300":
     nice -n 19 python3 tools/unsplash_people_pull.py {{target}}
+
+report:
+    cargo build --profile release-fast -p zensr-bench --bin gallery_dump
+    ./target/release-fast/gallery_dump ~/tmp/zensr-gallery/scenes.tsv ~/tmp/zensr-gallery 12
+    python3 tools/build_report.py
