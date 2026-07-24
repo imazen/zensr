@@ -404,7 +404,20 @@ on degraded input — nothing “restores” q35 at ×4. F_spanf (NTIRE clean-sp
 (worse-rate 19 %) and collapses on JPEG; D_anime is the blind winner on degraded input.</div>
 <h3>×1 repair track (vs identity)</h3>
 {deg_tabs("x1", ("q35", "q50", "q75"))}
-<div class="note win"><b>Round trip falsified → native model wins.</b> The interim
+<div class="note win"><b>S6-v2 (zenjpeg-native, 4 encoders): deblock DISABLED wins; one model, no gating.</b>
+Directed follow-up: pairs re-generated through the deployment decoder (zenjpeg 0.9) across
+{libjpeg-turbo, mozjpeg 4.1.5, jpegli, zenjpeg} × {4:2:0, 4:4:4} × q∈U(10,96) + 5 % clean
+anchors, with a 2×2 deblock experiment (same encoded bytes, decoded with DeblockMode Off vs
+Auto, matched models trained per arm). Verdict: model-on-pixel-exact-decode 69.45 mean
+cell-median SSIM2 > cooperating model 68.64 > deblock-alone 66.70 > identity 66.22 — zenjpeg's
+default (Off) is correct under the model; deblocking helps only standalone. The single
+qboost-tuned model (dejpeg2b) beats identity at q15–90 on every encoder and both subsamplings
+(q15 mean +9.9 SSIM2); q93–96 dips are +0.01…+0.04 butteraugli on a 0.33–0.52 baseline —
+an order of magnitude under JND, guard-bounded. Fingerprint hookup validated at n=960:
+mozjpeg/jpegli 100 % family-stable, zenjpeg probes as jpegli-lineage (imazen/zenjpeg#189
+filed: encoder-embedded parameter record). Queued: S10 quantization-consistency projection
+(per-coefficient DCT box ⇒ provable re-encode consistency) + S5b YCbCr-native models.</div>
+<div class="note win"><b>Round trip falsified → native model wins (v1).</b> The interim
 ×2-up→downscale round trip lost to doing nothing at q50/q75 (rows kept above as the
 record). The direct inversion — <b>S6_dejpeg</b>, trained in 25 GPU-minutes on same-size
 turbo-JPEG pairs with an A2c-body warm start — beats identity at <em>every</em> quality on
