@@ -78,6 +78,21 @@ fn zj_decode(data: &[u8], deblock_auto: bool) -> Rgb8Img {
     Rgb8Img { px: r.pixels_u8().expect("u8").to_vec(), w: w as usize, h: h as usize }
 }
 
+/// Deployment policy: Knusperli (Auto) only for Annex-K-family files at
+/// probe-estimated q <= 9 (exact at those q); AQ-family (Cjpegli*) never.
+fn policy_wants_auto(data: &[u8]) -> bool {
+    match zenjpeg::detect::probe(data) {
+        Ok(p) => {
+            let fam = format!("{:?}", p.encoder);
+            let scale = format!("{:?}", p.quality.scale);
+            !fam.starts_with("Cjpegli")
+                && (scale == "IjgQuality" || scale == "MozjpegQuality")
+                && p.quality.value <= 9.5
+        }
+        Err(_) => false,
+    }
+}
+
 fn probe_cols(data: &[u8]) -> (String, String) {
     match zenjpeg::detect::probe(data) {
         Ok(p) => (format!("{:?}", p.encoder), format!("{:.1}", p.quality.value)),
@@ -105,8 +120,10 @@ fn main() {
         Ok("low") => QS_LOW,
         _ => QS,
     };
+    let m_policy_dir = args.next();
     let m_off = load_adopted(&m_off_dir).expect("model off");
     let m_auto = load_adopted(&m_auto_dir).expect("model auto");
+    let m_policy = m_policy_dir.map(|d| load_adopted(&d).expect("model policy"));
     assert!(m_off.scale == 1 && m_auto.scale == 1);
     let td = tmpdir();
 
@@ -139,12 +156,16 @@ fn main() {
                         let (pf, pq) = probe_cols(&data);
                         let d_off = zj_decode(&data, false);
                         let d_auto = zj_decode(&data, true);
-                        let outs = [
+                        let mut outs: Vec<(&str, &Rgb8Img, Option<&zensr_micro::adopted::AdoptedModel>)> = vec![
                             ("identity_off", &d_off, None),
                             ("identity_auto", &d_auto, None),
                             ("model_off", &d_off, Some(&m_off)),
                             ("model_auto", &d_auto, Some(&m_auto)),
                         ];
+                        if let Some(mp) = &m_policy {
+                            let src = if policy_wants_auto(&data) { &d_auto } else { &d_off };
+                            outs.push(("model_policy", src, Some(mp)));
+                        }
                         for (arm, src, model) in outs {
                             let o = match model {
                                 Some(m) => run_x1(m, src, threads),

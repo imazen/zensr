@@ -440,3 +440,24 @@ fingerprint-detectable (family + est-q from probe) if it ever matters
 commercially before S10; the principled closure is the S10
 coefficient-aware model, which subsumes Knusperli's advantage into the
 single-model story.
+
+### Final S6 deployment: dejpeg4_policy + the two-line decoder rule (2026-07-25)
+
+User challenge ("why not enable Knusperli at low q?") accepted — the
+constraint was never about a decoder flag, only about not bounding model
+activation. Shipping configuration:
+
+- **One model** (`dejpeg4_policy`, 595 K), fine-tuned on the exact decode
+  mix the runtime produces; **runs on every image, every quality**.
+- **Two-line decoder rule** (measured-exact inputs): probe family not
+  Cjpegli* AND quality scale Ijg/Mozjpeg AND estimate ≤ 9.5 →
+  `DeblockMode::Auto` (Knusperli), else `Off`. Probe q is exact at 5/8/12
+  for turbo (as Unknown-family) and mozjpeg; AQ files never trigger.
+- **End-to-end (probe→decode→model) validation**: low-q mean 21.23 —
+  captures the cooperating specialist (21.26) vs pure-off 20.77;
+  standard grid 70.85 ≈ off-specialist 70.89, with **0/40 cells** more
+  than 0.3 below the per-cell best-of-both-specialists oracle.
+- "Disable ML at low q" was refuted outright: the model's largest wins
+  on the whole axis are at q5–15 (up to +13 SSIM2 over identity).
+S10 remains the roadmap item that folds Knusperli's coefficient-domain
+advantage into the model itself, retiring even the decoder flag.
