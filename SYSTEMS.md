@@ -317,3 +317,23 @@ the day TSV): within ±0.25 SSIM2 of v1 at every quality including textures
 the subcorpus) — the teresa leak was immaterial; verdicts unchanged. S-E now
 ships the clean weights; goldens ≤3e-7. Distill val is image-level (clean
 val 32.42 ≈ v1's crop-level 32.35 — old monitoring numbers were honest).
+
+### S6 native ×1 dejpeg (2026-07-24): round-trip retired, direct inversion wins everything
+
+User called it ("just train inversions of jpeg artifacts, right?") — the
+scale round-trip was a day-1 adoption-only expedient. dejpeg_1x: Compact
+nf64/nc16 at scale 1 (595,459 params; runtime gained s=1 via zero-channel
+head padding), warm-started from A2c's body (51/53 tensors), 23.5k
+same-size turbo-JPEG pairs (q35–95, pinned-exclusion imazen-26), 20k
+steps ≈ 25 GPU-min. n=64/cell vs identity:
+
+| deg | identity | C_repair (round-trip) | **S6_dejpeg** |
+|---|---|---|---|
+| q35 | 59.6 / 1.91 | 58.6 / 2.08 / 44 % | **65.4 / 1.68 / 2 %** |
+| q50 | 66.8 / 1.64 | 64.6 / 1.87 / 62 % | **71.6 / 1.39 / 2 %** |
+| q75 | 77.2 / 1.18 | 72.9 / 1.59 / 89 % | **79.6 / 0.99 / 14 %** |
+
+(SSIM2 med / butteraugli med / worse-than-identity.) Wins every quality
+on every metric incl worst-decile (p10 72.7 vs 69.8 at q75); +1.7–2.0 dB
+PSNR. S-C is replaced by S6; the RealPLKSR port is no longer on the
+critical path (still interesting for a quality-tier ×1 later).

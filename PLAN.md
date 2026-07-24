@@ -98,6 +98,11 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
   a chroma trunk with PixelShuffle(2) merge, skipping decoder chroma upsampling entirely.
   Potentially our biggest quality differentiator on 4:2:0. → decides deep-decoder integration.
 - **S6 1× repair mode:** same pipeline, scale=1 (deblock/dering only) as an imageflow filter.
+  **DONE 2026-07-24 (first result):** dejpeg_1x (Compact nf64/nc16 s=1, A2c-body warm start,
+  25 GPU-min) beats identity at every q on all metrics — q35/q50 worse-rate 2 %, q75 14 %,
+  butteraugli 0.99 at q75. The interim ×2-up→down round-trip is retired (it lost to identity);
+  s=1 runs natively (zero-channel head padding to the quad multiple). Next: severity bands (S2)
+  + mozjpeg axis.
 - **S7 Quant-table features:** beyond q-banding, do cheap table-derived scalars (per-band quant
   energies) as broadcast input channels help at band boundaries?
 - **S8 Realtime frontier:** at the ≤0.05 M budget, which shape wins on degraded inputs:

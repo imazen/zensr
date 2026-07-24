@@ -52,8 +52,12 @@ def load_init(m):
             sd = sd[k]
             break
     sd = {k: v for k, v in sd.items() if k.startswith("body.")}
-    m.load_state_dict(sd, strict=True)
-    print(f"warm-started from {INIT} ({sum(v.numel() for v in sd.values())} floats)", flush=True)
+    own = m.state_dict()
+    keep = {k: v for k, v in sd.items() if k in own and own[k].shape == v.shape}
+    skipped = sorted(set(sd) - set(keep)) + sorted(k for k in own if k not in sd)
+    m.load_state_dict(keep, strict=False)
+    print(f"warm-started from {INIT}: {len(keep)} tensors loaded"
+          f"{', skipped (shape/missing): ' + ','.join(skipped) if skipped else ''}", flush=True)
 
 
 def main():
