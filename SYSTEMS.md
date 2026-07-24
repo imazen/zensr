@@ -278,3 +278,35 @@ moved a content class from "loses to Lanczos" to "wins at every quality"
 n=8 people readout that motivated rung 4 was noise-pessimistic: at n=64
 A2c already won q35 people; per-class evals need n≥50 (sweep discipline
 held).
+
+### Split audit + TRUE-TEST confirmation (2026-07-24, user-prompted)
+
+Audit of train/val/test hygiene found: (1) people GT training clean
+(eval excluded + image-level val, verified in logs); (2) ONE leaked image
+in the distill data (textures/teresa — the Rust eval's "first 8 usable"
+slid past a 101MP decode-skip while the exclusion cut "first 8 sorted");
+(3) distill val tail was crop-level (monitoring only); (4) the frozen
+slices had been reused for rung selection — they are DEV sets.
+
+Fixes: the imazen-26 eval split is now a PINNED COMMITTED FILE LIST
+(`eval_split/imazen26_eval_files.tsv`) and training excludes first-8 ∪
+pinned; distill gen val split is image-level; rtc (S-E) retrained on the
+clean regen. Policy: frozen-by-file-list, dev slices for selection, test
+slices touched once per milestone.
+
+**True held-out TEST — people-test-v1** (64 images, 6 virgin pxhere
+shards, zero id overlap with any pool/dev slice, scored exactly once):
+
+| deg | Lanczos | A2c | P_rtc 45K | **P_a2c 600K** |
+|---|---|---|---|---|
+| q35 | 33.5 / 3.14 | 38.1 / 2.98 / 16 % | 36.9 / 2.93 / **3 %** | **41.4 / 2.74 / 2 %** |
+| q50 | 44.7 / 2.70 | 46.2 / 2.67 / 30 % | 46.9 / 2.53 / 6 % | **50.3 / 2.40 / 2 %** |
+| q75 | 59.0 / 2.11 | 57.2 / 2.18 / 69 % | 59.9 / 1.93 / 22 % | **61.6 / 1.85 / 8 %** |
+| clean | 82.2 / 1.18 | 77.6 / 89 % | 76.1 / 97 % | 80.2 / 89 % |
+
+(SSIM2 med / butteraugli med / worse-than-Lanczos; n=64; lanczos clean
+n=63, one row filtered.) Test ≥ dev on every degraded metric — the dev
+claims transfer: P_a2c wins every degraded quality on all three metrics
+(q35 worse-rate 2 %); P_rtc at 45K beats Lanczos q35–q75 and the 600K
+generalist at q50/q75; clean stays route-to-resample. These are the
+citable people-band numbers.
