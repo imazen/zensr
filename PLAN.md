@@ -73,7 +73,10 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
   external model set is acceptable).** Severity signal = computed EXACTLY from decoded quant
   tables (zenjpeg): map tables → equivalent IJG quality + subsampling flag → canonical severity
   scalar (mozjpeg tables map too; recompressed files expose only the last encoder's tables —
-  a content-based correction is S7's job). Candidate mechanisms, all keeping the core small:
+  a content-based correction is S7's job; **zenjpeg#189 filed 2026-07-24: encoder-embedded
+  APPn parameter record would upgrade the severity signal from table-inversion estimation to
+  ground truth for zenjpeg-encoded files** — fingerprint fallback stays for everything else).
+  Candidate mechanisms, all keeping the core small:
   - **S2a input-conditioning:** severity as extra input channel(s) — single model, +O(100)
     params; risk: soft compromise at extremes.
   - **S2b banded external set:** N specialist fine-tunes selected by severity band; fast-tier
