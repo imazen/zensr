@@ -18,7 +18,7 @@ from collections import defaultdict
 import cv2
 
 OUT = os.environ.get("ZENSR_PEOPLE_OUT", "/mnt/tower/input/zensr-people-v1")
-LOCAL = "/mnt/v/input/zensr-people-eval-v1"
+LOCAL = os.environ.get("ZENSR_PEOPLE_LOCAL", "/mnt/v/input/zensr-people-eval-v1")
 
 
 def main():

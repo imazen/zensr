@@ -64,8 +64,14 @@ def main():
         with open(man_path, "w") as f:
             f.write("image_id\ttier\tresolution\tshard\tdownload_url\ttags\n")
     kept_total = sum(1 for f in os.listdir(os.path.join(OUT, "pool")) if f.endswith(".jpg"))
-    rng = random.Random(20260723)
-    shards = rng.sample(range(N_SHARDS_TOTAL), n_shards)
+    rng = random.Random(int(os.environ.get("ZENSR_SHARD_SEED", "20260723")))
+    avoid = set()
+    ad = os.environ.get("ZENSR_AVOID_DONE", "")
+    if ad and os.path.isdir(ad):
+        avoid = {int(n.split("-")[1]) for n in os.listdir(ad) if n.startswith("pxhere-")}
+    cand = [i for i in range(N_SHARDS_TOTAL) if i not in avoid]
+    shards = rng.sample(cand, n_shards)
+    print(f"avoiding {len(avoid)} already-used shards", flush=True)
     print(f"resuming with {kept_total} kept; shard plan: {shards}", flush=True)
     for si in shards:
         if kept_total >= quota:

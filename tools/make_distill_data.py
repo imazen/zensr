@@ -31,6 +31,20 @@ N_PAIRS = 14000
 CROP = 192  # HR crop; LR = 96
 SEED = 20260723
 
+EVAL_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                        "eval_split", "imazen26_eval_files.tsv")
+
+
+def eval_pinned(sub):
+    out = set()
+    if os.path.exists(EVAL_PIN):
+        for line in open(EVAL_PIN):
+            c = line.rstrip("\n").split("\t")
+            if len(c) == 2 and c[0] == sub and not c[0].startswith("#"):
+                out.add(c[1])
+    return out
+
+
 def list_train_files(sub):
     d = os.path.join(ROOT, sub)
     files = []
@@ -39,7 +53,11 @@ def list_train_files(sub):
             if n.lower().endswith((".png", ".jpg", ".jpeg")):
                 files.append(os.path.join(base, n))
     files.sort()
-    return files[8:]  # first 8 = frozen eval split
+    # Frozen eval = first-8-sorted UNION the pinned actually-evaluated list.
+    # Runtime "first 8 usable" slides past decode-skipped files (teresa leak,
+    # 2026-07-24 postmortem) — the pinned file is authoritative.
+    pinned = eval_pinned(sub)
+    return [f for f in files[8:] if os.path.basename(f) not in pinned]
 
 
 def main():
@@ -67,6 +85,11 @@ def main():
         pool += fs
         print(f"{s}: {len(fs)} train files")
     rng.shuffle(pool)
+    # image-level val: last 512 pairs come ONLY from val-reserved files
+    n_val_files = max(16, len(pool) // 20)
+    val_pool, train_pool = pool[-n_val_files:], pool[:-n_val_files]
+    TRAIN_TARGET = N_PAIRS - 512
+    print(f"train files {len(train_pool)} / val files {n_val_files}", flush=True)
 
     lr_all = np.zeros((N_PAIRS, 96, 96, 3), dtype=np.uint8)
     tg_all = np.zeros((N_PAIRS, 3, 192, 192), dtype=np.float16)
@@ -74,13 +97,15 @@ def main():
     fi = 0
     batch_lr = []
     while made < N_PAIRS:
-        f = pool[fi % len(pool)]
+        phase_target = TRAIN_TARGET if made < TRAIN_TARGET else N_PAIRS
+        src = train_pool if made < TRAIN_TARGET else val_pool
+        f = src[fi % len(src)]
         fi += 1
         img = cv2.imread(f, cv2.IMREAD_COLOR)  # BGR
         if img is None or img.shape[0] < CROP or img.shape[1] < CROP:
             continue
         for _ in range(min(4, 1 + img.shape[0] * img.shape[1] // (CROP * CROP * 4))):
-            if made + len(batch_lr) >= N_PAIRS:
+            if made + len(batch_lr) >= phase_target:
                 break
             y = rng.randrange(0, img.shape[0] - CROP + 1)
             x = rng.randrange(0, img.shape[1] - CROP + 1)
@@ -92,7 +117,7 @@ def main():
                 continue
             lr = cv2.imdecode(enc, cv2.IMREAD_COLOR)
             batch_lr.append(lr)
-        if len(batch_lr) >= 32 or (made + len(batch_lr) >= N_PAIRS and batch_lr):
+        if len(batch_lr) >= 32 or (made + len(batch_lr) >= phase_target and batch_lr):
             arr = np.stack(batch_lr)  # B,96,96,3 BGR u8
             rgb = arr[..., ::-1].astype(np.float32) / 255.0
             t = torch.from_numpy(rgb.transpose(0, 3, 1, 2).copy()).to(dev)
@@ -109,7 +134,7 @@ def main():
     np.save(os.path.join(OUT, "teacher_f16.npy"), tg_all)
     json.dump({"n": N_PAIRS, "val_tail": 512, "teacher": "2xNomosUni_span_multijpg",
                "degrade": "area-down2x + cv2 jpeg q40-90", "seed": SEED,
-               "eval_split_excluded": "first 8 sorted files per subdir"},
+               "eval_split_excluded": "first-8-sorted UNION pinned eval_split/imazen26_eval_files.tsv", "val_split": "image-level (last 5% of shuffled files)"},
               open(os.path.join(OUT, "meta.json"), "w"), indent=1)
     print("DONE", lr_all.nbytes / 1e9, "GB +", tg_all.nbytes / 1e9, "GB")
 
