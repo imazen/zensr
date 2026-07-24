@@ -388,3 +388,30 @@ per-coefficient DCT box), which scales the allowed correction with the
 tables themselves — continuous, exact, and zero-configuration. Queued
 next together with S5b YCbCr-native models (projection is tight in the
 decoder's YCbCr domain).
+
+### Sub-q15 probe (2026-07-25, user-prompted): the deblock verdict FLIPS at q≤8
+
+Training had been q≥10 and eval q≥15 — convention, not measurement, and
+counter to the workspace low-q mandate. A q∈{5,8,12} probe (n=24, full
+2×2) shows structure the q15+ survey missed:
+
+- **2×2 mean flips: model_auto 20.16 > model_off 19.49** > identity_auto
+  15.98 > identity_off 12.70. At q5–8 on the IJG-family encoders
+  (mozjpeg/turbo — brutal Annex-K steps), Knusperli + cooperating model
+  wins (e.g. turbo 420 q8: auto-model 10.3 vs off-model 5.7 vs identity
+  −2.4); on the AQ encoders (jpegli/zenjpeg) model_off still leads.
+  q12 returns to model_off majority. Worse-rates stay 0–25 % everywhere;
+  both models beat identity by huge margins (jpegli 420 q5: +13.3).
+- **Why this makes sense (S10 lens):** Knusperli is a DCT-coefficient-
+  domain consistency method. At extreme q the per-band boxes are huge and
+  pixel-domain inversion is underdetermined — coefficient-domain
+  information carries real signal a pixel-space model never sees. The
+  sub-q9 flip is more evidence that the coefficient-aware S10 direction
+  is the unifying mechanism, not per-range gating.
+- **Caveats:** current models trained with q floor 10 (q5–8 is out of
+  distribution — impressive that worse-rates stayed tiny), and the auto
+  arm lacks the qboost treatment. Floor-5 data (v3) is regenerating;
+  both arms retrain before any deployment change. Until then the
+  no-gating call stands: Off+model everywhere is still hugely positive
+  at every q (just leaves ~1–4 SSIM2 on the table at q5–8 IJG vs the
+  cooperating path).

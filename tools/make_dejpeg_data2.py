@@ -140,7 +140,7 @@ def main():
         clean = rng.random() < 0.05
         enc = rng.choice(ENCODERS)
         ss = "420" if rng.random() < 0.6 else "444"
-        q = rng.randrange(10, 97)
+        q = rng.randrange(5, 97)  # floor 5 per workspace low-q mandate (was 10)
         jobs.append((i, c, enc, ss, q, clean))
 
     n = len(jobs)
@@ -165,7 +165,7 @@ def main():
         np.save(os.path.join(d, "hr_u8.npy"), hr)
         json.dump({"n": n, "val_tail": VAL_TAIL, "seed": SEED, "crop": CROP,
                    "arm": arm, "task": "x1 dejpeg v2 (4 encoders, zenjpeg decode)",
-                   "encoders": ENCODERS, "ss": "420 60% / 444 40%", "q": "U(10,96) + 5% clean",
+                   "encoders": ENCODERS, "ss": "420 60% / 444 40%", "q": "U(5,96) + 5% clean",
                    "source": "imazen-26 train files (pinned exclusion)",
                    "val_split": "image-level"},
                   open(os.path.join(d, "meta.json"), "w"), indent=1)
