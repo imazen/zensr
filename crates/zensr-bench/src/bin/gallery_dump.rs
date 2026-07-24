@@ -14,6 +14,7 @@ const MODELS: &[(&str, &str)] = &[
     ("people_rtc_2x", "P_rtc"),
     ("rtc_distill_2x", "E_rtc"),
 ];
+const MODELS_X1: &[(&str, &str)] = &[("dejpeg_1x", "S6")];
 
 fn save_png(img: &Rgb8Img, path: &PathBuf) {
     let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&img.px);
@@ -41,28 +42,42 @@ fn main() {
 
     for line in scenes.lines() {
         let c: Vec<&str> = line.split('\t').collect();
-        if c.len() != 3 {
+        if c.len() < 3 {
             continue;
         }
         let (name, path, deg) = (c[0], PathBuf::from(c[1]), c[2]);
+        let track_x1 = c.len() > 3 && c[3] == "x1";
         let img = decode_any(&path).expect("decode scene");
         let hr = center_crop(&img, 512).expect("crop 512");
         let d = out_root.join(name);
         std::fs::create_dir_all(&d).unwrap();
         save_png(&hr, &d.join("gt.png"));
-        let half = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
-        let lr = match deg {
-            "clean" => half,
-            "q75" => turbo_jpeg(&half, 75),
-            "q50" => turbo_jpeg(&half, 50),
-            _ => turbo_jpeg(&half, 35),
+        let q = match deg {
+            "q75" => 75,
+            "q50" => 50,
+            _ => 35,
         };
-        save_png(
-            &resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
-            &d.join("lanczos.png"),
-        );
-        for (m, label) in &models {
-            save_png(&run_guarded(m, &lr, threads, true), &d.join(format!("{label}.png")));
+        if track_x1 {
+            // x1 protocol: degrade at full res; "lanczos" panel = the input itself
+            let lr = turbo_jpeg(&hr, q);
+            save_png(&lr, &d.join("lanczos.png"));
+            let x1: Vec<_> = MODELS_X1
+                .iter()
+                .map(|(dd, l)| (load_adopted(dd).unwrap_or_else(|| panic!("{dd}")), *l))
+                .collect();
+            for (m, label) in &x1 {
+                save_png(&run_guarded(m, &lr, threads, true), &d.join(format!("{label}.png")));
+            }
+        } else {
+            let half = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
+            let lr = if deg == "clean" { half } else { turbo_jpeg(&half, q) };
+            save_png(
+                &resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
+                &d.join("lanczos.png"),
+            );
+            for (m, label) in &models {
+                save_png(&run_guarded(m, &lr, threads, true), &d.join(format!("{label}.png")));
+            }
         }
         eprintln!("done {name}");
     }

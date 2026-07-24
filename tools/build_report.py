@@ -103,7 +103,7 @@ def table(rows_map, order, base="lanczos", note=""):
         if sysname not in rows_map:
             continue
         d = rows_map[sysname]
-        hl = ' class="hl"' if sysname.startswith(("P_", "E_rtc2")) else ""
+        hl = ' class="hl"' if sysname.startswith(("P_", "E_rtc2", "S6_")) else ""
         body.append(
             f"<tr{hl}><td>{html.escape(sysname)}</td>"
             f'<td class="num">{fmt(d["ssim2"])}</td><td class="num">{fmt(d["p10"])}</td>'
@@ -118,7 +118,7 @@ def table(rows_map, order, base="lanczos", note=""):
 X2_ORDER = ["lanczos", "catmullrom", "A2c_compact", "A2_span", "A2_span_raw",
             "E_rt", "E_rt32", "E_rtc", "E_rtc2"]
 X4_ORDER = ["lanczos", "F_spanf", "A4_span", "B_quality", "D_anime"]
-X1_ORDER = ["identity", "C_repair", "C_repair_cr"]
+X1_ORDER = ["identity", "C_repair", "C_repair_cr", "S6_dejpeg"]
 PT_ORDER = ["lanczos", "catmullrom", "A2c", "P_rtc", "P_a2c"]
 
 sections_tables = {}
@@ -168,6 +168,9 @@ SCENES = [
     ("realtime-q50", "Realtime tier — turbo q50, ×2 (45 K params, 23 MP/s @ 12T)",
      ["gt", "lanczos", "E_rtc", "A2c"],
      "The distilled 45 K student vs its 600 K teacher-family: most of the restoration at 13× less compute."),
+    ("dejpeg-q35", "Native ×1 dejpeg — turbo q35, same size (S6, trained this program)",
+     ["gt", "lanczos", "S6"],
+     "Direct JPEG-artifact inversion at original resolution — the middle panel IS the degraded input. S6 beats identity at every quality (q35/q50 worse-rate 2 %), retiring the falsified scale-round-trip."),
 ]
 
 # per-image ssim2 lookup for captions
@@ -177,12 +180,14 @@ for src in (DAY, PTEST):
         per_img[(f, dg, sysname)] = ssim2
 SCENE_FILES = {}
 for line in open(os.path.join(GAL, "scenes.tsv")):
-    n, p, dg = line.rstrip("\n").split("\t")
-    SCENE_FILES[n] = (os.path.basename(p), dg)
+    c = line.rstrip("\n").split("\t")
+    SCENE_FILES[c[0]] = (os.path.basename(c[1]), c[2])
 LBL = {"gt": "ground truth", "lanczos": "Lanczos", "A2c": "A2c 600K", "A2span": "SPAN 410K",
+       "S6": "S6 dejpeg ×1",
        "P_a2c": "P_a2c people", "P_rtc": "P_rtc 45K", "E_rtc": "E_rtc 45K"}
 SYS_TSV = {"A2c": ["A2c_compact", "A2c"], "A2span": ["A2_span"], "P_a2c": ["P_a2c"],
-           "P_rtc": ["P_rtc"], "E_rtc": ["E_rtc2", "E_rtc"], "lanczos": ["lanczos"]}
+           "P_rtc": ["P_rtc"], "E_rtc": ["E_rtc2", "E_rtc"], "lanczos": ["lanczos", "identity"],
+           "S6": ["S6_dejpeg"]}
 
 gallery_html = []
 for scene, title, variants, blurb in SCENES:
@@ -362,7 +367,7 @@ percent for the tuned bands.</p>
 <tr><td class="mono">S-A</td><td>Guarded Fast Photo</td><td>×2/×4</td><td>2x/4xNomosUni_span_multijpg (CC-BY-4.0)</td><td class="num">1.6 MB f32</td><td>opt-in “restore harder”, q≤50</td></tr>
 <tr><td class="mono">S-A′</td><td>Compact blind default</td><td>×2</td><td>2xNomosUni_compact_multijpg (CC-BY-4.0)</td><td class="num">2.4 MB</td><td>blind en-masse default (A2c)</td></tr>
 <tr><td class="mono">S-B</td><td>Quality Restore</td><td>×4</td><td>realesr-general-x4v3 + wdn blend (BSD-3)</td><td class="num">9.8 MB pair</td><td>severity-blended heavy restore</td></tr>
-<tr><td class="mono">S-C</td><td>×1 repair</td><td>×1</td><td>compact ×2 → downscale</td><td class="num">2.4 MB</td><td><b>falsified at q≥50</b> — native ×1 model queued</td></tr>
+<tr class="hl"><td class="mono">S-C/S6</td><td>×1 dejpeg (native)</td><td>×1</td><td>dejpeg_1x — GT-trained inversion, this program (595 K)</td><td class="num">2.4 MB f32 / 1.2 MB f16</td><td>beats identity at every q; round-trip retired</td></tr>
 <tr><td class="mono">S-D</td><td>Anime/Graphics</td><td>×4</td><td>realesr-animevideov3 (BSD-3)</td><td class="num">2.5 MB</td><td>surprise blind winner, degraded ×4</td></tr>
 <tr class="hl"><td class="mono">S-E</td><td>Realtime</td><td>×2</td><td>rtc_distill_2x — distilled this program (45,156 params)</td><td class="num">180 KB f32 / 90 KB f16</td><td>previews, latency-critical</td></tr>
 <tr class="hl"><td class="mono">S2-band</td><td>People pack</td><td>×2</td><td>P_a2c + P_rtc — GT fine-tunes, this program</td><td class="num">2.4 MB + 180 KB</td><td>first proven external band</td></tr>
@@ -399,9 +404,12 @@ on degraded input — nothing “restores” q35 at ×4. F_spanf (NTIRE clean-sp
 (worse-rate 19 %) and collapses on JPEG; D_anime is the blind winner on degraded input.</div>
 <h3>×1 repair track (vs identity)</h3>
 {deg_tabs("x1", ("q35", "q50", "q75"))}
-<div class="note grave"><b>Honest negative.</b> The ×2-up→downscale round trip loses to
-doing nothing at q50/q75 on all three metrics and only ties at q35. S-C ships as
-“falsified pending a native ×1 model” (RealPLKSR port queued).</div>
+<div class="note win"><b>Round trip falsified → native model wins.</b> The interim
+×2-up→downscale round trip lost to doing nothing at q50/q75 (rows kept above as the
+record). The direct inversion — <b>S6_dejpeg</b>, trained in 25 GPU-minutes on same-size
+turbo-JPEG pairs with an A2c-body warm start — beats identity at <em>every</em> quality on
+<em>every</em> metric: worse-rate 2 % at q35/q50, butteraugli 0.99 at q75, +1.7–2.0 dB PSNR.
+The runtime gained scale-1 via zero-channel head padding; goldens ≤3.7e-6.</div>
 
 <h2 id="subcorpus"><span class="no">§4</span>Per-class structure (Δ SSIM2 median vs Lanczos · wins/8, ×2 q35)</h2>
 <div class="pane on"><table><thead><tr><th>subcorpus</th><th>A2c</th><th>span</th><th>E_rtc</th><th>read</th></tr></thead><tbody>
@@ -513,7 +521,7 @@ Laplacian energy; shown at 224 px.</p>
 
 <h2 id="falsified"><span class="no">§12</span>Falsified / negative results registry</h2>
 <ul>
-<li>×1 repair via scale round-trip (q≥50) — loses to identity.</li>
+<li>×1 repair via scale round-trip (q≥50) — loses to identity. Replaced by the native S6 inversion, which wins everywhere.</li>
 <li>Capacity as the realtime bottleneck (nf32: +0.5 SSIM2, 2.7× compute).</li>
 <li>Heavyweight teacher adoption for people/textures (all four candidates lose to Lanczos).</li>
 <li>int8 weights-only PTQ on SPAN-class (35 dB — needs QAT or int8-first arch). f16 is transparent.</li>
