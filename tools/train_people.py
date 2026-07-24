@@ -21,7 +21,7 @@ import torch.nn.functional as F
 D = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-people-gt"))
 NF = int(os.environ.get("ZENSR_NF", "24"))
 NC = int(os.environ.get("ZENSR_NC", "8"))
-SCALE = 2
+SCALE = int(os.environ.get("ZENSR_SCALE", "2"))
 OUT_NAME = os.environ.get("ZENSR_OUT", "people_rtc_2x")
 INIT = os.environ.get("ZENSR_INIT", "")
 OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)

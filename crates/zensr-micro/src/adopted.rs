@@ -56,9 +56,11 @@ impl AdoptedModel {
         if raw.len() != expect {
             return Err(format!("compact: expected {expect} floats, got {}", raw.len()));
         }
-        if (3 * s2) % 4 != 0 {
-            return Err("compact: final cout not divisible by 4 (s=1 not yet supported)".into());
-        }
+        // final cout must be a multiple of 4 for the quad-blocked kernel; pad
+        // with zero output channels (s=1: 3->4, s=3: 27->28). The pixel shuffle
+        // reads only the first 3*s^2 channels, so pad rows are never consumed.
+        let cout = 3 * s2;
+        let cpad = cout.next_multiple_of(4);
         let mut buf = raw;
         let mut packed = Vec::new();
         let mut biases = Vec::new();
@@ -72,8 +74,17 @@ impl AdoptedModel {
             biases.push(take(&mut buf, nf).to_vec());
             slopes.push(take(&mut buf, nf).to_vec());
         }
-        packed.push(pack_conv3x3(take(&mut buf, nf * 3 * s2 * 9), nf, 3 * s2));
-        biases.push(take(&mut buf, 3 * s2).to_vec());
+        let wfin = take(&mut buf, nf * cout * 9);
+        if cpad == cout {
+            packed.push(pack_conv3x3(wfin, nf, cout));
+        } else {
+            let mut wp = vec![0.0f32; cpad * nf * 9];
+            wp[..wfin.len()].copy_from_slice(wfin);
+            packed.push(pack_conv3x3(&wp, nf, cpad));
+        }
+        let mut bfin = take(&mut buf, cout).to_vec();
+        bfin.resize(cpad, 0.0);
+        biases.push(bfin);
         debug_assert!(buf.is_empty());
         Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, packed, biases, slopes })
     }
@@ -133,8 +144,9 @@ impl AdoptedModel {
                     prelu_dispatch(&mut nxt[..span_nf], &self.slopes[1 + i], nf, plane, cs);
                     core::mem::swap(&mut cur, &mut nxt);
                 }
-                let mut pre = vec![0.0f32; 3 * s2 * cs];
-                conv3x3_packed_dispatch(&cur[..span_nf], nf, &self.packed[1 + nc], &self.biases[1 + nc], &mut pre, 3 * s2, h, w, cs);
+                let cpad = (3 * s2).next_multiple_of(4);
+                let mut pre = vec![0.0f32; cpad * cs];
+                conv3x3_packed_dispatch(&cur[..span_nf], nf, &self.packed[1 + nc], &self.biases[1 + nc], &mut pre, cpad, h, w, cs);
                 pixel_shuffle_s_strided(&pre, cs, out, h, w, s);
                 nearest_add(input, out, h, w, s);
             }
