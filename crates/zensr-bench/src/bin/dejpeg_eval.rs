@@ -14,6 +14,7 @@ use zensr_bench::*;
 use zensr_micro::guards::{guarded_merge, GuardConfig};
 
 const QS: &[u32] = &[15, 35, 55, 75, 90];
+const QS_HIGH: &[u32] = &[85, 90, 93, 96];
 const ENCODERS: &[&str] = &["turbo", "mozjpeg", "jpegli", "zenjpeg"];
 
 fn tmpdir() -> PathBuf {
@@ -98,6 +99,7 @@ fn main() {
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
     let m_off_dir = args.next().unwrap_or_else(|| "dejpeg2_off".into());
     let m_auto_dir = args.next().unwrap_or_else(|| "dejpeg2_auto".into());
+    let qs: &[u32] = if std::env::var("ZENSR_EVAL_HIGHQ").is_ok() { QS_HIGH } else { QS };
     let m_off = load_adopted(&m_off_dir).expect("model off");
     let m_auto = load_adopted(&m_auto_dir).expect("model auto");
     assert!(m_off.scale == 1 && m_auto.scale == 1);
@@ -121,7 +123,7 @@ fn main() {
             write_ppm(&hr, &ppm);
             for enc in ENCODERS {
                 for ss in ["420", "444"] {
-                    for &q in QS {
+                    for &q in qs {
                         let jpg = td.join("e.jpg");
                         let _ = std::fs::remove_file(&jpg);
                         if !encode(&ppm, &jpg, enc, q, ss) {

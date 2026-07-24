@@ -100,6 +100,20 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
 - **S5 Native-plane input (Phase ≥3):** model consumes zenjpeg's Y(full) + CbCr(half) planes +
   a chroma trunk with PixelShuffle(2) merge, skipping decoder chroma upsampling entirely.
   Potentially our biggest quality differentiator on 4:2:0. → decides deep-decoder integration.
+- **S5b YCbCr-native models (USER 2026-07-24):** run restoration in YCbCr (quantization's
+  own space — artifacts axis-aligned; RGB models waste capacity learning the color rotation).
+  zenjpeg exposes `DecodedYCbCr`; first rung = same Compact shape, planar YCbCr in/out, x1.
+  Prereq for S10 (projection is tight only in the decoder's YCbCr domain). 444 first; 420
+  chroma joins via S5's two-trunk shape — **420 chroma reconstruction ≡ guided ×2 SR of the
+  chroma planes** (user insight: same op vocabulary, same math; decoder's fixed upsampling
+  filter is where a learned PixelShuffle(2) trunk goes).
+- **S10 Quantization-consistency guard (USER 2026-07-24, the DCT-table math):** per band
+  |c_true − ĉ| ≤ Q[u,v]/2 ⇒ the file defines a convex DCT-space box (POCS constraint set).
+  (a) per-block severity map Σ Q²/12 over zeroed/active bands = LOCAL damage conditioning
+  (upgrades S7); (b) the box bounds allowed "invention" per band; (c) project model output
+  into the box (DCT→clamp→IDCT, zenjpeg owns fast DCTs) ⇒ output PROVABLY re-encodes to the
+  same coefficients — bitstream-consistency guarantee, strictly stronger than the bilinear
+  clamp. For 420, chroma box lives on the subsampled lattice (SR back-projection form).
 - **S6 1× repair mode:** same pipeline, scale=1 (deblock/dering only) as an imageflow filter.
   **DONE 2026-07-24 (first result):** dejpeg_1x (Compact nf64/nc16 s=1, A2c-body warm start,
   25 GPU-min) beats identity at every q on all metrics — q35/q50 worse-rate 2 %, q75 14 %,
