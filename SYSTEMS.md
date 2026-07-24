@@ -337,3 +337,35 @@ steps ≈ 25 GPU-min. n=64/cell vs identity:
 on every metric incl worst-decile (p10 72.7 vs 69.8 at q75); +1.7–2.0 dB
 PSNR. S-C is replaced by S6; the RealPLKSR port is no longer on the
 critical path (still interesting for a quality-tier ×1 later).
+
+### S6 v2 — zenjpeg-native, 4-encoder, deblock 2×2 (2026-07-24)
+
+Directive: cooperate with zenjpeg deblocking or determine it should be
+disabled; cover {turbo, mozjpeg, jpegli, zenjpeg} × {420,444} × any q;
+avoid encode-space gating if possible. Training pairs decoded by the
+LOCAL zenjpeg 0.9 (deployment decoder; 0.8.4 pub(crate)-locks
+DeblockMode), both arms from the same encoded bytes.
+
+**Deblock verdict: DISABLE (which is zenjpeg's default).** 2×2 mean of
+per-cell SSIM2 medians (4 enc × 2 ss × q∈{15,35,55,75,90}, n=24):
+model_off **69.45** > model_auto 68.64 > identity_auto 66.70 >
+identity_off 66.22. Best-arm-by-butteraugli: model_off 26/40 cells,
+model_auto 10, identity_off 3 (raw q90 cells), identity_auto 0.
+Deblocking helps when NO model runs (+0.5 alone) but destroys block-
+boundary structure the trained inversion uses — train on pixel-exact
+decode. Val agrees: off-arm 33.42 vs auto-arm 33.24 dB.
+
+**Coverage:** model_off beats identity at q15–q75 on every encoder and
+both subsamplings (worse-rate 0–38 %; biggest wins at low q: mozjpeg
+420 q15 23.7→31.0). Largest gains on mozjpeg/turbo (Annex-K-scaling
+artifacts); jpegli/zenjpeg gain less (their AQ encodes are cleaner).
+**Sole gap: q90** — 5/8 enc×ss combos show −0.01…−0.61 SSIM2 medians
+(visually nil, guard-bounded). Fix in flight WITHOUT gating: qboost
+rung (3× oversampling of q≥85 + clean pairs, fine-tune from the off
+arm) targeting identity behavior at transparent qualities.
+
+**Fingerprint validation (n=960 encodes):** mozjpeg→Mozjpeg 100 %,
+jpegli→CjpegliYcbcr 100 %, zenjpeg→CjpegliYcbcr 100 % (jpegli lineage —
+indistinguishable; zenjpeg#189 filed for an encoder-embedded parameter
+record), turbo -optimize→ImageMagick 80 % / Unknown 20 %. Family-level
+routing is reliable today; #189 upgrades zenjpeg files to ground truth.

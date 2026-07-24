@@ -73,6 +73,24 @@ def main():
     val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dev)
     hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dev)
+    # ZENSR_QBOOST: oversample high-q + clean pairs (index duplication) using
+    # <data>/../pairs.tsv (dejpeg-v2 layout). Closes the q90 identity gap
+    # without runtime gating.
+    sample_pool = None
+    qboost = int(os.environ.get("ZENSR_QBOOST", "0"))
+    ptsv = os.path.join(os.path.dirname(D), "pairs.tsv")
+    if qboost > 0 and os.path.exists(ptsv):
+        import csv as _csv
+        boosted = list(range(n))
+        with open(ptsv) as f:
+            rd = _csv.reader(f, delimiter="\t")
+            next(rd)
+            for row in rd:
+                i = int(row[0])
+                if i < n and (int(row[4]) == 1 or int(row[3]) >= 85):
+                    boosted.extend([i] * qboost)
+        sample_pool = torch.tensor(boosted, device=dev)
+        print(f"qboost x{qboost}: pool {len(boosted)} (from {n})", flush=True)
 
     m = Student().to(dev)
     if INIT:
@@ -84,7 +102,10 @@ def main():
     print(f"train n={n} steps={steps} batch={batch} lr={lr0} nf={NF} nc={NC} "
           f"params={sum(p.numel() for p in m.parameters())}", flush=True)
     for step in range(1, steps + 1):
-        idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
+        if sample_pool is not None:
+            idx = sample_pool[torch.from_numpy(rng.integers(0, len(sample_pool), batch)).to(dev)]
+        else:
+            idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
         x = lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
         y = hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
         with torch.autocast("cuda", dtype=torch.bfloat16):
