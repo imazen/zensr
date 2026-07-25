@@ -461,3 +461,17 @@ activation. Shipping configuration:
   on the whole axis are at q5–15 (up to +13 SSIM2 over identity).
 S10 remains the roadmap item that folds Knusperli's coefficient-domain
 advantage into the model itself, retiring even the decoder flag.
+
+### Conditioning ablation, part 1 (2026-07-25, LAN fleet): precision confound dead, S2a falsified
+
+Distributed over the household fleet (lianli 2080 / jason 3070 / ian
+1660Ti; ian lost mid-run to a power-off — kids' box). Matched arms
+(24k v4 pairs, policy-mix decode, 14k steps, batch 48, warm from
+dejpeg4): **none-Turing 32.59 ≡ none-Ampere 32.61** (every stratum
+within 0.06 dB) — bf16-vs-fp32-fallback compile paths do NOT matter;
+cross-box arms are comparable. Therefore the scalar arm's result is
+real: **+13.7 dB on clean, −2.7…−3.5 dB on every degraded band** — a
+global severity scalar is an over-strong prior that fights local
+evidence. S2a input-conditioning falsified in scalar form (and the
+clean win is redundant with qboost). S10 dmap (local, exact,
+per-block) still in training — the surviving conditioning hypothesis.
