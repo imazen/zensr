@@ -79,6 +79,37 @@ fn main() {
             assert_eq!(px.len(), 3 * w as usize * h as usize, "expect RGB8");
             write_ppm(&Rgb8Img { px, w: w as usize, h: h as usize }, &a[2]);
         }
+        // dmap <in.jpg> <out.pgm16> : per-8x8-luma-block damage map (S10 math)
+        //   damage = sum over bands of Q[u,v]^2/12 where coeff==0 (erased detail
+        //   uncertainty), log1p-scaled to u16. Dims = blocks_wide x blocks_high.
+        "dmap" => {
+            let data = std::fs::read(&a[1]).expect("read jpg");
+            let dc = zenjpeg::decoder::Decoder::new()
+                .decode_coefficients(&data, enough::Unstoppable)
+                .expect("coeffs");
+            let y = &dc.components[0];
+            let qt = dc.quant_tables[y.quant_table_idx as usize]
+                .expect("luma quant table");
+            let (bw, bh) = (y.blocks_wide, y.blocks_high);
+            let mut out = vec![0u16; bw * bh];
+            for b in 0..bw * bh {
+                let blk = &y.coeffs[b * 64..(b + 1) * 64];
+                let mut dmg = 0.0f64;
+                for k in 1..64 {
+                    if blk[k] == 0 {
+                        let q = qt[k] as f64;
+                        dmg += q * q / 12.0;
+                    }
+                }
+                // log1p scale: q=255 worst case sum ~ 3.4e5 -> ln ~ 12.7; map to u16
+                out[b] = ((dmg.ln_1p() / 13.0).min(1.0) * 65535.0) as u16;
+            }
+            let mut buf = format!("P5\n{bw} {bh}\n65535\n").into_bytes();
+            for v in &out {
+                buf.extend_from_slice(&v.to_be_bytes());
+            }
+            std::fs::write(&a[2], buf).expect("write pgm");
+        }
         "probe" => {
             let data = std::fs::read(&a[1]).expect("read jpg");
             match zenjpeg::detect::probe(&data) {
