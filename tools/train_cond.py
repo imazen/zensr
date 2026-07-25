@@ -62,10 +62,14 @@ def main():
 
     rows = list(csv.reader(open(os.path.join(D, "pairs.tsv")), delimiter="\t"))[1:]
 
-    lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dev)
-    hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dev)
-    sc_gpu = torch.from_numpy(sc_all[:n]).to(dev)
-    dm_gpu = torch.from_numpy(dm_all[:n].astype(np.float32) / 65535.0).to(dev)
+    # ZENSR_CPU_DATA=1: keep train arrays host-side (small-VRAM boxes); the
+    # per-batch H2D copy is ~5 MB/step. Same data/order/batch as GPU mode.
+    cpu_data = os.environ.get("ZENSR_CPU_DATA", "0") == "1"
+    data_dev = "cpu" if cpu_data else dev
+    lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(data_dev)
+    hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(data_dev)
+    sc_gpu = torch.from_numpy(sc_all[:n]).to(data_dev)
+    dm_gpu = torch.from_numpy(dm_all[:n].astype(np.float32) / 65535.0).to(data_dev)
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     val_sc = torch.from_numpy(sc_all[n:]).to(dev)
@@ -109,9 +113,10 @@ def main():
 
     for step in range(1, steps + 1):
         idx = pool_t[torch.from_numpy(rng.integers(0, len(pool), batch)).to(dev)]
-        x = lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
-        y = hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
-        x = with_cond(x, sc_gpu[idx], dm_gpu[idx])
+        di = idx.to(data_dev)
+        x = lr_gpu[di].to(dev).permute(0, 3, 1, 2).float().div_(255)
+        y = hr_gpu[di].to(dev).permute(0, 3, 1, 2).float().div_(255)
+        x = with_cond(x, sc_gpu[di].to(dev), dm_gpu[di].to(dev))
         with torch.autocast("cuda", dtype=torch.bfloat16):
             loss = charbonnier(m(x), y)
         opt.zero_grad(set_to_none=True)
