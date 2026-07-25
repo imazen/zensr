@@ -9,13 +9,14 @@ DATA=~/tmp/zensr-dejpeg-v4
 declare -A BOX=( [lianli]="lilith@192.168.50.27" [jason]="zen@192.168.50.148" [ian]="zen@192.168.50.193" )
 declare -A ARM=( [lianli]="none" [jason]="scalar" [ian]="dmap" )
 STEPS=${STEPS:-14000}
+BATCH=${BATCH:-48}
 
 case "${1:?sync|launch|status|collect}" in
   sync)
     for b in "${!BOX[@]}"; do
       echo "== sync $b"
       rsync -a --info=progress2 "$DATA"/{lr_u8.npy,hr_u8.npy,cond_scalar_f32.npy,dmap_u16.npy,pairs.tsv,meta.json} \
-        ~/work/zen/zensr/tools/train_cond.py "${BOX[$b]}":~/zensr-ablation/ &
+        ~/work/zen/zensr/tools/train_cond.py ~/tmp/zensr-dejpeg-v3/policy/dejpeg4_policy_10000.pth "${BOX[$b]}":~/zensr-ablation/ &
     done; wait ;;
   launch)
     for b in "${!BOX[@]}"; do
@@ -24,7 +25,7 @@ case "${1:?sync|launch|status|collect}" in
       ssh -o BatchMode=yes "${BOX[$b]}" "cd ~/zensr-ablation && \
         ZENSR_DATA=~/zensr-ablation ZENSR_COND=$a ZENSR_OUT=dejpeg5_$a \
         ZENSR_INIT=~/zensr-ablation/dejpeg4_policy_10000.pth ZENSR_QBOOST=3 \
-        nohup ~/zensr-env/bin/python train_cond.py $STEPS 64 7e-5 > train_$a.log 2>&1 & echo started"
+        nohup ~/zensr-env/bin/python train_cond.py $STEPS $BATCH 7e-5 > train_$a.log 2>&1 & echo started"
     done ;;
   status)
     for b in "${!BOX[@]}"; do
