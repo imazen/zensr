@@ -615,3 +615,25 @@ User-directed question: how does the pipeline behave on 2nd/3rd-generation JPEGs
   next dataset build and A/B against dejpeg4_policy on the gen chains; a
   double-quantization detector (DCT-histogram periodicity) stays a
   rung-if-needed, not a default.
+
+### slack_abs validated + high-q identity gate (2026-07-26, benchmarks/dejpeg_proj_highq_slackabs_*.tsv)
+
+High-grid A/B vs the 07-25 baseline (same files/grid/models; the only delta
+is slack_abs in Auto projection):
+
+- **slack_abs works where the mechanism said it would**: q93 residual erased
+  (turbo −0.24→−0.02; moz +0.06→+0.38; jpegli +0.12→+0.26; zen +0.04→+0.13),
+  q90 improved for all four families. Mean high-grid gain +0.160→+0.225.
+  Cost: moz q85 −0.14 (wider boxes, slightly weaker corrections).
+- **q96 reframed — it was never a projection problem.** proj−policy is
+  POSITIVE at every q96 cell (+0.15..+0.81): the projection adds value; the
+  MODEL loses to identity on near-pristine input (policy arm −0.5..−1.1).
+  My earlier "q96 residual traced to calibration tails" was only part of
+  the story; "solved by slack_abs" (113722d7 commit message) was premature.
+- **Fix: measured high-q identity gate** (`policy_high_q_identity`, default
+  on): skip the model at probe q>=94.5 (IJG/Moz scale, exact at these q) or
+  d<=0.6 (Cjpegli family; q96 reads 0.3–0.5, q93 reads 0.7–1.0 and stays
+  modeled). Top-end analog of the user-endorsed low-q deblock policy; the
+  decode is already consistent so projection is skipped too (no-op).
+  Analytic effect on the grid: negative cells 5/16 → 1/16 (turbo q93 −0.02
+  marginal); mean high-grid gain +0.35. Report flag `skipped_model_high_q`.

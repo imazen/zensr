@@ -346,7 +346,7 @@ ul {{ max-width:78ch; }}
   <a href="#results">results</a><a href="#subcorpus">per-class</a><a href="#guard">guard</a>
   <a href="#ladder">distillation</a><a href="#audition">audition</a><a href="#people">people band</a>
   <a href="#speed">speed</a><a href="#audit">split audit</a><a href="#gallery">gallery</a>
-  <a href="#s10">S10</a><a href="#falsified">falsified</a>
+  <a href="#s10">S10</a><a href="#genloss">gen-loss</a><a href="#falsified">falsified</a>
 </nav>
 
 <h2 id="verdict"><span class="no">§0</span>Verdict</h2>
@@ -562,6 +562,27 @@ Engineering: product cold build 11.9 s / core-edit loop 2.0 s; upstream issues f
 zenjpeg#189 (encoder parameter record), zenjpeg#190 (impl-Stop monomorphization: 46k LLVM
 lines + 11.6 s rebuilds for a 300-line consumer; dyn-inner fix proposed).</div>
 
+<h2 id="genloss"><span class="no">§12c</span>Generation loss — gen2/gen3 measured (2026-07-26)</h2>
+<p>Multi-generation re-encode chains (the real web: social re-encode, CDN recompress,
+meme chains, crop-shifted grids, re-encode at <i>higher</i> q), each scored against the
+pristine original at every generation, with matched single-generation baselines
+(benchmarks/gen_eval_2026-07-26.tsv, 24 pinned-eval crops × 14 chains, run on tower):</p>
+<div class="pane on"><table><thead><tr><th>chain</th><th>identity ssim2</th><th>restored</th><th>model Δ</th><th>matched single-gen Δ</th></tr></thead><tbody>
+<tr><td>g2 social 85→75</td><td class="num">71.8</td><td class="num">75.1</td><td class="num"><b>+3.22</b></td><td class="num">+2.13 (t75)</td></tr>
+<tr><td>g2 CDN 92→moz70</td><td class="num">70.4</td><td class="num">73.4</td><td class="num"><b>+3.02</b></td><td class="num">+2.30 (m70)</td></tr>
+<tr><td>g2 up-q 60→90</td><td class="num">68.2</td><td class="num">71.6</td><td class="num"><b>+3.37</b></td><td class="num">+0.54 (t90)</td></tr>
+<tr><td>g3 meme 75→m60→50</td><td class="num">55.9</td><td class="num">61.0</td><td class="num"><b>+5.13</b></td><td class="num">+4.25 (t50)</td></tr>
+<tr><td>g3 deep 35×3</td><td class="num">54.1</td><td class="num">60.1</td><td class="num"><b>+6.09</b></td><td class="num">+5.79 (t35)</td></tr>
+</tbody></table></div>
+<div class="note win">Three findings. (1) <b>Gains grow on multi-gen input</b> — more artifact
+energy, and the blind model removes proportionally more; no under-correction collapse.
+(2) <b>Generation damage is mostly permanent</b>: restored gen2 lands ~3.9 ssim2 below restored
+single-gen at the same final q (the model recovers ~20 % of the generational delta). That gap
+is the target of gen-aware training (chain augmentation implemented, ZENSR_GEN2/GEN3, A/B queued).
+(3) <b>The S10 projection stays safe</b> — it certifies the <i>final</i> generation; proj−noproj ≥ 0
+on 13/14 chains (−0.05 only on up-q, neutral). Bonus: the up-q chain (probe says "q90, mild";
+model corrects +3.37 from pixels) independently re-falsifies severity conditioning.</div>
+
 <h2 id="falsified"><span class="no">§12</span>Falsified / negative results registry</h2>
 <ul>
 <li>×1 repair via scale round-trip (q≥50) — loses to identity. Replaced by the native S6 inversion, which wins everywhere.</li>
@@ -570,6 +591,12 @@ lines + 11.6 s rebuilds for a 300-line consumer; dyn-inner fix proposed).</div>
 <li>Input-channel conditioning, both forms — global severity scalar AND per-block damage map
 land identical (−3 dB on every degraded band): a gradient shortcut that substitutes for pixel
 analysis. Pixels-in/pixels-out ships; S10 lives at the output.</li>
+<li>Bilinear-up of the half-res projection correction (4:2:0 back-projection) — box(bilerp(c)) ≠ c
+attenuates the correction (only 1.8× violation reduction). Pixel replication is the exact
+right-inverse of box decimation: one-pass exact (residual &lt; 2e-3).</li>
+<li>Skip-zeroed-bands rescue for trellis/AQ projection slack — measured violations sit on
+<i>coded</i> coefficients too (mozjpeg nonzero-only p99 up to 1.7Q, max 15Q). No band-conditional
+skip restores the truth-in-box guarantee for those families.</li>
 <li>int8 weights-only PTQ on SPAN-class (35 dB — needs QAT or int8-first arch). f16 is transparent.</li>
 <li>Norm-folding into conv_1 (borders wrong by 0.32 — official zero-pads after normalization).</li>
 <li>Consistency-only goldens (agreed on a broken graph — reference-gate everything).</li>

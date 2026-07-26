@@ -41,11 +41,13 @@ impl core::panic::unwind_safe::UnwindSafe for zensr_zenjpeg::RestoreError
 #[non_exhaustive] pub struct zensr_zenjpeg::RestoreConfig
 pub zensr_zenjpeg::RestoreConfig::deblock_policy: bool
 pub zensr_zenjpeg::RestoreConfig::guard: zensr_micro::guards::GuardConfig
+pub zensr_zenjpeg::RestoreConfig::high_q_identity: bool
 pub zensr_zenjpeg::RestoreConfig::projection: zensr_zenjpeg::Projection
 pub zensr_zenjpeg::RestoreConfig::threads: usize
 pub zensr_zenjpeg::RestoreConfig::tile: usize
 impl zensr_zenjpeg::RestoreConfig
 pub fn zensr_zenjpeg::RestoreConfig::with_deblock_policy(self, bool) -> Self
+pub fn zensr_zenjpeg::RestoreConfig::with_high_q_identity(self, bool) -> Self
 pub fn zensr_zenjpeg::RestoreConfig::with_projection(self, zensr_zenjpeg::Projection) -> Self
 pub fn zensr_zenjpeg::RestoreConfig::with_threads(self, usize) -> Self
 impl core::default::Default for zensr_zenjpeg::RestoreConfig
@@ -63,6 +65,7 @@ pub zensr_zenjpeg::RestoreReport::est_quality: f32
 pub zensr_zenjpeg::RestoreReport::guard: zensr_micro::guards::GuardReport
 pub zensr_zenjpeg::RestoreReport::projection: alloc::vec::Vec<zensr_micro::consist::ProjectionReport>
 pub zensr_zenjpeg::RestoreReport::quality_scale: alloc::string::String
+pub zensr_zenjpeg::RestoreReport::skipped_model_high_q: bool
 pub zensr_zenjpeg::RestoreReport::used_deblock_auto: bool
 impl core::clone::Clone for zensr_zenjpeg::RestoreReport
 pub fn zensr_zenjpeg::RestoreReport::clone(&self) -> zensr_zenjpeg::RestoreReport
@@ -91,6 +94,8 @@ impl core::marker::Unpin for zensr_zenjpeg::Restored
 impl core::marker::UnsafeUnpin for zensr_zenjpeg::Restored
 impl core::panic::unwind_safe::RefUnwindSafe for zensr_zenjpeg::Restored
 impl core::panic::unwind_safe::UnwindSafe for zensr_zenjpeg::Restored
+pub fn zensr_zenjpeg::policy_high_q_identity(&zenjpeg::detect::JpegProbe) -> bool
 pub fn zensr_zenjpeg::policy_wants_auto(&zenjpeg::detect::JpegProbe) -> bool
 pub fn zensr_zenjpeg::restore_jpeg(&[u8], &zensr_micro::adopted::AdoptedModel, &zensr_zenjpeg::RestoreConfig) -> core::result::Result<zensr_zenjpeg::Restored, zensr_zenjpeg::RestoreError>
+pub fn zensr_zenjpeg::slack_abs_for(&zenjpeg::detect::JpegProbe) -> f32
 pub fn zensr_zenjpeg::slack_for(&zenjpeg::detect::JpegProbe) -> f32

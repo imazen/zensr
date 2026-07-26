@@ -80,6 +80,25 @@ pub fn slack_abs_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     }
 }
 
+/// Measured high-q identity gate (2026-07-26, benchmarks/
+/// dejpeg_proj_highq_slackabs_2026-07-26.tsv): at q>=~95 the input is
+/// near-artifact-free and the x1 model LOSES to identity (policy arm
+/// -0.5..-1.1 ssim2 at q96 across all four families; the projection claws
+/// back +0.15..+0.81 but not all of it). Skipping the model there is the
+/// top-end analog of the measured low-q deblock policy. Thresholds from
+/// probe calibration on the eval grid: IJG/Mozjpeg quality scale reads
+/// exact q (q96 -> 96.0); Cjpegli-family Butteraugli distance reads
+/// 0.3-0.5 at q96 vs 0.7-1.0 at q93 (which stays modeled — positive with
+/// slack_abs).
+pub fn policy_high_q_identity(probe: &zenjpeg::detect::JpegProbe) -> bool {
+    let scale = format!("{:?}", probe.quality.scale);
+    match scale.as_str() {
+        "IjgQuality" | "MozjpegQuality" => probe.quality.value >= 94.5,
+        "ButteraugliDistance" => probe.quality.value <= 0.6,
+        _ => false,
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Projection {
@@ -101,6 +120,9 @@ pub struct RestoreConfig {
     /// Apply the measured deblock policy (Auto at Annex-K q<=9). When false,
     /// decode is always pixel-exact (DeblockMode::Off).
     pub deblock_policy: bool,
+    /// Skip the model on near-pristine input (probe q >= ~95 / d <= 0.6) —
+    /// measured: the model loses to identity there (`policy_high_q_identity`).
+    pub high_q_identity: bool,
     pub threads: usize,
     /// Tile size for the model runner; 0 = auto.
     pub tile: usize,
@@ -121,6 +143,10 @@ impl RestoreConfig {
         self.deblock_policy = on;
         self
     }
+    pub fn with_high_q_identity(mut self, on: bool) -> Self {
+        self.high_q_identity = on;
+        self
+    }
 }
 
 impl Default for RestoreConfig {
@@ -129,6 +155,7 @@ impl Default for RestoreConfig {
             guard: GuardConfig::default(),
             projection: Projection::Auto,
             deblock_policy: true,
+            high_q_identity: true,
             threads: 1,
             tile: 0,
         }
@@ -142,6 +169,9 @@ pub struct RestoreReport {
     pub est_quality: f32,
     pub quality_scale: String,
     pub used_deblock_auto: bool,
+    /// True when the high-q identity gate skipped the model (output is the
+    /// plain decode).
+    pub skipped_model_high_q: bool,
     pub guard: GuardReport,
     /// Per-projected-plane reports (Y, then Cb/Cr when projected).
     pub projection: Vec<ProjectionReport>,
@@ -258,6 +288,14 @@ pub fn restore_jpeg(
         for c in 0..3 {
             planes[c * plane + i] = px[i * 3 + c] as f32 / 255.0;
         }
+    }
+
+    // 2b. high-q identity gate: near-pristine input — the model can only
+    // do harm here (measured; see policy_high_q_identity). The decode is
+    // already consistent, so projection is a no-op too: return it.
+    if cfg.high_q_identity && policy_high_q_identity(&probe) {
+        report.skipped_model_high_q = true;
+        return Ok(Restored { planes, width: w, height: h, report });
     }
 
     // 3. model space: YCbCr-native models run directly in the space where
@@ -425,6 +463,22 @@ mod tests {
                 PlaneGeometry::Full
             );
         }
+    }
+
+    #[test]
+    fn high_q_identity_gate_fires_on_probe_scales() {
+        // turbo/moz q>=95 and jpegli-family d<=0.6 must gate; q93-band must not
+        let rgb = synth_rgb(64, 64);
+        let jpg = encode(64, 64, &rgb, 96.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let p = zenjpeg::detect::probe(&jpg).unwrap();
+        // zenjpeg's own encodes probe as Cjpegli-family distance
+        let scale = format!("{:?}", p.quality.scale);
+        if scale == "ButteraugliDistance" {
+            assert!(policy_high_q_identity(&p), "q96 zenjpeg d={} must gate", p.quality.value);
+        }
+        let jlow = encode(64, 64, &rgb, 55.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let pl = zenjpeg::detect::probe(&jlow).unwrap();
+        assert!(!policy_high_q_identity(&pl), "q55 must NOT gate (d={})", pl.quality.value);
     }
 
     #[test]
