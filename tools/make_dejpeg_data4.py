@@ -59,21 +59,32 @@ def read_dmap(path):
 
 
 def make_pair(args):
-    idx, crop_rgb, enc, ss, q, clean = args
+    # gens: list of (enc, ss, q) — len 1 = single generation (the default);
+    # len 2/3 = generation-loss chains (decode of gen k re-encoded as k+1).
+    # The FINAL generation's file drives the deblock policy / dmap / probe —
+    # exactly what the runtime pipeline will see. GT stays the pristine crop.
+    idx, crop_rgb, gens, clean = args
+    enc, ss, q = gens[-1]
     nb = CROP // 8
     if clean:
-        return idx, crop_rgb, crop_rgb, 0.0, np.zeros((nb, nb), np.uint16), enc, ss, q, clean
+        return idx, crop_rgb, crop_rgb, 0.0, np.zeros((nb, nb), np.uint16), enc, ss, q, clean, len(gens)
     with tempfile.TemporaryDirectory(dir=os.path.expanduser("~/tmp")) as td:
         ppm, jpg = os.path.join(td, "c.ppm"), os.path.join(td, "c.jpg")
         write_ppm(ppm, cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
-        encode(ppm, jpg, enc, q, ss)
+        for gi, (genc, gss, gq) in enumerate(gens):
+            encode(ppm, jpg, genc, gq, gss)
+            if gi + 1 < len(gens):
+                # decode pixel-exact and feed the next generation
+                mid = os.path.join(td, f"m{gi}.ppm")
+                run([ZJTOOL, "dec", jpg, mid, "off"])
+                ppm = mid
         mode = "auto" if (enc in ("turbo", "mozjpeg") and q <= 9) else "off"
         dec = os.path.join(td, "d.ppm")
         run([ZJTOOL, "dec", jpg, dec, mode])
         dm = os.path.join(td, "d.pgm")
         run([ZJTOOL, "dmap", jpg, dm])
         sev = probe_severity(jpg)
-        return idx, crop_rgb, read_ppm(dec).copy(), sev, read_dmap(dm).copy(), enc, ss, q, clean
+        return idx, crop_rgb, read_ppm(dec).copy(), sev, read_dmap(dm).copy(), enc, ss, q, clean, len(gens)
 
 
 def main():
@@ -90,11 +101,20 @@ def main():
     print(f"train files {len(train_f)} / val files {n_val}", flush=True)
     crops = gen_crops(train_f, n_pairs - VAL_TAIL, rng) + gen_crops(val_f, VAL_TAIL, rng)
     print(f"{len(crops)} crops ready", flush=True)
+    # Generation-loss augmentation (SYSTEMS.md "generation loss"): fractions
+    # of pairs re-encoded 2x/3x with independent random enc/ss/q per
+    # generation. Default OFF — enable per measured gen_eval verdict.
+    p_gen2 = float(os.environ.get("ZENSR_GEN2", "0"))
+    p_gen3 = float(os.environ.get("ZENSR_GEN3", "0"))
     jobs = []
     for i, c in enumerate(crops):
         clean = rng.random() < 0.05
-        jobs.append((i, c, rng.choice(ENCODERS), "420" if rng.random() < 0.6 else "444",
-                     rng.randrange(5, 97), clean))
+        def step():
+            return (rng.choice(ENCODERS), "420" if rng.random() < 0.6 else "444",
+                    rng.randrange(5, 97))
+        r = rng.random()
+        ngens = 3 if r < p_gen3 else 2 if r < p_gen3 + p_gen2 else 1
+        jobs.append((i, c, [step() for _ in range(ngens)], clean))
     n = len(jobs)
     nb = CROP // 8
     hr = np.zeros((n, CROP, CROP, 3), np.uint8)
@@ -104,9 +124,11 @@ def main():
     meta_rows = [None] * n
     done = 0
     with Pool(workers) as p:
-        for idx, h, l, s_, d_, enc, ss, q, clean in p.imap_unordered(make_pair, jobs, chunksize=16):
+        for idx, h, l, s_, d_, enc, ss, q, clean, gens in p.imap_unordered(
+            make_pair, jobs, chunksize=16
+        ):
             hr[idx], lr[idx], sc[idx], dm[idx] = h, l, s_, d_
-            meta_rows[idx] = f"{idx}\t{enc}\t{ss}\t{q}\t{int(clean)}\t{s_:.3f}"
+            meta_rows[idx] = f"{idx}\t{enc}\t{ss}\t{q}\t{int(clean)}\t{s_:.3f}\t{gens}"
             done += 1
             if done % 2000 == 0:
                 print(f"{done}/{n}", flush=True)
@@ -117,11 +139,12 @@ def main():
     json.dump({"n": n, "val_tail": VAL_TAIL, "seed": SEED, "crop": CROP,
                "task": "v4 conditioning ablation (policy-mix decode)",
                "q": "U(5,96)+5% clean", "encoders": ENCODERS,
+               "subs": SUBS, "gen2": p_gen2, "gen3": p_gen3,
                "cond": "scalar=probe severity; dmap=per-block erased-band Q^2/12 log-scaled",
                "val_split": "image-level"},
               open(os.path.join(OUT, "meta.json"), "w"), indent=1)
     with open(os.path.join(OUT, "pairs.tsv"), "w") as f:
-        f.write("idx\tencoder\tss\tq\tclean\tseverity\n")
+        f.write("idx\tencoder\tss\tq\tclean\tseverity\tgens\n")
         f.write("\n".join(meta_rows) + "\n")
     print(f"DONE {n} pairs ({(hr.nbytes + lr.nbytes + dm.nbytes)/1e9:.2f} GB)", flush=True)
 
