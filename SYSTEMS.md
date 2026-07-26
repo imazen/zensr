@@ -475,3 +475,20 @@ global severity scalar is an over-strong prior that fights local
 evidence. S2a input-conditioning falsified in scalar form (and the
 clean win is redundant with qboost). S10 dmap (local, exact,
 per-block) still in training — the surviving conditioning hypothesis.
+
+### Conditioning ablation, part 2 — VERDICT: pixels-only wins; input-channel conditioning is a shortcut trap
+
+dmap (S10-as-input, local + exact) landed **identical to the global
+scalar** (31.05 vs 31.07 val; every stratum within 0.15 dB; clean 75.9):
+the network extracts only the "overall severity" bit from the rich map
+and uses it the same shortcut way — conditioning substitutes for pixel
+analysis instead of augmenting it, costing ~3 dB on every degraded band
+for a clean-identity win qboost provides anyway. **S2a and S7-as-input
+falsified; S10's value is the OUTPUT-side projection** (DCT-box clamp —
+no training, hard re-encode-consistency guarantee), not input channels.
+The shipping architecture stays pixels-in/pixels-out.
+
+Fleet postscript: 6 training runs + 1 confound probe across lianli/
+jason/ian in one afternoon; ian was lost mid-run to a physical power-off
+(kids' box — WoL unarmed after hard cut; needs the button) and its arm
+completed on lianli. Kids' boxes flipped back to Windows at wrap-up.
