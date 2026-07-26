@@ -555,3 +555,34 @@ The `code review / refactor / minimize public API` milestone (user-directed):
   Grayscale (1-component) keeps luma projection.
 - `RestoreError` and `Restored` are now `#[non_exhaustive]`; the x1-model
   precondition returns `RestoreError::UnsupportedModel` instead of panicking.
+
+### S10 high-q slack: the q96 residual is SOLVED — absolute sample-quantization noise (2026-07-26)
+
+Per-quantizer-value calibration (slack_probe extended with per-Q breakdown +
+nonzero split; 1M coeffs/cell, q88–q98; benchmarks/slack_calibration_highq_*
++ _nzsplit_2026-07-26.tsv):
+
+- **Root cause of the q96 projection regression**: encoders with integer
+  sample pipelines (libjpeg-turbo, mozjpeg) round YCbCr samples to u8 BEFORE
+  their FDCT. That injects a bounded ABSOLUTE DCT-domain noise (turbo Q=1:
+  p99 1.32, p99.9 2.15, max 3.70 ≈ 8·0.5 — exactly the ±0.5/255-per-sample
+  worst case) which a relative slack can never cover as Q→1. At Q≥4 it hides
+  under Q/2; at q≥94 the DQT is mostly Q=1..3 and 17% of Q=1 bands violate
+  the box → the projection clamps CORRECT detail.
+- **Fix shipped**: `ProjectionConfig.slack_abs` (additive, coefficient
+  units); interval is now Q·(0.5+slack_q) + slack_abs. Family calibration in
+  `slack_abs_for`: turbo/mozjpeg 1.5 (covers p99, most of p99.9), Cjpegli
+  family 0.5 (float sample pipeline measured far cleaner: Q=1 p99 ≤ 0.24 —
+  don't weaken valid high-q projection). Negligible at low q by construction
+  (1.5/Q vanishes as Q grows).
+- **Falsified: skip-zeroed-bands rescue for trellis/AQ.** Hypothesis was
+  that mozjpeg/zenjpeg 15Q violations sit only on zeroed runs; the nonzero
+  split disproves it — coded coefficients also violate (mozjpeg-nz p99 up to
+  1.7, max 15Q, 8–17% violating). Trellis moves coded coefficients multiple
+  steps for rate. No band-conditional skip can restore the truth-in-box
+  guarantee for those families; their tail remains the documented
+  approximation, arbitrated by eval only.
+- jpegli at high q is nearly round-to-nearest (float pipeline) — the 0.45
+  relative family slack is about AQ at LOW q, not high.
+- Validation eval (high grid, per_sub=3, slack_abs active in Auto) launched;
+  verdict lands with the next benchmarks commit.

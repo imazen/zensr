@@ -47,13 +47,23 @@ pub struct CoeffView<'a> {
     pub quant: &'a [u16; 64],
 }
 
-/// Extra half-width added to every interval, in units of Q (0.0 = strict
-/// round-to-nearest box). Trellis quantizers (mozjpeg) deliberately round
-/// off-nearest; calibrate per encoder family with `slack_probe`.
+/// Slack widening the per-coefficient interval |c - c_hat| <= Q/2.
+///
+/// Two additive terms, calibrated per encoder family with `slack_probe`:
+/// - `slack_q` — RELATIVE, in units of Q. Covers quantizer-behavior spread
+///   (trellis off-nearest rounding, AQ understating the stored DQT).
+/// - `slack_abs` — ABSOLUTE, in coefficient units. Covers the encoder-side
+///   sample-quantization noise floor: encoders that round YCbCr samples to
+///   u8 before their FDCT (libjpeg-turbo, mozjpeg) carry a bounded absolute
+///   DCT-domain error (measured p99 ~1.3, max ~3.7 units) regardless of Q.
+///   Invisible when Q/2 dominates; decisive at Q=1..3 (high quality), where
+///   a purely relative slack lets the box exclude the truth and the
+///   projection clamps CORRECT detail (the measured q96 regression).
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct ProjectionConfig {
     pub slack_q: f32,
+    pub slack_abs: f32,
 }
 
 impl ProjectionConfig {
@@ -62,12 +72,16 @@ impl ProjectionConfig {
         c.slack_q = slack_q;
         c
     }
+    pub fn with_slack_abs(mut self, slack_abs: f32) -> Self {
+        self.slack_abs = slack_abs;
+        self
+    }
 }
 
 impl Default for ProjectionConfig {
     fn default() -> Self {
         // strict box + a hair for decoder IDCT/rounding noise
-        ProjectionConfig { slack_q: 0.05 }
+        ProjectionConfig { slack_q: 0.05, slack_abs: 0.0 }
     }
 }
 
@@ -161,7 +175,7 @@ pub fn project_plane(
                 let (u, v) = (nat / B, nat % B);
                 let q = cv.quant[nat] as f32;
                 let c_hat = raw as f32 * q;
-                let half = q * (0.5 + cfg.slack_q);
+                let half = q * (0.5 + cfg.slack_q) + cfg.slack_abs;
                 let cval = fq[u][v];
                 let cc = cval.clamp(c_hat - half, c_hat + half);
                 if cc != cval {
@@ -387,7 +401,7 @@ mod tests {
         let (mut dec, coeffs) = simulate(w, h, &qt, 7);
         let before = dec.clone();
         let cv = CoeffView { coeffs: &coeffs, blocks_wide: 4, blocks_high: 3, order: CoeffOrder::Natural, quant: &qt };
-        let rep = project_plane(&mut dec, w, h, &cv, &ProjectionConfig { slack_q: 0.05 });
+        let rep = project_plane(&mut dec, w, h, &cv, &ProjectionConfig { slack_q: 0.05, slack_abs: 0.0 });
         for (a, b) in dec.iter().zip(before.iter()) {
             assert!((a - b).abs() < 2e-3, "decode should already be consistent");
         }
@@ -406,7 +420,7 @@ mod tests {
             .enumerate()
             .map(|(i, v)| (v + if (i / 3) % 2 == 0 { 0.3 } else { -0.3 }).clamp(0.0, 1.0))
             .collect();
-        let rep = project_plane(&mut out, w, h, &cv, &ProjectionConfig { slack_q: 0.0 });
+        let rep = project_plane(&mut out, w, h, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
         assert!(rep.clamped_frac > 0.2, "should clamp a lot: {}", rep.clamped_frac);
         // after projection, re-quantizing must reproduce the file's coefficients
         let m = basis();
@@ -463,11 +477,11 @@ mod tests {
                 }
             }
             let before = d.clone();
-            project_plane(&mut d, hw, hh, &cv, &ProjectionConfig { slack_q: 0.0 });
+            project_plane(&mut d, hw, hh, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
             d.iter().zip(before.iter()).map(|(a, b)| (a - b).abs()).sum::<f32>() / (hw * hh) as f32
         };
         let v0 = viol(&full);
-        project_chroma_420(&mut full, w, h, &cv, &ProjectionConfig { slack_q: 0.0 });
+        project_chroma_420(&mut full, w, h, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
         let v1 = viol(&full);
         assert!(v0 > 0.01, "test setup must start violated (v0={v0})");
         assert!(v1 < 2e-3, "one back-projection pass must satisfy the half-res box (v0={v0} -> v1={v1})");

@@ -56,6 +56,27 @@ pub fn slack_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     }
 }
 
+/// Family-conditional ABSOLUTE slack (coefficient units), calibrated
+/// 2026-07-26 per-quantizer-value at q88..q98 (1M coeffs/cell,
+/// benchmarks/slack_calibration_highq_*.tsv): encoders that quantize YCbCr
+/// samples to u8 before their FDCT (libjpeg-turbo, mozjpeg) carry a bounded
+/// absolute DCT noise — turbo Q=1 p99 1.32 / p99.9 2.15 / max 3.7 — which a
+/// purely relative slack cannot cover at Q=1..3 (the q96 projection
+/// regression). Cjpegli-family (float sample pipeline) measured far cleaner
+/// (Q=1 p99 <= 0.24): small allowance only, so valid high-q projection is
+/// not needlessly weakened. NOTE (falsified alternative): restricting the
+/// clamp to nonzero-coded bands does NOT rescue trellis/AQ families —
+/// measured violations sit on coded coefficients too (mozjpeg-nz p99 up to
+/// 1.7, max 15Q); their tail stays a documented approximation.
+pub fn slack_abs_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
+    let fam = format!("{:?}", probe.encoder);
+    if fam.starts_with("Cjpegli") {
+        0.5
+    } else {
+        1.5
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Projection {
@@ -259,7 +280,10 @@ pub fn restore_jpeg(
     // one-pass back-projection on the half-res lattice.
     let pcfg = match cfg.projection {
         Projection::Off => None,
-        Projection::Auto => Some(ProjectionConfig::with_slack_q(slack_for(&probe))),
+        Projection::Auto => Some(
+            ProjectionConfig::with_slack_q(slack_for(&probe))
+                .with_slack_abs(slack_abs_for(&probe)),
+        ),
         Projection::Fixed(c) => Some(c),
     };
     let mut ycc = if ycbcr_native {

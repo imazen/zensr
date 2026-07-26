@@ -21,6 +21,12 @@ use zensr_micro::consist::{rgb_to_ycbcr_planes, ZIGZAG_TO_NATURAL};
 const QS: &[u32] = &[8, 35, 75, 92];
 const ENCODERS: &[&str] = &["turbo", "mozjpeg", "jpegli", "zenjpeg"];
 
+fn env_list(name: &str, default: Vec<String>) -> Vec<String> {
+    std::env::var(name)
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .unwrap_or(default)
+}
+
 fn encode(ppm: &PathBuf, jpg: &PathBuf, enc: &str, q: u32) -> bool {
     let home = std::env::var("HOME").unwrap();
     let st = match enc {
@@ -84,10 +90,34 @@ fn main() {
     let td = PathBuf::from(&home).join("tmp").join(format!("zensr-slack-{}", std::process::id()));
     std::fs::create_dir_all(&td).unwrap();
 
+    // provenance (sweep discipline): commit, host, config
+    let commit = Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
+    let encoders = env_list("ZENSR_SLACK_ENCODERS", ENCODERS.iter().map(|s| s.to_string()).collect());
+    let qs: Vec<u32> = env_list("ZENSR_SLACK_QS", QS.iter().map(|q| q.to_string()).collect())
+        .iter()
+        .map(|s| s.parse().expect("q"))
+        .collect();
+    println!(
+        "# slack_probe commit={commit} host={} per_sub={per_sub} encoders={encoders:?} qs={qs:?}",
+        host.trim()
+    );
     println!("encoder\tq\tn_coeffs\tp50_excess\tp99_excess\tmax_excess\tviolation%");
-    for enc in ENCODERS {
-        for &q in QS {
+    let mut perq_rows: Vec<String> = Vec::new();
+    for enc in &encoders {
+        let enc = enc.as_str();
+        for &q in &qs {
             let mut excess: Vec<f32> = Vec::new();
+            // (quantizer value, normalized excess) for the per-Q breakdown
+            let mut by_qv: std::collections::BTreeMap<u16, Vec<f32>> = Default::default();
+            // nonzero-coded coefficients only (tests the skip_zeroed rule:
+            // trellis/AQ violations should concentrate on zeroed bands)
+            let mut excess_nz: Vec<f32> = Vec::new();
             for (_, dir) in SUBCORPORA {
                 let mut used = 0usize;
                 for f in list_images(&root.join(dir)) {
@@ -124,7 +154,12 @@ fn main() {
                                 let nat = ZIGZAG_TO_NATURAL[k];
                                 let qv = qt[nat] as f32;
                                 let c_hat = blk[k] as f32 * qv;
-                                excess.push(((f_true[nat] - c_hat).abs() - qv * 0.5) / qv);
+                                let e = ((f_true[nat] - c_hat).abs() - qv * 0.5) / qv;
+                                excess.push(e);
+                                by_qv.entry(qt[nat]).or_default().push(e);
+                                if blk[k] != 0 {
+                                    excess_nz.push(e);
+                                }
                             }
                         }
                     }
@@ -139,6 +174,41 @@ fn main() {
                 "{enc}\t{q}\t{n}\t{:.3}\t{:.3}\t{:.3}\t{:.2}",
                 pct(0.5), pct(0.99), excess[n - 1], viol
             );
+            excess_nz.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let nn = excess_nz.len();
+            if nn > 0 {
+                let pcn = |p: f64| excess_nz[((nn as f64 - 1.0) * p) as usize];
+                let violn =
+                    excess_nz.iter().filter(|e| **e > 0.0).count() as f64 / nn as f64 * 100.0;
+                println!(
+                    "{enc}-nz\t{q}\t{nn}\t{:.3}\t{:.3}\t{:.3}\t{:.2}",
+                    pcn(0.5), pcn(0.99), excess_nz[nn - 1], violn
+                );
+            }
+            // per-quantizer-value tail stats: if the violation tail is an
+            // ABSOLUTE noise floor (fdct/idct implementation skew), then
+            // p99_abs (= p99_excess * Q) should be ~constant across Q while
+            // p99_excess blows up as Q -> 1.
+            for (qv, mut v) in std::mem::take(&mut by_qv) {
+                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let m = v.len();
+                let pc = |p: f64| v[((m as f64 - 1.0) * p) as usize];
+                let vi = v.iter().filter(|e| **e > 0.0).count() as f64 / m as f64 * 100.0;
+                perq_rows.push(format!(
+                    "{enc}\t{q}\t{qv}\t{m}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.2}",
+                    pc(0.99),
+                    pc(0.999),
+                    v[m - 1],
+                    pc(0.99) * qv as f32,
+                    v[m - 1] * qv as f32,
+                    vi
+                ));
+            }
         }
+    }
+    println!("\n# per-quantizer-value breakdown");
+    println!("encoder\tq\tQval\tn\tp99_exc\tp999_exc\tmax_exc\tp99_abs\tmax_abs\tviolation%");
+    for r in perq_rows {
+        println!("{r}");
     }
 }
