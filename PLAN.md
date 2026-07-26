@@ -168,6 +168,11 @@ validation, no hand-distilled N=1 anchors). Falsified branches get recorded in P
 - **Storage (USER DIRECTIVE 2026-07-24): local disk OK for zensr data up to 400 GB total;**
   cleaning `target/` dirs of unclaimed repos is authorized when space runs low (zenjpeg +
   jxl-encoder targets = 291 G reclaimed same day; check `.workongoing` claims first).
+- **Compute placement (USER 2026-07-25): compute jobs run on lianli or mac — the dev box is
+  the operator.** lianli (.27, RTX 2080 + 24c) carries GPU training AND Rust eval jobs (zensr
+  source + pinned eval slice at ~/data/imazen-26-eval + encoders + models provisioned
+  2026-07-25); mac (.224, M4 Pro 12c/24G) is the CPU spare. Kids' boxes (jason/ian) only per
+  explicit user direction, idle-verified, flags returned to-windows after.
 - **Compute (USER DIRECTIVE 2026-07-22): LAN nodes only — no rented cloud compute.** CPU data
   generation and GPU training run on our own machines (this box: 7950X + RTX 5070 12 GB; plus
   the other LAN nodes — P1 inventories them). All multi-node orchestration goes through
