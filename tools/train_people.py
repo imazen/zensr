@@ -81,7 +81,14 @@ def main():
     steps = int(sys.argv[1]) if len(sys.argv) > 1 else 20000
     batch = int(sys.argv[2]) if len(sys.argv) > 2 else 96
     lr0 = float(sys.argv[3]) if len(sys.argv) > 3 else 1e-4
-    dev = "cuda"
+    dev = os.environ.get("ZENSR_DEV") or (
+        "cuda" if torch.cuda.is_available()
+        else "mps" if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    # M4-class Apple silicon runs bf16 natively; ZENSR_AMP=0 to disable.
+    amp_on = dev != "cpu" and os.environ.get("ZENSR_AMP", "1") != "0"
+    print(f"device={dev} amp={amp_on}", flush=True)
     torch.manual_seed(7)
     lr_all = np.load(os.path.join(D, "lr_u8.npy"), mmap_mode="r")
     hr_all = np.load(os.path.join(D, "hr_u8.npy"), mmap_mode="r")
@@ -114,7 +121,8 @@ def main():
     m = Student().to(dev)
     if INIT:
         load_init(m)
-    m = torch.compile(m)
+    if dev == "cuda":  # inductor; MPS compile is flaky, eager is fine there
+        m = torch.compile(m)
     opt = torch.optim.AdamW(m.parameters(), lr=lr0, weight_decay=0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr0 / 50)
     rng = np.random.default_rng(11)
@@ -127,7 +135,7 @@ def main():
             idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
         x = to_space(lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
         y = to_space(hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast(dev, dtype=torch.bfloat16, enabled=amp_on):
             out = m(x)
             loss = charbonnier(out, y)
         opt.zero_grad(set_to_none=True)
@@ -135,7 +143,7 @@ def main():
         opt.step()
         sched.step()
         if step % 500 == 0 or step == steps:
-            with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.no_grad(), torch.autocast(dev, dtype=torch.bfloat16, enabled=amp_on):
                 vps = []
                 for i in range(0, 512, 128):
                     vo = m(to_space(val_lr[i:i + 128])).float()

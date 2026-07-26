@@ -34,6 +34,10 @@ CROP = 128
 SEED = 20260727
 VAL_TAIL = 512
 ENCODERS = ["turbo", "mozjpeg", "jpegli", "zenjpeg"]
+# ZENSR_ENCODERS=turbo,mozjpeg,zenjpeg — fallback when a binary is missing on
+# a worker node; document any non-canonical mix in the dataset meta.
+if os.environ.get("ZENSR_ENCODERS"):
+    ENCODERS = [e.strip() for e in os.environ["ZENSR_ENCODERS"].split(",") if e.strip()]
 
 
 def write_ppm(path, bgr):

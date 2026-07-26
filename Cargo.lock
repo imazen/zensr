@@ -1541,6 +1541,18 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
+dependencies = [
+ "archmage",
+ "garb",
+ "linear-srgb",
+ "magetypes",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
+name = "zenanalyze"
+version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
 dependencies = [
  "archmage",
@@ -1604,7 +1616,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
  "zenyuv",
@@ -1725,6 +1737,7 @@ dependencies = [
  "imgref",
  "rgb",
  "tract-onnx",
+ "zenanalyze 0.2.0",
  "zenjpeg",
  "zenpixels",
  "zenpng",

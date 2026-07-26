@@ -23,9 +23,13 @@ import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dump_adopted import compact_forward, load_sd, prepare_span_sd, span_forward  # noqa: E402
 
-ROOT = "/mnt/v/imazen-26"
+ROOT = os.environ.get("ZENSR_ROOT", "/mnt/v/imazen-26")
 SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
         "national-park-service", "unsplash-renders", "unsplash-textures", "office-documents"]
+# ZENSR_SUBS=screen,office-documents,... restricts sources (class-specialist
+# datasets, e.g. the graphics model). Exclusion discipline is unchanged.
+if os.environ.get("ZENSR_SUBS"):
+    SUBS = [s.strip() for s in os.environ["ZENSR_SUBS"].split(",") if s.strip()]
 OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-distill"))
 N_PAIRS = 14000
 CROP = 192  # HR crop; LR = 96
