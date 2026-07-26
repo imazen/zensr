@@ -1731,6 +1731,7 @@ dependencies = [
  "zenresize",
  "zensim",
  "zensr-micro",
+ "zensr-zenjpeg",
 ]
 
 [[package]]

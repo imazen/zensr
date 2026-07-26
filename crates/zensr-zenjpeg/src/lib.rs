@@ -30,13 +30,35 @@ pub fn policy_wants_auto(probe: &zenjpeg::detect::JpegProbe) -> bool {
         && probe.quality.value <= 9.5
 }
 
+/// Family-conditional projection slack, calibrated 2026-07-25 on 1M luma
+/// coefficients per (encoder, q) cell (benchmarks/slack_calibration_*.tsv):
+/// round-to-nearest (turbo/IJG) p99 excess <=0.07Q; mozjpeg trellis p99
+/// <=0.23Q (max ~15Q on zeroed runs); jpegli/zenjpeg AQ p99 <=0.41Q (stored
+/// DQT understates per-block quantization). Slack covers p99 + margin; the
+/// trellis-zero tail is a documented approximation (<=~4% of coefficients,
+/// where the box may exclude the truth and non-expansiveness doesn't hold —
+/// net effect measured in the eval).
+pub fn slack_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
+    let fam = format!("{:?}", probe.encoder);
+    if fam.starts_with("Cjpegli") {
+        0.45
+    } else if fam == "Mozjpeg" {
+        0.35
+    } else {
+        0.15
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Projection {
     /// No projection (pixel pipeline only).
     Off,
     /// Project luma always; chroma too when the file is 4:4:4.
+    /// Slack comes from `slack_for(probe)` (family-calibrated).
     /// (Subsampled chroma needs the back-projection form — not yet wired.)
-    LumaAndFullResChroma(ProjectionConfig),
+    Auto,
+    /// As Auto but with an explicit slack override.
+    Fixed(ProjectionConfig),
 }
 
 pub struct RestoreConfig {
@@ -54,7 +76,7 @@ impl Default for RestoreConfig {
     fn default() -> Self {
         RestoreConfig {
             guard: GuardConfig::default(),
-            projection: Projection::LumaAndFullResChroma(ProjectionConfig::default()),
+            projection: Projection::Auto,
             deblock_policy: true,
             threads: 1,
             tile: 0,
@@ -163,7 +185,12 @@ pub fn restore_jpeg(
     report.guard = guarded_merge(&mut sr, &lp, h, w, 1, &cfg.guard);
 
     // 4. quantization-consistency projection (S10)
-    if let Projection::LumaAndFullResChroma(pcfg) = cfg.projection {
+    let pcfg = match cfg.projection {
+        Projection::Off => None,
+        Projection::Auto => Some(ProjectionConfig { slack_q: slack_for(&probe) }),
+        Projection::Fixed(c) => Some(c),
+    };
+    if let Some(pcfg) = pcfg {
         let coeffs = zenjpeg::decoder::Decoder::new()
             .decode_coefficients(data, enough::Unstoppable)
             .map_err(|e| RestoreError::Decode(format!("coefficients: {e:?}")))?;

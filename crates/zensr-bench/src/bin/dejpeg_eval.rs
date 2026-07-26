@@ -81,6 +81,7 @@ fn zj_decode(data: &[u8], deblock_auto: bool) -> Rgb8Img {
 /// Deployment policy: Knusperli (Auto) only for Annex-K-family files at
 /// probe-estimated q <= 9 (exact at those q); AQ-family (Cjpegli*) never.
 fn policy_wants_auto(data: &[u8]) -> bool {
+    // kept for arm construction; canonical copy lives in zensr-zenjpeg
     match zenjpeg::detect::probe(data) {
         Ok(p) => {
             let fam = format!("{:?}", p.encoder);
@@ -165,6 +166,21 @@ fn main() {
                         if let Some(mp) = &m_policy {
                             let src = if policy_wants_auto(&data) { &d_auto } else { &d_off };
                             outs.push(("model_policy", src, Some(mp)));
+                        }
+                        let proj_out = m_policy.as_ref().map(|mp| {
+                            let r = zensr_zenjpeg::restore_jpeg(
+                                &data,
+                                mp,
+                                &zensr_zenjpeg::RestoreConfig {
+                                    threads,
+                                    ..Default::default()
+                                },
+                            )
+                            .expect("restore_jpeg");
+                            Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height }
+                        });
+                        if let Some(po) = &proj_out {
+                            outs.push(("model_proj", po, None));
                         }
                         for (arm, src, model) in outs {
                             let o = match model {
