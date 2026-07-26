@@ -543,24 +543,31 @@ Laplacian energy; shown at 224 px.</p>
 ±Q/2 of the stored value. Clamping the model output's block-DCT coefficients into that
 box (the exact convex projection; <code>zensr_micro::consist</code>) makes the output
 <b>provably re-encode to the file's own coefficients</b> — a training-free guarantee that
-cannot be shortcut-gamed, unlike the input-conditioning arms falsified above. Slack is
-family-calibrated from 1M coefficients/cell (turbo p99≤0.07Q; mozjpeg trellis ≤0.23Q with
-a ~15Q zeroed-run tail; jpegli/zenjpeg AQ ≤0.41Q — stored tables understate per-block
-quantization). The production call (<code>zensr_zenjpeg::restore_jpeg</code>: probe →
-deblock policy → guarded model → projection) was measured as its own eval arm:</p>
-<div class="pane on"><table><thead><tr><th>grid</th><th>policy arm</th><th>+ projection</th><th>cells &lt; identity</th></tr></thead><tbody>
-<tr><td>high-q 85–96</td><td class="num">+0.18</td><td class="num"><b>+0.37</b></td><td class="num">14→12 / 32</td></tr>
+cannot be shortcut-gamed, unlike the input-conditioning arms falsified above. Slack has two
+measured terms: relative (turbo p99≤0.07Q; mozjpeg trellis ≤0.23Q with a ~15Q tail on
+<i>coded</i> coefficients too; jpegli/zenjpeg AQ ≤0.41Q) plus <b>slack_abs</b>, an absolute term
+covering encoder-side u8 sample quantization (turbo Q=1 bands: p99 1.32, max 3.70 ≈ the
+8·0.5 per-sample worst case — invisible until the DQT hits Q=1..3 at q≥93, where a purely
+relative slack lets the box clamp CORRECT detail). 4:2:0 chroma is back-projected exactly on
+the half-res lattice (replication is the right-inverse of box decimation — one pass,
+residual &lt;2e-3); 4:4:4 projects directly; YCbCr-native models (S5b) run in the space where
+quantization happened. Production call (<code>zensr_zenjpeg::restore_jpeg</code>):</p>
+<div class="pane on"><table><thead><tr><th>grid</th><th>policy arm</th><th>+ projection (final config)</th><th>cells &lt; identity</th></tr></thead><tbody>
+<tr><td>high-q 85–96</td><td class="num">+0.16</td><td class="num"><b>+0.35</b></td><td class="num">5/16→1/16 (−0.02)</td></tr>
 <tr><td>standard 15–90</td><td class="num">+3.93</td><td class="num">+3.96</td><td class="num">5→3 / 40</td></tr>
 <tr><td>low-q 5–12</td><td class="num">+8.54</td><td class="num">+8.55</td><td class="num">0→0 / 24</td></tr>
 </tbody></table></div>
-<div class="note win">Projection doubles the high-q margin and costs nothing anywhere else.
-Honest residuals at q96: jpegli −0.60→−0.25 and zenjpeg −0.74→−0.54 improve sharply;
-turbo/mozjpeg dip ~0.1 further — traced to calibration tails (turbo integer-DCT skew puts
-2.2 % of q92 coefficients up to 1.2Q outside the strict box). Full q96 erasure needs
-420-chroma back-projection + the YCbCr-native pipeline (S5b), the next milestone.
-Engineering: product cold build 11.9 s / core-edit loop 2.0 s; upstream issues filed —
-zenjpeg#189 (encoder parameter record), zenjpeg#190 (impl-Stop monomorphization: 46k LLVM
-lines + 11.6 s rebuilds for a 300-line consumer; dyn-inner fix proposed).</div>
+<div class="note win">slack_abs erased the q93 residual (turbo −0.24→−0.02, moz +0.06→+0.38)
+and lifted q90 everywhere. The q96 story reversed under measurement: projection ADDS at every
+q96 cell (+0.15..+0.81) — it is the <i>model</i> that loses to identity on near-pristine input.
+Shipped fix: a measured <b>high-q identity gate</b> (probe q≥94.5 IJG/Moz scale, d≤0.6
+Cjpegli-family; q93 reads d 0.7–1.0 and stays modeled) — the top-end analog of the low-q
+deblock policy. One marginal negative cell remains on the grid (turbo q93, −0.02).
+Engineering: SPANF research surface gated behind <code>internals</code> (default API 260→169
+lines, contract in apidoc/PUBLIC_API.md), product-crates rebuild 1.56 s; review caught and
+fixed a 4:2:2/4:4:0-misclassified-as-4:2:0 chroma corruption bug (regression-tested on real
+encodes of all four subsampling modes); CMYK skips projection. Upstream issues filed —
+zenjpeg#189 (encoder parameter record), zenjpeg#190 (impl-Stop monomorphization).</div>
 
 <h2 id="genloss"><span class="no">§12c</span>Generation loss — gen2/gen3 measured (2026-07-26)</h2>
 <p>Multi-generation re-encode chains (the real web: social re-encode, CDN recompress,
