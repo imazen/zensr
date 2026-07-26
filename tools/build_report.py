@@ -346,7 +346,7 @@ ul {{ max-width:78ch; }}
   <a href="#results">results</a><a href="#subcorpus">per-class</a><a href="#guard">guard</a>
   <a href="#ladder">distillation</a><a href="#audition">audition</a><a href="#people">people band</a>
   <a href="#speed">speed</a><a href="#audit">split audit</a><a href="#gallery">gallery</a>
-  <a href="#falsified">falsified</a>
+  <a href="#s10">S10</a><a href="#falsified">falsified</a>
 </nav>
 
 <h2 id="verdict"><span class="no">§0</span>Verdict</h2>
@@ -538,11 +538,38 @@ degraded input; numbers in captions are that image’s SSIMULACRA2. Crops auto-s
 Laplacian energy; shown at 224 px.</p>
 {"".join(gallery_html)}
 
+<h2 id="s10"><span class="no">§12b</span>S10 — quantization-consistency projection (shipped)</h2>
+<p>The JPEG file certifies per 8×8 block and band that the true coefficient lay within
+±Q/2 of the stored value. Clamping the model output's block-DCT coefficients into that
+box (the exact convex projection; <code>zensr_micro::consist</code>) makes the output
+<b>provably re-encode to the file's own coefficients</b> — a training-free guarantee that
+cannot be shortcut-gamed, unlike the input-conditioning arms falsified above. Slack is
+family-calibrated from 1M coefficients/cell (turbo p99≤0.07Q; mozjpeg trellis ≤0.23Q with
+a ~15Q zeroed-run tail; jpegli/zenjpeg AQ ≤0.41Q — stored tables understate per-block
+quantization). The production call (<code>zensr_zenjpeg::restore_jpeg</code>: probe →
+deblock policy → guarded model → projection) was measured as its own eval arm:</p>
+<div class="pane on"><table><thead><tr><th>grid</th><th>policy arm</th><th>+ projection</th><th>cells &lt; identity</th></tr></thead><tbody>
+<tr><td>high-q 85–96</td><td class="num">+0.18</td><td class="num"><b>+0.37</b></td><td class="num">14→12 / 32</td></tr>
+<tr><td>standard 15–90</td><td class="num">+3.93</td><td class="num">+3.96</td><td class="num">5→3 / 40</td></tr>
+<tr><td>low-q 5–12</td><td class="num">+8.54</td><td class="num">+8.55</td><td class="num">0→0 / 24</td></tr>
+</tbody></table></div>
+<div class="note win">Projection doubles the high-q margin and costs nothing anywhere else.
+Honest residuals at q96: jpegli −0.60→−0.25 and zenjpeg −0.74→−0.54 improve sharply;
+turbo/mozjpeg dip ~0.1 further — traced to calibration tails (turbo integer-DCT skew puts
+2.2 % of q92 coefficients up to 1.2Q outside the strict box). Full q96 erasure needs
+420-chroma back-projection + the YCbCr-native pipeline (S5b), the next milestone.
+Engineering: product cold build 11.9 s / core-edit loop 2.0 s; upstream issues filed —
+zenjpeg#189 (encoder parameter record), zenjpeg#190 (impl-Stop monomorphization: 46k LLVM
+lines + 11.6 s rebuilds for a 300-line consumer; dyn-inner fix proposed).</div>
+
 <h2 id="falsified"><span class="no">§12</span>Falsified / negative results registry</h2>
 <ul>
 <li>×1 repair via scale round-trip (q≥50) — loses to identity. Replaced by the native S6 inversion, which wins everywhere.</li>
 <li>Capacity as the realtime bottleneck (nf32: +0.5 SSIM2, 2.7× compute).</li>
 <li>Heavyweight teacher adoption for people/textures (all four candidates lose to Lanczos).</li>
+<li>Input-channel conditioning, both forms — global severity scalar AND per-block damage map
+land identical (−3 dB on every degraded band): a gradient shortcut that substitutes for pixel
+analysis. Pixels-in/pixels-out ships; S10 lives at the output.</li>
 <li>int8 weights-only PTQ on SPAN-class (35 dB — needs QAT or int8-first arch). f16 is transparent.</li>
 <li>Norm-folding into conv_1 (borders wrong by 0.32 — official zero-pads after normalization).</li>
 <li>Consistency-only goldens (agreed on a broken graph — reference-gate everything).</li>
