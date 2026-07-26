@@ -526,3 +526,32 @@ from-source) **11.9 s**; core-edit loop 2.0 s; zenjpeg-edit loop 7.5 s.
 zenjpeg#190 filed: impl-Stop monomorphizes the decode pipeline into
 every consumer (46k LLVM lines in our 300-line glue; 11.6 s glue edits)
 — dyn-inner fix proposed.
+
+### Production hardening pass (2026-07-26): API contract + geometry review
+
+The `code review / refactor / minimize public API` milestone (user-directed):
+
+- **Public surface minimized and snapshotted.** `zensr-micro` default API went
+  260 → 169 lines (`apidoc/zensr-micro.public-api.txt`); the SPANF research
+  surface (simd/tiled/px modules, root re-exports, `SpanfWeights`/`SpanfModel`/
+  `Scratch`/layout consts/f16+int8 decoders, scalar `spanf_x4`) is gone from
+  the default surface — modules are `pub(crate)` unless the `internals`
+  feature opts in; root items that must stay compiled are `#[doc(hidden)]`.
+  `px` was dropped from default features (SPANF-only, zero consumers) and now
+  also requires `internals`; the `zensr-verify` bin is
+  `required-features = ["internals"]`. Contract doc: `apidoc/PUBLIC_API.md`.
+  Product-crates rebuild: 1.56 s (was 2.0 s with zenpixels in the default
+  graph).
+- **Review caught a real 4:2:2/4:4:0 bug** in `restore_jpeg`: the old
+  `half_res` test (`blocks*16 >= dim` on both axes) classified half-ONE-axis
+  chroma (4:2:2 horizontal, 4:4:0 vertical — both encodable by zenjpeg) as
+  4:2:0 and would have run the 2×2 box back-projection on them, corrupting
+  chroma. Fixed with an explicit `PlaneGeometry {Full, HalfBoth, Other}`
+  classifier; 422/440 now classify `Other` and stay unprojected. Regression
+  test `geometry_classification_422_440_never_uses_420_backprojection` runs
+  against real zenjpeg encodes of all four subsampling modes.
+- **4-component (Adobe CMYK/YCCK) files skip projection entirely** — their
+  coefficient planes are not the YCbCr space the pipeline reconstructs.
+  Grayscale (1-component) keeps luma projection.
+- `RestoreError` and `Restored` are now `#[non_exhaustive]`; the x1-model
+  precondition returns `RestoreError::UnsupportedModel` instead of panicking.

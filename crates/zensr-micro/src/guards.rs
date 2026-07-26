@@ -21,6 +21,7 @@
 #![allow(clippy::too_many_arguments)]
 
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct GuardConfig {
     /// Max |out - base| in [0,1] units. INFINITY disables. Default 0.25.
     pub residual_clamp: f32,

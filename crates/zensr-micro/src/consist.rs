@@ -51,8 +51,17 @@ pub struct CoeffView<'a> {
 /// round-to-nearest box). Trellis quantizers (mozjpeg) deliberately round
 /// off-nearest; calibrate per encoder family with `slack_probe`.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct ProjectionConfig {
     pub slack_q: f32,
+}
+
+impl ProjectionConfig {
+    pub fn with_slack_q(slack_q: f32) -> Self {
+        let mut c = Self::default();
+        c.slack_q = slack_q;
+        c
+    }
 }
 
 impl Default for ProjectionConfig {
@@ -351,6 +360,26 @@ mod tests {
         [v; 64]
     }
 
+    /// Test-only 2x bilinear upsample (align-corners=false, edge clamp).
+    fn bilerp_up2(src: &[f32], sw: usize, sh: usize) -> Vec<f32> {
+        let (dw, dh) = (sw * 2, sh * 2);
+        let mut out = vec![0.0f32; dw * dh];
+        for y in 0..dh {
+            let fy = ((y as f32 + 0.5) / 2.0 - 0.5).clamp(0.0, (sh - 1) as f32);
+            let (y0, ty) = (fy.floor() as usize, fy.fract());
+            let y1 = (y0 + 1).min(sh - 1);
+            for x in 0..dw {
+                let fx = ((x as f32 + 0.5) / 2.0 - 0.5).clamp(0.0, (sw - 1) as f32);
+                let (x0, tx) = (fx.floor() as usize, fx.fract());
+                let x1 = (x0 + 1).min(sw - 1);
+                let top = src[y0 * sw + x0] * (1.0 - tx) + src[y0 * sw + x1] * tx;
+                let bot = src[y1 * sw + x0] * (1.0 - tx) + src[y1 * sw + x1] * tx;
+                out[y * dw + x] = top * (1.0 - ty) + bot * ty;
+            }
+        }
+        out
+    }
+
     #[test]
     fn decode_is_inside_box_and_unchanged() {
         let (w, h) = (32, 24);
@@ -418,7 +447,7 @@ mod tests {
         let qt = qt_flat(32);
         let (dec_half, coeffs) = simulate(hw, hh, &qt, 5);
         // full-res "restored chroma" = bilinear-up of decode + hallucination
-        let mut full = crate::guards::bilinear_up_plane(&dec_half, hw, hh, 2);
+        let mut full = bilerp_up2(&dec_half, hw, hh);
         for (i, v) in full.iter_mut().enumerate() {
             *v = (*v + if (i / 7) % 2 == 0 { 0.15 } else { -0.15 }).clamp(0.0, 1.0);
         }

@@ -8,4 +8,4 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-zensr-micro = { path = "../zensr-micro" }
+zensr-micro = { path = "../zensr-micro", features = ["internals"] }

@@ -4,24 +4,31 @@
 //! guarded x1 model -> quantization-consistency projection -> RGB planes.
 //!
 //! Policy (measured, SYSTEMS.md "S6-v2"): `DeblockMode::Auto` (Knusperli)
-//! only for Annex-K-family files at probe-estimated q <= 9 — the regime where
+//! only for Annex-K-family files at probe-estimated q <= 9.5 — the regime where
 //! coefficient-domain correction beats pixel-exact decode; AQ-family
 //! (Cjpegli*/zenjpeg) never. The model runs on every image; the projection
 //! (S10) guarantees the output re-encodes to the file's own coefficients.
 
-use zensr_micro::adopted::{AdoptedModel, ModelSpace};
 use zensr_micro::consist::{
     project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,
-    CoeffView, ProjectionConfig, ProjectionReport,
+    CoeffView,
 };
-use zensr_micro::guards::{guarded_merge, GuardConfig, GuardReport};
+use zensr_micro::guards::guarded_merge;
 
-pub use zensr_micro::consist;
-pub use zensr_micro::guards;
+// Narrow, deliberate re-exports — the full micro modules are NOT part of
+// this crate's contract.
+pub use zensr_micro::adopted::{AdoptedModel, ModelSpace};
+pub use zensr_micro::consist::{ProjectionConfig, ProjectionReport};
+pub use zensr_micro::guards::{GuardConfig, GuardReport};
 
 /// Measured deployment rule for zenjpeg's deblocker under the model.
 /// Inputs are exact at the qualities where it matters (probe q5/8/12 verified
 /// error-free for turbo + mozjpeg on the eval corpus).
+///
+/// Family/scale matching goes through the `Debug` strings deliberately: the
+/// probe enums are `#[non_exhaustive]` upstream and this crate spans zenjpeg
+/// ">=0.8.4, <0.10" — string prefixes stay stable across that range where a
+/// `match` would not.
 pub fn policy_wants_auto(probe: &zenjpeg::detect::JpegProbe) -> bool {
     let fam = format!("{:?}", probe.encoder);
     let scale = format!("{:?}", probe.quality.scale);
@@ -50,17 +57,20 @@ pub fn slack_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum Projection {
     /// No projection (pixel pipeline only).
     Off,
-    /// Project luma always; chroma too when the file is 4:4:4.
+    /// Project luma always; 4:4:4 chroma via the direct box clamp, 4:2:0
+    /// chroma via exact one-pass back-projection on the half-res lattice.
     /// Slack comes from `slack_for(probe)` (family-calibrated).
-    /// (Subsampled chroma needs the back-projection form — not yet wired.)
+    /// (4:2:2 / 4:4:0 chroma is left unprojected for now.)
     Auto,
     /// As Auto but with an explicit slack override.
     Fixed(ProjectionConfig),
 }
 
+#[non_exhaustive]
 pub struct RestoreConfig {
     pub guard: GuardConfig,
     pub projection: Projection,
@@ -70,6 +80,23 @@ pub struct RestoreConfig {
     pub threads: usize,
     /// Tile size for the model runner; 0 = auto.
     pub tile: usize,
+}
+
+impl RestoreConfig {
+    /// Builder-style helpers (the struct is `#[non_exhaustive]`; construct via
+    /// `RestoreConfig::default()` and adjust).
+    pub fn with_threads(mut self, threads: usize) -> Self {
+        self.threads = threads;
+        self
+    }
+    pub fn with_projection(mut self, p: Projection) -> Self {
+        self.projection = p;
+        self
+    }
+    pub fn with_deblock_policy(mut self, on: bool) -> Self {
+        self.deblock_policy = on;
+        self
+    }
 }
 
 impl Default for RestoreConfig {
@@ -85,6 +112,7 @@ impl Default for RestoreConfig {
 }
 
 #[derive(Debug, Default, Clone)]
+#[non_exhaustive]
 pub struct RestoreReport {
     pub encoder_family: String,
     pub est_quality: f32,
@@ -96,6 +124,7 @@ pub struct RestoreReport {
 }
 
 /// Planar RGB f32 output ([3, h, w], values in [0,1]) + provenance report.
+#[non_exhaustive]
 pub struct Restored {
     pub planes: Vec<f32>,
     pub width: usize,
@@ -119,10 +148,12 @@ impl Restored {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum RestoreError {
     Probe(String),
     Decode(String),
     UnsupportedPixels(&'static str),
+    UnsupportedModel(&'static str),
 }
 
 impl core::fmt::Display for RestoreError {
@@ -131,10 +162,34 @@ impl core::fmt::Display for RestoreError {
             RestoreError::Probe(e) => write!(f, "probe: {e}"),
             RestoreError::Decode(e) => write!(f, "decode: {e}"),
             RestoreError::UnsupportedPixels(e) => write!(f, "unsupported pixels: {e}"),
+            RestoreError::UnsupportedModel(e) => write!(f, "unsupported model: {e}"),
         }
     }
 }
 impl std::error::Error for RestoreError {}
+
+/// How a coefficient plane's block grid relates to the full-res image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlaneGeometry {
+    /// Covers the image at full resolution (luma, or 4:4:4 chroma).
+    Full,
+    /// Half resolution in BOTH axes (4:2:0 chroma).
+    HalfBoth,
+    /// Anything else (4:2:2 / 4:4:0 half-one-axis, exotic factors).
+    Other,
+}
+
+fn plane_geometry(blocks_wide: usize, blocks_high: usize, w: usize, h: usize) -> PlaneGeometry {
+    let hor_full = blocks_wide * 8 >= w;
+    let ver_full = blocks_high * 8 >= h;
+    if hor_full && ver_full {
+        PlaneGeometry::Full
+    } else if !hor_full && !ver_full && blocks_wide * 16 >= w && blocks_high * 16 >= h {
+        PlaneGeometry::HalfBoth
+    } else {
+        PlaneGeometry::Other
+    }
+}
 
 /// Full x1 restoration pipeline against the deployment decoder.
 pub fn restore_jpeg(
@@ -142,7 +197,9 @@ pub fn restore_jpeg(
     model: &AdoptedModel,
     cfg: &RestoreConfig,
 ) -> Result<Restored, RestoreError> {
-    assert_eq!(model.scale, 1, "restore_jpeg is the x1 pipeline");
+    if model.scale != 1 {
+        return Err(RestoreError::UnsupportedModel("restore_jpeg is the x1 pipeline"));
+    }
     let mut report = RestoreReport::default();
 
     // 1. fingerprint + deblock policy
@@ -202,7 +259,7 @@ pub fn restore_jpeg(
     // one-pass back-projection on the half-res lattice.
     let pcfg = match cfg.projection {
         Projection::Off => None,
-        Projection::Auto => Some(ProjectionConfig { slack_q: slack_for(&probe) }),
+        Projection::Auto => Some(ProjectionConfig::with_slack_q(slack_for(&probe))),
         Projection::Fixed(c) => Some(c),
     };
     let mut ycc = if ycbcr_native {
@@ -219,7 +276,13 @@ pub fn restore_jpeg(
         let coeffs = zenjpeg::decoder::Decoder::new()
             .decode_coefficients(data, enough::Unstoppable)
             .map_err(|e| RestoreError::Decode(format!("coefficients: {e:?}")))?;
-        for (ci, comp) in coeffs.components.iter().enumerate().take(3) {
+        // Only geometries whose color model we know: 1 (grayscale luma) or 3
+        // (YCbCr). 4-component (Adobe CMYK/YCCK) coefficients do NOT live in
+        // the YCbCr space we reconstruct here — skip projection entirely.
+        let ncomp = coeffs.components.len();
+        let projectable = ncomp == 1 || ncomp == 3;
+        for (ci, comp) in coeffs.components.iter().enumerate().take(if projectable { 3 } else { 0 })
+        {
             let Some(qt) = coeffs.quant_tables[comp.quant_table_idx as usize] else {
                 continue;
             };
@@ -231,15 +294,17 @@ pub fn restore_jpeg(
                 quant: &qt,
             };
             let target = &mut ycc[ci * plane..(ci + 1) * plane];
-            let full_res = comp.blocks_wide * 8 >= w && comp.blocks_high * 8 >= h;
-            let half_res =
-                comp.blocks_wide * 16 >= w && comp.blocks_high * 16 >= h && !full_res;
-            if full_res {
-                report.projection.push(project_plane(target, w, h, &cv, &pcfg));
-            } else if half_res {
-                report.projection.push(project_chroma_420(target, w, h, &cv, &pcfg));
+            match plane_geometry(comp.blocks_wide, comp.blocks_high, w, h) {
+                PlaneGeometry::Full => {
+                    report.projection.push(project_plane(target, w, h, &cv, &pcfg));
+                }
+                PlaneGeometry::HalfBoth => {
+                    report.projection.push(project_chroma_420(target, w, h, &cv, &pcfg));
+                }
+                // 4:2:2 / 4:4:0 (half in ONE axis only): the 2x2 box
+                // back-projection would be wrong — leave unprojected.
+                PlaneGeometry::Other => {}
             }
-            // other subsampling geometries (422/440): not yet projected
         }
     }
     let mut out = vec![0.0f32; 3 * plane];
@@ -279,6 +344,59 @@ mod tests {
             let jpg = encode(64, 64, &rgb, q, zenjpeg::encoder::ChromaSubsampling::Quarter);
             let p = zenjpeg::detect::probe(&jpg).unwrap();
             assert!(!policy_wants_auto(&p), "AQ family must never trigger Auto (q={q})");
+        }
+    }
+
+    #[test]
+    fn geometry_classification_422_440_never_uses_420_backprojection() {
+        // 4:2:2 and 4:4:0 chroma are half-res in ONE axis; running the 2x2
+        // box back-projection on them would corrupt output. They must
+        // classify as Other (unprojected), on real zenjpeg encodes.
+        let (w, h) = (64usize, 48usize);
+        let rgb = synth_rgb(w, h);
+        for (ss, name) in [
+            (zenjpeg::encoder::ChromaSubsampling::HalfHorizontal, "422"),
+            (zenjpeg::encoder::ChromaSubsampling::HalfVertical, "440"),
+        ] {
+            let jpg = encode(w, h, &rgb, 50.0, ss);
+            let coeffs = zenjpeg::decoder::Decoder::new()
+                .decode_coefficients(&jpg, enough::Unstoppable)
+                .unwrap();
+            assert_eq!(coeffs.components.len(), 3);
+            let luma = &coeffs.components[0];
+            assert_eq!(
+                plane_geometry(luma.blocks_wide, luma.blocks_high, w, h),
+                PlaneGeometry::Full,
+                "{name} luma"
+            );
+            for comp in &coeffs.components[1..] {
+                assert_eq!(
+                    plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                    PlaneGeometry::Other,
+                    "{name} chroma must NOT be treated as 4:2:0"
+                );
+            }
+        }
+        // and the real geometries still classify correctly
+        let jpg420 = encode(w, h, &rgb, 50.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let c420 = zenjpeg::decoder::Decoder::new()
+            .decode_coefficients(&jpg420, enough::Unstoppable)
+            .unwrap();
+        for comp in &c420.components[1..] {
+            assert_eq!(
+                plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                PlaneGeometry::HalfBoth
+            );
+        }
+        let jpg444 = encode(w, h, &rgb, 50.0, zenjpeg::encoder::ChromaSubsampling::None);
+        let c444 = zenjpeg::decoder::Decoder::new()
+            .decode_coefficients(&jpg444, enough::Unstoppable)
+            .unwrap();
+        for comp in &c444.components {
+            assert_eq!(
+                plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                PlaneGeometry::Full
+            );
         }
     }
 

@@ -1,0 +1,169 @@
+pub mod zensr_micro
+pub mod zensr_micro::adopted
+pub enum zensr_micro::adopted::Arch
+pub zensr_micro::adopted::Arch::Compact
+pub zensr_micro::adopted::Arch::Compact::nc: usize
+pub zensr_micro::adopted::Arch::Compact::nf: usize
+pub zensr_micro::adopted::Arch::Span48
+impl core::marker::Freeze for zensr_micro::adopted::Arch
+impl core::marker::Send for zensr_micro::adopted::Arch
+impl core::marker::Sync for zensr_micro::adopted::Arch
+impl core::marker::Unpin for zensr_micro::adopted::Arch
+impl core::marker::UnsafeUnpin for zensr_micro::adopted::Arch
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::adopted::Arch
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::adopted::Arch
+#[non_exhaustive] pub enum zensr_micro::adopted::ModelSpace
+pub zensr_micro::adopted::ModelSpace::Rgb
+pub zensr_micro::adopted::ModelSpace::Ycbcr
+impl core::clone::Clone for zensr_micro::adopted::ModelSpace
+pub fn zensr_micro::adopted::ModelSpace::clone(&self) -> zensr_micro::adopted::ModelSpace
+impl core::cmp::Eq for zensr_micro::adopted::ModelSpace
+impl core::cmp::PartialEq for zensr_micro::adopted::ModelSpace
+pub fn zensr_micro::adopted::ModelSpace::eq(&self, &zensr_micro::adopted::ModelSpace) -> bool
+impl core::default::Default for zensr_micro::adopted::ModelSpace
+pub fn zensr_micro::adopted::ModelSpace::default() -> zensr_micro::adopted::ModelSpace
+impl core::fmt::Debug for zensr_micro::adopted::ModelSpace
+pub fn zensr_micro::adopted::ModelSpace::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::adopted::ModelSpace
+impl core::marker::StructuralPartialEq for zensr_micro::adopted::ModelSpace
+impl core::marker::Freeze for zensr_micro::adopted::ModelSpace
+impl core::marker::Send for zensr_micro::adopted::ModelSpace
+impl core::marker::Sync for zensr_micro::adopted::ModelSpace
+impl core::marker::Unpin for zensr_micro::adopted::ModelSpace
+impl core::marker::UnsafeUnpin for zensr_micro::adopted::ModelSpace
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::adopted::ModelSpace
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::adopted::ModelSpace
+pub struct zensr_micro::adopted::AdoptedModel
+pub zensr_micro::adopted::AdoptedModel::arch: zensr_micro::adopted::Arch
+pub zensr_micro::adopted::AdoptedModel::scale: usize
+impl zensr_micro::adopted::AdoptedModel
+pub fn zensr_micro::adopted::AdoptedModel::forward(&self, &[f32], usize, usize, &mut [f32])
+pub fn zensr_micro::adopted::AdoptedModel::halo(&self) -> usize
+pub fn zensr_micro::adopted::AdoptedModel::load_compact(&[f32], usize, usize, usize) -> core::result::Result<Self, alloc::string::String>
+pub fn zensr_micro::adopted::AdoptedModel::load_span48(&[f32], usize) -> core::result::Result<Self, alloc::string::String>
+pub fn zensr_micro::adopted::AdoptedModel::set_space(&mut self, zensr_micro::adopted::ModelSpace)
+pub fn zensr_micro::adopted::AdoptedModel::space(&self) -> zensr_micro::adopted::ModelSpace
+pub fn zensr_micro::adopted::AdoptedModel::upscale_tiled(&self, &[f32], usize, usize, usize, usize) -> alloc::vec::Vec<f32>
+impl core::marker::Freeze for zensr_micro::adopted::AdoptedModel
+impl core::marker::Send for zensr_micro::adopted::AdoptedModel
+impl core::marker::Sync for zensr_micro::adopted::AdoptedModel
+impl core::marker::Unpin for zensr_micro::adopted::AdoptedModel
+impl core::marker::UnsafeUnpin for zensr_micro::adopted::AdoptedModel
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::adopted::AdoptedModel
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::adopted::AdoptedModel
+pub mod zensr_micro::consist
+pub enum zensr_micro::consist::CoeffOrder
+pub zensr_micro::consist::CoeffOrder::Natural
+pub zensr_micro::consist::CoeffOrder::Zigzag
+impl core::clone::Clone for zensr_micro::consist::CoeffOrder
+pub fn zensr_micro::consist::CoeffOrder::clone(&self) -> zensr_micro::consist::CoeffOrder
+impl core::cmp::Eq for zensr_micro::consist::CoeffOrder
+impl core::cmp::PartialEq for zensr_micro::consist::CoeffOrder
+pub fn zensr_micro::consist::CoeffOrder::eq(&self, &zensr_micro::consist::CoeffOrder) -> bool
+impl core::fmt::Debug for zensr_micro::consist::CoeffOrder
+pub fn zensr_micro::consist::CoeffOrder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::consist::CoeffOrder
+impl core::marker::StructuralPartialEq for zensr_micro::consist::CoeffOrder
+impl core::marker::Freeze for zensr_micro::consist::CoeffOrder
+impl core::marker::Send for zensr_micro::consist::CoeffOrder
+impl core::marker::Sync for zensr_micro::consist::CoeffOrder
+impl core::marker::Unpin for zensr_micro::consist::CoeffOrder
+impl core::marker::UnsafeUnpin for zensr_micro::consist::CoeffOrder
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::consist::CoeffOrder
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::consist::CoeffOrder
+pub struct zensr_micro::consist::CoeffView<'a>
+pub zensr_micro::consist::CoeffView::blocks_high: usize
+pub zensr_micro::consist::CoeffView::blocks_wide: usize
+pub zensr_micro::consist::CoeffView::coeffs: &'a [i16]
+pub zensr_micro::consist::CoeffView::order: zensr_micro::consist::CoeffOrder
+pub zensr_micro::consist::CoeffView::quant: &'a [u16; 64]
+impl<'a> core::marker::Freeze for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::marker::Send for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::marker::Sync for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::marker::Unpin for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::marker::UnsafeUnpin for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for zensr_micro::consist::CoeffView<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for zensr_micro::consist::CoeffView<'a>
+#[non_exhaustive] pub struct zensr_micro::consist::ProjectionConfig
+pub zensr_micro::consist::ProjectionConfig::slack_q: f32
+impl zensr_micro::consist::ProjectionConfig
+pub fn zensr_micro::consist::ProjectionConfig::with_slack_q(f32) -> Self
+impl core::clone::Clone for zensr_micro::consist::ProjectionConfig
+pub fn zensr_micro::consist::ProjectionConfig::clone(&self) -> zensr_micro::consist::ProjectionConfig
+impl core::default::Default for zensr_micro::consist::ProjectionConfig
+pub fn zensr_micro::consist::ProjectionConfig::default() -> Self
+impl core::fmt::Debug for zensr_micro::consist::ProjectionConfig
+pub fn zensr_micro::consist::ProjectionConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::consist::ProjectionConfig
+impl core::marker::Freeze for zensr_micro::consist::ProjectionConfig
+impl core::marker::Send for zensr_micro::consist::ProjectionConfig
+impl core::marker::Sync for zensr_micro::consist::ProjectionConfig
+impl core::marker::Unpin for zensr_micro::consist::ProjectionConfig
+impl core::marker::UnsafeUnpin for zensr_micro::consist::ProjectionConfig
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::consist::ProjectionConfig
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::consist::ProjectionConfig
+pub struct zensr_micro::consist::ProjectionReport
+pub zensr_micro::consist::ProjectionReport::clamped_frac: f32
+pub zensr_micro::consist::ProjectionReport::mean_abs_change: f32
+impl core::clone::Clone for zensr_micro::consist::ProjectionReport
+pub fn zensr_micro::consist::ProjectionReport::clone(&self) -> zensr_micro::consist::ProjectionReport
+impl core::default::Default for zensr_micro::consist::ProjectionReport
+pub fn zensr_micro::consist::ProjectionReport::default() -> zensr_micro::consist::ProjectionReport
+impl core::fmt::Debug for zensr_micro::consist::ProjectionReport
+pub fn zensr_micro::consist::ProjectionReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::consist::ProjectionReport
+impl core::marker::Freeze for zensr_micro::consist::ProjectionReport
+impl core::marker::Send for zensr_micro::consist::ProjectionReport
+impl core::marker::Sync for zensr_micro::consist::ProjectionReport
+impl core::marker::Unpin for zensr_micro::consist::ProjectionReport
+impl core::marker::UnsafeUnpin for zensr_micro::consist::ProjectionReport
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::consist::ProjectionReport
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::consist::ProjectionReport
+pub const zensr_micro::consist::ZIGZAG_TO_NATURAL: [usize; 64]
+pub fn zensr_micro::consist::project_chroma_420(&mut [f32], usize, usize, &zensr_micro::consist::CoeffView<'_>, &zensr_micro::consist::ProjectionConfig) -> zensr_micro::consist::ProjectionReport
+pub fn zensr_micro::consist::project_plane(&mut [f32], usize, usize, &zensr_micro::consist::CoeffView<'_>, &zensr_micro::consist::ProjectionConfig) -> zensr_micro::consist::ProjectionReport
+pub fn zensr_micro::consist::rgb_to_ycbcr_planes(&[f32], usize, &mut [f32], &mut [f32], &mut [f32])
+pub fn zensr_micro::consist::ycbcr_to_rgb_planes(&[f32], &[f32], &[f32], &mut [f32], usize)
+pub mod zensr_micro::guards
+#[non_exhaustive] pub struct zensr_micro::guards::GuardConfig
+pub zensr_micro::guards::GuardConfig::residual_clamp: f32
+pub zensr_micro::guards::GuardConfig::roundtrip_mae_max: f32
+pub zensr_micro::guards::GuardConfig::texture_alpha_min: f32
+pub zensr_micro::guards::GuardConfig::texture_gate: bool
+pub zensr_micro::guards::GuardConfig::texture_k: f32
+impl core::clone::Clone for zensr_micro::guards::GuardConfig
+pub fn zensr_micro::guards::GuardConfig::clone(&self) -> zensr_micro::guards::GuardConfig
+impl core::default::Default for zensr_micro::guards::GuardConfig
+pub fn zensr_micro::guards::GuardConfig::default() -> Self
+impl core::fmt::Debug for zensr_micro::guards::GuardConfig
+pub fn zensr_micro::guards::GuardConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::guards::GuardConfig
+impl core::marker::Freeze for zensr_micro::guards::GuardConfig
+impl core::marker::Send for zensr_micro::guards::GuardConfig
+impl core::marker::Sync for zensr_micro::guards::GuardConfig
+impl core::marker::Unpin for zensr_micro::guards::GuardConfig
+impl core::marker::UnsafeUnpin for zensr_micro::guards::GuardConfig
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::guards::GuardConfig
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::guards::GuardConfig
+pub struct zensr_micro::guards::GuardReport
+pub zensr_micro::guards::GuardReport::clamped_frac: f32
+pub zensr_micro::guards::GuardReport::fallback_blend: f32
+pub zensr_micro::guards::GuardReport::mean_alpha: f32
+pub zensr_micro::guards::GuardReport::roundtrip_mae: f32
+impl core::clone::Clone for zensr_micro::guards::GuardReport
+pub fn zensr_micro::guards::GuardReport::clone(&self) -> zensr_micro::guards::GuardReport
+impl core::default::Default for zensr_micro::guards::GuardReport
+pub fn zensr_micro::guards::GuardReport::default() -> zensr_micro::guards::GuardReport
+impl core::fmt::Debug for zensr_micro::guards::GuardReport
+pub fn zensr_micro::guards::GuardReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for zensr_micro::guards::GuardReport
+impl core::marker::Freeze for zensr_micro::guards::GuardReport
+impl core::marker::Send for zensr_micro::guards::GuardReport
+impl core::marker::Sync for zensr_micro::guards::GuardReport
+impl core::marker::Unpin for zensr_micro::guards::GuardReport
+impl core::marker::UnsafeUnpin for zensr_micro::guards::GuardReport
+impl core::panic::unwind_safe::RefUnwindSafe for zensr_micro::guards::GuardReport
+impl core::panic::unwind_safe::UnwindSafe for zensr_micro::guards::GuardReport
+pub fn zensr_micro::guards::bilinear_up(&[f32], usize, usize, usize) -> alloc::vec::Vec<f32>
+pub fn zensr_micro::guards::guarded_merge(&mut [f32], &[f32], usize, usize, usize, &zensr_micro::guards::GuardConfig) -> zensr_micro::guards::GuardReport
+pub fn zensr_micro::decode_all_f16(&[u8]) -> alloc::vec::Vec<f32>

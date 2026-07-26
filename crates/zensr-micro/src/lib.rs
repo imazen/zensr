@@ -9,22 +9,39 @@
 pub mod adopted;
 pub mod consist;
 pub mod guards;
+// SPANF research kernels: crate-internal unless `internals` opts in.
+#[cfg(feature = "internals")]
 pub mod simd;
+#[cfg(not(feature = "internals"))]
+#[allow(dead_code)] // SPANF-only paths idle when internals is off
+pub(crate) mod simd;
+#[cfg(feature = "internals")]
 pub mod tiled;
-#[cfg(feature = "px")]
+#[cfg(not(feature = "internals"))]
+#[allow(dead_code)]
+pub(crate) mod tiled;
+#[cfg(all(feature = "px", feature = "internals"))]
 pub mod px;
-#[cfg(feature = "px")]
+#[cfg(all(feature = "px", feature = "internals"))]
 pub use px::{spanf_x4_px, PxError};
+#[cfg(feature = "internals")]
 pub use simd::spanf_x4_simd;
+#[cfg(feature = "internals")]
 pub use tiled::{spanf_x4_tiled, HALO};
 
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const FC: usize = 32; // feature channels
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const S2: usize = 16; // upscale^2
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const NEAR_CH: usize = 3 * S2; // 48
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const CAT_CH: usize = NEAR_CH + 2 * FC; // 112
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const TOTAL_FLOATS: usize = 148_288;
 
 /// Weight views into one flat buffer, in tools/dump_spanf_weights.py order.
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub struct SpanfWeights<'a> {
     pub conv_near: &'a [f32],                    // [48,1,3,3]
     pub blocks: [[(&'a [f32], &'a [f32]); 3]; 5], // (w,b) per conv, per block
@@ -64,6 +81,7 @@ impl<'a> SpanfWeights<'a> {
 }
 
 /// Tensor layout in dump order: (weight_floats, bias_floats) per conv.
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const TENSOR_LAYOUT: [(usize, usize); 17] = [
     (NEAR_CH * 9, 0),      // conv_near (grouped, no bias)
     (3 * FC * 9, FC),      // b1.c1
@@ -87,6 +105,7 @@ pub const TENSOR_LAYOUT: [(usize, usize); 17] = [
 
 /// IEEE 754 half → f32 (safe, handles subnormals/inf/nan).
 #[inline]
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub fn f16_to_f32(bits: u16) -> f32 {
     let sign = ((bits >> 15) & 1) as u32;
     let exp = ((bits >> 10) & 0x1f) as u32;
@@ -125,6 +144,7 @@ pub fn decode_all_f16(bytes: &[u8]) -> Vec<f32> {
 
 /// Decode the f16 weight dump (weights f16, biases f32) into the canonical
 /// TOTAL_FLOATS f32 buffer accepted by `SpanfWeights::parse`.
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub fn decode_f16_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
     let mut out = Vec::with_capacity(TOTAL_FLOATS);
     let mut off = 0usize;
@@ -159,6 +179,7 @@ pub fn decode_f16_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
 /// Decode the int8-per-channel dump (per conv: cout f32 scales, then int8
 /// weights; biases f32) into the canonical f32 buffer. NOTE: accuracy study
 /// shows this is NOT production-viable for SPANF (~35 dB); kept for size demo.
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
     let mut out = Vec::with_capacity(TOTAL_FLOATS);
     let mut off = 0usize;
@@ -223,6 +244,7 @@ pub(crate) fn pack_conv1x1(wts: &[f32], cin_total: usize, cout: usize) -> Vec<f3
 }
 
 /// Owned, pre-packed model: build once, share across threads (`Sync`).
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub struct SpanfModel {
     raw: Vec<f32>,
     pub(crate) packed_blocks: [[Vec<f32>; 3]; 5],
@@ -256,6 +278,7 @@ impl SpanfModel {
 }
 
 /// Per-thread work buffers for one (h, w) tile shape.
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub struct Scratch {
     pub(crate) h: usize,
     pub(crate) w: usize,
@@ -499,6 +522,7 @@ pub(crate) fn nan_debug(stage: &str, data: &[f32]) {
 pub(crate) fn nan_debug(_stage: &str, _data: &[f32]) {}
 
 /// Full SPANF x4 forward. `input` is [3,h,w] NCHW f32; returns [3,4h,4w].
+#[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32> {
     let plane = h * wd;
     assert_eq!(input.len(), 3 * plane);
@@ -535,6 +559,9 @@ pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32
 #[cfg(test)]
 mod tests {
     use super::*;
+    // internal paths so unit tests build without the `internals` re-exports
+    #[allow(unused_imports)]
+    use crate::{simd::spanf_x4_simd, tiled::spanf_x4_tiled};
 
     /// Deterministic LCG values in [-0.5, 0.5).
     fn lcg(n: usize, seed: u32, scale: f32) -> Vec<f32> {

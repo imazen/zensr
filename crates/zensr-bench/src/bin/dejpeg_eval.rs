@@ -171,10 +171,7 @@ fn main() {
                             let r = zensr_zenjpeg::restore_jpeg(
                                 &data,
                                 mp,
-                                &zensr_zenjpeg::RestoreConfig {
-                                    threads,
-                                    ..Default::default()
-                                },
+                                &zensr_zenjpeg::RestoreConfig::default().with_threads(threads),
                             )
                             .expect("restore_jpeg");
                             Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height }

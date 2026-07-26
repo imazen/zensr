@@ -5,7 +5,8 @@
 //! De/re-interleave happens at the staging boundary that already exists for
 //! tiling, so strided input costs nothing extra versus tightly-packed input.
 
-use crate::{spanf_x4_tiled, SpanfModel};
+use crate::tiled::spanf_x4_tiled;
+use crate::SpanfModel;
 use zenpixels::{At, BufferError, PixelBuffer, PixelDescriptor, PixelSlice};
 
 #[derive(Debug)]

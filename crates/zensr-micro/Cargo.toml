@@ -11,7 +11,8 @@ zenpixels = { version = "0.2.14", optional = true }
 bytemuck = { version = "1.25.2", optional = true }
 
 [features]
-default = ["avx512", "px"]
+internals = []
+default = ["avx512"]
 # zenpixels-typed API (PixelSlice in, PixelBuffer out)
 px = ["dep:zenpixels", "dep:bytemuck"]
 avx512 = ["magetypes/avx512"]
@@ -19,3 +20,8 @@ avx512 = ["magetypes/avx512"]
 # Off by default: they fall back to v3/AVX2, saving ~50KB of duplicate kernels.
 tier_v4 = ["avx512"]
 nan-debug = []
+
+[[bin]]
+name = "zensr-verify"
+path = "src/bin/zensr-verify.rs"
+required-features = ["internals"]
