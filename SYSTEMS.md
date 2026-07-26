@@ -653,3 +653,25 @@ it above ~q50) was already measured by the high-grid identity_auto arm:
   pixel-exact input (model_off >= model_auto, deblock-mix verdict).
 Policy unchanged: Knusperli (Annex-K, q<=9.5) -> model+projection -> identity
 (q>=~95); Boundary4Tap dominated everywhere in between.
+
+### Chained dejpeg->SR vs jpeg-specialized direct SR — CHAIN WINS (2026-07-26, user question; benchmarks/chain_eval_2026-07-26.tsv)
+
+Protocol: systems_eval LR (catmullrom half + turbo 420) x q35/50/75, 24 eval
+files; SR = nomosuni span/compact x2 (both degradation-trained); chain = full
+restore_jpeg prod call (S10 projection incl.) then SR on restored planes.
+
+Paired per-file ssim2 (chain - direct):
+  q35: span +1.85 median (22/24 wins), compact +1.09 (19/24)
+  q50: span +0.85 (18/24), compact +0.67 (16/24)
+  q75: ~+0.4 median but ~0 mean, wins 13-15/24 — neutral
+Butteraugli agrees (chain <= direct at q35/50).
+
+VERDICT: separate the steps. SR does NOT need to jpeg-specialize — the
+S10-projected x1 stage removes artifacts better than the SR models absorb
+them internally (it works at input resolution, in the quantization-native
+space, with coefficient information SR never sees), and hands SR an input
+closer to its training distribution. Chaining INCREASED the gain at q<=50
+and is neutral at q75. Runtime cost: ~+80% over SR alone per prod_bench
+(restore 5.3 s/MP + span-x2 ~4.2 s/MP-input at 12T). Per-file tail at q75
+is symmetric (+3.8/-4.6 extremes) — optional future refinement: skip the
+x1 stage above ~q75 if tail-risk matters more than the median.
