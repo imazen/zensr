@@ -492,3 +492,37 @@ Fleet postscript: 6 training runs + 1 confound probe across lianli/
 jason/ian in one afternoon; ian was lost mid-run to a physical power-off
 (kids' box — WoL unarmed after hard cut; needs the button) and its arm
 completed on lianli. Kids' boxes flipped back to Windows at wrap-up.
+
+### S10 projection — shipped and measured (2026-07-25/26)
+
+Implementation: `zensr_micro::consist` (decoder-agnostic DCT-box clamp,
+property-tested: decode-in-box no-op, adversarial re-encode consistency)
++ `zensr-zenjpeg::restore_jpeg` (probe → deblock policy → guarded model →
+family-slack projection; the eval's `model_proj` arm IS this call).
+Slack calibrated on 1M coefficients/cell: turbo p99≤0.07Q; mozjpeg
+trellis p99≤0.23Q (max ~15Q zeroed runs); jpegli/zenjpeg AQ p99≤0.41Q
+(stored DQT understates per-block quant) → family slack 0.15/0.35/0.45.
+
+Grid results (Δ SSIM2 median vs identity, mean over cells):
+
+| grid | policy (no proj) | **+ projection** | cells < identity |
+|---|---|---|---|
+| high-q 85–96 | +0.18 | **+0.37** | 14→12 /32 |
+| standard 15–90 | +3.93 | **+3.96** | 5→3 /40 |
+| low-q 5–12 | +8.54 | +8.55 | 0→0 /24 |
+
+Projection doubles the high-q margin, never costs anything at q≤90, and
+carries the hard guarantee (output re-encodes to the file's own
+coefficients, per-family slack caveats aside). Honest residuals at q96:
+jpegli −0.60→−0.25 and zenjpeg −0.74→−0.54 (big improvements), but
+turbo −0.75→−0.87 / mozjpeg −0.32→−0.40 — traced to calibration tails
+(turbo q92 shows 2.2 % violations up to 1.2Q from integer-DCT skew;
+slack 0.15 clips them). Full q96 erasure additionally needs 420-chroma
+back-projection + the YCbCr-native pipeline (S5b) — the projection
+currently covers luma always and chroma only at 4:4:4.
+
+Build/deps milestone: product cold build (zensr-zenjpeg+micro+zenjpeg-
+from-source) **11.9 s**; core-edit loop 2.0 s; zenjpeg-edit loop 7.5 s.
+zenjpeg#190 filed: impl-Stop monomorphizes the decode pipeline into
+every consumer (46k LLVM lines in our 300-line glue; 11.6 s glue edits)
+— dyn-inner fix proposed.

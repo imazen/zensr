@@ -64,4 +64,4 @@ report:
 
 cargo-local:
     mkdir -p .cargo
-    printf '[patch.crates-io]\nzenjpeg = { path = "/home/lilith/work/zen/zenjpeg/zenjpeg" }\n' > .cargo/config.toml
+    printf '[patch.crates-io]\nzenjpeg = { path = "../zenjpeg/zenjpeg" }\n' > .cargo/config.toml
