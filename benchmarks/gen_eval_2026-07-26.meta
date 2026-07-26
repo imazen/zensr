@@ -1,0 +1,7 @@
+# gen_eval multi-generation survey, 2026-07-26
+# commit: ed8d786d (harness added 4c448136); host: tower (Unraid docker ubuntu:24.04,
+#   cpuset 0-23, cpu-shares 256, mem 24g); cmd: gen_eval imazen-26 out.tsv 3 20 dejpeg4_policy
+# corpus: 64 pinned eval files (eval_split/imazen26_eval_files.tsv), 3/sub used, 512 center crops
+# arms: identity (every gen), model = restore_jpeg default (policy+S10+slack_abs),
+#   model_noproj (Projection::Off) at final gen. 14 chains (singles t90/75/50/35+m70,
+#   g2 social/cdn/upq/444to420/shift2/low, g3 meme/shift/deep).

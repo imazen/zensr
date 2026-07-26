@@ -586,3 +586,32 @@ nonzero split; 1M coeffs/cell, q88–q98; benchmarks/slack_calibration_highq_*
   relative family slack is about AQ at LOW q, not high.
 - Validation eval (high grid, per_sub=3, slack_abs active in Auto) launched;
   verdict lands with the next benchmarks commit.
+
+### Generation loss (gen2/gen3) — measured 2026-07-26 (tower; benchmarks/gen_eval_2026-07-26.tsv)
+
+User-directed question: how does the pipeline behave on 2nd/3rd-generation JPEGs?
+
+- **The model's gain does NOT collapse on multi-gen input** — it grows: at
+  matched final q, g2-social +3.22 ssim2 (vs +2.13 single t75), g2-cdn +3.02
+  (vs +2.30 single m70), g3-meme +5.13 (vs +4.25 single t50), g3-deep +6.09.
+  Multi-gen inputs carry more total artifact energy and the blind
+  pixels-in/pixels-out model removes proportionally more of it.
+- **But generation damage is mostly permanent**: restored g2-social lands at
+  75.06 vs 78.92 for restored single-t75 — the model recovers only ~20% of
+  the generation-loss delta (identity gap 4.96 → restored gap 3.86). That
+  ~3-4 ssim2 gap is the headroom for gen-aware training (augmentation is
+  implemented: ZENSR_GEN2/ZENSR_GEN3 in make_dejpeg_data4, default off).
+- **S10 projection stays safe on multi-gen** (it certifies the FINAL
+  generation): proj−noproj ≥ 0 on 13/14 chains; the one negative is −0.05 on
+  g2-upq (60→90 re-encode: tight q90 boxes lock in gen1 damage) — neutral,
+  not harmful. At low-q finals projection is ~0 as expected (huge boxes).
+- **Grid-misaligned chains (crop+re-encode) are harder but not pathological**:
+  g2-shift2 +2.60 vs g2-social +3.22.
+- **g2-upq retro-validates pixels-only**: probe says "q90, mild" but the
+  model corrects what it SEES (+3.37) — a severity-conditioned model would
+  have under-corrected exactly here (the conditioning-ablation verdict,
+  independently confirmed on generation loss).
+- Approach going forward: enable ZENSR_GEN2≈0.25 / ZENSR_GEN3≈0.08 on the
+  next dataset build and A/B against dejpeg4_policy on the gen chains; a
+  double-quantization detector (DCT-histogram periodicity) stays a
+  rung-if-needed, not a default.
