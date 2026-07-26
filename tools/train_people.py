@@ -86,9 +86,16 @@ def main():
         else "mps" if torch.backends.mps.is_available()
         else "cpu"
     )
-    # M4-class Apple silicon runs bf16 natively; ZENSR_AMP=0 to disable.
+    # AMP dtype by hardware: Ampere+ (cc>=8) and Apple silicon run bf16
+    # natively; Turing (cc 7.x) has fp16 tensor cores but only EMULATED bf16
+    # (torch.cuda.is_bf16_supported() returns True there anyway — check
+    # compute capability, not that flag). fp16 needs a GradScaler.
     amp_on = dev != "cpu" and os.environ.get("ZENSR_AMP", "1") != "0"
-    print(f"device={dev} amp={amp_on}", flush=True)
+    amp_dt = torch.bfloat16
+    if dev == "cuda" and torch.cuda.get_device_capability()[0] < 8:
+        amp_dt = torch.float16
+    scaler = torch.amp.GradScaler(dev, enabled=amp_on and amp_dt == torch.float16)
+    print(f"device={dev} amp={amp_on} dtype={amp_dt if amp_on else 'fp32'}", flush=True)
     torch.manual_seed(7)
     lr_all = np.load(os.path.join(D, "lr_u8.npy"), mmap_mode="r")
     hr_all = np.load(os.path.join(D, "hr_u8.npy"), mmap_mode="r")
@@ -140,15 +147,20 @@ def main():
             idx = torch.from_numpy(rng.integers(0, n, batch)).to(dloc)
         x = to_space(lr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
         y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
-        with torch.autocast(dev, dtype=torch.bfloat16, enabled=amp_on):
+        with torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
             out = m(x)
             loss = charbonnier(out, y)
         opt.zero_grad(set_to_none=True)
-        loss.backward()
-        opt.step()
+        if scaler.is_enabled():
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
+        else:
+            loss.backward()
+            opt.step()
         sched.step()
         if step % 500 == 0 or step == steps:
-            with torch.no_grad(), torch.autocast(dev, dtype=torch.bfloat16, enabled=amp_on):
+            with torch.no_grad(), torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
                 vps = []
                 for i in range(0, 512, 128):
                     vo = m(to_space(val_lr[i:i + 128])).float()
