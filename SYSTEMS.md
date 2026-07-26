@@ -637,3 +637,19 @@ is slack_abs in Auto projection):
   decode is already consistent so projection is skipped too (no-op).
   Analytic effect on the grid: negative cells 5/16 → 1/16 (turbo q93 −0.02
   marginal); mean high-grid gain +0.35. Report flag `skipped_model_high_q`.
+
+### Boundary4Tap on high-q content — no slot (2026-07-26, user-prompted; from committed grids)
+
+zenjpeg's second deblocker (H.264-style 4-tap pixel filter; zenjpeg Auto uses
+it above ~q50) was already measured by the high-grid identity_auto arm:
+- q96: BYTE-IDENTICAL to pixel-exact decode — strength derives from DC quant
+  (0.25*dc_quant, threshold 0.4x; deblock/boundary.rs), so at DC quant 1 it
+  is a structural no-op. Cannot help where the model lost to identity;
+  independently confirms the high-q identity gate.
+- q85–93: small net LOSS (turbo −0.19..−0.29, moz −0.14..−0.32 ssim2; butter
+  also worse) — it smooths real detail where block edges barely exist. The
+  model+projection arm (+0.35 mean) dominates.
+- mid-q 55–75: alone +0.1..+0.35, but the model is +2..+4 and prefers
+  pixel-exact input (model_off >= model_auto, deblock-mix verdict).
+Policy unchanged: Knusperli (Annex-K, q<=9.5) -> model+projection -> identity
+(q>=~95); Boundary4Tap dominated everywhere in between.
