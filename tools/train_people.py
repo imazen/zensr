@@ -95,8 +95,13 @@ def main():
     n = lr_all.shape[0] - 512
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
-    lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dev)
-    hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dev)
+    # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
+    # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
+    # hang in waitUntilCompleted) and on small-VRAM cards (ian's 1660 Ti).
+    cpu_data = os.environ.get("ZENSR_CPU_DATA", "1" if dev == "mps" else "0") == "1"
+    dloc = "cpu" if cpu_data else dev
+    lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dloc)
+    hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dloc)
     # ZENSR_QBOOST: oversample high-q + clean pairs (index duplication) using
     # <data>/../pairs.tsv (dejpeg-v2 layout). Closes the q90 identity gap
     # without runtime gating.
@@ -115,7 +120,7 @@ def main():
                 i = int(row[0])
                 if i < n and (int(row[4]) == 1 or int(row[3]) >= 85):
                     boosted.extend([i] * qboost)
-        sample_pool = torch.tensor(boosted, device=dev)
+        sample_pool = torch.tensor(boosted, device=dloc)
         print(f"qboost x{qboost}: pool {len(boosted)} (from {n})", flush=True)
 
     m = Student().to(dev)
@@ -130,11 +135,11 @@ def main():
           f"params={sum(p.numel() for p in m.parameters())}", flush=True)
     for step in range(1, steps + 1):
         if sample_pool is not None:
-            idx = sample_pool[torch.from_numpy(rng.integers(0, len(sample_pool), batch)).to(dev)]
+            idx = sample_pool[torch.from_numpy(rng.integers(0, len(sample_pool), batch)).to(dloc)]
         else:
-            idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
-        x = to_space(lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
-        y = to_space(hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
+            idx = torch.from_numpy(rng.integers(0, n, batch)).to(dloc)
+        x = to_space(lr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
+        y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
         with torch.autocast(dev, dtype=torch.bfloat16, enabled=amp_on):
             out = m(x)
             loss = charbonnier(out, y)
