@@ -1,0 +1,21 @@
+# chooser fit 2026-07-26 — graphics-vs-photo router (commit at fit time: 4c448136)
+# data: benchmarks/chooser_features_2026-07-26.tsv (chooser_probe on lianli;
+#   center-512 crops, turbo 420 q35/75/92, compressed-then-decoded)
+# split: train=1023 rows (graphics 666) fit only; eval=192 rows (pinned
+#   eval_split files union first-8) never fit.
+# method: robust z (train median/IQR, clip +-8) -> sklearn L1 logistic C=0.1
+#   feature-select (21 kept) -> L2 refit. Geometry + size-dependent
+#   (bitmap_bytes) + near-constant columns excluded.
+#
+# operating curve (eval):
+#   t=0.75 precision=0.901 recall=0.760
+#   t=0.80 precision=0.913 recall=0.656
+#   t=0.85 precision=0.950 recall=0.594   <- shipped threshold
+# eval FPs at 0.85: logan-voss render x3q (synthetic content; label debatable)
+# eval FPs at 0.80 add: bjorn-pierre (people) x3q + 1 screenshot mislabeled
+#   as photo in the corpus (chooser was right).
+# per-sub graphics recall at t=0.80: documents 24/24, screen 21/24,
+#   maps 12/24, art-scans 6/24 (scans look photographic -> intentional
+#   fall-through to the photo model).
+# REVISIT: threshold can drop (recall up) once the measured cost of running
+#   dejpeg7_graphics on true photos is known (bounded-downside test).

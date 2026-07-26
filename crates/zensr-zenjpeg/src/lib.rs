@@ -9,6 +9,9 @@
 //! (Cjpegli*/zenjpeg) never. The model runs on every image; the projection
 //! (S10) guarantees the output re-encodes to the file's own coefficients.
 
+#[cfg(feature = "chooser")]
+pub mod chooser;
+
 use zensr_micro::consist::{
     project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,
     CoeffView,

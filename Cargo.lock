@@ -1771,6 +1771,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "rgb",
+ "zenanalyze 0.2.0",
  "zenjpeg",
  "zensr-micro",
 ]
