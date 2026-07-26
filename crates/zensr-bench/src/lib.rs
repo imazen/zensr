@@ -250,14 +250,18 @@ pub fn load_adopted(dir: &str) -> Option<zensr_micro::adopted::AdoptedModel> {
     };
     let raw = read_f32_file(&d.join("weights.raw"));
     let scale: usize = f("scale").parse().ok()?;
-    match f("arch").as_str() {
+    let mut m = match f("arch").as_str() {
         "compact" => {
             AdoptedModel::load_compact(&raw, f("nf").parse().ok()?, f("nc").parse().ok()?, scale)
-                .ok()
+                .ok()?
         }
-        "span48" => AdoptedModel::load_span48(&raw, scale).ok(),
-        _ => None,
+        "span48" => AdoptedModel::load_span48(&raw, scale).ok()?,
+        _ => return None,
+    };
+    if f("space") == "ycbcr" {
+        m.set_space(zensr_micro::adopted::ModelSpace::Ycbcr);
     }
+    Some(m)
 }
 
 /// Real libjpeg-turbo round trip at quality q, 4:2:0 -optimize, via system cjpeg.

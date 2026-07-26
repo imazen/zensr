@@ -222,6 +222,49 @@ pub fn ycbcr_to_rgb_planes(y: &[f32], cb: &[f32], cr: &[f32], rgb: &mut [f32], p
     }
 }
 
+/// Project a FULL-resolution chroma plane whose bitstream constraint lives on
+/// the 2x-subsampled lattice (4:2:0), via one back-projection pass:
+/// down = box2x2(plane); down' = project(down); plane += replicate(down' - down).
+/// Replication is the exact right-inverse of the box decimation, so the
+/// corrected plane satisfies the half-res constraint EXACTLY in one pass
+/// (up to [0,1] clamping); the correction field is piecewise-constant at
+/// 2x2 granularity, which is invisible at chroma scales.
+pub fn project_chroma_420(
+    plane: &mut [f32],
+    w: usize,
+    h: usize,
+    cv: &CoeffView<'_>,
+    cfg: &ProjectionConfig,
+) -> ProjectionReport {
+    assert_eq!(plane.len(), w * h);
+    let (hw, hh) = (w.div_ceil(2), h.div_ceil(2));
+    // box 2x2 down (edge-replicated on odd dims) — the common encoder decimation
+    let mut down = vec![0.0f32; hw * hh];
+    for y in 0..hh {
+        let (y0, y1) = (2 * y, (2 * y + 1).min(h - 1));
+        for x in 0..hw {
+            let (x0, x1) = (2 * x, (2 * x + 1).min(w - 1));
+            down[y * hw + x] = 0.25
+                * (plane[y0 * w + x0] + plane[y0 * w + x1] + plane[y1 * w + x0] + plane[y1 * w + x1]);
+        }
+    }
+    let before = down.clone();
+    let report = project_plane(&mut down, hw, hh, cv, cfg);
+    // Upsample the half-res correction by PIXEL REPLICATION and add: replication
+    // is the exact right-inverse of the 2x2 box-down (box(replicate(c)) == c),
+    // so the corrected plane satisfies the half-res constraint exactly in one
+    // pass. (Bilinear up attenuates the correction: box(bilerp(c)) != c.)
+    for y in 0..h {
+        let hy = (y / 2).min(hh - 1);
+        for x in 0..w {
+            let c = down[hy * hw + (x / 2).min(hw - 1)] - before[hy * hw + (x / 2).min(hw - 1)];
+            let i = y * w + x;
+            plane[i] = (plane[i] + c).clamp(0.0, 1.0);
+        }
+    }
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +406,42 @@ mod tests {
                 let _ = m;
             }
         }
+    }
+
+    #[test]
+    fn chroma_420_backprojection_reduces_violation() {
+        // synthetic 420: encode a half-res plane, restore-with-error at full
+        // res, back-project; the half-res constraint violation must shrink
+        // to ~quantization-noise scale and full-res content stays smooth.
+        let (w, h) = (32usize, 32usize);
+        let (hw, hh) = (16usize, 16usize);
+        let qt = qt_flat(32);
+        let (dec_half, coeffs) = simulate(hw, hh, &qt, 5);
+        // full-res "restored chroma" = bilinear-up of decode + hallucination
+        let mut full = crate::guards::bilinear_up_plane(&dec_half, hw, hh, 2);
+        for (i, v) in full.iter_mut().enumerate() {
+            *v = (*v + if (i / 7) % 2 == 0 { 0.15 } else { -0.15 }).clamp(0.0, 1.0);
+        }
+        let cv = CoeffView { coeffs: &coeffs, blocks_wide: 2, blocks_high: 2, order: CoeffOrder::Natural, quant: &qt };
+        let viol = |p: &[f32]| -> f32 {
+            // measure half-res box violation: project a copy, see how far it moves
+            let mut d = vec![0.0f32; hw * hh];
+            for y in 0..hh {
+                for x in 0..hw {
+                    d[y * hw + x] = 0.25
+                        * (p[2 * y * w + 2 * x] + p[2 * y * w + 2 * x + 1]
+                            + p[(2 * y + 1) * w + 2 * x] + p[(2 * y + 1) * w + 2 * x + 1]);
+                }
+            }
+            let before = d.clone();
+            project_plane(&mut d, hw, hh, &cv, &ProjectionConfig { slack_q: 0.0 });
+            d.iter().zip(before.iter()).map(|(a, b)| (a - b).abs()).sum::<f32>() / (hw * hh) as f32
+        };
+        let v0 = viol(&full);
+        project_chroma_420(&mut full, w, h, &cv, &ProjectionConfig { slack_q: 0.0 });
+        let v1 = viol(&full);
+        assert!(v0 > 0.01, "test setup must start violated (v0={v0})");
+        assert!(v1 < 2e-3, "one back-projection pass must satisfy the half-res box (v0={v0} -> v1={v1})");
     }
 
     #[test]

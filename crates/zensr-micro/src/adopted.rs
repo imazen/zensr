@@ -14,6 +14,17 @@ use crate::{nearest_add, pack_conv1x1, pack_conv3x3, pixel_shuffle_s_strided};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
+/// Colorspace the model was trained in. Graph-identical either way; the
+/// caller must feed planes in the matching space (see zensr-zenjpeg).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[non_exhaustive]
+pub enum ModelSpace {
+    #[default]
+    Rgb,
+    /// JFIF full-range YCbCr, [0,1] planes, Cb/Cr offset +0.5.
+    Ycbcr,
+}
+
 pub enum Arch {
     /// [conv3x3+PReLU] x (nc+1) -> conv3x3(3*s^2) -> shuffle -> +nearest(x)
     Compact { nf: usize, nc: usize },
@@ -24,6 +35,7 @@ pub enum Arch {
 pub struct AdoptedModel {
     pub arch: Arch,
     pub scale: usize,
+    space: ModelSpace,
     /// packed conv weights in graph order
     packed: Vec<Vec<f32>>,
     biases: Vec<Vec<f32>>,
@@ -40,6 +52,14 @@ fn take<'a>(buf: &mut &'a [f32], n: usize) -> &'a [f32] {
 }
 
 impl AdoptedModel {
+    pub fn space(&self) -> ModelSpace {
+        self.space
+    }
+
+    pub fn set_space(&mut self, space: ModelSpace) {
+        self.space = space;
+    }
+
     /// Receptive-field radius in input pixels (number of chained 3x3 convs).
     pub fn halo(&self) -> usize {
         match self.arch {
@@ -86,7 +106,7 @@ impl AdoptedModel {
         bfin.resize(cpad, 0.0);
         biases.push(bfin);
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, packed, biases, slopes })
+        Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, space: ModelSpace::Rgb, packed, biases, slopes })
     }
 
     pub fn load_span48(raw: &[f32], scale: usize) -> Result<Self, String> {
@@ -116,7 +136,7 @@ impl AdoptedModel {
         packed.push(pack_conv3x3(take(&mut buf, fc * 3 * s2 * 9), fc, 3 * s2)); // upsampler
         biases.push(take(&mut buf, 3 * s2).to_vec());
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Span48, scale, packed, biases, slopes: Vec::new() })
+        Ok(AdoptedModel { arch: Arch::Span48, scale, space: ModelSpace::Rgb, packed, biases, slopes: Vec::new() })
     }
 
     /// Whole-tile forward: input [3,h,w] tight -> out [3,s*h,s*w] tight.

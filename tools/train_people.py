@@ -23,6 +23,7 @@ NF = int(os.environ.get("ZENSR_NF", "24"))
 NC = int(os.environ.get("ZENSR_NC", "8"))
 SCALE = int(os.environ.get("ZENSR_SCALE", "2"))
 OUT_NAME = os.environ.get("ZENSR_OUT", "people_rtc_2x")
+SPACE = os.environ.get("ZENSR_SPACE", "rgb")  # rgb | ycbcr (JFIF full-range)
 INIT = os.environ.get("ZENSR_INIT", "")
 OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)
 
@@ -43,6 +44,22 @@ class Student(nn.Module):
 
 def charbonnier(a, b, eps=1e-6):
     return torch.sqrt((a - b) ** 2 + eps).mean()
+
+
+# JFIF full-range RGB->YCbCr, [0,1] planes, Cb/Cr carry +0.5 (matches
+# zensr_micro::consist so the runtime pipeline is bit-consistent).
+_M = torch.tensor([[0.299, 0.587, 0.114],
+                   [-0.1687359, -0.3312641, 0.5],
+                   [0.5, -0.4186876, -0.0813124]])
+_OFF = torch.tensor([0.0, 0.5, 0.5])
+
+
+def to_space(x):
+    if SPACE != "ycbcr":
+        return x
+    m = _M.to(x.device).to(x.dtype)
+    off = _OFF.to(x.device).to(x.dtype)
+    return torch.einsum("ij,bjhw->bihw", m, x) + off.view(1, 3, 1, 1)
 
 
 def load_init(m):
@@ -78,7 +95,9 @@ def main():
     # without runtime gating.
     sample_pool = None
     qboost = int(os.environ.get("ZENSR_QBOOST", "0"))
-    ptsv = os.path.join(os.path.dirname(D), "pairs.tsv")
+    ptsv = os.path.join(D, "pairs.tsv")
+    if not os.path.exists(ptsv):
+        ptsv = os.path.join(os.path.dirname(D), "pairs.tsv")
     if qboost > 0 and os.path.exists(ptsv):
         import csv as _csv
         boosted = list(range(n))
@@ -106,8 +125,8 @@ def main():
             idx = sample_pool[torch.from_numpy(rng.integers(0, len(sample_pool), batch)).to(dev)]
         else:
             idx = torch.from_numpy(rng.integers(0, n, batch)).to(dev)
-        x = lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
-        y = hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255)
+        x = to_space(lr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
+        y = to_space(hr_gpu[idx].permute(0, 3, 1, 2).float().div_(255))
         with torch.autocast("cuda", dtype=torch.bfloat16):
             out = m(x)
             loss = charbonnier(out, y)
@@ -119,8 +138,8 @@ def main():
             with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
                 vps = []
                 for i in range(0, 512, 128):
-                    vo = m(val_lr[i:i + 128]).clamp(0, 1).float()
-                    mse = ((vo - val_hr[i:i + 128]) ** 2).mean().item()
+                    vo = m(to_space(val_lr[i:i + 128])).float()
+                    mse = ((vo - to_space(val_hr[i:i + 128])) ** 2).mean().item()
                     vps.append(-10 * np.log10(max(mse, 1e-10)))
                 print(f"step {step} loss {loss.item():.5f} val_psnr_vs_GT {np.mean(vps):.2f}", flush=True)
         if step % 10000 == 0 or step == steps:
@@ -148,7 +167,7 @@ def main():
         gi.tofile(os.path.join(OUTM, f"gold_in_{h}x{w}.raw"))
         y.tofile(os.path.join(OUTM, f"gold_out_{h}x{w}.raw"))
     total = sum(int(np.prod(v.shape)) for v in sd.values())
-    json.dump({"arch": "compact", "scale": SCALE, "nf": NF, "nc": NC,
+    json.dump({"arch": "compact", "scale": SCALE, "nf": NF, "nc": NC, "space": SPACE,
                "total_floats": int(total),
                "source": f"people GT fine-tune (init={os.path.basename(INIT) or 'scratch'})"},
               open(os.path.join(OUTM, "meta.json"), "w"), indent=1)

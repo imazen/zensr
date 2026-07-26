@@ -9,10 +9,10 @@
 //! (Cjpegli*/zenjpeg) never. The model runs on every image; the projection
 //! (S10) guarantees the output re-encodes to the file's own coefficients.
 
-use zensr_micro::adopted::AdoptedModel;
+use zensr_micro::adopted::{AdoptedModel, ModelSpace};
 use zensr_micro::consist::{
-    project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder, CoeffView,
-    ProjectionConfig, ProjectionReport,
+    project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,
+    CoeffView, ProjectionConfig, ProjectionReport,
 };
 use zensr_micro::guards::{guarded_merge, GuardConfig, GuardReport};
 
@@ -179,37 +179,49 @@ pub fn restore_jpeg(
         }
     }
 
-    // 3. guarded model
-    let lp = planes.clone();
-    let mut sr = model.upscale_tiled(&lp, h, w, cfg.threads, cfg.tile);
-    report.guard = guarded_merge(&mut sr, &lp, h, w, 1, &cfg.guard);
+    // 3. model space: YCbCr-native models run directly in the space where
+    // quantization happened (S5b); RGB models keep the legacy path.
+    let ycbcr_native = model.space() == ModelSpace::Ycbcr;
+    let model_in = if ycbcr_native {
+        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
+        rgb_to_ycbcr_planes(&planes, plane, &mut y, &mut cb, &mut cr);
+        let mut p = y;
+        p.extend_from_slice(&cb);
+        p.extend_from_slice(&cr);
+        p
+    } else {
+        planes
+    };
 
-    // 4. quantization-consistency projection (S10)
+    // 4. guarded model (guard anchors in the model's own space)
+    let mut sr = model.upscale_tiled(&model_in, h, w, cfg.threads, cfg.tile);
+    report.guard = guarded_merge(&mut sr, &model_in, h, w, 1, &cfg.guard);
+
+    // 5. quantization-consistency projection (S10): luma via direct box clamp,
+    // full-res chroma (4:4:4) likewise, subsampled chroma (4:2:0) via exact
+    // one-pass back-projection on the half-res lattice.
     let pcfg = match cfg.projection {
         Projection::Off => None,
         Projection::Auto => Some(ProjectionConfig { slack_q: slack_for(&probe) }),
         Projection::Fixed(c) => Some(c),
     };
+    let mut ycc = if ycbcr_native {
+        sr
+    } else {
+        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
+        rgb_to_ycbcr_planes(&sr, plane, &mut y, &mut cb, &mut cr);
+        let mut p = y;
+        p.extend_from_slice(&cb);
+        p.extend_from_slice(&cr);
+        p
+    };
     if let Some(pcfg) = pcfg {
         let coeffs = zenjpeg::decoder::Decoder::new()
             .decode_coefficients(data, enough::Unstoppable)
             .map_err(|e| RestoreError::Decode(format!("coefficients: {e:?}")))?;
-        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
-        rgb_to_ycbcr_planes(&sr, plane, &mut y, &mut cb, &mut cr);
-        let mut projected_any = false;
-        for (ci, comp) in coeffs.components.iter().enumerate() {
-            let full_res = comp.blocks_wide * 8 >= w && comp.blocks_high * 8 >= h;
-            if !full_res {
-                continue; // subsampled chroma: back-projection form, later
-            }
+        for (ci, comp) in coeffs.components.iter().enumerate().take(3) {
             let Some(qt) = coeffs.quant_tables[comp.quant_table_idx as usize] else {
                 continue;
-            };
-            let target = match ci {
-                0 => &mut y,
-                1 => &mut cb,
-                2 => &mut cr,
-                _ => continue,
             };
             let cv = CoeffView {
                 coeffs: &comp.coeffs,
@@ -218,15 +230,22 @@ pub fn restore_jpeg(
                 order: CoeffOrder::Zigzag,
                 quant: &qt,
             };
-            report.projection.push(project_plane(target, w, h, &cv, &pcfg));
-            projected_any = true;
-        }
-        if projected_any {
-            ycbcr_to_rgb_planes(&y, &cb, &cr, &mut sr, plane);
+            let target = &mut ycc[ci * plane..(ci + 1) * plane];
+            let full_res = comp.blocks_wide * 8 >= w && comp.blocks_high * 8 >= h;
+            let half_res =
+                comp.blocks_wide * 16 >= w && comp.blocks_high * 16 >= h && !full_res;
+            if full_res {
+                report.projection.push(project_plane(target, w, h, &cv, &pcfg));
+            } else if half_res {
+                report.projection.push(project_chroma_420(target, w, h, &cv, &pcfg));
+            }
+            // other subsampling geometries (422/440): not yet projected
         }
     }
+    let mut out = vec![0.0f32; 3 * plane];
+    ycbcr_to_rgb_planes(&ycc[..plane], &ycc[plane..2 * plane], &ycc[2 * plane..], &mut out, plane);
 
-    Ok(Restored { planes: sr, width: w, height: h, report })
+    Ok(Restored { planes: out, width: w, height: h, report })
 }
 
 #[cfg(test)]
@@ -261,6 +280,50 @@ mod tests {
             let p = zenjpeg::detect::probe(&jpg).unwrap();
             assert!(!policy_wants_auto(&p), "AQ family must never trigger Auto (q={q})");
         }
+    }
+
+    #[test]
+    fn pipeline_420_projects_all_three_components() {
+        let (w, h) = (64usize, 48usize);
+        let rgb = synth_rgb(w, h);
+        let jpg = encode(w, h, &rgb, 35.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let coeffs = zenjpeg::decoder::Decoder::new()
+            .decode_coefficients(&jpg, enough::Unstoppable)
+            .unwrap();
+        assert_eq!(coeffs.components.len(), 3);
+        // luma full-res, chroma half-res grids
+        assert!(coeffs.components[0].blocks_wide * 8 >= w);
+        assert!(coeffs.components[1].blocks_wide * 16 >= w);
+        // exercise the projection branches directly on the decode
+        let dec = zenjpeg::decoder::Decoder::new().decode(&jpg, enough::Unstoppable).unwrap();
+        let px = dec.pixels_u8().unwrap();
+        let plane = w * h;
+        let mut planes = vec![0.0f32; 3 * plane];
+        for i in 0..plane {
+            for c in 0..3 {
+                planes[c * plane + i] = px[i * 3 + c] as f32 / 255.0;
+            }
+        }
+        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
+        rgb_to_ycbcr_planes(&planes, plane, &mut y, &mut cb, &mut cr);
+        let mut nproj = 0;
+        for (ci, comp) in coeffs.components.iter().enumerate() {
+            let qt = coeffs.quant_tables[comp.quant_table_idx as usize].unwrap();
+            let cv = CoeffView { coeffs: &comp.coeffs, blocks_wide: comp.blocks_wide,
+                blocks_high: comp.blocks_high, order: CoeffOrder::Zigzag, quant: &qt };
+            let t = match ci { 0 => &mut y, 1 => &mut cb, _ => &mut cr };
+            let full = comp.blocks_wide * 8 >= w && comp.blocks_high * 8 >= h;
+            let rep = if full {
+                project_plane(t, w, h, &cv, &ProjectionConfig::default())
+            } else {
+                project_chroma_420(t, w, h, &cv, &ProjectionConfig::default())
+            };
+            // decode itself must be near-consistent on every component,
+            // including the back-projected chroma path
+            assert!(rep.mean_abs_change < 4e-3, "comp {ci}: change {}", rep.mean_abs_change);
+            nproj += 1;
+        }
+        assert_eq!(nproj, 3);
     }
 
     /// End-to-end coefficient consistency WITHOUT model weights: decode + a
