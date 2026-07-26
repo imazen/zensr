@@ -348,6 +348,10 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
 - **P5 — Product wiring + bench release:** imageflow/zenpipe integration (decode-metadata →
   band pick → tiled upscale), size diet toward sub-300 KB; **publish `webjpeg-sr-bench`**
   (spec + harness + frozen subcorpus + all baseline numbers) — user-gated like any publish.
+  *Status 2026-07-26: the zenjpeg leg is LIVE — `zensr-zenjpeg::restore_jpeg` (probe →
+  deblock policy → decode → guarded ×1 model → S10 projection, 444+420, YCbCr-native-aware)
+  with a minimized snapshot-enforced API (`apidoc/PUBLIC_API.md`); product-crates rebuild
+  1.56 s. See SYSTEMS.md "Production hardening pass".*
 - **P5.5 — Challenge entries:** NTIRE ESR + real-world/real-time track submissions with
   shipping models (calendar-driven; prep starts when P4 models exist). Gate G5.
 - **P6 — Frontier (ongoing):** S5 native-plane models, PLKSR-Rep-class large-kernel port,
