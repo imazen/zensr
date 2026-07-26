@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/zensr-bench", "crates/zensr-micro", "crates/zensr-micro-abi"]
+members = ["crates/zensr-bench", "crates/zensr-micro", "crates/zensr-micro-abi", "crates/zensr-zenjpeg"]
 
 [profile.release]
 lto = "thin"

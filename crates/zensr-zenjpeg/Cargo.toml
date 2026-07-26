@@ -1,0 +1,17 @@
+[package]
+name = "zensr-zenjpeg"
+version = "0.1.0"
+edition = "2021"
+description = "zenjpeg integration for zensr: probe-driven decode policy, restoration pipeline, quantization-consistency projection"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# >=0.8.4 resolves from crates.io; the gitignored .cargo config patches the
+# local 0.9 tree (DeblockMode export + shipping decoder). just cargo-local
+zenjpeg = ">=0.8.4, <0.10"
+zensr-micro = { path = "../zensr-micro" }
+enough = "0.4.4"
+
+[dev-dependencies]
+rgb = "0.8.52"
+bytemuck = "1.25.2"

@@ -1751,6 +1751,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zensr-zenjpeg"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "rgb",
+ "zenjpeg",
+ "zensr-micro",
+]
+
+[[package]]
 name = "zenyuv"
 version = "0.1.3"
 dependencies = [
