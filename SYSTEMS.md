@@ -798,3 +798,29 @@ single-seed, ~24 effective units/grid, equal-compute-not-asymptote) and the x2
 protocol caveat (synthetic catmullrom LR = valid for relative A/Bs incl. the
 chain verdict, weaker for absolute real-web gains; x1 evals — ALL the ycbcr/
 specialist/control verdicts — use the pristine original as GT with no downscale).
+
+### Chroma ceiling + lattice decomposition (2026-07-27; benchmarks/chroma_ceiling_2026-07-27.tsv)
+
+Oracle-chroma probe (swap GT Cb/Cr into pipeline output, turbo 420, dejpeg7):
+restored->restored_oc gap = +10.1/+6.8/+6.2/+4.8/+3.1 ssim2 at q15/35/55/75/90 —
+chroma is ~HALF the remaining error mass, and the current pixel CNN recovers
+almost none of it (decode-side chroma gap 7.6 -> restored-side 6.8 at q35: the
+model's +5.9 total gain is nearly all luma).
+
+Lattice-floor decomposition (GT chroma, NO quantization, 2x2 box down +
+bilinear up = 93.21 ssim2, loss 6.79): at q>=35 the ENTIRE oracle gap sits at
+or under the lattice floor -> ~0% is unrecovered quantization damage. VERDICT
+on S5-two-trunk (coefficient-faithful native-lattice arch): ~zero headroom
+above q35 — decoder upsampling + S10 back-projection already saturate what the
+coefficients contain. Only q15 keeps a quant-side component (+3.3 of +10.1),
+matching where ycbcr-space training always showed its graphics edge.
+
+REDIRECT: the recoverable pool is GUIDED CHROMA SR — luma-guided sharpening
+past the lattice (the 6.8-point pool; the model already SEES full-res luma but
+RGB charbonnier underweights chroma so it doesn't try). Cheapest lever first:
+chroma-weighted loss (ZENSR_LOSS_SPACE=ycbcr + ZENSR_CHROMA_W, loss-only
+change, model stays RGB drop-in). Paired experiment launched on jason:
+dejpeg10_chw3 (w=3) vs dejpeg10_ctl (plain), both warm from dejpeg7_16000.
+Caveats: decomposition is a crude subtraction in ssim2 space; bilinear
+lattice floor slightly understates the best resampler; ssim2 (XYB-based)
+weights chroma heavily — butteraugli columns in the TSV allow a cross-check.

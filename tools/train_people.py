@@ -25,6 +25,8 @@ SCALE = int(os.environ.get("ZENSR_SCALE", "2"))
 OUT_NAME = os.environ.get("ZENSR_OUT", "people_rtc_2x")
 SPACE = os.environ.get("ZENSR_SPACE", "rgb")  # rgb | ycbcr (JFIF full-range)
 INIT = os.environ.get("ZENSR_INIT", "")
+LOSS_SPACE = os.environ.get("ZENSR_LOSS_SPACE", "")  # "" | ycbcr
+CHROMA_W = float(os.environ.get("ZENSR_CHROMA_W", "1"))
 OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)
 
 
@@ -43,6 +45,16 @@ class Student(nn.Module):
 
 
 def charbonnier(a, b, eps=1e-6):
+    # ZENSR_LOSS_SPACE=ycbcr computes the loss in YCbCr regardless of model
+    # I/O space, with Cb/Cr weighted by ZENSR_CHROMA_W (chroma-ceiling probe
+    # 2026-07-27: the RGB loss lets the model ignore ~half the remaining
+    # 420 error mass; this reweights without changing the deployed model).
+    if LOSS_SPACE == "ycbcr":
+        m = _M.to(a.device).to(a.dtype)
+        aw = torch.einsum("ij,bjhw->bihw", m, a)
+        bw = torch.einsum("ij,bjhw->bihw", m, b)
+        wv = torch.tensor([1.0, CHROMA_W, CHROMA_W], device=a.device, dtype=a.dtype).view(1, 3, 1, 1)
+        return (torch.sqrt((aw - bw) ** 2 + eps) * wv).mean()
     return torch.sqrt((a - b) ** 2 + eps).mean()
 
 
