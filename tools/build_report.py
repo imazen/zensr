@@ -346,7 +346,7 @@ ul {{ max-width:78ch; }}
   <a href="#results">results</a><a href="#subcorpus">per-class</a><a href="#guard">guard</a>
   <a href="#ladder">distillation</a><a href="#audition">audition</a><a href="#people">people band</a>
   <a href="#speed">speed</a><a href="#audit">split audit</a><a href="#gallery">gallery</a>
-  <a href="#s10">S10</a><a href="#genloss">gen-loss</a><a href="#falsified">falsified</a>
+  <a href="#s10">S10</a><a href="#genloss">gen-loss</a><a href="#ladder">ladder</a><a href="#falsified">falsified</a>
 </nav>
 
 <h2 id="verdict"><span class="no">§0</span>Verdict</h2>
@@ -590,6 +590,26 @@ is the target of gen-aware training (chain augmentation implemented, ZENSR_GEN2/
 on 13/14 chains (−0.05 only on up-q, neutral). Bonus: the up-q chain (probe says "q90, mild";
 model corrects +3.37 from pixels) independently re-falsifies severity conditioning.</div>
 
+<h2 id="ladder"><span class="no">§12d</span>Production model ladder (2026-07-27 autonomous wave)</h2>
+<p>One night of LAN-fleet dispatch (jason RTX 3070 native-bf16 at 0.18 s/step trained seven
+595k-param models in ~12–50 min each) closed the remaining design questions with
+control-adjusted A/Bs. A +16k-step control on the original mix measured FLAT — so every
+delta below is a real effect, not training time:</p>
+<div class="pane on"><table><thead><tr><th>tier</th><th>model</th><th>params</th><th>ssim2 gain q15/35/55/75/90 (std)</th><th>s/MP @12T</th></tr></thead><tbody>
+<tr><td><b>quality (default)</b></td><td>dejpeg7_graphics</td><td class="num">595k</td><td class="num">beats dejpeg4 on BOTH classes (+0.09 photo / +0.09 graphics median vs control) and at every high-q point; zero negative cells</td><td class="num">5.3</td></tr>
+<tr><td><b>realtime</b></td><td>dejpeg_rt24d</td><td class="num">43k</td><td class="num">+1.63 / +1.58 / +1.42 / +0.86 / +0.04</td><td class="num"><b>0.21</b></td></tr>
+<tr><td>low-q graphics route</td><td>dejpeg9_gfxycc</td><td class="num">595k</td><td class="num">graphics rows +1.58/+0.65/+0.39 OVER dejpeg7 at q15/35/55 (negative above q75)</td><td class="num">5.3</td></tr>
+</tbody></table></div>
+<div class="note win">Findings that set the shape: (1) the "graphics" specialist beat the
+generalist on photos too — harder text/edge data improved artifact discrimination globally,
+so it simply becomes the default; (2) S9 distillation holds at ×1 (+0.41 over direct-train)
+and SATURATES at 43k params — rt24d matches rt32d at 3.2× the speed, 25× the quality tier;
+(3) YCbCr-native is falsified as the general pipeline (lost the high grid outright) but is a
+real low-q graphics trait (+0.30 median vs control) — it survives only inside the compound
+specialist; (4) routing: default dejpeg7; chooser p(graphics)&gt;0.85 AND probe q≤60 →
+gfxycc; q≥95 → identity gate; Annex-K q≤9.5 → Knusperli. Every row traces to a committed
+benchmarks/ TSV; models mirrored to Tower.</div>
+
 <h2 id="falsified"><span class="no">§12</span>Falsified / negative results registry</h2>
 <ul>
 <li>×1 repair via scale round-trip (q≥50) — loses to identity. Replaced by the native S6 inversion, which wins everywhere.</li>
@@ -598,6 +618,11 @@ model corrects +3.37 from pixels) independently re-falsifies severity conditioni
 <li>Input-channel conditioning, both forms — global severity scalar AND per-block damage map
 land identical (−3 dB on every degraded band): a gradient shortcut that substitutes for pixel
 analysis. Pixels-in/pixels-out ships; S10 lives at the output.</li>
+<li>YCbCr-native pipeline as the general model (S5b) — lost the high grid outright
+(+0.225→−0.017 mean vs RGB), median-negative on std; survives only as a low-q graphics
+trait inside the compound specialist.</li>
+<li>Extra-training-time as the explanation for specialist gains — the +16k-step control
+on the original mix measured flat.</li>
 <li>Bilinear-up of the half-res projection correction (4:2:0 back-projection) — box(bilerp(c)) ≠ c
 attenuates the correction (only 1.8× violation reduction). Pixel replication is the exact
 right-inverse of box decimation: one-pass exact (residual &lt; 2e-3).</li>
