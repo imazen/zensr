@@ -82,8 +82,13 @@ fn main() {
                 dec_best = dec_best.min(t.elapsed().as_secs_f64() * 1e3);
             }
             println!("decode\t{n}\t{mp:.2}\t{threads}\t{dec_best:.1}\t{:.2}", mp / (dec_best / 1e3));
-            // full restore
-            let cfg = RestoreConfig::default().with_threads(threads);
+            // full restore (ZENSR_PB_TILE sweeps the tiled-runner tile size)
+            let tile: usize = std::env::var("ZENSR_PB_TILE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            let mut cfg = RestoreConfig::default().with_threads(threads);
+            cfg.tile = tile;
             let mut best = f64::INFINITY;
             let mut restored = None;
             for _ in 0..reps {
