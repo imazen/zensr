@@ -248,7 +248,15 @@ pub fn load_adopted(dir: &str) -> Option<zensr_micro::adopted::AdoptedModel> {
             None => String::new(),
         }
     };
-    let raw = read_f32_file(&d.join("weights.raw"));
+    let f16p = d.join("weights_f16.raw");
+    let raw = if f16p.exists()
+        && meta.contains("\"f16_goldens\"")
+        && std::env::var("ZENSR_LOAD_F32").is_err()
+    {
+        zensr_micro::decode_all_f16(&std::fs::read(&f16p).ok()?)
+    } else {
+        read_f32_file(&d.join("weights.raw"))
+    };
     let scale: usize = f("scale").parse().ok()?;
     let mut m = match f("arch").as_str() {
         "compact" => {

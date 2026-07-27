@@ -39,7 +39,16 @@ fn main() {
         let scale: usize = meta_field(&meta, "scale").parse().unwrap();
         let nf: usize = meta_field(&meta, "nf").parse().unwrap();
         let nc: usize = meta_field(&meta, "nc").parse().unwrap();
-        let raw = read_f32(&d.join("weights.raw"));
+        // Prefer the f16 SHIP file when the meta carries the f16_goldens
+        // marker (goldens regenerated THROUGH f16 by the bake/backfill).
+        // Legacy adoption dirs (span dumps, general_*) keep the f32 path
+        // until their own pipelines re-dump.
+        let f16p = d.join("weights_f16.raw");
+        let raw = if f16p.exists() && meta.contains("\"f16_goldens\"") {
+            zensr_micro::decode_all_f16(&std::fs::read(&f16p).unwrap())
+        } else {
+            read_f32(&d.join("weights.raw"))
+        };
         let model = match arch.as_str() {
             "compact" => AdoptedModel::load_compact(&raw, nf, nc, scale),
             "span48" => AdoptedModel::load_span48(&raw, scale),
