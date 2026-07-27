@@ -25,6 +25,14 @@ calibrated slack + absolute sample-quantization slack) → optional ×2 SR.
 | realtime | dejpeg_rt24d (distilled) | 43k / **86 KB** | +1.6/+1.6/+1.4/+0.9/+0.0 | **0.21** |
 | low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 | 5.3 |
 
+
+Runtime: safe-Rust explicit SIMD throughout — one `#[magetypes]` f32x8 kernel
+family (AVX2/SSE4.2/NEON/WASM128/scalar) + a hand `_v4x` AVX-512 f32x16 variant,
+packed weights, tiled multithreading with exact halos, strided rows. Measured
+efficiency: realtime tier ~410 GFLOPS aggregate @12T (near practical peak);
+quality tier ~225 GFLOPS (cache-bound at nf=64 — open rungs: strip-fused layer
+scheduling, Winograd F(2,3)). No GPU path yet (CubeCL spike queued).
+
 Routing (all probe-driven): chooser p(graphics)>0.85 ∧ q≤60 → gfxycc; q≥95 →
 identity gate (model loses on near-pristine input); chain ×1 before SR when
 4:2:0 ∨ q≲50 (chain +1.9 ssim2 at 420 q35; skip at 444 high-q). Ship format is
