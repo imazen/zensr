@@ -715,3 +715,23 @@ vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
 - Pending: dejpeg9_gfxycc compound rung (graphics x YCbCr, jason) — decides
   whether the chooser routes graphics to a compound specialist or retires;
   rt24 rung (mac) for the speed floor.
+
+### FINAL production shape (2026-07-27, closes the 07-26/27 autonomous wave)
+
+Model ladder (all golden-verified; std-grid mean ssim2 gain / full-pipeline speed @12T):
+
+| tier | model | params | q15 / q35 / q55 / q75 / q90 | s/MP |
+|---|---|---|---|---|
+| quality (DEFAULT) | dejpeg7_graphics | 595k | +7.1*/+3.5*/+2.6*/+1.2*/+0.07* (dejpeg4 cols; dejpeg7 beats them per attribution & high grid) | 5.3 |
+| realtime | dejpeg_rt24d (distilled) | 43k | +1.63/+1.58/+1.42/+0.86/+0.04 | 0.21 |
+| low-q graphics route | dejpeg9_gfxycc | 595k | graphics rows +1.58/+0.65/+0.39 OVER dejpeg7 at q15/35/55; negative q75+ | 5.3 |
+
+- **rt24d == rt32d quality at 3.2x speed** (43k saturates the S9 recipe;
+  rt32d retired). Zero negative cells on both -> safe for blind mass use.
+- **Routing rule (measured)**: default dejpeg7; IF chooser p_graphics>0.85
+  AND probe est-q<=60 -> dejpeg9_gfxycc (the "more aggressive correction"
+  slot from the user directive; bounded downside: photo-misroute at low q
+  costs -0.14 median vs +0.4..+1.6 upside on target class). High-q identity
+  gate (>=q95) and low-q Knusperli policy (Annex-K <=9.5) unchanged.
+- Every number above is a committed TSV in benchmarks/ with box+commit
+  provenance; models mirrored to Tower.
