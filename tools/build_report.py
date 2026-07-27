@@ -607,7 +607,9 @@ and SATURATES at 43k params — rt24d matches rt32d at 3.2× the speed, 25× the
 (3) YCbCr-native is falsified as the general pipeline (lost the high grid outright) but is a
 real low-q graphics trait (+0.30 median vs control) — it survives only inside the compound
 specialist; (4) routing: default dejpeg7; chooser p(graphics)&gt;0.85 AND probe q≤60 →
-gfxycc; q≥95 → identity gate; Annex-K q≤9.5 → Knusperli. Every row traces to a committed
+gfxycc; q≥95 → identity gate; Annex-K q≤9.5 → Knusperli; before SR, chain the ×1 stage
+when 4:2:0 OR q≲50 (the 4:4:4 arm showed the chain's lever is chroma repair on the
+subsampled lattice — at 4:4:4 it wins q35, goes neutral q50, loses slightly q75). Every row traces to a committed
 benchmarks/ TSV; models mirrored to Tower.</div>
 
 <h2 id="falsified"><span class="no">§12</span>Falsified / negative results registry</h2>
@@ -618,9 +620,11 @@ benchmarks/ TSV; models mirrored to Tower.</div>
 <li>Input-channel conditioning, both forms — global severity scalar AND per-block damage map
 land identical (−3 dB on every degraded band): a gradient shortcut that substitutes for pixel
 analysis. Pixels-in/pixels-out ships; S10 lives at the output.</li>
-<li>YCbCr-native pipeline as the general model (S5b) — lost the high grid outright
-(+0.225→−0.017 mean vs RGB), median-negative on std; survives only as a low-q graphics
-trait inside the compound specialist.</li>
+<li>YCbCr-native pipeline as the general model (S5b) — falsified under BOTH bias regimes:
+warm-start (lost the high grid outright) and a from-scratch same-seed pair (−0.14 median,
+photos −0.36; the warm run's q15 advantage did not survive de-confounding). The one robust
+survivor is a graphics-rows edge (+0.13..+0.30 median) — it lives on only inside the
+compound graphics specialist.</li>
 <li>Extra-training-time as the explanation for specialist gains — the +16k-step control
 on the original mix measured flat.</li>
 <li>Bilinear-up of the half-res projection correction (4:2:0 back-projection) — box(bilerp(c)) ≠ c
