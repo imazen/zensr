@@ -157,12 +157,19 @@ fn main() {
                         let (pf, pq) = probe_cols(&data);
                         let d_off = zj_decode(&data, false);
                         let d_auto = zj_decode(&data, true);
-                        let mut outs: Vec<(&str, &Rgb8Img, Option<&zensr_micro::adopted::AdoptedModel>)> = vec![
-                            ("identity_off", &d_off, None),
-                            ("identity_auto", &d_auto, None),
-                            ("model_off", &d_off, Some(&m_off)),
-                            ("model_auto", &d_auto, Some(&m_auto)),
-                        ];
+                        // ZENSR_EVAL_ARMS=policy skips arms that are invariant
+                        // across policy-model A/Bs (identity_auto, model_off,
+                        // model_auto — reuse them from the committed baseline
+                        // TSV of the same grid) — those are ~2/3 of the compute.
+                        let policy_only =
+                            std::env::var("ZENSR_EVAL_ARMS").as_deref() == Ok("policy");
+                        let mut outs: Vec<(&str, &Rgb8Img, Option<&zensr_micro::adopted::AdoptedModel>)> =
+                            vec![("identity_off", &d_off, None)];
+                        if !policy_only {
+                            outs.push(("identity_auto", &d_auto, None));
+                            outs.push(("model_off", &d_off, Some(&m_off)));
+                            outs.push(("model_auto", &d_auto, Some(&m_auto)));
+                        }
                         if let Some(mp) = &m_policy {
                             let src = if policy_wants_auto(&data) { &d_auto } else { &d_off };
                             outs.push(("model_policy", src, Some(mp)));
