@@ -883,3 +883,10 @@ could be hallucinated past the lattice is not reliably luma-predictable.
   container compression (<=15% for real complexity); zero-bias closed for
   conv SR. Reuse from zenanalyze stack: bake-format ideas only; zentrain is
   picker-specific — nothing to link for SR training.
+
+### f16 metric-level A/B — TRANSPARENT (2026-07-28; benchmarks/f{16,32}_metric_ab_*.tsv)
+
+320 paired cells (dejpeg7, full pipeline, loader f16 vs ZENSR_LOAD_F32):
+ssim2 median +0.0010, butteraugli median -0.0001; tails symmetric on 3/320
+knife-edge text cells (-0.24..+0.61, largest delta favors f16 = reshuffling).
+f16 ship format fully cleared at golden, output, and metric levels.
