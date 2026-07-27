@@ -860,3 +860,26 @@ rung with a sigma-swept/learned guide, expected value LOW. The honest
 answer to "how can RGB be as good as YCbCr at 420": the chroma information
 a native pipeline could read better simply isn't in the file — and what
 could be hallucinated past the lattice is not reliably luma-predictable.
+
+### f16 ship format + compression study (2026-07-27/28)
+
+- f16 BAKED IN: trainer exports weights_f16.raw and generates goldens THROUGH
+  the f16 roundtrip; verify + eval loader use f16 when meta carries
+  f16_goldens (27 dirs pass, max golden diff 9.8e-6 vs f16-goldens; measured
+  output delta vs f32 <=9e-4 = ~1/4 of an 8-bit step). Legacy dump dirs
+  (span48, general_*) stay f32 pending their own pipeline re-dump — NOTE:
+  general_* torch re-repro mismatches runtime at 1e-3; their goldens were
+  restored from Tower after a near-poisoning; do NOT regenerate them with
+  train_people's Student.
+- Reproducibility: model meta.json now embeds a repro block (argv, ZENSR_*
+  env, seeds, commit, host, torch version, init sha, full dataset meta,
+  f16 sha) and every export writes an executable repro.sh.
+- COMPRESSION (study in this section; script inline in jj history):
+  f16+zstd19 = 1.07-1.09x; byte-plane split = 1.15x (dejpeg7) — conv weights
+  are near-max-entropy. zenpredict zero_bias (tau*max per block) DOES NOT
+  TRANSFER from picker MLPs to conv kernels: tau=0.002 already corrupts
+  output 9e-2 (100x f16 noise) for +2% ratio; tau=0.02 = 0.52 corruption for
+  1.26x. VERDICT: ship plain f16 (dejpeg tier 1.16MB, rt24d 86KB); skip
+  container compression (<=15% for real complexity); zero-bias closed for
+  conv SR. Reuse from zenanalyze stack: bake-format ideas only; zentrain is
+  picker-specific — nothing to link for SR training.
