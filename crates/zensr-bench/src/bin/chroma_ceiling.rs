@@ -137,8 +137,50 @@ fn main() {
                 };
                 let (gy_full, _, _) = split_ycc(&gt_planes, plane);
                 let lattice = merge_y_with_oracle_chroma(&gy_full, &up(&lcb), &up(&lcr), hr.w, hr.h);
+                // joint-bilateral 2x upsample of the SAME clean half-res chroma,
+                // guided by full-res GT luma: the classic guided-upsampling bound.
+                let jbu = |half: &Vec<f32>| -> Vec<f32> {
+                    let mut full = vec![0.0f32; plane];
+                    let sig_r = 0.06f32; // luma range sigma ([0,1] units)
+                    for y in 0..hr.h {
+                        for x in 0..hr.w {
+                            let g = gy_full[y * hr.w + x];
+                            let cy = ((y as f32 + 0.5) / 2.0 - 0.5).clamp(0.0, (hh - 1) as f32);
+                            let cx = ((x as f32 + 0.5) / 2.0 - 0.5).clamp(0.0, (hw - 1) as f32);
+                            let (y0, x0) = (cy.floor() as isize, cx.floor() as isize);
+                            let mut num = 0.0f32;
+                            let mut den = 0.0f32;
+                            for dy in -1..=2isize {
+                                let sy = (y0 + dy).clamp(0, hh as isize - 1) as usize;
+                                for dx in -1..=2isize {
+                                    let sx = (x0 + dx).clamp(0, hw as isize - 1) as usize;
+                                    // guide luma at the chroma sample's center (2x2 mean)
+                                    let gy2 = (2 * sy).min(hr.h - 1);
+                                    let gx2 = (2 * sx).min(hr.w - 1);
+                                    let gs = 0.25
+                                        * (gy_full[gy2 * hr.w + gx2]
+                                            + gy_full[gy2 * hr.w + (gx2 + 1).min(hr.w - 1)]
+                                            + gy_full[(gy2 + 1).min(hr.h - 1) * hr.w + gx2]
+                                            + gy_full[(gy2 + 1).min(hr.h - 1) * hr.w
+                                                + (gx2 + 1).min(hr.w - 1)]);
+                                    let ds = ((sy as f32 - cy).powi(2) + (sx as f32 - cx).powi(2))
+                                        / (2.0 * 0.8f32.powi(2));
+                                    let dr = (g - gs).powi(2) / (2.0 * sig_r * sig_r);
+                                    let w = (-ds - dr).exp();
+                                    num += w * half[sy * hw + sx];
+                                    den += w;
+                                }
+                            }
+                            full[y * hr.w + x] = num / den.max(1e-9);
+                        }
+                    }
+                    full
+                };
+                let lattice_jbu =
+                    merge_y_with_oracle_chroma(&gy_full, &jbu(&lcb), &jbu(&lcr), hr.w, hr.h);
                 let arms: Vec<(&str, Rgb8Img)> = vec![
                     ("lattice_floor", lattice),
+                    ("lattice_jbu", lattice_jbu),
                     ("decode", dimg),
                     ("decode_oc", merge_y_with_oracle_chroma(&dy, &gcb, &gcr, hr.w, hr.h)),
                     ("restored", rimg),

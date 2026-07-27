@@ -840,3 +840,23 @@ half-res chroma with GT luma guide vs the bilinear lattice floor (93.21).
 If classic guided upsampling can't beat the floor materially, the practical
 pool is far smaller than the 6.8 oracle bound and the chroma direction gets
 CLOSED with measured bounds at every rung.
+
+### Guided-chroma rung 2: JBU bound — NEGATIVE; chroma direction CLOSED (2026-07-27)
+
+Joint-bilateral 2x chroma upsample with a GROUND-TRUTH luma guide on CLEAN
+half-res chroma (best case for guided upsampling; benchmarks/
+chroma_ceiling_v3_2026-07-27.tsv): 93.21 bilinear -> 90.95 JBU (-2.25 mean,
+median -0.57, worst -13.2 documents, best +2.7 screen). Luma-guided range
+weighting pulls chroma across mismatched edges — luma structure does not
+reliably predict chroma structure on this corpus.
+
+CLOSED with three concordant bounds: (1) oracle pool is ~all lattice loss
+above q35 (destroyed information, not recoverable-by-fidelity); (2) chroma-
+boosted loss on the end-to-end model: null; (3) classic guided upsampling
+with a perfect guide: negative (untuned single sigma — caveat recorded).
+Decoder upsampling + S10 back-projection are already at the practical
+chroma frontier for 420. Re-open only via a dedicated learned chroma-head
+rung with a sigma-swept/learned guide, expected value LOW. The honest
+answer to "how can RGB be as good as YCbCr at 420": the chroma information
+a native pipeline could read better simply isn't in the file — and what
+could be hallucinated past the lattice is not reliably luma-predictable.
