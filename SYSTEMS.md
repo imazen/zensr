@@ -824,3 +824,19 @@ dejpeg10_chw3 (w=3) vs dejpeg10_ctl (plain), both warm from dejpeg7_16000.
 Caveats: decomposition is a crude subtraction in ssim2 space; bilinear
 lattice floor slightly understates the best resampler; ssim2 (XYB-based)
 weights chroma heavily — butteraugli columns in the TSV allow a cross-check.
+
+### Guided-chroma rung 1: chroma-weighted loss — NULL (2026-07-27; benchmarks/dejpeg10_*_2026-07-27.tsv)
+
+chw3 (YCbCr loss, Cb/Cr x3) vs paired plain-loss control, both warm from
+dejpeg7_16000: ssim2 +0.009 median / 500 of 960 (420-only q-slices all within
+noise), butteraugli flat. Loss reweighting does NOT unlock the chroma pool —
+the model isn't ignoring chroma because of loss weighting; either the
+luma-guided signal is weak in practice (the oracle bound includes truly
+destroyed information) or a full-res conv stack can't express the guided
+upsample. Also: both +16k continuations sit ~0.06 BELOW their dejpeg7 init —
+re-confirms dejpeg7 is converged (third flat continuation).
+Next (decisive, training-free): joint-bilateral-upsample arm on CLEAN
+half-res chroma with GT luma guide vs the bilinear lattice floor (93.21).
+If classic guided upsampling can't beat the floor materially, the practical
+pool is far smaller than the 6.8 oracle bound and the chroma direction gets
+CLOSED with measured bounds at every rung.
