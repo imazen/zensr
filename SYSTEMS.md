@@ -751,3 +751,26 @@ when (ss==420) OR (est-q < ~50); skip it for 444 high-q before SR. Verdict
 (Cross-box note: 444 arm ran on the mac with brew cjpeg vs dev-box turbo — the
 within-run chain-vs-direct comparison is box-consistent; only cross-grid absolute
 levels carry the box difference.)
+
+### YCbCr de-confound: from-scratch pair (2026-07-27, user-prompted; benchmarks/scr_{rgb,ycc}_std_*.tsv)
+
+User challenge: the warm-start comparisons inherited RGB-tuned convs — was the
+S5b falsification an artifact? From-scratch pair (identical seed/box/steps/LR,
+jason 3070, 16k @2e-4), paired ycc−rgb:
+
+- ALL −0.137 median / −0.444 mean (416/960); photo −0.360 median / −1.031 mean.
+- graphics rows: **+0.131 median** — same direction/size class as warm-start
+  (+0.30) and as gfxycc's low-q graphics gains. The graphics trait is robust
+  across BOTH bias regimes.
+- The warm-start run's q15 advantage (+0.45 median) did NOT survive
+  de-confounding (scratch q15 −0.44) — it was largely extra effective
+  training, not the color space.
+- Both experiments carry opposite convergence biases (warm favors RGB init;
+  scratch tests equal-step convergence where YCbCr's low-variance chroma
+  channels may learn slower) and AGREE qualitatively → S5b-as-general-model
+  falsified robustly; YCbCr survives only as the graphics-specialist trait
+  (dejpeg9_gfxycc). Residual caveat: fixed 16k budget tests equal-compute,
+  not asymptote; not worth another rung given three concordant comparisons.
+- context: scratch-rgb sits −0.92 median under production dejpeg4 (16k from
+  scratch is undertrained vs the warm lineage — as expected; pairing is
+  internal so this doesn't affect the ycc−rgb comparison).
