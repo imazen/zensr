@@ -675,3 +675,27 @@ and is neutral at q75. Runtime cost: ~+80% over SR alone per prod_bench
 (restore 5.3 s/MP + span-x2 ~4.2 s/MP-input at 12T). Per-file tail at q75
 is symmetric (+3.8/-4.6 extremes) — optional future refinement: skip the
 x1 stage above ~q75 if tail-risk matters more than the median.
+
+### Attribution: control separates training-time from specialization (2026-07-27)
+
+dejpeg4b_control (+16k steps, ORIGINAL mix — benchmarks/dejpeg4b_control_std_*.tsv)
+vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
+
+- **control: FLAT** (photo −0.011 median, graphics +0.031) — the +16k-steps
+  confound was a mirage; dejpeg4 was converged. All specialist deltas below
+  are REAL effects (vs control):
+- **graphics specialist (dejpeg7): wins BOTH classes** — photo +0.085 median
+  (207/320), graphics +0.086 (209/320). Training on harder text/edge content
+  improved general artifact discrimination. Ship-candidate as DEFAULT
+  pending its high-grid safety eval (running).
+- **YCbCr (dejpeg6): split** — photo −0.059 median (141/320, loses), graphics
+  +0.296 median / +0.405 mean (wins clearly). S5b stays falsified as the
+  general pipeline (also lost the high grid outright) but is a real
+  GRAPHICS-specialist trait → compounding rung dejpeg9_gfxycc (graphics data
+  x YCbCr space) training on jason.
+- gen-aware (dejpeg8): deep chains +0.3..+0.45, light chains −0.1..−0.2,
+  singles −0.05 — a wash for typical traffic, only deep-gen corpora want it.
+  Not default; available as a routing option if gen-heavy traffic emerges.
+- realtime tier: rt32 direct-train keeps 15–45% of quality-tier gain with
+  ZERO negative cells (safe blind); rt32-DISTILL (teacher targets, S9
+  recipe) exported — eval queued. rt24 rung on mac.
