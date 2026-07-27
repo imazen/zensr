@@ -903,3 +903,11 @@ Implications: cache penalty at nf=64 is box-dependent (lianli 78% of rt-tier
 rate vs WSL 55%) -> tile/strip-fusion headroom ~25% on good caches; Winograd
 (2.25x flops) is the dominant portable lever. WSL numbers understate
 production Linux by ~2x on the quality tier.
+
+### Tile sweep (lianli, 1MP, 12T; benchmarks/tile_sweep_lianli_2026-07-28.tsv)
+
+48:4575ms 64:3353 96:2620 128(default):2726 192:3163 256:3659.
+Default 128 is within 4% of the optimum (96); curve shallow 96-128, steep at
+extremes (tile 48 pays ~3x halo recompute; 256 blows cache). Tile lever
+EXHAUSTED — Winograd F(2x2,3x3) is the next and dominant CPU rung (2.25x
+arithmetic; golden-tolerance gate mandatory; same-box retime on lianli).

@@ -1,0 +1,7 @@
+# tile sweep, lianli, quality tier (dejpeg7), 1MP, 12T, commit 081f00fc, 2026-07-28
+tile=48 restore	1024	1.05	12	4574.8	0.23
+tile=64 restore	1024	1.05	12	3352.6	0.31
+tile=96 restore	1024	1.05	12	2619.6	0.40
+tile=128 restore	1024	1.05	12	2726.2	0.38
+tile=192 restore	1024	1.05	12	3162.9	0.33
+tile=256 restore	1024	1.05	12	3658.6	0.29
