@@ -774,3 +774,27 @@ jason 3070, 16k @2e-4), paired ycc−rgb:
 - context: scratch-rgb sits −0.92 median under production dejpeg4 (16k from
   scratch is undertrained vs the warm lineage — as expected; pairing is
   internal so this doesn't affect the ycc−rgb comparison).
+
+### SCOPE CORRECTION on the YCbCr falsification (2026-07-27, user-prompted)
+
+What the three concordant comparisons falsified is the COLOR BASIS: feeding the
+same full-res pixel CNN YCbCr instead of RGB. That is theoretically ~neutral
+anyway (RGB<->YCbCr is a fixed 3x3 linear map the first/last convs absorb; only
+optimization dynamics differ — Cb/Cr low variance => smaller gradients, matching
+the scratch result). They did NOT test a LATTICE-AWARE architecture: both arms
+received chroma already upsampled to full res (zenjpeg DecodedYCbCr also returns
+upsampled planes), so neither model ever saw the 4:2:0 grid. The S10 projection
+is native-space/native-lattice in ALL arms (Y full-res box, chroma back-projected
+on the half-res lattice) — the pipeline's frequency-domain component was never RGB.
+OPEN (S5 two-trunk, the right next rung): Y trunk full-res + chroma trunk at
+half-res fed PRE-UPSAMPLE chroma, reconstructible today via decode_coefficients
+-> dequant+IDCT at native res (consist.rs has the exact basis) — no zenjpeg
+change needed. A-priori ceiling on photos is modest (decoder upsampling + S10
+back-projection already enforce the lattice constraints; chroma = 2 of 6
+samples per 2x2), which the persistent graphics-only edge hints at — but that
+is an argument, not a measurement.
+Also recorded: strength tiering (direction robust across 3 designs; magnitudes
+single-seed, ~24 effective units/grid, equal-compute-not-asymptote) and the x2
+protocol caveat (synthetic catmullrom LR = valid for relative A/Bs incl. the
+chain verdict, weaker for absolute real-web gains; x1 evals — ALL the ycbcr/
+specialist/control verdicts — use the pristine original as GT with no downscale).
