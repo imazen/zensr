@@ -34,7 +34,10 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     m = tp.Student().to(dev).eval()
     sd = torch.load(CKPT, map_location="cpu", weights_only=True)
-    sd = sd.get("model", sd)
+    for k in ("sd", "model", "params", "params_ema", "state_dict"):
+        if k in sd and isinstance(sd[k], dict):
+            sd = sd[k]
+            break
     sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
     m.load_state_dict(sd, strict=True)
     lr_all = np.load(os.path.join(SRC, "lr_u8.npy"), mmap_mode="r")
