@@ -735,3 +735,19 @@ Model ladder (all golden-verified; std-grid mean ssim2 gain / full-pipeline spee
   gate (>=q95) and low-q Knusperli policy (Annex-K <=9.5) unchanged.
 - Every number above is a committed TSV in benchmarks/ with box+commit
   provenance; models mirrored to Tower.
+
+### Chain verdict, 4:4:4 arm (2026-07-27, mac; closes the 420-only scope flag)
+
+Same protocol at 4:4:4 (benchmarks/chain_eval_444_2026-07-27.tsv; ZENSR_CHAIN_SS=444):
+  q35: span +1.04 median (17/24), compact +0.38 (15/24) — chain still wins clearly
+  q50: ~neutral (span +0.09, compact −0.12)
+  q75: chain LOSES slightly (span −0.31, compact −0.40, wins 8-9/24)
+vs 420 where chain won q35/q50 and was neutral at q75. Mechanistically consistent:
+the x1 stage's biggest lever over direct SR is chroma repair on the subsampled
+lattice (back-projection + native-space work); at 4:4:4 that lever is absent, so
+the crossover point drops from ~q75 to ~q50. REFINED ROUTING: chain the x1 stage
+when (ss==420) OR (est-q < ~50); skip it for 444 high-q before SR. Verdict
+"separate the steps" unchanged — the switch is per-image, cheap, and probe-driven.
+(Cross-box note: 444 arm ran on the mac with brew cjpeg vs dev-box turbo — the
+within-run chain-vs-direct comparison is box-consistent; only cross-grid absolute
+levels carry the box difference.)
