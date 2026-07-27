@@ -47,7 +47,8 @@ fn encode_turbo(img: &Rgb8Img, q: u32) -> Vec<u8> {
 
 fn main() {
     let reps: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(3);
-    let model = load_adopted("dejpeg4_policy").expect("dejpeg4_policy");
+    let model_name = std::env::var("ZENSR_PB_MODEL").unwrap_or_else(|_| "dejpeg4_policy".into());
+    let model = load_adopted(&model_name).expect("model");
     let sr = load_adopted("nomosuni_span_2x");
     let one: Option<usize> = std::env::var("ZENSR_PB_ONE").ok().and_then(|s| s.parse().ok());
     let sizes: Vec<usize> = one.map(|n| vec![n]).unwrap_or_else(|| vec![64, 256, 1024, 2048, 4096]);
