@@ -27,8 +27,10 @@ fn encode_turbo(img: &Rgb8Img, q: u32, td: &PathBuf) -> Vec<u8> {
     let mut buf = format!("P6\n{} {}\n255\n", img.w, img.h).into_bytes();
     buf.extend_from_slice(&img.px);
     std::fs::write(&ppm, buf).unwrap();
+    // ZENSR_CHAIN_SS=444 switches the whole experiment to 4:4:4 (default 420)
+    let samp = if std::env::var("ZENSR_CHAIN_SS").as_deref() == Ok("444") { "1x1" } else { "2x2" };
     assert!(Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+        .args(["-quality", &q.to_string(), "-sample", samp, "-optimize", "-outfile"])
         .arg(&jpg)
         .arg(&ppm)
         .status()
