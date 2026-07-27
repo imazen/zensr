@@ -699,3 +699,19 @@ vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
 - realtime tier: rt32 direct-train keeps 15–45% of quality-tier gain with
   ZERO negative cells (safe blind); rt32-DISTILL (teacher targets, S9
   recipe) exported — eval queued. rt24 rung on mac.
+
+### Default-swap + realtime tier verdicts (2026-07-27)
+
+- **dejpeg7 clears the default bar** (benchmarks/dejpeg7_high_2026-07-27.tsv):
+  high grid +0.97/+0.69/+0.35 at q85/90/93 (vs dejpeg4's +0.80/+0.42/+0.19),
+  q96 = 0.00 (identity gate), NO negative cells. With its std-grid wins on
+  both classes (vs control): strictly better default. "graphics" in the name
+  is a training-data label — it ships as the general model.
+- **S9 distillation works at x1** (rt32d vs rt32, benchmarks/rt32d_std_*):
+  +0.41 mean paired (745/960), q15 1.10->1.83, q35 0.98->1.64, q55 ->1.43,
+  q75 ->0.84 — 26-69% of teacher quality at 0.68 s/MP (7.9x faster).
+  q90 -0.00 neutral (near-clean edge traded away; the >=q95 gate covers the
+  top). Ship shape: quality tier = dejpeg7-class; realtime = rt32d-class.
+- Pending: dejpeg9_gfxycc compound rung (graphics x YCbCr, jason) — decides
+  whether the chooser routes graphics to a compound specialist or retires;
+  rt24 rung (mac) for the speed floor.
