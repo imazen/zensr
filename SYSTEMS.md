@@ -890,3 +890,16 @@ could be hallucinated past the lattice is not reliably luma-predictable.
 ssim2 median +0.0010, butteraugli median -0.0001; tails symmetric on 3/320
 knife-edge text cells (-0.24..+0.61, largest delta favors f16 = reshuffling).
 f16 ship format fully cleared at golden, output, and metric levels.
+
+### Cross-arch runtime benches (2026-07-28; benchmarks/neon_mac_benches_*, lianli logs)
+
+Full restore_jpeg fits (total_ms = a + b*MP), quality tier / rt24d @12T:
+  lianli (bare Linux x86): 2.71 s/MP (439 GFLOPS agg) / 0.153 (565)
+  WSL dev box:             5.3        (225)           / 0.21  (410)
+  mac M4 Pro (NEON):       4.45       (267)           / 0.253 (342); 1T rt =
+  2.03 s/MP = 42.6 GFLOPS/thread — the FASTEST single-thread of the fleet
+  (NEON path healthy; MT limited by 4 E-cores in the 12).
+Implications: cache penalty at nf=64 is box-dependent (lianli 78% of rt-tier
+rate vs WSL 55%) -> tile/strip-fusion headroom ~25% on good caches; Winograd
+(2.25x flops) is the dominant portable lever. WSL numbers understate
+production Linux by ~2x on the quality tier.

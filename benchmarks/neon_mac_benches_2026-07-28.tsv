@@ -1,0 +1,65 @@
+# NEON benches, mac M4 Pro (8P+4E), commit 081f00fc, 2026-07-28
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.1	37.56
+restore	64	0.00	1	109.2	0.04
+decode	64	0.00	12	0.0	165.21
+restore	64	0.00	12	110.0	0.04
+decode	256	0.07	1	0.3	247.97
+restore	256	0.07	1	1762.2	0.04
+decode	256	0.07	12	0.3	223.10
+restore	256	0.07	12	475.8	0.14
+decode	1024	1.05	1	4.8	219.60
+restore	1024	1.05	1	34186.2	0.03
+decode	1024	1.05	12	4.7	224.60
+restore	1024	1.05	12	4353.3	0.24
+decode	2048	4.19	1	18.8	222.93
+restore	2048	4.19	1	143882.8	0.03
+decode	2048	4.19	12	18.9	221.66
+restore	2048	4.19	12	17398.2	0.24
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	73.2	229.12
+restore	4096	16.78	12	74656.4	0.22
+# restore fit t=1: total_ms = -707.1 + 34403.5 * MP
+# restore fit t=12: total_ms = -263.4 + 4450.5 * MP
+NEON-BENCHES-DONE
+# --- rt24d ---
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	132.48
+restore	64	0.00	1	8.2	0.50
+decode	64	0.00	12	0.0	150.09
+restore	64	0.00	12	8.1	0.50
+decode	256	0.07	1	0.3	216.95
+restore	256	0.07	1	114.8	0.57
+decode	256	0.07	12	0.3	210.05
+restore	256	0.07	12	31.0	2.11
+decode	1024	1.05	1	4.7	221.57
+restore	1024	1.05	1	2079.5	0.50
+decode	1024	1.05	12	4.8	219.94
+restore	1024	1.05	12	266.3	3.94
+decode	2048	4.19	1	19.0	221.30
+restore	2048	4.19	1	8488.0	0.49
+decode	2048	4.19	12	19.0	220.97
+restore	2048	4.19	12	1035.8	4.05
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	73.7	227.62
+restore	4096	16.78	12	4244.9	3.95
+# restore fit t=1: total_ms = -19.1 + 2026.7 * MP
+# restore fit t=12: total_ms = 1.4 + 252.6 * MP
+# --- systems ---
+system	in	out_mp	threads	min_ms	mp_out_per_s	guard_ms
+S-A x2 span	512x512	1.05	1	5625.3	0.19	7.2
+S-A x2 span	512x512	1.05	12	876.0	1.20	7.3
+S-A x4 span	256x256	1.05	1	1331.9	0.79	4.6
+S-A x4 span	256x256	1.05	12	372.1	2.82	4.8
+S-B x4 general	256x256	1.05	1	4269.9	0.25	4.9
+S-B x4 general	256x256	1.05	12	1195.1	0.88	5.1
+S-C x1 compact2x	512x512	1.05	1	7939.0	0.13	7.1
+S-C x1 compact2x	512x512	1.05	12	1226.7	0.85	7.1
+S-D x4 anime	256x256	1.05	1	1836.3	0.57	5.0
+S-D x4 anime	256x256	1.05	12	495.7	2.12	5.1
+S-E x2 rt	512x512	1.05	1	501.9	2.09	7.1
+S-E x2 rt	512x512	1.05	12	72.8	14.40	7.2
+S-E2 x2 rt32	512x512	1.05	1	1418.9	0.74	7.1
+S-E2 x2 rt32	512x512	1.05	12	209.9	5.00	7.2
