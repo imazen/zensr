@@ -177,7 +177,7 @@ impl AdoptedModel {
                 prelu_dispatch(&mut cur[..span_nf], &self.slopes[0], nf, plane, cs);
                 for i in 0..nc {
                     match self.wino.get(1 + i).and_then(|o| o.as_ref()) {
-                        Some((u, raw)) => crate::wino::conv3x3_wino(
+                        Some((u, raw)) => crate::simd::conv3x3_wino_dispatch(
                             &cur[..span_nf], nf, u, raw, &self.biases[1 + i], &mut nxt, nf, h, w, cs,
                         ),
                         None => conv3x3_packed_dispatch(

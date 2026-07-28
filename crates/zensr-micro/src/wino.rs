@@ -13,10 +13,12 @@
 
 const T: usize = 16; // tiles per GEMM batch (2 AVX2 regs per [f32; T] row)
 
-/// U = G g G^T for every (oc, ic) 3x3 kernel; layout [16][cout][cin]
-/// (position-major so each GEMM position reads a contiguous [cout][cin]).
+/// U = G g G^T for every (oc, ic) 3x3 kernel; QUAD-major layout
+/// [16][cout/4][cin][4] (matches pack_conv3x3's broadcast-4-outputs GEMM
+/// pattern; cout must be a multiple of 4).
 pub(crate) fn wino_weights(raw: &[f32], cin: usize, cout: usize) -> Vec<f32> {
     assert_eq!(raw.len(), cout * cin * 9);
+    assert_eq!(cout % 4, 0, "wino: cout must be quad-aligned");
     let mut u = vec![0.0f32; 16 * cout * cin];
     for oc in 0..cout {
         for ic in 0..cin {
@@ -35,7 +37,8 @@ pub(crate) fn wino_weights(raw: &[f32], cin: usize, cout: usize) -> Vec<f32> {
                 let (a, b, c2) = (gg[r][0], gg[r][1], gg[r][2]);
                 let row = [a, 0.5 * (a + b + c2), 0.5 * (a - b + c2), c2];
                 for (p, v) in row.iter().enumerate() {
-                    u[(r * 4 + p) * cout * cin + oc * cin + ic] = *v;
+                    let pos = r * 4 + p;
+                    u[((pos * (cout / 4) + oc / 4) * cin + ic) * 4 + (oc % 4)] = *v;
                 }
             }
         }
@@ -82,7 +85,7 @@ fn output_transform(m: &[f32; 16]) -> [f32; 4] {
 
 /// Scalar direct 3x3 (zero pad) for one output pixel — border path.
 #[inline(always)]
-fn direct_px(
+pub(crate) fn direct_px(
     inp: &[f32],
     cin: usize,
     raw: &[f32],
@@ -194,17 +197,20 @@ pub(crate) fn conv3x3_wino(
                 let up = &u[p * cout * cin..][..cout * cin];
                 let vp = &v[p * cin * T..][..cin * T];
                 let mp = &mut mbuf[p * cout * T..][..cout * T];
-                for oc in 0..cout {
-                    let urow = &up[oc * cin..][..cin];
-                    let mut acc = [0.0f32; T];
+                for q in 0..cout / 4 {
+                    let mut acc = [[0.0f32; T]; 4];
                     for ic in 0..cin {
-                        let w = urow[ic];
+                        let w4 = &up[(q * cin + ic) * 4..][..4];
                         let vv: &[f32; T] = (&vp[ic * T..ic * T + T]).try_into().unwrap();
-                        for tt in 0..T {
-                            acc[tt] += w * vv[tt];
+                        for ob in 0..4 {
+                            for tt in 0..T {
+                                acc[ob][tt] += w4[ob] * vv[tt];
+                            }
                         }
                     }
-                    mp[oc * T..oc * T + T].copy_from_slice(&acc);
+                    for ob in 0..4 {
+                        mp[(q * 4 + ob) * T..(q * 4 + ob) * T + T].copy_from_slice(&acc[ob]);
+                    }
                 }
             }
             // inverse transform + bias
@@ -240,6 +246,35 @@ mod tests {
                 (s >> 8) as f32 / (1u32 << 24) as f32 - 0.5
             })
             .collect()
+    }
+
+    #[test]
+    fn wino_dispatch_matches_direct() {
+        // sizes chosen so nt >= 16 (exercises the VECTOR kernel incl. the
+        // f32x16 tier), plus odd/even w and h and non-tight stride
+        for &(cin, cout, h, wd) in
+            &[(8usize, 8usize, 40usize, 70usize), (16, 16, 23, 37), (8, 8, 24, 36)]
+        {
+            let cs = h * wd + 5;
+            let raw = lcg(cout * cin * 9, 3);
+            let bias = lcg(cout, 5);
+            let inp = lcg(cin * cs, 9);
+            let u = wino_weights(&raw, cin, cout);
+            let mut got = vec![0.0f32; cout * cs];
+            crate::simd::conv3x3_wino_dispatch(
+                &inp, cin, &u, &raw, &bias, &mut got, cout, h, wd, cs,
+            );
+            let mut mx = 0.0f32;
+            for oc in 0..cout {
+                for y in 0..h {
+                    for x in 0..wd {
+                        let want = direct_px(&inp, cin, &raw, bias[oc], oc, y, x, h, wd, cs);
+                        mx = mx.max((got[oc * cs + y * wd + x] - want).abs());
+                    }
+                }
+            }
+            assert!(mx < 1e-4, "dispatch cin{cin} {h}x{wd}: max diff {mx}");
+        }
     }
 
     #[test]

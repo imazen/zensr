@@ -374,6 +374,195 @@ macro_rules! define_kernels {
                 }
             }
 
+            /// Winograd F(2x2,3x3) middle-layer conv (zero pad, planar, bias).
+            /// Interior: even/odd-deinterleaved staging makes every transform
+            /// access a contiguous W-lane load; quad-blocked GEMM in the
+            /// transform domain; vector inverse transform. Borders + tiny
+            /// buffers: scalar (crate::wino). Overlap blocks are idempotent.
+            #[inline(always)]
+            #[allow(clippy::too_many_arguments)]
+            pub(crate) fn wino_mid<T: Backend>(
+                token: T,
+                inp: &[f32],
+                cin: usize,
+                uq: &[f32],
+                raw: &[f32],
+                bias: &[f32],
+                out: &mut [f32],
+                cout: usize,
+                h: usize,
+                wd: usize,
+                cs: usize,
+            ) {
+                const W: usize = $w;
+                if h < 4 || wd < 4 {
+                    crate::wino::conv3x3_wino(inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+                    return;
+                }
+                let nt = (wd - 4) / 2 + 1;
+                if nt < W {
+                    crate::wino::conv3x3_wino(inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+                    return;
+                }
+                // scalar border frame (+ the wd-even rightmost interior column)
+                let extra_col = 2 * nt < wd - 2;
+                for oc in 0..cout {
+                    for x in 0..wd {
+                        out[oc * cs + x] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, 0, x, h, wd, cs);
+                        out[oc * cs + (h - 1) * wd + x] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, h - 1, x, h, wd, cs);
+                    }
+                    for y in 1..h - 1 {
+                        out[oc * cs + y * wd] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, 0, h, wd, cs);
+                        out[oc * cs + y * wd + wd - 1] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, wd - 1, h, wd, cs);
+                        if extra_col {
+                            out[oc * cs + y * wd + wd - 2] = crate::wino::direct_px(
+                                inp, cin, raw, bias[oc], oc, y, wd - 2, h, wd, cs,
+                            );
+                        }
+                    }
+                }
+                let half = wd / 2 + 2 + W;
+                // padded tile count: full-W blocks + one overlap block tail
+                let nblk = nt / W + usize::from(nt % W != 0);
+                let starts: Vec<usize> = (0..nblk)
+                    .map(|b| if (b + 1) * W <= nt { b * W } else { nt - W })
+                    .collect();
+                let ntp = nblk * W; // lane slots (overlap block recomputes)
+                let mut eo = vec![0.0f32; cin * 4 * 2 * half];
+                let mut vb = vec![0.0f32; 16 * cin * ntp];
+                let mut mb = vec![0.0f32; 16 * cout * ntp];
+                let mut ys: Vec<usize> = (1..=h - 3).step_by(2).collect();
+                if ys.last().copied().unwrap_or(1) + 1 < h - 2 {
+                    ys.push(h - 3);
+                }
+                for &y0 in &ys {
+                    for ic in 0..cin {
+                        for r in 0..4 {
+                            let row = &inp[ic * cs + (y0 - 1 + r) * wd..][..wd];
+                            let be = ((ic * 4 + r) * 2) * half;
+                            let bo = be + half;
+                            for i in 0..wd.div_ceil(2) {
+                                eo[be + i] = row[2 * i];
+                            }
+                            for i in 0..wd / 2 {
+                                eo[bo + i] = row[2 * i + 1];
+                            }
+                        }
+                    }
+                    // phase 1: input transform for EVERY block in the row
+                    for (bi, &bx) in starts.iter().enumerate() {
+                        let lane0 = bi * W;
+                        for ic in 0..cin {
+                            let mut d = [[V::<T>::splat(token, 0.0); 4]; 4];
+                            for r in 0..4 {
+                                let be = ((ic * 4 + r) * 2) * half;
+                                let bo = be + half;
+                                d[r][0] = V::<T>::from_slice(token, &eo[be + bx..]);
+                                d[r][1] = V::<T>::from_slice(token, &eo[bo + bx..]);
+                                d[r][2] = V::<T>::from_slice(token, &eo[be + bx + 1..]);
+                                d[r][3] = V::<T>::from_slice(token, &eo[bo + bx + 1..]);
+                            }
+                            let mut t = [[V::<T>::splat(token, 0.0); 4]; 4];
+                            for c in 0..4 {
+                                t[0][c] = d[0][c] - d[2][c];
+                                t[1][c] = d[1][c] + d[2][c];
+                                t[2][c] = d[2][c] - d[1][c];
+                                t[3][c] = d[1][c] - d[3][c];
+                            }
+                            for r in 0..4 {
+                                let vr = [
+                                    t[r][0] - t[r][2],
+                                    t[r][1] + t[r][2],
+                                    t[r][2] - t[r][1],
+                                    t[r][1] - t[r][3],
+                                ];
+                                for c in 0..4 {
+                                    let o = ((r * 4 + c) * cin + ic) * ntp + lane0;
+                                    let dst: &mut [f32; W] =
+                                        (&mut vb[o..o + W]).try_into().unwrap();
+                                    vr[c].store(dst);
+                                }
+                            }
+                        }
+                    }
+                    // phase 2: GEMM — each U quad amortized over the WHOLE row
+                    for p in 0..16 {
+                        let upb = p * (cout / 4) * cin * 4;
+                        let vpb = p * cin * ntp;
+                        let mpb = p * cout * ntp;
+                        for q in 0..cout / 4 {
+                            for bi in 0..nblk {
+                                let lane0 = bi * W;
+                                let mut acc = [V::<T>::splat(token, 0.0); 4];
+                                for ic in 0..cin {
+                                    let vv = V::<T>::from_slice(
+                                        token,
+                                        &vb[vpb + ic * ntp + lane0..],
+                                    );
+                                    let w4: &[f32; 4] = (&uq
+                                        [upb + (q * cin + ic) * 4..upb + (q * cin + ic) * 4 + 4])
+                                        .try_into()
+                                        .unwrap();
+                                    for ob in 0..4 {
+                                        acc[ob] =
+                                            vv.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
+                                    }
+                                }
+                                for ob in 0..4 {
+                                    let o = mpb + (q * 4 + ob) * ntp + lane0;
+                                    let dst: &mut [f32; W] =
+                                        (&mut mb[o..o + W]).try_into().unwrap();
+                                    acc[ob].store(dst);
+                                }
+                            }
+                        }
+                    }
+                    // phase 3: inverse transform + bias + scatter, whole row
+                    for oc in 0..cout {
+                        let bv = V::<T>::splat(token, bias[oc]);
+                        for (bi, &bx) in starts.iter().enumerate() {
+                            let lane0 = bi * W;
+                            let mut mm = [V::<T>::splat(token, 0.0); 16];
+                            for (p, m) in mm.iter_mut().enumerate() {
+                                *m = V::<T>::from_slice(
+                                    token,
+                                    &mb[(p * cout + oc) * ntp + lane0..],
+                                );
+                            }
+                            let mut t0 = [V::<T>::splat(token, 0.0); 4];
+                            let mut t1 = [V::<T>::splat(token, 0.0); 4];
+                            for c in 0..4 {
+                                t0[c] = mm[c] + mm[4 + c] + mm[8 + c];
+                                t1[c] = mm[4 + c] - mm[8 + c] - mm[12 + c];
+                            }
+                            let ytile = [
+                                t0[0] + t0[1] + t0[2] + bv,
+                                t0[1] - t0[2] - t0[3] + bv,
+                                t1[0] + t1[1] + t1[2] + bv,
+                                t1[1] - t1[2] - t1[3] + bv,
+                            ];
+                            let mut tmp = [[0.0f32; W]; 4];
+                            for (i, y) in ytile.iter().enumerate() {
+                                y.store(&mut tmp[i]);
+                            }
+                            let obase = oc * cs + y0 * wd;
+                            for tt in 0..W {
+                                let x0 = 1 + 2 * (bx + tt);
+                                out[obase + x0] = tmp[0][tt];
+                                out[obase + x0 + 1] = tmp[1][tt];
+                                out[obase + wd + x0] = tmp[2][tt];
+                                out[obase + wd + x0 + 1] = tmp[3][tt];
+                            }
+                        }
+                    }
+                }
+            
+            }
+
             #[inline(always)]
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn spab<T: Backend>(
@@ -646,6 +835,80 @@ pub(crate) fn conv3x3_packed_dispatch(
 ) {
     incant!(
         conv3x3_lay(inp, cin, packed, bias, out, cout, h, wd, cs),
+        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+    );
+}
+
+
+#[magetypes(v3, neon, wasm128, scalar)]
+#[allow(clippy::too_many_arguments)]
+fn wino_lay(
+    token: Token,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k8::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn wino_lay_v4(
+    token: X64V4Token,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn wino_lay_v4x(
+    token: X64V4xToken,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn conv3x3_wino_dispatch(
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+) {
+    incant!(
+        wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs),
         [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
     );
 }
