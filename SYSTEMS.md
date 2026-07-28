@@ -928,3 +928,26 @@ beat 2.7 s/MP quality-tier on lianli — realistic ceiling ~1.3-1.5x over
 direct per literature; EV modest. CPU opt status: direct kernel STANDS as
 the frontier (tile default within 4%, cache levers ~25% box-dependent,
 winograd-naive falsified).
+
+### Winograd v2/v3 (magetypes-tiered) — still loses; root cause PROFILED (2026-07-28)
+
+User challenge "insufficient intrinsics" was half right: proper tiering
+(deinterleaved even/odd staging -> all-contiguous vector transform loads,
+quad-blocked FMA GEMM, per-tier f32x8/f32x16 via the macro) cut the deficit
+1.8x -> 1.17x (quality tier 3184 vs 2701ms; rt24d worse: 236 vs 152).
+Row-wide U amortization (v3) changed nothing -> weight-traffic hypothesis
+falsified. perf stat (lianli, quality tier, whole run):
+  wino=1: 1825G instr / 364G cyc = IPC 5.0, 17.3G L1d misses
+  wino=0:  864G instr / 323G cyc = IPC 2.7, 30.1G L1d misses
+VERDICT: wino executes 2.1x MORE INSTRUCTIONS at near-peak IPC — the 2.25x
+multiply cut is erased by transform bookkeeping, the stride-2 scalar
+scatter (~hundreds of scalar instr/px across 64 oc), and bounds checks on
+runtime-strided slice accesses. Not memory-bound, not stall-bound:
+instruction-count-bound. A v4 would need ~3x fewer non-GEMM instructions
+(vectorized interleave via shuffle stores, hoisted-bounds patterns,
+fused transform+GEMM registers) for a best-case ~1.3x quality-tier win and
+a certain rt-tier loss -> LOW EV; direct kernel remains the CPU frontier.
+Wino stays opt-in (ZENSR_WINOGRAD=1), correctness-tested at both scalar and
+vector tiers. Engineering note: a bad edit anchor amputated simd.rs mid-
+iteration; rebuilt from committed base — commit kernel files BEFORE
+iterating on them.

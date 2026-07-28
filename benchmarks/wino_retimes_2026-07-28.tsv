@@ -1,0 +1,3 @@
+# wino v1/v2/v3 retimes + perf, lianli, 2026-07-28 (commits 8ec83714, b7148291)
+v1 q:4834 rt:277 | v2 q:3196 rt:233 | v3 q:3184 rt:236 | direct q:2701 rt:152 (ms/1.05MP @12T)
+perf: wino 1825G instr/364G cyc IPC5.0; direct 864G/323G IPC2.7
