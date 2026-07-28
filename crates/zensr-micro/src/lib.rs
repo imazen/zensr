@@ -8,6 +8,7 @@
 
 pub mod adopted;
 pub mod consist;
+mod wino;
 pub mod guards;
 // SPANF research kernels: crate-internal unless `internals` opts in.
 #[cfg(feature = "internals")]

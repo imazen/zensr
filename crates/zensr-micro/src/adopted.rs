@@ -41,6 +41,10 @@ pub struct AdoptedModel {
     biases: Vec<Vec<f32>>,
     /// per-channel PReLU slopes (compact only), in order
     slopes: Vec<Vec<f32>>,
+    /// Winograd F(2x2,3x3) data for the nf->nf middle layers: (U transformed
+    /// [16][nf][nf], raw [cout][cin][9] for scalar borders). Empty when
+    /// disabled (ZENSR_WINOGRAD=0) or non-applicable.
+    wino: Vec<Option<(Vec<f32>, Vec<f32>)>>,
 }
 
 const SPAN_FC: usize = 48;
@@ -89,11 +93,23 @@ impl AdoptedModel {
         packed.push(pack_conv3x3(take(&mut buf, 3 * nf * 9), 3, nf));
         biases.push(take(&mut buf, nf).to_vec());
         slopes.push(take(&mut buf, nf).to_vec());
+        // Winograd v1 measured 1.8x SLOWER than the magetypes direct kernel on
+        // lianli (scalar transforms + untier'd GEMM lose more than the 2.25x
+        // multiply cut saves) — opt-in only, kept for a future vectorized v2.
+        let use_wino = std::env::var("ZENSR_WINOGRAD").as_deref() == Ok("1");
+        let mut wino: Vec<Option<(Vec<f32>, Vec<f32>)>> = vec![None];
         for _ in 0..nc {
-            packed.push(pack_conv3x3(take(&mut buf, nf * nf * 9), nf, nf));
+            let wraw = take(&mut buf, nf * nf * 9);
+            packed.push(pack_conv3x3(wraw, nf, nf));
+            if use_wino {
+                wino.push(Some((crate::wino::wino_weights(wraw, nf, nf), wraw.to_vec())));
+            } else {
+                wino.push(None);
+            }
             biases.push(take(&mut buf, nf).to_vec());
             slopes.push(take(&mut buf, nf).to_vec());
         }
+        wino.push(None); // final conv stays direct
         let wfin = take(&mut buf, nf * cout * 9);
         if cpad == cout {
             packed.push(pack_conv3x3(wfin, nf, cout));
@@ -106,7 +122,7 @@ impl AdoptedModel {
         bfin.resize(cpad, 0.0);
         biases.push(bfin);
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, space: ModelSpace::Rgb, packed, biases, slopes })
+        Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, space: ModelSpace::Rgb, packed, biases, slopes, wino })
     }
 
     pub fn load_span48(raw: &[f32], scale: usize) -> Result<Self, String> {
@@ -136,7 +152,7 @@ impl AdoptedModel {
         packed.push(pack_conv3x3(take(&mut buf, fc * 3 * s2 * 9), fc, 3 * s2)); // upsampler
         biases.push(take(&mut buf, 3 * s2).to_vec());
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Span48, scale, space: ModelSpace::Rgb, packed, biases, slopes: Vec::new() })
+        Ok(AdoptedModel { arch: Arch::Span48, scale, space: ModelSpace::Rgb, packed, biases, slopes: Vec::new() , wino: Vec::new() })
     }
 
     /// Whole-tile forward: input [3,h,w] tight -> out [3,s*h,s*w] tight.
@@ -160,7 +176,14 @@ impl AdoptedModel {
                 conv3x3_packed_dispatch(&inp3[..span3], 3, &self.packed[0], &self.biases[0], &mut cur, nf, h, w, cs);
                 prelu_dispatch(&mut cur[..span_nf], &self.slopes[0], nf, plane, cs);
                 for i in 0..nc {
-                    conv3x3_packed_dispatch(&cur[..span_nf], nf, &self.packed[1 + i], &self.biases[1 + i], &mut nxt, nf, h, w, cs);
+                    match self.wino.get(1 + i).and_then(|o| o.as_ref()) {
+                        Some((u, raw)) => crate::wino::conv3x3_wino(
+                            &cur[..span_nf], nf, u, raw, &self.biases[1 + i], &mut nxt, nf, h, w, cs,
+                        ),
+                        None => conv3x3_packed_dispatch(
+                            &cur[..span_nf], nf, &self.packed[1 + i], &self.biases[1 + i], &mut nxt, nf, h, w, cs,
+                        ),
+                    }
                     prelu_dispatch(&mut nxt[..span_nf], &self.slopes[1 + i], nf, plane, cs);
                     core::mem::swap(&mut cur, &mut nxt);
                 }

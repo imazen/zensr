@@ -911,3 +911,20 @@ Default 128 is within 4% of the optimum (96); curve shallow 96-128, steep at
 extremes (tile 48 pays ~3x halo recompute; 256 blows cache). Tile lever
 EXHAUSTED — Winograd F(2x2,3x3) is the next and dominant CPU rung (2.25x
 arithmetic; golden-tolerance gate mandatory; same-box retime on lianli).
+
+### Winograd F(2x2,3x3) v1 — correct but FALSIFIED on speed (2026-07-28)
+
+Implemented (crates/zensr-micro/src/wino.rs): interior 2x2 tiles, 16-tile GEMM
+batches, scalar borders, exact zero-pad semantics. Correctness clean first
+try: kernel-equivalence test <1e-4 across odd sizes/strides/asym channels;
+ALL 31 model goldens pass with it active (f16 checks at 9.95e-6).
+Retime (lianli, 1MP, 12T, paired): quality 4834ms vs 2699 direct; rt24d 277
+vs 154 — 1.8x SLOWER both tiers. The 2.25x multiply cut is swamped by scalar
+strided transform gather/scatter + an untier'd GEMM vs the 439-565 GFLOPS
+magetypes direct kernel. Default OFF (ZENSR_WINOGRAD=1 opt-in).
+v2 bar (if ever re-attempted): vectorized tile transforms (contiguous
+[T]-major layouts), f32x8/f32x16 GEMM microkernel via magetypes, and it must
+beat 2.7 s/MP quality-tier on lianli — realistic ceiling ~1.3-1.5x over
+direct per literature; EV modest. CPU opt status: direct kernel STANDS as
+the frontier (tile default within 4%, cache levers ~25% box-dependent,
+winograd-naive falsified).
