@@ -358,6 +358,31 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
   fusion-retry via per-tier `#[rite]` exp helpers, QAT-int8 if ever needed; scoreboard defense
   as competitors move.
 
+## Session state 2026-07-28 (for continuation — canon lives in SYSTEMS.md, read it first)
+
+Everything below is COMMITTED with benchmarks/ TSVs; repo has NO remote — Tower bundle
+`/mnt/tower/output/zensr-archive/zensr-2026-07-28.bundle` + models mirror are the backup.
+
+**Production ladder (final, all golden-verified, f16 ship format cleared 3 levels):**
+dejpeg7_graphics default / dejpeg_rt24d realtime (0.15 s/MP lianli) / dejpeg9_gfxycc
+low-q-graphics route (chooser p>0.85 ∧ q≤60) / gates: q≥95 identity, Annex-K q≤9.5
+Knusperli / chain ×1-before-SR when 420 ∨ q≲50. Reproducibility: every model dir has
+repro.sh + full meta.repro; f16 baked into train_people.py export.
+
+**Open tasks (task list + SYSTEMS.md sections have full detail):**
+- #15 GPU spike: CUDA floor DONE (loses to CPU 4x naive; ladder to win = smem tiling,
+  persistent buffers, pinned staging, f16). NEXT: wgpu leg on lianli(2080/vulkan) +
+  mac(Metal) — `cargo build -p zensr-gpu-spike --features wgpu`; then decide tiled-kernel
+  investment. Crate: crates/zensr-gpu-spike (API quirks solved: comptime scalars,
+  from_raw_parts(handle,len), read_one(handle).unwrap()).
+- CPU AI cores: fleet measured (Zen4 avx512_bf16+vnni; M4 SME/SME2 B16F32). Highest-EV:
+  bf16-dot compute path (~2x GEMM density; weights already f16) — check magetypes bf16
+  support first. Live landscape survey (NPUs/AVX10) pending via WebSearch.
+- #13 feature-KD falsification rung (design in task; expect null — rt24d saturated).
+- Winograd: CLOSED opt-in (3 rungs falsified, root cause instruction-bound IPC 5.0).
+- jason: rebooted to kid use (host key changed) — hands off until verified idle; ian
+  needs physical power button (WoL runbook in zenmetrics/NODES.md).
+
 ## Standing engineering rules for this repo
 
 1. Retime after every kernel-adjacent commit (paired/interleaved, min-of-N, load recorded).
