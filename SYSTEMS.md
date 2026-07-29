@@ -997,3 +997,18 @@ f16) AND only pays at batch/server scale where buffers persist — for
 single-image web-size restore, CPU rt24d at 0.15-0.25 s/MP remains the
 production answer. GPU runtime investment: DEFERRED until a batch use case
 appears; spike crate stays as the measured baseline + working CubeCL harness.
+
+### Production integration: zenjpeg `restore` feature (2026-07-29, zenjpeg PR #191)
+
+The restore pipeline moved INTO zenjpeg as a default-off cargo feature per
+user directive (human-maintainable / fast-compile / shallow-tree):
+- zenjpeg/src/restore.rs — one module, native EncoderFamily/QualityScale
+  matching (kills the Debug-string probing), every constant cites its
+  benchmarks/ TSV. RestoreModel::from_f16_bytes (no weights committed).
+- Measured: +0.11s compile with feature on, zero off; dep depth 2
+  (zensr-micro -> archmage+magetypes); e2e smoke green inside zenjpeg.
+- GATE (user decision on PR #191): sibling-path dep until zensr-micro is
+  published OR the zensr repo gets an imazen remote — CI can't resolve the
+  path. Feature intentionally absent from CI feature lists meanwhile.
+- zensr-zenjpeg's role narrows to the research/eval harness (dejpeg_eval,
+  chain_eval, probes); production wiring canon = zenjpeg's module.
