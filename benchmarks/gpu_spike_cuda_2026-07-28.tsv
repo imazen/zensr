@@ -7,3 +7,6 @@ cuda quality nf64 nc16 2048x2048 (4.19MP): up 6421.8ms kernels 2907.1ms read 109
 cuda rt nf24 nc8 512x512 (0.26MP): up 137.6ms kernels 64.1ms read 0.3ms total 202.0ms = 1.30 MP/s (0.771 s/MP)
 cuda rt nf24 nc8 1024x1024 (1.05MP): up 466.8ms kernels 241.2ms read 1.8ms total 709.8ms = 1.48 MP/s (0.677 s/MP)
 cuda rt nf24 nc8 2048x2048 (4.19MP): up 1969.6ms kernels 270.1ms read 6.4ms total 2246.1ms = 1.87 MP/s (0.536 s/MP)
+# wgpu legs 2026-07-29 (2D dispatch fix; wgpu per-stage split is ASYNC-SKEWED — kernel time lands in 'read'; totals only)
+# lianli RTX 2080 / Vulkan: quality 3.08/3.37/3.48 s/MP (0.26/1.05/4.19MP); rt 0.56/0.50/0.48 s/MP; correctness 3.58e-7
+# mac M4 Pro / Metal:       quality 4.95/4.83/4.83 s/MP;                    rt 0.59/0.43/0.40 s/MP; correctness 3.58e-7

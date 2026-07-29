@@ -979,3 +979,21 @@ benchmarks/gpu_spike_cuda_2026-07-28.tsv, RTX 5070):
   GEMM-bound direct kernel on Zen4) — needs magetypes/archmage bf16 support
   check first. Live web survey of the broader landscape (Intel NPU, AMD
   XDNA, AVX10) NOT done — do with WebSearch per AI-changes-weekly rule.
+
+### GPU spike wgpu legs (2026-07-29) — spike COMPLETE, all three backends measured
+
+wgpu required a 2D-dispatch fix (65535/dim limit CUDA ignores). Correctness
+identical on all backends (3.58e-7). wgpu's per-stage split is async-skewed
+(sync doesn't drain the queue; kernel time bills to readback — the classic
+host-timer trap) so totals only:
+  lianli 2080/Vulkan: quality ~3.1-3.5 s/MP, rt ~0.48-0.56
+  mac M4 Metal:       quality ~4.8-5.0 s/MP, rt ~0.40-0.59
+  5070 CUDA (prior):  quality ~2.3-2.6 s/MP, rt ~0.63-1.5
+UNIFIED VERDICT: at the naive floor every GPU backend LOSES to same-box CPU
+(lianli CPU 2.71 quality / 0.153 rt s/MP; M4 CPU 4.45 / 0.253). Transfers +
+per-run allocation dominate; kernels are 4% of peak un-tiled. A GPU win
+requires the full ladder (smem tiling, persistent buffers, pinned staging,
+f16) AND only pays at batch/server scale where buffers persist — for
+single-image web-size restore, CPU rt24d at 0.15-0.25 s/MP remains the
+production answer. GPU runtime investment: DEFERRED until a batch use case
+appears; spike crate stays as the measured baseline + working CubeCL harness.

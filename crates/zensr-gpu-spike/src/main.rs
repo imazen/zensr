@@ -135,7 +135,11 @@ fn run<R: Runtime>(name: &str) {
         unsafe {
             conv3x3_prelu::launch_unchecked::<R>(
                 &client,
-                CubeCount::Static((n as u32).div_ceil(256), 1, 1),
+                {
+                    let g = (n as u32).div_ceil(256);
+                    let gx = g.min(65535);
+                    CubeCount::Static(gx, g.div_ceil(gx), 1)
+                },
                 CubeDim::new_1d(256),
                 ArrayArg::from_raw_parts(hi.clone(), cin * plane),
                 ArrayArg::from_raw_parts(hw.clone(), wts.len()),
@@ -197,7 +201,11 @@ fn run<R: Runtime>(name: &str) {
                 unsafe {
                     conv3x3_prelu::launch_unchecked::<R>(
                         &client,
-                        CubeCount::Static((n as u32).div_ceil(256), 1, 1),
+                        {
+                    let g = (n as u32).div_ceil(256);
+                    let gx = g.min(65535);
+                    CubeCount::Static(gx, g.div_ceil(gx), 1)
+                },
                         CubeDim::new_1d(256),
                         ArrayArg::from_raw_parts(hin.clone(), cin * plane),
                         ArrayArg::from_raw_parts(hw_.clone(), cout * cin * 9),
