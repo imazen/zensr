@@ -951,3 +951,31 @@ Wino stays opt-in (ZENSR_WINOGRAD=1), correctness-tested at both scalar and
 vector tiers. Engineering note: a bad edit anchor amputated simd.rs mid-
 iteration; rebuilt from committed base — commit kernel files BEFORE
 iterating on them.
+
+### GPU spike (task #15, CUDA leg DONE) + CPU AI-core fleet inventory (2026-07-28)
+
+**gpu_spike** (crates/zensr-gpu-spike, zenforks-cubecl 0.10.1, one naive
+thread-per-pixel conv3x3+PReLU kernel, correctness-gated vs CPU ref at 3.6e-7;
+benchmarks/gpu_spike_cuda_2026-07-28.tsv, RTX 5070):
+- quality topology: kernels-only ~0.85 s/MP (~1.3 TFLOPS = ~4% of peak, as
+  expected for the un-tiled floor) but END-TO-END 2.3-2.6 s/MP — upload +
+  per-run buffer alloc dominates (pageable + zeroed ping-pong buffers).
+- rt topology: end-to-end 0.63-1.5 s/MP vs CPU rt 0.15 — **CPU WINS 4x+ at
+  the floor**. VERDICT: naive GPU does NOT beat CPU; a real win needs the
+  known ladder: smem-tiled kernel (10-20x kernel headroom), persistent
+  buffers, pinned staging (see zen CLAUDE.md pageable-vs-pinned), f16
+  compute. wgpu leg NOT run yet (build --features wgpu; WSL vulkan is dozen —
+  run on lianli 2080/vulkan and mac Metal instead).
+
+**CPU AI-core inventory (measured via lscpu/sysctl, 2026-07-28):**
+- dev 7950X + lianli 7900X (both Zen4): avx512_bf16 (VDPBF16PS bf16-dot ->
+  f32, 2x lane density over f32 FMA) + avx512_vnni (int8 dot — needs the QAT
+  program per the int8 falsification). NO AMX (Intel-server only).
+- mac M4: FEAT_SME + SME2 with SME_F32F32, SME_B16F32 (bf16 outer-product!),
+  BI32I32, plus NEON I8MM/BF16/DotProd. Rust/std SME access is early —
+  Accelerate or asm today.
+- None exploited by zensr today (kernels are f32 FMA). Highest-EV rung:
+  bf16 compute path (weights already ship f16; bf16-dot could ~2x the
+  GEMM-bound direct kernel on Zen4) — needs magetypes/archmage bf16 support
+  check first. Live web survey of the broader landscape (Intel NPU, AMD
+  XDNA, AVX10) NOT done — do with WebSearch per AI-changes-weekly rule.
