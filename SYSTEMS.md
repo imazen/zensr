@@ -1039,3 +1039,23 @@ CANDIDATE: dejpeg_rt24e (84KB, 0.164 s/MP, golden-verified) supersedes
 rt24d. Two independent capacity probes now agree (rt32d 2026-07-27,
 rt32e today) — 43k params saturates this topology+task; further realtime
 gains must come from recipe/teacher/architecture, not size.
+
+### Why the mac is slow at TRAINING (measured 2026-07-30; not our setup)
+
+User challenge: "mac unified architecture should be excellent at training, did
+we set this up wrong?" Answer: no — PyTorch MPS conv2d BACKWARD is the defect.
+  conv3x3 c24 bs48 128x128: fwd 1.9 ms, fwd+bwd 80.8 ms  -> backward ~42x fwd
+  8x conv stack:            fwd 14.4,   fwd+bwd 160      -> backward ~10x fwd
+  PReLU: fwd 0.6, fwd+bwd 6.5 (LeakyReLU 2.7 — PReLU bwd is 3x LReLU)
+Healthy backends run conv backward ~2x forward. MPS FORWARD is fine: conv3x3
+hits 4.0 (c24) / 6.9-7.6 (c64) TFLOPS vs a 5.5-6.1 TFLOPS matmul ceiling —
+i.e. inference on MPS is at hardware limits.
+Config levers measured and NEARLY WORTHLESS: data residency on device 0%,
+batch 48->256 0% (perfectly linear = already saturated), torch.compile +6%,
+autocast bf16 +2%, channels_last +1-11% on isolated convs only.
+METHOD NOTE: an earlier 0.9 s/step mac figure was inflated ~5x by calling
+torch.mps.synchronize() every step in the bench harness (real training never
+does). True rate ~0.2 s/step at nf24 vs lianli 0.023 -> 8.7x.
+FLEET RULE: train on lianli (2080, 44 steps/s nf24) + jason (3070); mac is
+for INFERENCE benches (best per-thread CPU + healthy GPU forward) and CPU
+work. Revisit if PyTorch fixes MPS conv backward.
