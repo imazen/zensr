@@ -1059,3 +1059,19 @@ does). True rate ~0.2 s/step at nf24 vs lianli 0.023 -> 8.7x.
 FLEET RULE: train on lianli (2080, 44 steps/s nf24) + jason (3070); mac is
 for INFERENCE benches (best per-thread CPU + healthy GPU forward) and CPU
 work. Revisit if PyTorch fixes MPS conv backward.
+
+### 2/3-of-quality target: MET at q>=35 with recipe+budget alone (2026-07-30)
+
+User target: realtime tier reaching 2/3 of the quality tier's gain.
+84KB / 0.16 s/MP progression (std-grid mean ssim2 gain vs identity;
+benchmarks/rt24{d,e,f}_std_*.tsv):
+  q    shipped  +recipe  +4x steps   quality   rt24f as % of quality
+  15   +1.63    +2.11    +2.83       +7.13     39.7%
+  35   +1.58    +1.79    +2.33       +3.53     66.1%  <- TARGET MET
+  55   +1.42    +1.53    +1.88       +2.62     71.7%  <- MET
+  75   +0.86    +0.87    +1.09       +1.22     89.5%  <- MET
+No size increase. Confirms the optimization-bound diagnosis (rt32e fit its
+teacher WORSE than rt24e at equal steps). REMAINING FRONTIER: q15 (39.7%) —
+in flight: rt24g 200k steps on jason 3070 (12.5x budget, lr 3e-4), rt48e
+~500KB capacity fill on lianli. Next lever after budget: feature-KD (#13),
+whose case is now much stronger (student is under-taught, not saturated).
