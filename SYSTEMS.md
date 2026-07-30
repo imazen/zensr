@@ -1012,3 +1012,30 @@ user directive (human-maintainable / fast-compile / shallow-tree):
   path. Feature intentionally absent from CI feature lists meanwhile.
 - zensr-zenjpeg's role narrows to the research/eval harness (dejpeg_eval,
   chain_eval, probes); production wiring canon = zenjpeg's module.
+
+### Realtime-tier capacity vs recipe — CAPACITY FALSIFIED AGAIN, recipe wins (2026-07-29)
+
+User question: "can we improve the realtime model at ~180KB?" Answered with a
+same-box (lianli), same-seed 2x2: {84KB nf24/nc8, 221KB nf32/nc12} x {old
+recipe = dejpeg4 teacher + u8-rounded targets, NEW = dejpeg7 teacher + f16
+targets}. benchmarks/rt{24,32}e_std_2026-07-29.tsv.
+
+std-grid mean ssim2 gain vs identity:
+  q     84KB old  84KB NEW  221KB old  221KB NEW   quality(1.16MB)
+  15      +1.63     +2.11     +1.83      +1.94       +7.13
+  35      +1.58     +1.79     +1.64      +1.67       +3.53
+  55      +1.42     +1.53     +1.43      +1.47       +2.62
+  75      +0.86     +0.87     +0.84      +0.85       +1.22
+Paired: RECIPE at 84KB +0.075 median (636/960 wins); CAPACITY under the new
+recipe **-0.023 median** (456/960 — 221KB is NOT better, it is marginally
+worse); 84KB-new BEATS 221KB-old (+0.081, 626/960).
+Runtime (lianli 1MP 12T): 84KB 0.164 s/MP vs 221KB 0.366 s/MP (2.2x).
+
+VERDICT: **don't grow the realtime tier.** 180-221KB buys nothing (slightly
+negative) at 2.2x the compute; the same size with a better teacher and
+f16 (un-rounded) targets gains +0.5 at q15 / +0.2 at q35. Both identified
+recipe defects were real: teacher choice AND target quantization. NEW SHIP
+CANDIDATE: dejpeg_rt24e (84KB, 0.164 s/MP, golden-verified) supersedes
+rt24d. Two independent capacity probes now agree (rt32d 2026-07-27,
+rt32e today) — 43k params saturates this topology+task; further realtime
+gains must come from recipe/teacher/architecture, not size.

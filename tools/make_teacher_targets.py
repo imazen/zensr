@@ -42,18 +42,22 @@ def main():
     m.load_state_dict(sd, strict=True)
     lr_all = np.load(os.path.join(SRC, "lr_u8.npy"), mmap_mode="r")
     n = lr_all.shape[0]
-    out = np.zeros_like(lr_all)
+    # ZENSR_TARGET_F16=1: keep teacher outputs in f16 instead of rounding to
+    # u8 (u8 caps student fidelity at 1/255 while the loss runs in f32).
+    f16 = os.environ.get("ZENSR_TARGET_F16") == "1"
+    out = np.zeros(lr_all.shape, dtype=np.float16 if f16 else np.uint8)
     bs = 256
     with torch.no_grad():
         for i in range(0, n, bs):
             x = torch.from_numpy(lr_all[i:i + bs].copy()).to(dev).permute(0, 3, 1, 2).float().div_(255)
             with torch.autocast(dev, dtype=torch.bfloat16, enabled=dev != "cpu"):
                 y = m(x)
-            y8 = (y.float().clamp(0, 1) * 255.0 + 0.5).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
-            out[i:i + bs] = y8
+            yc = y.float().clamp(0, 1).permute(0, 2, 3, 1).cpu()
+            out[i:i + bs] = (yc.numpy().astype(np.float16) if f16
+                             else (yc * 255.0 + 0.5).to(torch.uint8).numpy())
             if (i // bs) % 20 == 0:
                 print(f"{i}/{n}", flush=True)
-    np.save(os.path.join(OUT, "hr_u8.npy"), out)
+    np.save(os.path.join(OUT, "hr_f16.npy" if f16 else "hr_u8.npy"), out)
     # lr + pairs pass through unchanged
     if not os.path.exists(os.path.join(OUT, "lr_u8.npy")):
         shutil.copy(os.path.join(SRC, "lr_u8.npy"), os.path.join(OUT, "lr_u8.npy"))

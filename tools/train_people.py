@@ -110,10 +110,13 @@ def main():
     print(f"device={dev} amp={amp_on} dtype={amp_dt if amp_on else 'fp32'}", flush=True)
     torch.manual_seed(7)
     lr_all = np.load(os.path.join(D, "lr_u8.npy"), mmap_mode="r")
-    hr_all = np.load(os.path.join(D, "hr_u8.npy"), mmap_mode="r")
+    # f16 targets (teacher distillation) take precedence over u8 GT/targets
+    hr_f16 = os.path.exists(os.path.join(D, "hr_f16.npy"))
+    hr_all = np.load(os.path.join(D, "hr_f16.npy" if hr_f16 else "hr_u8.npy"), mmap_mode="r")
+    tgt_div = 1.0 if hr_f16 else 255.0
     n = lr_all.shape[0] - 512
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
-    val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
+    val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(tgt_div).to(dev)
     # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
     # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
     # hang in waitUntilCompleted) and on small-VRAM cards (ian's 1660 Ti).
@@ -158,7 +161,7 @@ def main():
         else:
             idx = torch.from_numpy(rng.integers(0, n, batch)).to(dloc)
         x = to_space(lr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
-        y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
+        y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(tgt_div))
         with torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
             out = m(x)
             loss = charbonnier(out, y)
