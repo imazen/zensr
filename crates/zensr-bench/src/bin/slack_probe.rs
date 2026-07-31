@@ -130,7 +130,48 @@ fn main() {
                     let mut buf = format!("P6\n{} {}\n255\n", hr.w, hr.h).into_bytes();
                     buf.extend_from_slice(&hr.px);
                     std::fs::write(&ppm, &buf).unwrap();
-                    if !encode(&ppm, &jpg, enc, q) { continue; }
+                    // ZENSR_SLACK_GENS=N: re-encode the crop N times (each
+                    // generation adds its own pre-FDCT u8 rounding). The final
+                    // generation's coefficients are compared against the TRUE
+                    // DCT of the PRISTINE original — i.e. how far outside the
+                    // box the truth sits for a multi-generation file, which is
+                    // what the projection must tolerate on real web images.
+                    let gens: usize = std::env::var("ZENSR_SLACK_GENS")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(1);
+                    let mut cur_ppm = ppm.clone();
+                    let mut ok = true;
+                    for gi in 0..gens {
+                        if !encode(&cur_ppm, &jpg, enc, q) { ok = false; break; }
+                        if gi + 1 < gens {
+                            let mid = td.join(format!("m{gi}.ppm"));
+                            let me = std::env::current_exe().unwrap();
+                            let st = Command::new(me.parent().unwrap().join("zjtool"))
+                                .arg("dec").arg(&jpg).arg(&mid).arg("off").status();
+                            if !st.map(|s| s.success()).unwrap_or(false) { ok = false; break; }
+                            // ZENSR_SLACK_RESIZE=1: resample between generations
+                            // (the CDN thumbnail flow). Destroys the previous
+                            // block grid, so the next encode sees a resampled
+                            // signal rather than an aligned re-quantization —
+                            // the violation physics should differ.
+                            if std::env::var("ZENSR_SLACK_RESIZE").as_deref() == Ok("1") {
+                                let Some(dimg) = decode_any(&mid) else { ok = false; break };
+                                let half = resize_rgb8(
+                                    &dimg, dimg.w * 3 / 4, dimg.h * 3 / 4,
+                                    zenresize::Filter::CatmullRom,
+                                );
+                                let back = resize_rgb8(
+                                    &half, hr.w, hr.h, zenresize::Filter::CatmullRom,
+                                );
+                                let mut b2 = format!("P6\n{} {}\n255\n", back.w, back.h).into_bytes();
+                                b2.extend_from_slice(&back.px);
+                                std::fs::write(&mid, &b2).unwrap();
+                            }
+                            cur_ppm = mid;
+                        }
+                    }
+                    if !ok { continue; }
                     let data = std::fs::read(&jpg).unwrap();
                     let Ok(dc) = zenjpeg::decoder::Decoder::new()
                         .decode_coefficients(&data, enough::Unstoppable) else { continue };

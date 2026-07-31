@@ -1,0 +1,122 @@
+# gen_detect_train commit=5c31d56 date=2026-07-31 inputs=['/home/lilith/tmp/gendet/combined4.tsv'] train_n=4440 eval_n=1536 train_sources=185
+section	k1	k2	k3	k4	k5	k6	k7
+full	confusion3	gen1	113	32	111	0.4414
+full	confusion3	gen2a	124	387	129	0.6047
+full	confusion3	gen2r	153	44	443	0.6922
+full	binary	false_gen1	0.2164	gen1_recall	0.4414	[[113, 143], [277, 1003]]	
+full3way	tau=0.5	oof_fg1=0.0792	oof_g1rec=0.2095	eval_fg1=0.0930	eval_g1rec=0.2070		
+full3way	tau=0.6	oof_fg1=0.0208	oof_g1rec=0.0865	eval_fg1=0.0266	eval_g1rec=0.0586		
+full3way	tau=0.7	oof_fg1=0.0049	oof_g1rec=0.0203	eval_fg1=0.0023	eval_g1rec=0.0078		
+full3way	tau=0.8	oof_fg1=0.0003	oof_g1rec=0.0027	eval_fg1=0.0008	eval_g1rec=0.0039		
+full3way	tau=0.9	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+full3way	tau=0.95	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+full3way	tau=0.98	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+full3way	tau=0.99	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+full3way_conservative	tau=0.9	eval_fg1=0.0000	eval_fg1_n=0	eval_g1rec=0.0000			
+subgroup	gen2a	q1<q2[all]	384	recall=0.8880	as_gen1=0.0495		
+subgroup	gen2a	q1<q2[same-enc]	187	recall=0.8663	as_gen1=0.0535		
+subgroup	gen2a	q1<q2[cross-enc]	197	recall=0.9086	as_gen1=0.0457		
+subgroup	gen2a	q1==q2[all]	192	recall=0.1875	as_gen1=0.3698		
+subgroup	gen2a	q1==q2[same-enc]	106	recall=0.0943	as_gen1=0.4434		
+subgroup	gen2a	q1==q2[cross-enc]	86	recall=0.3023	as_gen1=0.2791		
+subgroup	gen2a	q1>q2[all]	64	recall=0.1562	as_gen1=0.5312		
+subgroup	gen2a	q1>q2[same-enc]	29	recall=0.1034	as_gen1=0.4483		
+subgroup	gen2a	q1>q2[cross-enc]	35	recall=0.2000	as_gen1=0.6000		
+subgroup	gen2r	q1<q2[all]	384	recall=0.7786	as_gen1=0.1458		
+subgroup	gen2r	q1<q2[same-enc]	187	recall=0.7754	as_gen1=0.1604		
+subgroup	gen2r	q1<q2[cross-enc]	197	recall=0.7817	as_gen1=0.1320		
+subgroup	gen2r	q1==q2[all]	192	recall=0.5990	as_gen1=0.3333		
+subgroup	gen2r	q1==q2[same-enc]	106	recall=0.5566	as_gen1=0.3491		
+subgroup	gen2r	q1==q2[cross-enc]	86	recall=0.6512	as_gen1=0.3140		
+subgroup	gen2r	q1>q2[all]	64	recall=0.4531	as_gen1=0.5156		
+subgroup	gen2r	q1>q2[same-enc]	29	recall=0.5517	as_gen1=0.4483		
+subgroup	gen2r	q1>q2[cross-enc]	35	recall=0.3714	as_gen1=0.5714		
+gen2r_scale	0.55	170	as_gen1=0.2353				
+gen2r_scale	0.70	156	as_gen1=0.2756				
+gen2r_scale	0.85	170	as_gen1=0.2294				
+gen2r_scale	0.92	144	as_gen1=0.2153				
+srcfmt	png	156	as_gen2=0.6026				
+srcfmt	jpg	100	as_gen2=0.4900				
+gate-lean-binary	tau=0.5	oof_fg1=0.3735	oof_g1rec=0.6176	eval_fg1=0.3789	eval_g1rec=0.6016		
+gate-lean-binary	tau=0.6	oof_fg1=0.1330	oof_g1rec=0.3297	eval_fg1=0.1164	eval_g1rec=0.2812		
+gate-lean-binary	tau=0.7	oof_fg1=0.0270	oof_g1rec=0.0797	eval_fg1=0.0109	eval_g1rec=0.0234		
+gate-lean-binary	tau=0.8	oof_fg1=0.0005	oof_g1rec=0.0068	eval_fg1=0.0000	eval_g1rec=0.0000		
+gate-lean-binary	tau=0.9	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+gate-lean-binary	tau=0.95	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+gate-lean-binary	tau=0.98	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+gate-lean-binary	tau=0.99	oof_fg1=0.0000	oof_g1rec=0.0000	eval_fg1=0.0000	eval_g1rec=0.0000		
+gate-lean-binary_conservative	tau=0.9	eval_fg1=0.0000	eval_fg1_n=0	eval_g1rec=0.0000			
+gate_q	35	fg1=0.0000	128	g1rec=0.0000	64		
+gate_q	55	fg1=0.0000	256	g1rec=0.0000	64		
+gate_q	75	fg1=0.0000	384	g1rec=0.0000	64		
+gate_q	92	fg1=0.0000	512	g1rec=0.0000	64		
+aligned_gate_auc	0.7800						
+asweep	tau=0.5	oof_g2a_missed=0.3757	oof_g1rec=0.7892	eval_g2a_missed=0.3641	eval_g1rec=0.8242	eval_g2r_waved=0.8375	
+asweep	tau=0.6	oof_g2a_missed=0.2189	oof_g1rec=0.5689	eval_g2a_missed=0.2687	eval_g1rec=0.6562	eval_g2r_waved=0.6641	
+asweep	tau=0.7	oof_g2a_missed=0.0805	oof_g1rec=0.2216	eval_g2a_missed=0.1219	eval_g1rec=0.3242	eval_g2r_waved=0.2484	
+asweep	tau=0.8	oof_g2a_missed=0.0032	oof_g1rec=0.0162	eval_g2a_missed=0.0000	eval_g1rec=0.0000	eval_g2r_waved=0.0000	
+asweep	tau=0.9	oof_g2a_missed=0.0000	oof_g1rec=0.0000	eval_g2a_missed=0.0000	eval_g1rec=0.0000	eval_g2r_waved=0.0000	
+asweep	tau=0.95	oof_g2a_missed=0.0000	oof_g1rec=0.0000	eval_g2a_missed=0.0000	eval_g1rec=0.0000	eval_g2r_waved=0.0000	
+asweep	tau=0.98	oof_g2a_missed=0.0000	oof_g1rec=0.0000	eval_g2a_missed=0.0000	eval_g1rec=0.0000	eval_g2r_waved=0.0000	
+aligned_conservative	tau=0.9	eval_g2a_missed=0.0000	n=0	q1lt_missed=0.0000	eval_g1rec=0.0000		
+plain_rule	gapc>=0.25|dcfill<=0.35	gen1_fp=0.1328	g2a=0.5297	g2a_hard=0.7500	g2r=0.1016		
+plain_rule	gapc>=0.5|dcfill<=0.3	gen1_fp=0.1055	g2a=0.4594	g2a_hard=0.6693	g2r=0.0531		
+plain_rule	gapc>=1.0|dcfill<=0.25	gen1_fp=0.0781	g2a=0.3859	g2a_hard=0.5755	g2r=0.0406		
+coeff-only	confusion3	gen1	124	26	106	0.4844
+coeff-only	confusion3	gen2a	134	373	133	0.5828
+coeff-only	confusion3	gen2r	147	40	453	0.7078
+coeff-only	binary	false_gen1	0.2195	gen1_recall	0.4844	[[124, 132], [281, 999]]	
+dq-only	confusion3	gen1	112	29	115	0.4375
+dq-only	confusion3	gen2a	152	325	163	0.5078
+dq-only	confusion3	gen2r	169	50	421	0.6578
+dq-only	binary	false_gen1	0.2508	gen1_recall	0.4375	[[112, 144], [321, 959]]	
+pixel-only	confusion3	gen1	23	132	101	0.0898
+pixel-only	confusion3	gen2a	58	404	178	0.6312
+pixel-only	confusion3	gen2r	73	204	363	0.5672
+pixel-only	binary	false_gen1	0.1023	gen1_recall	0.0898	[[23, 233], [131, 1149]]	
+auc	bpp	0.4924	0.6065				
+auc	q_claim	0.6287	0.6287				
+auc	qt_lo_mean	0.3713	0.3713				
+auc	dq_chi_max	0.6361	0.4573				
+auc	dq_chi_top3	0.6407	0.4566				
+auc	dq_chi_wmean	0.6791	0.4469				
+auc	dq_gapc	0.7303	0.5126				
+auc	dq_nbands	0.4608	0.5949				
+auc	dc_fill	0.3230	0.4591				
+auc	dc_expfill	0.4113	0.4168				
+auc	dc_chi	0.6722	0.5066				
+auc	dc_width	0.6074	0.6087				
+auc	c_chi_max	0.5167	0.5123				
+auc	c_gapc	0.6054	0.5055				
+auc	c_dc_fill	0.3540	0.4500				
+auc	nz_lo	0.4641	0.5824				
+auc	nz_mid	0.4572	0.5975				
+auc	nz_hi	0.4512	0.6087				
+auc	e_lo	0.4992	0.5087				
+auc	e_mid	0.4971	0.5238				
+auc	e_hi	0.4800	0.5699				
+auc	blk_v	0.5714	0.4016				
+auc	blk_h	0.5582	0.3948				
+auc	ghost_v_snr	0.5071	0.4923				
+auc	ghost_v_per	0.4898	0.5195				
+auc	ghost_h_snr	0.4938	0.4843				
+auc	ghost_h_per	0.4758	0.5524				
+auc	ghost_match	0.4969	0.4836				
+auc	ghost_match_s	0.4892	0.5438				
+auc	ghost_min_snr	0.5024	0.4873				
+auc	ghost_per_agree	0.5187	0.5128				
+auc	dc_deficit	0.6917	0.5487				
+auc	r_hm	0.4562	0.5880				
+auc	r_ml	0.4951	0.5484				
+perm_importance	e_lo	0.0536					
+perm_importance	dc_chi	0.0509					
+perm_importance	dq_gapc	0.0471					
+perm_importance	q_claim	0.0274					
+perm_importance	e_hi	0.0252					
+perm_importance	e_mid	0.0243					
+perm_importance	blk_v	0.0226					
+perm_importance	dq_chi_wmean	0.0215					
+perm_importance	r_ml	0.0184					
+perm_importance	blk_h	0.0170					
+perm_importance	dq_chi_max	0.0153					
+perm_importance	dc_deficit	0.0136					

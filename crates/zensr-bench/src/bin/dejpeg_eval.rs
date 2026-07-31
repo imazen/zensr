@@ -116,9 +116,14 @@ fn main() {
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
     let m_off_dir = args.next().unwrap_or_else(|| "dejpeg2_off".into());
     let m_auto_dir = args.next().unwrap_or_else(|| "dejpeg2_auto".into());
-    let qs: &[u32] = match std::env::var("ZENSR_EVAL_GRID").as_deref() {
-        Ok("high") => QS_HIGH,
-        Ok("low") => QS_LOW,
+    // ZENSR_EVAL_QS=40,50,60,... overrides the named grids entirely
+    let custom_qs: Option<Vec<u32>> = std::env::var("ZENSR_EVAL_QS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect());
+    let qs: &[u32] = match (custom_qs.as_deref(), std::env::var("ZENSR_EVAL_GRID").as_deref()) {
+        (Some(c), _) => c,
+        (None, Ok("high")) => QS_HIGH,
+        (None, Ok("low")) => QS_LOW,
         _ => QS,
     };
     let m_policy_dir = args.next();

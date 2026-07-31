@@ -1,84 +1,105 @@
-//! Render gallery panels for the report: per scene (name, path, deg) from a
-//! scenes.tsv, write gt + degraded-upscaled baselines + model outputs as PNGs
-//! (512x512, x2 protocol identical to systems_eval). Output dir per scene.
+//! Visual gallery: dump original / decoded / restored / restored-strict crops
+//! as PPM for the measurement console. Includes deliberately-chosen REGRESSION
+//! cases (files where the model loses) alongside wins — the console should
+//! show what a -9 ssim2 outlier actually looks like, not just count it.
 //!
-//! Usage: gallery_dump <scenes.tsv> <out-root> [threads=12]
+//! Usage: gallery_dump <imazen26-root> <outdir> <model> [crop=192]
+//!   env ZENSR_GAL_CASES="sub:file:q,sub:file:q,..."
 
 use std::path::PathBuf;
+use std::process::Command;
 use zensr_bench::*;
+use zensr_zenjpeg::{restore_jpeg, Projection, ProjectionConfig, RestoreConfig};
 
-const MODELS: &[(&str, &str)] = &[
-    ("nomosuni_compact_2x", "A2c"),
-    ("nomosuni_span_2x", "A2span"),
-    ("people_a2c_2x", "P_a2c"),
-    ("people_rtc_2x", "P_rtc"),
-    ("rtc_distill_2x", "E_rtc"),
-];
-const MODELS_X1: &[(&str, &str)] = &[("dejpeg_1x", "S6")];
+fn write_ppm(img: &Rgb8Img, p: &PathBuf) {
+    let mut buf = format!("P6\n{} {}\n255\n", img.w, img.h).into_bytes();
+    buf.extend_from_slice(&img.px);
+    std::fs::write(p, buf).unwrap();
+}
 
-fn save_png(img: &Rgb8Img, path: &PathBuf) {
-    let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&img.px);
-    let r = imgref::ImgRef::new(px, img.w, img.h);
-    let data = zenpng::encode_rgb8(
-        r,
-        None,
-        &zenpng::EncodeConfig::default(),
-        &enough::Unstoppable,
-        &enough::Unstoppable,
-    )
-    .expect("png encode");
-    std::fs::write(path, data).expect("write png");
+fn crop_at(img: &Rgb8Img, x0: usize, y0: usize, s: usize) -> Rgb8Img {
+    let (w, h) = (s.min(img.w - x0), s.min(img.h - y0));
+    let mut px = Vec::with_capacity(3 * w * h);
+    for y in 0..h {
+        px.extend_from_slice(&img.px[((y0 + y) * img.w + x0) * 3..][..w * 3]);
+    }
+    Rgb8Img { px, w, h }
+}
+
+/// Most-detailed sub-crop (max mean |laplacian| on luma) — where artifacts show.
+fn busiest(img: &Rgb8Img, s: usize) -> (usize, usize) {
+    let l: Vec<f32> = (0..img.w * img.h)
+        .map(|i| 0.299 * img.px[i * 3] as f32 + 0.587 * img.px[i * 3 + 1] as f32 + 0.114 * img.px[i * 3 + 2] as f32)
+        .collect();
+    let (mut best, mut bxy) = (-1.0f32, (0, 0));
+    let step = (s / 2).max(16);
+    for y0 in (0..img.h.saturating_sub(s)).step_by(step) {
+        for x0 in (0..img.w.saturating_sub(s)).step_by(step) {
+            let mut e = 0.0f32;
+            for y in y0 + 1..(y0 + s - 1).min(img.h - 1) {
+                for x in x0 + 1..(x0 + s - 1).min(img.w - 1) {
+                    let c = l[y * img.w + x];
+                    e += (4.0 * c - l[(y - 1) * img.w + x] - l[(y + 1) * img.w + x]
+                        - l[y * img.w + x - 1] - l[y * img.w + x + 1]).abs();
+                }
+            }
+            if e > best { best = e; bxy = (x0, y0); }
+        }
+    }
+    bxy
 }
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let scenes = std::fs::read_to_string(args.next().expect("scenes.tsv")).expect("read scenes");
-    let out_root = PathBuf::from(args.next().expect("out root"));
-    let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
-    let models: Vec<_> = MODELS
-        .iter()
-        .map(|(d, l)| (load_adopted(d).unwrap_or_else(|| panic!("{d}")), *l))
+    let root = PathBuf::from(args.next().expect("root"));
+    let outdir = PathBuf::from(args.next().expect("outdir"));
+    let model_name = args.next().unwrap_or_else(|| "dejpeg_rt24g".into());
+    let crop: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(192);
+    let model = load_adopted(&model_name).expect("model");
+    std::fs::create_dir_all(&outdir).unwrap();
+    let td = outdir.join("_tmp");
+    std::fs::create_dir_all(&td).unwrap();
+
+    let cases: Vec<(String, String, u32)> = std::env::var("ZENSR_GAL_CASES")
+        .expect("ZENSR_GAL_CASES")
+        .split(',')
+        .map(|c| {
+            let p: Vec<&str> = c.split(':').collect();
+            (p[0].to_string(), p[1].to_string(), p[2].parse().unwrap())
+        })
         .collect();
 
-    for line in scenes.lines() {
-        let c: Vec<&str> = line.split('\t').collect();
-        if c.len() < 3 {
-            continue;
+    for (sub, fname, q) in cases {
+        let dir = SUBCORPORA.iter().find(|(s, _)| *s == sub).map(|(_, d)| *d).expect("sub");
+        let Some(path) = list_images(&root.join(dir)).into_iter().find(|p| {
+            p.file_name().unwrap().to_string_lossy().contains(&fname)
+        }) else { eprintln!("MISS {sub}/{fname}"); continue };
+        let Some(img) = decode_any(&path) else { continue };
+        let Some(gt512) = center_crop(&img, 512) else { continue };
+        let ppm = td.join("g.ppm");
+        let jpg = td.join("g.jpg");
+        write_ppm(&gt512, &ppm);
+        assert!(Command::new("cjpeg")
+            .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+            .arg(&jpg).arg(&ppm).status().unwrap().success());
+        let data = std::fs::read(&jpg).unwrap();
+        let dec = zenjpeg::decoder::Decoder::new().decode(&data, enough::Unstoppable).unwrap();
+        let ident = Rgb8Img { px: dec.pixels_u8().unwrap().to_vec(), w: gt512.w, h: gt512.h };
+        let r = restore_jpeg(&data, &model, &RestoreConfig::default().with_threads(12)).unwrap();
+        let rest = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
+        let rs = restore_jpeg(&data, &model, &RestoreConfig::default().with_threads(12)
+            .with_projection(Projection::Fixed(
+                ProjectionConfig::with_slack_q(0.0).with_slack_abs(0.0)))).unwrap();
+        let strict = Rgb8Img { px: rs.to_rgb8(), w: rs.width, h: rs.height };
+        let (cx, cy) = busiest(&gt512, crop);
+        let tag = format!("{sub}_{}_{q}", fname.split('.').next().unwrap_or("f").replace('-', "_"));
+        for (name, im) in [("gt", &gt512), ("jpeg", &ident), ("restored", &rest), ("strict", &strict)] {
+            write_ppm(&crop_at(im, cx, cy, crop), &outdir.join(format!("{tag}__{name}.ppm")));
         }
-        let (name, path, deg) = (c[0], PathBuf::from(c[1]), c[2]);
-        let track_x1 = c.len() > 3 && c[3] == "x1";
-        let img = decode_any(&path).expect("decode scene");
-        let hr = center_crop(&img, 512).expect("crop 512");
-        let d = out_root.join(name);
-        std::fs::create_dir_all(&d).unwrap();
-        save_png(&hr, &d.join("gt.png"));
-        let q = match deg {
-            "q75" => 75,
-            "q50" => 50,
-            _ => 35,
-        };
-        if track_x1 {
-            // x1 protocol: degrade at full res; "lanczos" panel = the input itself
-            let lr = turbo_jpeg(&hr, q);
-            save_png(&lr, &d.join("lanczos.png"));
-            let x1: Vec<_> = MODELS_X1
-                .iter()
-                .map(|(dd, l)| (load_adopted(dd).unwrap_or_else(|| panic!("{dd}")), *l))
-                .collect();
-            for (m, label) in &x1 {
-                save_png(&run_guarded(m, &lr, threads, true), &d.join(format!("{label}.png")));
-            }
-        } else {
-            let half = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
-            let lr = if deg == "clean" { half } else { turbo_jpeg(&half, q) };
-            save_png(
-                &resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
-                &d.join("lanczos.png"),
-            );
-            for (m, label) in &models {
-                save_png(&run_guarded(m, &lr, threads, true), &d.join(format!("{label}.png")));
-            }
-        }
-        eprintln!("done {name}");
+        let s_i = score(&gt512, &ident);
+        let s_r = score(&gt512, &rest);
+        let s_s = score(&gt512, &strict);
+        println!("{tag}\tident {:.2}\trestored {:.2} ({:+.2})\tstrict {:.2} ({:+.2})",
+                 s_i.ssim2, s_r.ssim2, s_r.ssim2 - s_i.ssim2, s_s.ssim2, s_s.ssim2 - s_i.ssim2);
     }
 }

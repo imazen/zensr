@@ -1,0 +1,30 @@
+# gen_detect physics: S10 box-violation (units of Q) of the TRUE pre-chain luma DCT vs final stored coefficients
+# commit=5c31d56 host=lilith date=2026-07-31 cmd='ZENSR_GD_PHYSICS=1 ZENSR_GD_TRAIN_PER_SUB=2 gen_detect /mnt/v/imazen-26' corpus=imazen-26 crops=256px 16 sources (2/subcorpus)
+# truth: gen1/gen2a/gen2r-roundtrip = pristine crop at original dims; gen2r-cdn = pristine resized 0.75 (CatmullRom, same kernel as chain)
+# NOTE: slack_probe's ZENSR_SLACK_RESIZE mode emits no data (decode_any on .ppm always fails) - these numbers are the first measured resized-chain physics
+# gen_detect physics per_sub=2 chains=gen1,gen2a,gen2r-roundtrip,gen2r-cdn (q1==q2, resize=0.75 catmullrom)
+chain	encoder	q	n	p50	p99	p999	max	violation%	n_nz	p99_nz	max_nz	viol%_nz
+gen1	turbo	35	1048576	-0.496	-0.026	0.006	0.108	0.17	111676	0.003	0.108	1.39
+gen2a	turbo	35	1048576	-0.496	-0.018	0.585	2.365	0.51	111611	0.555	2.365	4.42
+gen2r-cdn	turbo	35	589824	-0.489	0.196	0.580	2.105	3.30	68484	0.545	2.105	21.45
+gen2r-roundtrip	turbo	35	1048576	-0.496	0.699	2.758	13.616	3.18	104753	2.720	13.616	23.06
+gen1	turbo	75	1048576	-0.490	-0.011	0.060	0.401	0.64	184800	0.035	0.401	3.16
+gen2a	turbo	75	1048576	-0.489	0.043	0.947	3.720	1.50	184782	0.829	3.720	7.96
+gen2r-cdn	turbo	75	589824	-0.472	0.315	0.888	3.316	5.37	113628	0.694	3.316	22.23
+gen2r-roundtrip	turbo	75	1048576	-0.489	2.531	8.909	38.724	9.37	163281	7.393	38.724	42.67
+gen1	turbo	92	1048576	-0.470	0.067	0.457	1.211	2.24	309185	0.208	1.211	7.05
+gen2a	turbo	92	1048576	-0.470	0.526	1.776	5.974	3.94	309659	1.040	5.974	12.72
+gen2r-cdn	turbo	92	589824	-0.433	0.521	1.447	4.424	8.84	185794	0.924	4.424	23.78
+gen2r-roundtrip	turbo	92	1048576	-0.466	8.482	27.439	97.559	22.75	251759	19.191	97.559	64.84
+gen1	mozjpeg	35	1048576	-0.497	0.119	1.326	9.026	2.18	82167	1.675	9.026	8.34
+gen2a	mozjpeg	35	1048576	-0.497	0.149	1.083	9.026	2.35	80715	0.953	9.026	8.97
+gen2r-cdn	mozjpeg	35	589824	-0.492	0.323	1.144	7.908	4.15	49069	1.148	7.908	23.40
+gen2r-roundtrip	mozjpeg	35	1048576	-0.497	0.576	1.912	8.827	3.74	75737	2.113	8.827	21.50
+gen1	mozjpeg	75	1048576	-0.492	0.179	2.497	14.413	3.27	151086	1.636	14.413	8.03
+gen2a	mozjpeg	75	1048576	-0.492	0.325	1.572	13.916	3.84	149038	1.054	13.916	10.78
+gen2r-cdn	mozjpeg	75	589824	-0.479	0.462	1.896	13.474	6.57	88777	1.436	13.474	24.71
+gen2r-roundtrip	mozjpeg	75	1048576	-0.492	1.788	6.480	26.695	9.24	129584	5.864	26.695	39.09
+gen1	mozjpeg	92	1048576	-0.478	0.233	2.875	14.979	4.42	267896	0.852	14.979	9.25
+gen2a	mozjpeg	92	1048576	-0.477	0.679	2.353	14.813	5.99	265556	1.433	14.813	14.47
+gen2r-cdn	mozjpeg	92	589824	-0.445	0.665	2.680	13.071	9.95	153960	1.526	13.071	25.90
+gen2r-roundtrip	mozjpeg	92	1048576	-0.475	6.615	20.650	76.992	20.93	212412	15.528	76.992	62.63
