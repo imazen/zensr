@@ -22,7 +22,7 @@ calibrated slack + absolute sample-quantization slack) → optional ×2 SR.
 | tier | model | params / f16 size | std-grid ssim2 gain q15/35/55/75/90 | s/MP @12T |
 |---|---|---|---|---|
 | quality (default) | dejpeg7_graphics | 595k / 1.16 MB | +7.1/+3.5/+2.6/+1.2/+0.1 class (beats dejpeg4 on both content classes; zero negative cells) | 5.3 |
-| realtime | dejpeg_rt24d (distilled) | 43k / **86 KB** | +1.6/+1.6/+1.4/+0.9/+0.0 | **0.21** |
+| realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | +5.0/+2.8/+2.0/+0.8 (q15/35/55/75) = 68–79% of quality tier | **0.16** |
 | low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 | 5.3 |
 
 
@@ -33,8 +33,9 @@ efficiency: realtime tier ~410 GFLOPS aggregate @12T (near practical peak);
 quality tier ~225 GFLOPS (cache-bound at nf=64 — open rungs: strip-fused layer
 scheduling, Winograd F(2,3)). No GPU path yet (CubeCL spike queued).
 
-Routing (all probe-driven): chooser p(graphics)>0.85 ∧ q≤60 → gfxycc; q≥95 →
-identity gate (model loses on near-pristine input); chain ×1 before SR when
+Routing (all probe-driven): chooser p(graphics)>0.85 ∧ q≤60 → gfxycc; identity
+gate at q≥94.5 for the quality tier and **q≥82 for realtime** (measured: the
+realtime model is more aggressive and turns net-negative above ~q85) (model loses on near-pristine input); chain ×1 before SR when
 4:2:0 ∨ q≲50 (chain +1.9 ssim2 at 420 q35; skip at 444 high-q). Ship format is
 f16 (measured ≤9e-4 output delta ≈ ¼ of an 8-bit step; goldens verify through
 f16; int8 weights-only PTQ measured catastrophic — needs QAT). Every model dir

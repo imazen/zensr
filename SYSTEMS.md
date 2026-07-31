@@ -1099,3 +1099,22 @@ the loss said it mattered. Do NOT re-attempt plain loss reweighting; if
 edge specialization is revisited, the untested rungs are contrast-stratified
 CROP SAMPLING (data, not loss) and per-block runtime routing (expensive:
 chooser per block + seam handling).
+
+### rt24g SHIPPED as the realtime tier + gate correction (2026-07-30)
+
+User: "we can rt24g ship". Shipped WITH a measured policy change, because the
+ship gate found a regression the old policy didn't cover.
+- rt24g (84KB, 0.16 s/MP, 200k steps): q15 +4.98 / q35 +2.80 / q55 +1.99 /
+  q75 +0.83 ssim2 = 68-79% of the quality tier. 3x the shipped model's low-q
+  gain at identical size and speed.
+- SHIP GATE FINDING: rt24g is more aggressive than rt24d — more negative
+  per-file rows above q55 (q75: 80 vs 56 of 192; worst -7.49 vs -3.95) and
+  net-negative on the high grid (q85 +0.29, q90 -0.23, q93 -0.51).
+- CORRECTION to an earlier claim: "rt24d has zero negative cells" was true at
+  CELL (encoder x q mean) granularity only. Per-FILE, every model has
+  negatives (rt24d 16-84 rows/band, worst -8.19). Report granularity matters.
+- FIX SHIPPED (zenjpeg PR #191 follow-up commit): RestoreOptions gains
+  high_q_threshold / high_q_distance + a realtime_tier() preset. Quality tier
+  keeps 94.5 / d<=0.6; realtime uses 82.0 / d<=1.0. Without it the realtime
+  model runs in the band where it hurts.
+- benchmarks/rt24g_{std,high}_2026-07-30.tsv.
