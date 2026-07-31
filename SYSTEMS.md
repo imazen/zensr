@@ -1118,3 +1118,27 @@ ship gate found a regression the old policy didn't cover.
   keeps 94.5 / d<=0.6; realtime uses 82.0 / d<=1.0. Without it the realtime
   model runs in the band where it hurts.
 - benchmarks/rt24g_{std,high}_2026-07-30.tsv.
+
+### EVAL CONTAMINATION (2026-07-31, user-caught): 39% of eval refs are JPEGs
+
+User noticed the q90 "worst regression" render looked like it had compression
+noise in the ORIGINAL. Audit: unsplash-people/renders/textures are JPEG-only
+(51 files) plus 23 jpgs in lilith/ — 25 of the 64 pinned eval files (39%) have
+JPEG ground truth. The model is penalised for removing artifacts that are IN
+the reference.
+Impact on rt24g (clean PNG refs vs JPEG refs, mean ssim2 gain):
+  q35 +3.82 vs +1.37 | q55 +3.05 vs +0.52 | q75 +1.50 vs -0.11 | q90 +0.35 vs -1.04
+60% of all negative-file rows come from JPEG-ref files (42% of rows).
+CONSEQUENCES:
+- Every absolute gain reported before today is UNDERSTATED for the model.
+- q90 is +0.35 on clean refs, NOT -0.23 -> the q82 identity gate was set
+  partly on contaminated evidence and must be re-derived.
+- Clean-ref ladder: q15 74.0% / q35 88.0% / q55 86.3% / q75 69.6% of the
+  quality tier (the 2/3 target is exceeded at every band by more than thought).
+- Strict projection wins on clean refs at every band (+0.30 q15, +0.33 q35,
+  +0.33 q55, +0.59 q75, +0.18 q90) and in 8 of 9 visual cases.
+ACTIONS: (1) eval harness must record + optionally filter GT source type;
+(2) re-derive the identity gate on clean refs; (3) the pinned eval split needs
+a clean-source subset (or transcode-free replacements for the unsplash dirs);
+(4) relative model-vs-model comparisons are less affected (both tiers show the
+same pattern) but every ABSOLUTE claim needs the clean-ref number.

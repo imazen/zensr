@@ -11,6 +11,25 @@ use std::process::Command;
 use zensr_bench::*;
 use zensr_zenjpeg::{restore_jpeg, Projection, ProjectionConfig, RestoreConfig};
 
+/// (label, slack_q, slack_abs) — None = projection off entirely.
+const SLACKS: &[(&str, Option<(f32, f32)>)] = &[
+    ("noproj", None),
+    ("strict", Some((0.0, 0.0))),
+    ("p99", Some((0.05, 1.0))),
+    ("calibrated", Some((0.15, 1.5))),
+];
+
+/// Amplified |a-b| error map (x8, clamped) — shows WHERE strategies differ.
+fn diffmap(a: &Rgb8Img, b: &Rgb8Img) -> Rgb8Img {
+    let px = a
+        .px
+        .iter()
+        .zip(b.px.iter())
+        .map(|(x, y)| (((*x as i32 - *y as i32).abs() * 8).min(255)) as u8)
+        .collect();
+    Rgb8Img { px, w: a.w, h: a.h }
+}
+
 fn write_ppm(img: &Rgb8Img, p: &PathBuf) {
     let mut buf = format!("P6\n{} {}\n255\n", img.w, img.h).into_bytes();
     buf.extend_from_slice(&img.px);
@@ -82,24 +101,46 @@ fn main() {
         assert!(Command::new("cjpeg")
             .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
             .arg(&jpg).arg(&ppm).status().unwrap().success());
+        // ZENSR_GAL_GENS=2 -> decode and re-encode once more (aligned recompress)
+        if std::env::var("ZENSR_GAL_GENS").as_deref() == Ok("2") {
+            let d1 = zenjpeg::decoder::Decoder::new()
+                .decode(&std::fs::read(&jpg).unwrap(), enough::Unstoppable).unwrap();
+            let (w1, h1) = d1.dimensions();
+            let mid = Rgb8Img { px: d1.pixels_u8().unwrap().to_vec(), w: w1 as usize, h: h1 as usize };
+            write_ppm(&mid, &ppm);
+            assert!(Command::new("cjpeg")
+                .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+                .arg(&jpg).arg(&ppm).status().unwrap().success());
+        }
         let data = std::fs::read(&jpg).unwrap();
         let dec = zenjpeg::decoder::Decoder::new().decode(&data, enough::Unstoppable).unwrap();
         let ident = Rgb8Img { px: dec.pixels_u8().unwrap().to_vec(), w: gt512.w, h: gt512.h };
-        let r = restore_jpeg(&data, &model, &RestoreConfig::default().with_threads(12)).unwrap();
-        let rest = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
-        let rs = restore_jpeg(&data, &model, &RestoreConfig::default().with_threads(12)
-            .with_projection(Projection::Fixed(
-                ProjectionConfig::with_slack_q(0.0).with_slack_abs(0.0)))).unwrap();
-        let strict = Rgb8Img { px: rs.to_rgb8(), w: rs.width, h: rs.height };
         let (cx, cy) = busiest(&gt512, crop);
-        let tag = format!("{sub}_{}_{q}", fname.split('.').next().unwrap_or("f").replace('-', "_"));
-        for (name, im) in [("gt", &gt512), ("jpeg", &ident), ("restored", &rest), ("strict", &strict)] {
-            write_ppm(&crop_at(im, cx, cy, crop), &outdir.join(format!("{tag}__{name}.ppm")));
-        }
+        let gens = std::env::var("ZENSR_GAL_GENS").ok().and_then(|v| v.parse().ok()).unwrap_or(1usize);
+        let tag = format!("{sub}_{}_{q}_g{gens}",
+            fname.split('.').next().unwrap_or("f").replace('-', "_"));
+        write_ppm(&crop_at(&gt512, cx, cy, crop), &outdir.join(format!("{tag}__gt.ppm")));
+        write_ppm(&crop_at(&ident, cx, cy, crop), &outdir.join(format!("{tag}__jpeg.ppm")));
+        write_ppm(&diffmap(&crop_at(&gt512, cx, cy, crop), &crop_at(&ident, cx, cy, crop)),
+                  &outdir.join(format!("{tag}__jpegdiff.ppm")));
         let s_i = score(&gt512, &ident);
-        let s_r = score(&gt512, &rest);
-        let s_s = score(&gt512, &strict);
-        println!("{tag}\tident {:.2}\trestored {:.2} ({:+.2})\tstrict {:.2} ({:+.2})",
-                 s_i.ssim2, s_r.ssim2, s_r.ssim2 - s_i.ssim2, s_s.ssim2, s_s.ssim2 - s_i.ssim2);
+        let mut line = format!("{tag}\tident {:.2}", s_i.ssim2);
+        for (label, sl) in SLACKS {
+            let mut rc = RestoreConfig::default().with_threads(12);
+            rc = match sl {
+                None => rc.with_projection(Projection::Off),
+                Some((sq, sa)) => rc.with_projection(Projection::Fixed(
+                    ProjectionConfig::with_slack_q(*sq).with_slack_abs(*sa))),
+            };
+            let r = restore_jpeg(&data, &model, &rc).unwrap();
+            let im = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
+            let c = crop_at(&im, cx, cy, crop);
+            write_ppm(&c, &outdir.join(format!("{tag}__{label}.ppm")));
+            write_ppm(&diffmap(&crop_at(&gt512, cx, cy, crop), &c),
+                      &outdir.join(format!("{tag}__{label}diff.ppm")));
+            let sc = score(&gt512, &im);
+            line += &format!("\t{label} {:.2} ({:+.2})", sc.ssim2, sc.ssim2 - s_i.ssim2);
+        }
+        println!("{line}");
     }
 }
