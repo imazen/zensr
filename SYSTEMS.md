@@ -1075,3 +1075,27 @@ teacher WORSE than rt24e at equal steps). REMAINING FRONTIER: q15 (39.7%) —
 in flight: rt24g 200k steps on jason 3070 (12.5x budget, lr 3e-4), rt48e
 ~500KB capacity fill on lianli. Next lever after budget: feature-KD (#13),
 whose case is now much stronger (student is under-taught, not saturated).
+
+### High-contrast specialization (user question 2026-07-30): damage confirmed, edge-loss FALSIFIED
+
+Contrast-stratified eval added (crates/zensr-bench/src/bin/contrast_eval.rs):
+buckets every pixel by the GT's own 8x8 block contrast (max-min luma, the
+JPEG grid), reports per-bucket identity vs model PSNR.
+
+WHERE THE DAMAGE IS (confirms the user's intuition): high-contrast blocks
+(>64) sit ~15 dB below flat blocks after decode (q15: 24.04 vs 39.30 dB) and
+are 33% of all pixels — not a niche.
+WHERE THE MODEL STANDS: rt24f already gains MOST in high-contrast at q35/75
+(+0.80 vs +0.44 flat); its worst relative deficit vs the quality tier is
+LOW/MID contrast at q15 (4.1-4.5x behind vs 2.2x at high contrast). Small
+models learn loud ringing signatures readily; subtle mid-contrast texture is
+what capacity buys.
+EDGE-WEIGHTED LOSS FALSIFIED (rt24h, w=1+3*clamp(contrast/64), vs rt24f
+control at identical 64k budget): std-grid ssim2 -0.01/-0.15/-0.10/-0.15 at
+q15/35/55/75; per-bucket high-contrast moved only +0.03 dB while FLAT
+collapsed (q75 +0.47 -> -1.09 dB). Reweighting doesn't add edge skill, it
+just starves the rest — the model was already spending its capacity where
+the loss said it mattered. Do NOT re-attempt plain loss reweighting; if
+edge specialization is revisited, the untested rungs are contrast-stratified
+CROP SAMPLING (data, not loss) and per-block runtime routing (expensive:
+chooser per block + seam handling).

@@ -27,6 +27,7 @@ SPACE = os.environ.get("ZENSR_SPACE", "rgb")  # rgb | ycbcr (JFIF full-range)
 INIT = os.environ.get("ZENSR_INIT", "")
 LOSS_SPACE = os.environ.get("ZENSR_LOSS_SPACE", "")  # "" | ycbcr
 CHROMA_W = float(os.environ.get("ZENSR_CHROMA_W", "1"))
+EDGE_W = float(os.environ.get("ZENSR_EDGE_W", "0"))
 OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)
 
 
@@ -44,6 +45,20 @@ class Student(nn.Module):
         return out + F.interpolate(x, scale_factor=SCALE, mode="nearest")
 
 
+def _edge_weight(y):
+    """Per-pixel weight from the TARGET's 8x8 block contrast (max-min luma).
+
+    ZENSR_EDGE_W=k -> weight = 1 + k*clamp(contrast/64, 0, 1). Shifts capacity
+    toward the high-contrast blocks that carry ~15 dB more error and 33% of
+    pixels (contrast_eval 2026-07-30). Zero runtime/architecture cost.
+    """
+    lum = (0.299 * y[:, 0:1] + 0.587 * y[:, 1:2] + 0.114 * y[:, 2:3])
+    hi = F.max_pool2d(lum, 8, 8)
+    lo = -F.max_pool2d(-lum, 8, 8)
+    c = ((hi - lo) * 255.0 / 64.0).clamp(0.0, 1.0)
+    return 1.0 + EDGE_W * F.interpolate(c, scale_factor=8, mode="nearest")
+
+
 def charbonnier(a, b, eps=1e-6):
     # ZENSR_LOSS_SPACE=ycbcr computes the loss in YCbCr regardless of model
     # I/O space, with Cb/Cr weighted by ZENSR_CHROMA_W (chroma-ceiling probe
@@ -55,6 +70,10 @@ def charbonnier(a, b, eps=1e-6):
         bw = torch.einsum("ij,bjhw->bihw", m, b)
         wv = torch.tensor([1.0, CHROMA_W, CHROMA_W], device=a.device, dtype=a.dtype).view(1, 3, 1, 1)
         return (torch.sqrt((aw - bw) ** 2 + eps) * wv).mean()
+    if EDGE_W > 0.0:
+        w = _edge_weight(b)
+        pw = torch.sqrt((a - b) ** 2 + eps)
+        return (pw * w).sum() / (w.expand_as(pw).sum())
     return torch.sqrt((a - b) ** 2 + eps).mean()
 
 
