@@ -175,11 +175,22 @@ fn main() {
                             outs.push(("model_policy", src, Some(mp)));
                         }
                         let proj_out = m_policy.as_ref().map(|mp| {
-                            let r = zensr_zenjpeg::restore_jpeg(
-                                &data,
-                                mp,
-                                &zensr_zenjpeg::RestoreConfig::default().with_threads(threads),
-                            )
+                            // ZENSR_SLACK_Q / ZENSR_SLACK_ABS override the
+                            // family-calibrated projection slack (tail study)
+                            let mut rc = zensr_zenjpeg::RestoreConfig::default()
+                                .with_threads(threads);
+                            if let (Ok(sq), Ok(sa)) = (
+                                std::env::var("ZENSR_SLACK_Q"),
+                                std::env::var("ZENSR_SLACK_ABS"),
+                            ) {
+                                rc = rc.with_projection(zensr_zenjpeg::Projection::Fixed(
+                                    zensr_zenjpeg::ProjectionConfig::with_slack_q(
+                                        sq.parse().unwrap(),
+                                    )
+                                    .with_slack_abs(sa.parse().unwrap()),
+                                ));
+                            }
+                            let r = zensr_zenjpeg::restore_jpeg(&data, mp, &rc)
                             .expect("restore_jpeg");
                             Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height }
                         });
