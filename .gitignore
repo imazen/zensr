@@ -1,7 +1,24 @@
 .workongoing
 .jj/
 target/
-models/
+models/*
+# Ship artifact: the realtime tier is committed deliberately (86 KB f16 +
+# goldens generated THROUGH the f16 roundtrip + repro.sh, ~144 KB total).
+# gitignore cannot re-include inside an excluded directory, so the path is
+# opened one level at a time. All other model dirs stay out — training
+# weights are reproducible from each dir's repro.sh.
+!models/adopted/
+models/adopted/*
+!models/adopted/dejpeg_rt24g/
+models/adopted/dejpeg_rt24g/*
+!models/adopted/dejpeg_rt24g/weights_f16.raw
+!models/adopted/dejpeg_rt24g/gold_in_17x13.raw
+!models/adopted/dejpeg_rt24g/gold_in_40x36.raw
+!models/adopted/dejpeg_rt24g/gold_out_17x13.raw
+!models/adopted/dejpeg_rt24g/gold_out_40x36.raw
+!models/adopted/dejpeg_rt24g/meta.json
+!models/adopted/dejpeg_rt24g/repro.sh
 *.onnx
 .cargo/
 .cargo/config.toml
+

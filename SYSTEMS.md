@@ -1172,3 +1172,26 @@ shipped q82 gate is discarding gains; the crossover is above q85.
 NOT YET FROZEN: this sweep is single-generation only, and multi-gen chains
 violate the box by 2-4 Q. Gate + slack must be set together against gen2
 chains before a constant lands.
+
+### Teacher retrain on the SAME data — NULL (4th flat continuation), 2026-08-01
+
+Roadmap 1.3 as first attempted: dejpeg11_teacher = dejpeg7 warm-start, 120k
+steps, nf64/nc16, GT targets, jason 3070, 4.55 h wall (0.137 s/step —
+legitimate; an early "too fast" suspicion was my own elapsed-time error, and
+checking it was right). val_psnr 32.50 -> 32.71 -> 32.65 = FLAT.
+This is the FOURTH flat continuation of dejpeg7 on this dataset (see the
+dejpeg10_chw3/ctl pair and dejpeg4b_control). The prior three predicted it;
+I should have. LESSON: for a converged model, "better teacher" is not more
+steps on the same data — it is more/better DATA. The 100k clean-reference
+dataset (finished on lianli the same day) is the actual lever, and the
+teacher retrain should be re-run against it, not against zensr-ablation.
+
+### Realtime tier COMMITTED to the repo (2026-08-01)
+
+dejpeg_rt24g ships in-tree: weights_f16.raw (86 KB) + the four goldens
+generated THROUGH the f16 roundtrip + meta.json (full repro block) +
+repro.sh — 144 KB total. .gitignore opens the path one level at a time
+(gitignore cannot re-include inside an excluded directory). Every other model
+dir stays out; their weights are reproducible from each dir's repro.sh.
+Rationale: the ship artifact must be verifiable from a clean clone — goldens
+in the same commit as the weights they were generated from.

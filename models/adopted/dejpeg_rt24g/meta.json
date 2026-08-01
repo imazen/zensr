@@ -1,0 +1,39 @@
+{
+ "arch": "compact",
+ "scale": 1,
+ "nf": 24,
+ "nc": 8,
+ "space": "rgb",
+ "total_floats": 43203,
+ "source": "train_people (init=scratch)",
+ "repro": {
+  "argv": [
+   "tools/train_people.py",
+   "200000",
+   "48",
+   "3e-4"
+  ],
+  "env": {
+   "ZENSR_DATA": "/home/zen/zensr-d7f16",
+   "ZENSR_SCALE": "1",
+   "ZENSR_NF": "24",
+   "ZENSR_NC": "8",
+   "ZENSR_OUT": "dejpeg_rt24g",
+   "ZENSR_QBOOST": "3"
+  },
+  "seed_torch": 7,
+  "seed_numpy": 11,
+  "trainer": "train_people.py",
+  "commit": null,
+  "host": "zen-node-2",
+  "torch": "2.13.0+cu130",
+  "device": "cuda",
+  "amp_dtype": "torch.bfloat16",
+  "init_sha256_16": null,
+  "dataset_dir": "/home/zen/zensr-d7f16",
+  "dataset_meta": null,
+  "weights_f16_sha256_16": "0de929e1bee7bde4"
+ },
+ "f16_goldens": true,
+ "weights_f16_sha256_16": "0de929e1bee7bde4"
+}
