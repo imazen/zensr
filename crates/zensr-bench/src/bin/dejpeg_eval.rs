@@ -157,15 +157,33 @@ fn main() {
             }
             used += 1;
             let ppm = td.join("hr.ppm");
-            write_ppm(&hr, &ppm);
             for enc in ENCODERS {
                 for ss in ["420", "444"] {
                     for &q in qs {
                         let jpg = td.join("e.jpg");
                         let _ = std::fs::remove_file(&jpg);
+                        write_ppm(&hr, &ppm); // fresh source each cell (gen chains rewrite it)
                         if !encode(&ppm, &jpg, enc, q, ss) {
                             eprintln!("ENCODE FAIL {enc} {ss} q{q} {fname}");
                             continue;
+                        }
+                        // ZENSR_EVAL_GENS=N: re-encode N-1 more times (aligned
+                        // recompression). Multi-gen inputs violate the S10 box
+                        // by 2-4 Q, so gate + slack must be set against these,
+                        // not just pristine single-generation encodes.
+                        let gens: usize = std::env::var("ZENSR_EVAL_GENS")
+                            .ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+                        for _ in 1..gens {
+                            let d = zenjpeg::decoder::Decoder::new()
+                                .decode(&std::fs::read(&jpg).unwrap(), enough::Unstoppable)
+                                .expect("decode");
+                            let (dw, dh) = d.dimensions();
+                            let mid = Rgb8Img {
+                                px: d.pixels_u8().expect("u8").to_vec(),
+                                w: dw as usize, h: dh as usize,
+                            };
+                            write_ppm(&mid, &ppm);
+                            if !encode(&ppm, &jpg, enc, q, ss) { break; }
                         }
                         let data = std::fs::read(&jpg).unwrap();
                         let (pf, pq) = probe_cols(&data);

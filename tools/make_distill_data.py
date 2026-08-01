@@ -61,7 +61,14 @@ def list_train_files(sub):
     # Runtime "first 8 usable" slides past decode-skipped files (teresa leak,
     # 2026-07-24 postmortem) — the pinned file is authoritative.
     pinned = eval_pinned(sub)
-    return [f for f in files[8:] if os.path.basename(f) not in pinned]
+    files = [f for f in files[8:] if os.path.basename(f) not in pinned]
+    # ZENSR_CLEAN_GT=1: drop JPEG-sourced references. They are themselves
+    # compressed, so training on them teaches the model to REPRODUCE jpeg
+    # artifacts (the training-side twin of the 2026-07-31 eval contamination;
+    # 8% of training files vs 39% of eval files).
+    if os.environ.get("ZENSR_CLEAN_GT") == "1":
+        files = [f for f in files if f.lower().endswith(".png")]
+    return files
 
 
 def main():
