@@ -1195,3 +1195,20 @@ repro.sh — 144 KB total. .gitignore opens the path one level at a time
 dir stays out; their weights are reproducible from each dir's repro.sh.
 Rationale: the ship artifact must be verifiable from a clean clone — goldens
 in the same commit as the weights they were generated from.
+
+### Data scale-up: the plateau WAS data-bound (2026-08-01, early signal)
+
+100k clean-reference crops (4x the previous 24k, PNG sources only) vs the old
+set, same recipe:
+  old 24k-crop student: 36.99 dB teacher-fidelity at step 174,000
+  new 100k-crop student: 36.89 dB at step 22,500  (~8x sample efficiency)
+Teacher, same comparison: same-data retrain sat FLAT at 32.6 for 120k steps;
+the 100k-data teacher reaches 35.21 by step 5,000 and is still climbing.
+Both directions agree: 400 epochs over 24k crops was the binding constraint,
+not capacity (falsified 3x) or architecture. Roadmap 1.2 confirmed as the
+lever; 1.3 ("better teacher") only works THROUGH data, not through steps.
+
+Infra fix that made it possible: train_people now measures free VRAM and
+places the dataset host-side when it would not fit (the 9.9-14.7 GB sets vs
+8 GB cards). Previously auto-only on MPS, so CUDA boxes OOM'd on the first
+large dataset. It now prints the decision.

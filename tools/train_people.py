@@ -139,7 +139,17 @@ def main():
     # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
     # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
     # hang in waitUntilCompleted) and on small-VRAM cards (ian's 1660 Ti).
-    cpu_data = os.environ.get("ZENSR_CPU_DATA", "1" if dev == "mps" else "0") == "1"
+    # Auto: keep data host-side when it would not comfortably fit in VRAM.
+    # MPS always (multi-GB .to(mps) wedges); CUDA when the arrays exceed half
+    # of free device memory (the 100k-crop set is 9.9 GB vs 8 GB cards).
+    need_bytes = lr_all[:n].nbytes + hr_all[:n].nbytes
+    auto_cpu = dev == "mps"
+    if dev == "cuda":
+        free, _total = torch.cuda.mem_get_info()
+        auto_cpu = need_bytes > free * 0.5
+        print(f"dataset {need_bytes/1e9:.1f} GB, free VRAM {free/1e9:.1f} GB "
+              f"-> {'host-side batches' if auto_cpu else 'device-resident'}", flush=True)
+    cpu_data = os.environ.get("ZENSR_CPU_DATA", "1" if auto_cpu else "0") == "1"
     dloc = "cpu" if cpu_data else dev
     lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dloc)
     hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dloc)
