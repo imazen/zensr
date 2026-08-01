@@ -72,7 +72,7 @@ fn main() {
         .join(format!("zensr-chain-{}", std::process::id()));
     std::fs::create_dir_all(&td).unwrap();
 
-    let mut tsv = String::from("sub\tfile\tq\tarm\tpsnr\tssim2\tbutter_n3\n");
+    let mut tsv = String::from("sub\tfile\tq\tarm\tpsnr\tssim2\tbutter_n3\tgt_src\n");
     for (sub, dir) in SUBCORPORA {
         let mut used = 0usize;
         for f in list_images(&root.join(dir)) {
@@ -86,6 +86,8 @@ fn main() {
             }
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") { continue; }
             let lr_clean = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
             for q in [35u32, 50, 75] {
                 let jpg = encode_turbo(&lr_clean, q, &td);
@@ -110,7 +112,7 @@ fn main() {
                     let s = score(&hr, o);
                     let _ = writeln!(
                         tsv,
-                        "{sub}\t{fname}\t{q}\t{arm}\t{:.3}\t{:.3}\t{:.4}",
+                        "{sub}\t{fname}\t{q}\t{arm}\t{:.3}\t{:.3}\t{:.4}\t{gt_src}",
                         s.psnr, s.ssim2, s.butter
                     );
                 }

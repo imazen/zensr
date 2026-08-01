@@ -134,7 +134,7 @@ fn main() {
     let td = tmpdir();
 
     let mut tsv = String::from(
-        "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\n",
+        "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
     for (sub, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));
@@ -146,6 +146,15 @@ fn main() {
             let Some(img) = decode_any(&f) else { continue };
             let Some(hr) = center_crop(&img, 512) else { continue };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
+            // Ground-truth provenance: JPEG-sourced references are themselves
+            // compressed, so the model gets penalised for removing artifacts
+            // that are IN the reference (2026-07-31: 39% of the pinned eval
+            // split, and it understated every absolute gain). Recorded per row;
+            // ZENSR_EVAL_CLEAN_GT=1 skips them entirely.
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
+                continue;
+            }
             used += 1;
             let ppm = td.join("hr.ppm");
             write_ppm(&hr, &ppm);
@@ -210,7 +219,7 @@ fn main() {
                             let s = score(&hr, &o);
                             let _ = writeln!(
                                 tsv,
-                                "{sub}\t{fname}\t{enc}\t{ss}\t{q}\t{arm}\t{:.3}\t{:.3}\t{:.4}\t{pf}\t{pq}",
+                                "{sub}\t{fname}\t{enc}\t{ss}\t{q}\t{arm}\t{:.3}\t{:.3}\t{:.4}\t{pf}\t{pq}\t{gt_src}",
                                 s.psnr, s.ssim2, s.butter
                             );
                         }

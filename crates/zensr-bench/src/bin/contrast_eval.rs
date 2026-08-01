@@ -119,7 +119,7 @@ fn main() {
 
     let nb = EDGES.len() + 1;
     let mut tsv = String::from(
-        "sub\tfile\tq\tbucket\tn_px\tidentity_psnr\tmodel_psnr\tgain_db\tpx_share\n",
+        "sub\tfile\tq\tbucket\tn_px\tidentity_psnr\tmodel_psnr\tgain_db\tpx_share\tgt_src\n",
     );
     for (sub, dir) in SUBCORPORA {
         let mut used = 0usize;
@@ -131,6 +131,8 @@ fn main() {
             let Some(gt) = center_crop(&img, 512) else { continue };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") { continue; }
             let buckets = bucket_map(&gt);
             let total = (gt.w * gt.h) as f64;
             for &q in QS {
@@ -153,7 +155,7 @@ fn main() {
                     let pm = psnr(bm[b].0 / bm[b].1 as f64);
                     let _ = writeln!(
                         tsv,
-                        "{sub}\t{fname}\t{q}\t{}\t{}\t{pi:.3}\t{pm:.3}\t{:.3}\t{:.4}",
+                        "{sub}\t{fname}\t{q}\t{}\t{}\t{pi:.3}\t{pm:.3}\t{:.3}\t{:.4}\t{gt_src}",
                         NAMES[b],
                         bi[b].1,
                         pm - pi,
