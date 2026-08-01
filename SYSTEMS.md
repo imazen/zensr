@@ -1142,3 +1142,33 @@ ACTIONS: (1) eval harness must record + optionally filter GT source type;
 a clean-source subset (or transcode-free replacements for the unsplash dirs);
 (4) relative model-vs-model comparisons are less affected (both tiers show the
 same pattern) but every ABSOLUTE claim needs the clean-ref number.
+
+### Generation specialists FALSIFIED + gate re-derived on clean refs (2026-08-01)
+
+**Generation-specialist models: falsified.** dejpeg_rt24_gen2 (all-gen2 chains,
+identical rt24f recipe) vs the generalist rt24g, 2x2 on both input types
+(benchmarks/geneval_*_2026-08-01.tsv):
+  single-generation input: generalist +2.00 vs specialist +1.38 (-0.62)
+  multi-generation input:  generalist +2.86 vs specialist +2.64 (-0.23)
+The specialist loses even on the inputs it was trained for; 8 of 9 chains
+favour the generalist (only g2-social +0.83). Consistent with the
+optimization-bound/data-hungry diagnosis: narrowing the training distribution
+costs more than specialization gains. Combined with the undetectability of
+generation count (2026-07-31 agent result), generation-conditional MODEL
+routing is closed. Slack conditioning on provenance remains open and useful.
+
+**Identity gate re-derived (clean refs, granular q40-85):**
+  q    calibrated  strict   neg(calib)  neg(strict)
+  40   +3.56       +3.90    14/112      13/112
+  60   +2.73       +3.07    12/112      11/112
+  70   +1.80       +2.34    28/112      13/112
+  80   +1.04       +1.71    38/112      20/112
+  85   +0.77       +1.14    40/112      25/112
+Strict projection wins at EVERY quality AND roughly halves the negative-file
+count at q70-85 — better on average and safer per file. Its advantage GROWS
+with quality (+0.34 at q60 -> +0.67 at q80): the over-wide slack was doing
+most damage where Q is smallest. The model is still +1.14 at q85, so the
+shipped q82 gate is discarding gains; the crossover is above q85.
+NOT YET FROZEN: this sweep is single-generation only, and multi-gen chains
+violate the box by 2-4 Q. Gate + slack must be set together against gen2
+chains before a constant lands.
