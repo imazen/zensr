@@ -139,6 +139,15 @@ Students are capped by what they imitate. dejpeg7 was only a 16k warm-start;
 it has never had the f16-target + long-budget recipe that the students got.
 - Retrain the quality tier with the validated recipe, then re-distil.
 - Decision: whether the realtime tier's remaining gap is teacher-limited.
+- **The asymmetry is now concrete.** `dejpeg11_teacher`'s own `meta.json`
+  records `dataset_meta.n = 24000`, while the student that imitates it trained
+  on 99,488 crops — and the data scale-up was worth ~2 dB to that student
+  (36.89 -> 38.97 fidelity-to-teacher). The student is being fit to a target
+  produced by the *smaller-data* model, so the ceiling argument is not
+  speculative. `dejpeg12_teacher_big` (120k steps on the 100k set, running on
+  lianli) is the direct test.
+- Compare teachers on the clean corpus once it exports, not on training loss:
+  both are `models/adopted/` dirs and the eval already takes model names.
 
 ### 1.4 Feature/affinity KD (task #13, RUNNING 2026-08-02)
 Output-KD plateaus the student ~33 dB from its teacher. Feature-level targets
