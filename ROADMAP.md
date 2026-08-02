@@ -123,8 +123,16 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
 
 - **Eval harness must record ground-truth source type** (png vs jpg) per row and
   support filtering. Everything in §0.1 was invisible because it didn't.
-- **The pinned eval split needs a clean-source subset** — or transcode-free
-  replacements for the unsplash dirs. Until then report clean-reference numbers.
+- ~~The pinned eval split needs a clean-source subset~~ — **built 2026-08-02**:
+  `/mnt/v/imazen-26-pristine` holds 74 downscaled-to-pristine PNG references
+  (0 skipped) covering exactly the four JPEG-sourced subcorpora — unsplash-people
+  28, lilith 23, unsplash-renders 13, unsplash-textures 10. Policy applied per
+  file from zenjpeg's own probe: 3x below q90 (51 files), 2x at q90+ (23);
+  sources ranged q89-100; smallest output 540x720; 310 MB. Measured residual
+  bias at these factors is 0.11-0.22 ssim2 (`benchmarks/pristine_probe_*.tsv`),
+  a twentieth of the effects being measured. **Still open**: rebuild the eval
+  split on this corpus and re-run the ladder, so the absolutes stop carrying the
+  39%-contaminated references.
 - `slack_probe`'s `ZENSR_SLACK_RESIZE` mode emits zero rows (`decode_any`
   rejects `.ppm`). Fixed measurement lives in `gen_detect.rs`; the flag in
   `slack_probe` is still broken.
