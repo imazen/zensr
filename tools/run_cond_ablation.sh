@@ -6,7 +6,13 @@
 # Usage: run_cond_ablation.sh sync|launch|status|collect
 set -euo pipefail
 DATA=~/tmp/zensr-dejpeg-v4
-declare -A BOX=( [lianli]="lilith@192.168.50.27" [jason]="zen@192.168.50.148" [ian]="zen@192.168.50.193" )
+# Boxes come from the environment so no host/LAN details live in the repo:
+#   ZENSR_BOXES="name=user@host name=user@host ..."
+declare -A BOX
+for kv in ${ZENSR_BOXES:-}; do BOX[${kv%%=*}]="${kv#*=}"; done
+if [ ${#BOX[@]} -eq 0 ]; then
+  echo "set ZENSR_BOXES, e.g. ZENSR_BOXES='a=user@host-a b=user@host-b'" >&2; exit 2
+fi
 declare -A ARM=( [lianli]="none" [jason]="scalar" [ian]="dmap" )
 STEPS=${STEPS:-14000}
 BATCH=${BATCH:-48}

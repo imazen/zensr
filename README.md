@@ -194,3 +194,17 @@ comparison are all measured; 64² still trails tract by 11% (per-call weight pac
 fix queued); nothing is product-wired (no zenpipe/imageflow integration, no zencodec
 surface). Weight licensing: NTIRE2025_ESR repo is MIT but per-team weight terms are
 unaffirmed — fine for experiments, diligence (or retrain on our corpora) before shipping.
+
+## License
+
+AGPL-3.0-only OR LicenseRef-Imazen-Commercial — the same dual license as the
+rest of the zen stack (zenpng, zenresize, zensim). See `LICENSE-AGPL3` and
+`LICENSE-COMMERCIAL`.
+
+## Status: pre-0.1 research
+
+Nothing here is released. The measured record lives in `SYSTEMS.md`, the
+forward plan and the falsification registry in `ROADMAP.md`, and the proposed
+public surface in `docs/API_DESIGN.md`. Absolute numbers predating 2026-07-31
+were measured against a partly JPEG-sourced eval split and understate the
+model — see the correction at the top of `ROADMAP.md`.

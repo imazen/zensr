@@ -3,7 +3,7 @@ name = "zensr-zenjpeg"
 version = "0.1.0"
 edition = "2021"
 description = "zenjpeg integration for zensr: probe-driven decode policy, restoration pipeline, quantization-consistency projection"
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 
 [dependencies]
 zenanalyze = { path = "../../../zenanalyze", optional = true }
