@@ -20,7 +20,21 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    → **Every absolute claim needs the clean-reference number.** Relative
    model-vs-model comparisons are less affected (both tiers show the same
    pattern), but the identity-gate threshold was set on contaminated evidence
-   and is being re-derived (§1.1).
+   and has now been re-derived (§1.1).
+   **Status 2026-08-02:** the clean corpus exists and the gate is re-derived,
+   but the README's SOTA table and the SYSTEMS ladder still carry contaminated
+   absolutes. First clean-reference numbers for the shipped realtime model
+   (turbo 4:2:0, per-file median, n=64): **+6.88 / +3.36 / +2.02 / +1.15 at
+   q15/35/55/75**, against the README's published +5.0/+2.8/+2.0/+0.8 — higher,
+   in the predicted direction, and not methodologically identical (per-encoder
+   median here vs a blended figure there), so they are not a drop-in swap.
+1b. **File selection (found 2026-08-02).** "First N sorted" admitted training
+   images whenever the directory listing differed from the one the split was
+   frozen against — the `photos` subcorpus contributed 4 of 32 files, none in
+   the pinned split. `dejpeg_eval` now selects from the pinned split by stem
+   (`ZENSR_EVAL_PIN`) and warns loudly if no list is found. Same failure shape
+   as the 2026-07-23 haberdoedas postmortem; it recurred because the fix then
+   was a regenerated list rather than a harness that enforces it.
 2. **Report granularity matters.** "Zero negative cells" was true at
    encoder×q *mean* granularity and false per-file. Always report per-file
    negative counts and worst case alongside means.
