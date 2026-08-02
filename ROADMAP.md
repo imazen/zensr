@@ -117,6 +117,17 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
 - A probe that produces **no rows must fail loudly**, not silently succeed.
 - Kernel files get committed *before* iterating on them (a bad edit anchor
   amputated `simd.rs` mid-session).
+- **Two dependencies are pinned to git revisions and must be unpinned when they
+  publish**: `zenjpeg` at `e277e9c9` (0.9.0 — 0.8.4 keeps `DeblockMode`
+  crate-private) and `zenanalyze` at `a7d8224` (0.2, the feature IDs the chooser
+  was trained against). Until both are on crates.io, `zensr-zenjpeg` cannot be
+  published. `zenjpeg` 0.9.0's own `zenanalyze` pin (`13d40c3`) differs from
+  ours, so a `chooser` build compiles zenanalyze twice — harmless, but it goes
+  away when both move to registry versions.
+- The repo is **public** (github.com/imazen/zensr, AGPL-3.0-only OR
+  LicenseRef-Imazen-Commercial). Anything committed here is world-readable:
+  no LAN addresses, no box names, no corpus bytes. `tools/run_cond_ablation.sh`
+  reads `ZENSR_BOXES` from the environment for exactly this reason.
 
 ---
 
