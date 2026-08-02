@@ -18,6 +18,39 @@ const QS_HIGH: &[u32] = &[85, 90, 93, 96];
 const QS_LOW: &[u32] = &[5, 8, 12];
 const ENCODERS: &[&str] = &["turbo", "mozjpeg", "jpegli", "zenjpeg"];
 
+/// Stem used to match a file against the pinned eval list: basename without
+/// extension, with any `__pristineNx` suffix removed so a downscaled-to-pristine
+/// replacement still matches the original it was derived from.
+fn pinned_stem(fname: &str) -> String {
+    let base = fname.rsplit_once('.').map(|(a, _)| a).unwrap_or(fname);
+    match base.find("__pristine") {
+        Some(i) => base[..i].to_string(),
+        None => base.to_string(),
+    }
+}
+
+/// The pinned eval split, keyed by directory. Selecting files by "first N
+/// sorted" is not safe: the sort slides past decode-skipped and
+/// format-filtered files, which is how training images reached an eval run
+/// (2026-07-23 postmortem, and again on 2026-08-02 when a pristine directory
+/// held only the JPEG-sourced subset). Returns None when no list is available,
+/// in which case the caller falls back to sorted order and says so.
+fn load_pinned(path: &str) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        let mut it = line.split('\t');
+        if let (Some(d), Some(f)) = (it.next(), it.next()) {
+            m.entry(d.to_string()).or_default().insert(pinned_stem(f));
+        }
+    }
+    if m.is_empty() { None } else { Some(m) }
+}
+
 fn tmpdir() -> PathBuf {
     let d = PathBuf::from(std::env::var("HOME").unwrap())
         .join("tmp")
@@ -146,12 +179,35 @@ fn main() {
     let mut tsv = String::from(
         "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
+    // ZENSR_EVAL_PIN=<tsv> (default eval_split/imazen26_eval_files.tsv) restricts
+    // every subcorpus to the frozen eval files. Without it, "first N sorted"
+    // silently admits training images whenever the directory listing differs
+    // from the one the split was frozen against.
+    let pin_path = std::env::var("ZENSR_EVAL_PIN")
+        .unwrap_or_else(|_| "eval_split/imazen26_eval_files.tsv".to_string());
+    let pinned = load_pinned(&pin_path);
+    match &pinned {
+        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
+        None => eprintln!(
+            "WARNING: no pinned eval split at {pin_path} — falling back to sorted order, \
+             which can admit training images"
+        ),
+    }
     for (sub, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));
+        let want = pinned.as_ref().and_then(|m| m.get(*dir));
+        let mut seen_pinned = std::collections::HashSet::new();
         let mut used = 0usize;
         for f in files {
             if used >= per_sub {
                 break;
+            }
+            if let Some(w) = want {
+                let stem = pinned_stem(&f.file_name().unwrap().to_string_lossy());
+                if !w.contains(&stem) {
+                    continue;
+                }
+                seen_pinned.insert(stem);
             }
             let Some(img) = decode_any(&f) else { continue };
             let Some(hr) = center_crop(&img, 512) else { continue };

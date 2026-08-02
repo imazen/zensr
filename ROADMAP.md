@@ -34,6 +34,17 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 
 ### 1.1 Re-derive the identity gate on clean references — MEASURED 2026-08-02
 
+> **SELECTION DEFECT — these numbers are being re-measured (2026-08-02).** The
+> run below picked files by "first N sorted", which admitted TRAINING images:
+> the `photos` subcorpus contributed 4 of 32 files, none of them in the pinned
+> eval split, because the pristine directory held only the JPEG-sourced subset
+> and the sort slid past the native PNGs. The merged root also dropped the
+> already-clean native PNGs entirely for those four directories. Both are
+> fixed — the corpus is now a proper union (974 refs) and `dejpeg_eval`
+> selects from the pinned split by stem (`ZENSR_EVAL_PIN`, tolerant of the
+> `__pristineNx` suffix) — and the ladders are re-running at 8 files/subcorpus.
+> Treat every figure in this section as provisional until replaced.
+
 Measured on `/mnt/v/imazen-26-clean` (674 refs, 0 JPEG), gate DISABLED so the
 ladder sees past it, q90-100, 32 files/cell, 420, turbo + mozjpeg. Summary:
 `benchmarks/clean_gate_crossover_2026-08-02.tsv`; raw in
