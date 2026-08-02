@@ -200,6 +200,12 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
   but the run continues and val sits frozen at its init value. bf16 boxes hid
   it entirely. Beyond the crash, a distillation target that varies with the
   student's precision is wrong on its own terms.
+- **Running the teacher in fp32 costs ~10x on a card without an fp32 tensor
+  path.** The correctness fix above is not free: on the GTX 1660 Ti (Turing,
+  no TF32) the online 64-wide/16-deep teacher dropped throughput from ~150
+  steps/min to ~12, which turns a 25k-step arm from 3 hours into 33. Ampere
+  and later have TF32 and do not pay this. Schedule online-teacher work on
+  Ampere+; a Turing card is fine for student-only training.
 - **A measurement must not be able to observe its own gate.** The first clean
   ladder reported a q96 crossover that was entirely the shipped identity gate
   short-circuiting restoration. Any harness that evaluates a policy needs a
