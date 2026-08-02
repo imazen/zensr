@@ -185,6 +185,16 @@ was falsified twice and the student is optimization-bound.
   `aff_share`), not guessed: on random features the affinity term is ~30x the
   reconstruction loss, so an arbitrary weight silently replaces the objective
   instead of augmenting it.
+- **Verdict rule, fixed before the data lands (2026-08-02).** Both arms are
+  scored per-file on the clean corpus with `tools/model_ab.py` (arm
+  `model_proj`), NOT on `val_psnr_vs_teacher`. Today's student comparison
+  showed those two answers can point opposite ways: ~2 dB better
+  teacher-fidelity came with a -0.02 median and a 0.45 win rate against clean
+  references. Affinity KD is a *feature-imitation* term, so it is exactly the
+  kind of change that can improve teacher-imitation while making the product
+  worse. Pass = positive per-file median with win_frac > 0.5 on the clean
+  corpus, with low q (q15-35) weighted as the deciding band. Writing this down
+  now so the metric is not chosen after seeing the result.
 - Box note: ian is a GTX 1660 Ti (6 GB, Turing cc 7.5), **not** the RTX 3070
   the fleet runbook guesses. The trainer's compute-capability gate correctly
   selects fp16+GradScaler there; inductor is unavailable (triton cannot build
