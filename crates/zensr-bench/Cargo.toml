@@ -6,16 +6,16 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 
 [dependencies]
-zenanalyze = { path = "../../../zenanalyze" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "a7d8224" }
 tract-onnx = "0.23.4"
 zensr-micro = { path = "../zensr-micro", features = ["internals"] }
 zensr-zenjpeg = { path = "../zensr-zenjpeg" }
 zenpixels = "0.2.14"
 zenpng = "0.1.4"
-# >=0.8.4 resolves 0.8.4 from crates.io normally; the gitignored .cargo
-# config patches in the local 0.9.0 tree (zjtool needs its DeblockMode
-# export — pub(crate)-locked in 0.8.4). Regenerate: just cargo-local
-zenjpeg = ">=0.8.4, <0.10"
+# zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
+# so this pins the public repo. Swap to a version req when 0.9.0 ships.
+# Local sibling tree wins via the gitignored .cargo override: just cargo-local
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e277e9c9" }
 zenresize = "0.3.1"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 butteraugli = "0.9.3"

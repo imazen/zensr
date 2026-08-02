@@ -195,6 +195,27 @@ fix queued); nothing is product-wired (no zenpipe/imageflow integration, no zenc
 surface). Weight licensing: NTIRE2025_ESR repo is MIT but per-team weight terms are
 unaffirmed — fine for experiments, diligence (or retrain on our corpora) before shipping.
 
+## Building
+
+```bash
+cargo build --release -p zensr-micro -p zensr-zenjpeg   # the restoration crates
+cargo build --release -p zensr-bench                    # the measurement harness
+```
+
+Two dependencies are pinned to git revisions rather than crates.io releases,
+because the versions we need are unpublished: `zenjpeg` 0.9.0 (0.8.4 keeps
+`DeblockMode` crate-private, which the deblock-policy code needs) and
+`zenanalyze` 0.2 (the content-class features the router was trained against).
+Both repos are public, so a plain `cargo build` resolves them. When those
+crates publish, the pins become ordinary version requirements.
+
+If you have the sibling `zenjpeg` checkout, `just cargo-local` writes a
+gitignored `.cargo/config.toml` that points the dependency at your working
+tree instead of the pinned revision.
+
+`zensr-bench` additionally needs `cjpeg` (libjpeg-turbo) on `PATH` for the
+encode arms, and the imazen-26 corpus, which is not distributed here.
+
 ## License
 
 AGPL-3.0-only OR LicenseRef-Imazen-Commercial — the same dual license as the

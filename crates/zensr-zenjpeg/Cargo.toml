@@ -6,10 +6,11 @@ description = "zenjpeg integration for zensr: probe-driven decode policy, restor
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 
 [dependencies]
-zenanalyze = { path = "../../../zenanalyze", optional = true }
-# >=0.8.4 resolves from crates.io; the gitignored .cargo config patches the
-# local 0.9 tree (DeblockMode export + shipping decoder). just cargo-local
-zenjpeg = ">=0.8.4, <0.10"
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "a7d8224", optional = true }
+# zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
+# so this pins the public repo. Swap to a version req when 0.9.0 ships.
+# Local sibling tree wins via the gitignored .cargo override: just cargo-local
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e277e9c9" }
 zensr-micro = { path = "../zensr-micro" }
 enough = "0.4.4"
 

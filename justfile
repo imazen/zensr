@@ -64,4 +64,4 @@ report:
 
 cargo-local:
     mkdir -p .cargo
-    printf '[patch.crates-io]\nzenjpeg = { path = "../zenjpeg/zenjpeg" }\n' > .cargo/config.toml
+    printf '# LOCAL zen dep overrides (gitignored). Relative: works on every box.\n# Regenerate: just cargo-local\n[patch."https://github.com/imazen/zenjpeg"]\nzenjpeg = { path = "../zenjpeg/zenjpeg" }\n' > .cargo/config.toml
