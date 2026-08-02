@@ -70,6 +70,22 @@ Caveats that bound this: n=32/cell does not resolve <0.1 ssim2 (the mozjpeg
 q94 bump above q92 is noise), 420 only, two encoders, and the pristine
 references are downscaled 2-3x so they run smaller than native inputs.
 
+**The projection is worth MORE the higher the quality** — the opposite shape to
+the model's own contribution. Isolating it (`model_proj` minus `model_policy`,
+same runs, `benchmarks/clean_projection_value_2026-08-02.tsv`):
+
+| q | 90 | 92 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
+|---|---|---|---|---|---|---|---|---|---|
+| turbo   | +0.33 | +0.26 | +0.41 | +0.49 | +0.59 | +0.70 | +0.67 | +0.97 | +1.06 |
+| mozjpeg | +0.41 | +0.39 | +0.46 | +0.50 | +0.59 | +0.55 | +0.67 | +0.77 | +0.98 |
+
+Monotone in q, 72-94% of files improved, harm fraction 0.03-0.25 — a far
+cleaner signal than the gate deltas above. So the composite crossover at
+q97/q99 is the model degrading while the projection increasingly offsets it,
+and restoration stays safe further up the scale *because* the box constrains
+it. This is direct support for `require_consistency` in the API design: the
+guarantee is not just a safety property, it is carrying the high-q gain.
+
 *(original framing below)*
 The realtime gate sits at q82 because q90 measured −0.23. On clean references
 q90 is **+0.35**. The gate may be discarding real gains.
