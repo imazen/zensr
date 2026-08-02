@@ -124,6 +124,14 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
   published. `zenjpeg` 0.9.0's own `zenanalyze` pin (`13d40c3`) differs from
   ours, so a `chooser` build compiles zenanalyze twice — harmless, but it goes
   away when both move to registry versions.
+- **Long runs on boxes we do not exclusively own must sync checkpoints off-box
+  while they run.** The 100k-crop student on the dual-boot box reached step
+  22.5k of 200k (36.89 dB — the result that established the plateau was
+  data-bound) and the box then rebooted into its other OS, stranding every
+  checkpoint on a partition we cannot reach until it next boots back. The
+  launcher only collected the *final* checkpoint, so an interrupted run kept
+  nothing. `tools/pull_ckpts.sh` now pulls intermediates on a cadence; run it
+  alongside any multi-hour training launch.
 - The repo is **public** (github.com/imazen/zensr, AGPL-3.0-only OR
   LicenseRef-Imazen-Commercial). Anything committed here is world-readable:
   no LAN addresses, no box names, no corpus bytes. `tools/run_cond_ablation.sh`
