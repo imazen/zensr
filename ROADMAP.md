@@ -169,6 +169,16 @@ it has never had the f16-target + long-budget recipe that the students got.
   lianli) is the direct test.
 - Compare teachers on the clean corpus once it exports, not on training loss:
   both are `models/adopted/` dirs and the eval already takes model names.
+- **`dejpeg12_teacher_big` finished 2026-08-02** (120k steps, 100,000 pairs vs
+  dejpeg11's 24,000, same nf=64/nc=16 architecture, 595,459 floats). Being
+  compared to dejpeg11 per-file on the clean corpus, same grid the incumbent
+  was already measured on. Judged on clean references from the start, NOT on
+  fidelity-to-anything — that distinction is what the student comparison cost
+  us today.
+- Context for reading the result: the incumbent teacher is already far ahead
+  of the 84 KB student it trains (median +3.58 ssim2 at q15, +0.61 at q75), so
+  a teacher improvement only matters to the product if it survives
+  distillation. A better teacher that the student cannot follow moves nothing.
 
 ### 1.4 Feature/affinity KD (task #13, RUNNING 2026-08-02)
 Output-KD plateaus the student ~33 dB from its teacher. Feature-level targets
