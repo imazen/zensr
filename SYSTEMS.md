@@ -1211,6 +1211,34 @@ Both directions agree: 400 epochs over 24k crops was the binding constraint,
 not capacity (falsified 3x) or architecture. Roadmap 1.2 confirmed as the
 lever; 1.3 ("better teacher") only works THROUGH data, not through steps.
 
+**CORRECTION 2026-08-02 — the scale-up did NOT produce a better product
+model.** The finished 100k-crop student (dejpeg_rt24big_r2, 173k steps,
+38.97 dB teacher-fidelity vs 36.89) was compared per-file against the shipped
+rt24g on the clean corpus (benchmarks/student_100k_vs_rt24g_2026-08-02.tsv,
+n=64/cell, arm model_proj):
+
+    overall  median -0.023  mean -0.216  win_frac 0.45
+    q15      turbo -0.862   mozjpeg -0.551   (the largest effect, and the
+                                              regime the product cares most about)
+    q55-75   +0.04..+0.05 median, win_frac ~0.61
+    q85-94   -0.01..-0.14 median
+
+So ~2 dB of extra teacher-fidelity bought nothing against clean references and
+LOST ground at low q. The reading: fidelity-to-teacher is not quality. rt24g
+had been BEATING its teacher at low q (a normal KD outcome), and training the
+student to imitate the teacher more precisely converged it toward the teacher,
+giving that advantage back. This is direct evidence for 1.3 — the teacher is
+the ceiling — and a warning that `val_psnr_vs_teacher` must never be read as a
+product metric.
+
+CAVEAT, stated because it is load-bearing: the 100k run was warm-restarted
+from a 20k checkpoint after a mid-run OS flip, so AdamW moments and the cosine
+schedule restarted over the remaining 173k steps. This is NOT a
+schedule-matched comparison, and "100k crops is worse" is NOT established.
+What IS established: this model, despite far better teacher-fidelity, is not
+better on clean references. A schedule-matched rerun is the way to separate
+the two.
+
 Infra fix that made it possible: train_people now measures free VRAM and
 places the dataset host-side when it would not fit (the 9.9-14.7 GB sets vs
 8 GB cards). Previously auto-only on MPS, so CUDA boxes OOM'd on the first

@@ -1,0 +1,31 @@
+# B(/home/lilith/tmp/student_ab_dejpeg_rt24big_r2.tsv) minus A(/home/lilith/tmp/student_ab_dejpeg_rt24g.tsv), arm model_proj, ssim2, per file
+encoder	ss	q	n	median	mean	win_frac
+mozjpeg	420	15	64	-0.551	-0.899	0.25
+mozjpeg	420	35	64	-0.002	-0.114	0.50
+mozjpeg	420	55	64	+0.046	-0.022	0.58
+mozjpeg	420	75	64	+0.050	+0.055	0.61
+mozjpeg	420	85	64	-0.009	-0.031	0.42
+mozjpeg	420	90	64	-0.030	-0.148	0.44
+mozjpeg	420	94	64	-0.139	-0.111	0.36
+turbo	420	15	64	-0.862	-1.128	0.31
+turbo	420	35	64	-0.086	-0.257	0.41
+turbo	420	55	64	+0.053	-0.058	0.61
+turbo	420	75	64	+0.044	+0.064	0.61
+turbo	420	85	64	-0.010	-0.087	0.41
+turbo	420	90	64	-0.044	-0.113	0.44
+turbo	420	94	64	-0.120	-0.177	0.41
+
+# overall n=896 median -0.023 mean -0.216 win_frac 0.45
+
+# PROVENANCE
+# A = dejpeg_rt24g (shipped, 24k-crop data, 200k steps, clean cosine schedule)
+# B = dejpeg_rt24big_r2 (100k-crop data, 173k steps, WARM-RESTARTED from a 20k
+#     checkpoint after a mid-run OS flip — AdamW moments and the cosine
+#     schedule restarted, so this is not a schedule-matched comparison)
+# corpus /mnt/v/imazen-26-clean, pinned split, 8 files/subcorpus, n=64/cell
+# arm model_proj (model + projection), metric ssim2, per file
+# B's fidelity-to-TEACHER is ~2 dB better (38.97 vs 36.89). Against clean
+# references it is not better: overall median -0.023, win_frac 0.45, and
+# clearly worse at low q (-0.86 turbo q15). Imitating the teacher more
+# precisely converged toward the teacher, including where the older student
+# had been BEATING it.
