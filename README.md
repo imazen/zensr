@@ -232,6 +232,15 @@ rest of the zen stack (zenpng, zenresize, zensim). See `LICENSE-AGPL3` and
 
 Nothing here is released. The measured record lives in `SYSTEMS.md`, the
 forward plan and the falsification registry in `ROADMAP.md`, and the proposed
-public surface in `docs/API_DESIGN.md`. Absolute numbers predating 2026-07-31
-were measured against a partly JPEG-sourced eval split and understate the
-model — see the correction at the top of `ROADMAP.md`.
+public surface in `docs/API_DESIGN.md`.
+
+Numbers predating 2026-07-31 were measured against a partly JPEG-sourced eval
+split, and on 2026-08-02 the file selection was found to admit training images
+as well. The effect is **not** uniform, so "they understate the model" is too
+simple: absolute gains are *understated* (quality tier +11.6 vs the +7.1 in
+the table above at q15; realtime +6.9 vs +5.0), while realtime-as-a-fraction-
+of-quality is *overstated* at low q — measured 59% at q15 against the 68-79%
+claimed. First clean-reference figures:
+`benchmarks/tier_ratio_clean_2026-08-02.tsv`. They cover turbo 4:2:0 at n=32,
+so they are not yet a drop-in replacement for the blended table. Full
+correction: `ROADMAP.md` §0.
