@@ -3,11 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+    # A documentation-only push cannot change what the code does. GitHub skips
+    # the run only when EVERY changed path matches, so a commit touching both
+    # docs and code still builds.
+    paths-ignore: ['**.md', 'benchmarks/**', 'eval_split/**']
   pull_request:
     branches: [main]
+    paths-ignore: ['**.md', 'benchmarks/**', 'eval_split/**']
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  # Keyed on the ref, NOT run_id: run_id is unique per run, so the group never
+  # matched and superseded runs piled up in the queue instead of cancelling.
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
