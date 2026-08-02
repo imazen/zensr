@@ -1338,3 +1338,41 @@ both subsamplings — +0.39 to +1.31 (turbo 420, q90->q100), +0.32 to +1.09
 crossovers above are the model degrading while the projection increasingly
 offsets it. require_consistency in docs/API_DESIGN.md is load-bearing, not
 merely a safety property.
+
+### FEATURE/AFFINITY KD PASSES AT LOW Q (2026-08-02) — roadmap 1.4, task #13
+
+First non-null rung in a session of nulls. FAKD-style affinity KD (channel-
+normalised Gram of pooled features, so a 24-wide student compares to a 64-wide
+teacher with no learned projector) added to output-KD, weight 0.027 derived
+from a probe rather than guessed (base 0.0091 / aff 0.1092 -> ~25% share;
+measured aff_share held 0.18-0.22 through training).
+
+Arms differ by EXACTLY one loss term: same box, data, seeds, 25k-step budget,
+and the same online fp32 teacher supplying both arms' output target.
+Per-file on the clean corpus (benchmarks/fkd_affinity_vs_outkd_2026-08-02.tsv):
+
+    cell         median   win%   sign-test p
+    turbo   q15  +0.163   0.86   3.5e-09
+    mozjpeg q15  +0.153   0.75   7.7e-05
+    turbo   q35  +0.077   0.62   6.0e-02
+    mozjpeg q35  +0.058   0.66   1.7e-02
+    q55          +0.04    0.56-0.61   n.s.
+    q75-q94      ~0       0.42-0.52   n.s. (both directions)
+    low-q band   +0.109   0.72   6.8e-13   (n=256)
+    overall      +0.030   0.56   2.7e-04   (n=896)
+
+TWO QUALIFIERS, both load-bearing:
+1. Magnitudes (~0.1 ssim2) are an order of magnitude BELOW the ~0.3
+   single-comparison resolution. The sign test is why this is reportable at
+   all: what is established is the systematic direction at low q, not a
+   difference visible on one image. Do not quote +0.163 as a user-visible win.
+2. Both arms sit at 25k steps against the shipped model's 200k (arm A is
+   -0.354 median vs rt24g). This is a 25k-budget result. The full-budget rerun
+   is task #17.
+
+Method note worth keeping: the verdict rule (per-file on the clean corpus, NOT
+val_psnr_vs_teacher, low q as the deciding band) was written into ROADMAP 1.4
+BEFORE the treatment arm finished, as was the scope bound. That mattered here
+— arm B ended with WORSE teacher-fidelity than arm A (34.51 vs 34.86) while
+being better on clean references at low q. Choosing the metric afterwards
+would have inverted the conclusion.
