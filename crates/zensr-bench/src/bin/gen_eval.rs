@@ -38,29 +38,56 @@ const CHAINS: &[(&str, &[Gen])] = &[
     ("single-t35", &[Gen("turbo", 35, "420", 0)]),
     ("single-m70", &[Gen("mozjpeg", 70, "420", 0)]),
     // gen2: common web flows
-    ("g2-social", &[Gen("turbo", 85, "420", 0), Gen("turbo", 75, "420", 0)]),
-    ("g2-cdn", &[Gen("turbo", 92, "420", 0), Gen("mozjpeg", 70, "420", 0)]),
-    ("g2-upq", &[Gen("turbo", 60, "420", 0), Gen("turbo", 90, "420", 0)]),
-    ("g2-low", &[Gen("turbo", 35, "420", 0), Gen("turbo", 35, "420", 0)]),
-    ("g2-444to420", &[Gen("jpegli", 85, "444", 0), Gen("turbo", 75, "420", 0)]),
+    (
+        "g2-social",
+        &[Gen("turbo", 85, "420", 0), Gen("turbo", 75, "420", 0)],
+    ),
+    (
+        "g2-cdn",
+        &[Gen("turbo", 92, "420", 0), Gen("mozjpeg", 70, "420", 0)],
+    ),
+    (
+        "g2-upq",
+        &[Gen("turbo", 60, "420", 0), Gen("turbo", 90, "420", 0)],
+    ),
+    (
+        "g2-low",
+        &[Gen("turbo", 35, "420", 0), Gen("turbo", 35, "420", 0)],
+    ),
+    (
+        "g2-444to420",
+        &[Gen("jpegli", 85, "444", 0), Gen("turbo", 75, "420", 0)],
+    ),
     // gen2 with 2px crop between generations (block grids misaligned)
-    ("g2-shift2", &[Gen("turbo", 75, "420", 0), Gen("turbo", 75, "420", 2)]),
+    (
+        "g2-shift2",
+        &[Gen("turbo", 75, "420", 0), Gen("turbo", 75, "420", 2)],
+    ),
     // gen3
-    ("g3-meme", &[
-        Gen("turbo", 75, "420", 0),
-        Gen("mozjpeg", 60, "420", 0),
-        Gen("turbo", 50, "420", 0),
-    ]),
-    ("g3-deep", &[
-        Gen("turbo", 35, "420", 0),
-        Gen("turbo", 35, "420", 0),
-        Gen("turbo", 35, "420", 0),
-    ]),
-    ("g3-shift", &[
-        Gen("turbo", 85, "420", 0),
-        Gen("turbo", 75, "420", 2),
-        Gen("turbo", 65, "420", 2),
-    ]),
+    (
+        "g3-meme",
+        &[
+            Gen("turbo", 75, "420", 0),
+            Gen("mozjpeg", 60, "420", 0),
+            Gen("turbo", 50, "420", 0),
+        ],
+    ),
+    (
+        "g3-deep",
+        &[
+            Gen("turbo", 35, "420", 0),
+            Gen("turbo", 35, "420", 0),
+            Gen("turbo", 35, "420", 0),
+        ],
+    ),
+    (
+        "g3-shift",
+        &[
+            Gen("turbo", 85, "420", 0),
+            Gen("turbo", 75, "420", 2),
+            Gen("turbo", 65, "420", 2),
+        ],
+    ),
 ];
 
 fn tmpdir() -> PathBuf {
@@ -82,12 +109,22 @@ fn encode(ppm: &PathBuf, jpg: &PathBuf, enc: &str, q: u32, ss: &str) -> bool {
     let samp = if ss == "420" { "2x2" } else { "1x1" };
     let st = match enc {
         "turbo" => Command::new("cjpeg")
-            .args(["-quality", &q.to_string(), "-sample", samp, "-optimize", "-outfile"])
+            .args([
+                "-quality",
+                &q.to_string(),
+                "-sample",
+                samp,
+                "-optimize",
+                "-outfile",
+            ])
             .arg(jpg)
             .arg(ppm)
             .status(),
         "mozjpeg" => Command::new(format!("{home}/tmp/ati-bin/mozjpeg-cjpeg"))
-            .env("LD_LIBRARY_PATH", format!("{home}/tmp/ati-bin/mozjpeg-lib64"))
+            .env(
+                "LD_LIBRARY_PATH",
+                format!("{home}/tmp/ati-bin/mozjpeg-lib64"),
+            )
             .args(["-quality", &q.to_string(), "-sample", samp, "-outfile"])
             .arg(jpg)
             .arg(ppm)
@@ -115,12 +152,19 @@ fn zj_decode(data: &[u8]) -> Rgb8Img {
         .decode(data, enough::Unstoppable)
         .expect("zenjpeg decode");
     let (w, h) = r.dimensions();
-    Rgb8Img { px: r.pixels_u8().expect("u8").to_vec(), w: w as usize, h: h as usize }
+    Rgb8Img {
+        px: r.pixels_u8().expect("u8").to_vec(),
+        w: w as usize,
+        h: h as usize,
+    }
 }
 
 fn probe_cols(data: &[u8]) -> (String, String) {
     match zenjpeg::detect::probe(data) {
-        Ok(p) => (format!("{:?}", p.encoder), format!("{:.1}", p.quality.value)),
+        Ok(p) => (
+            format!("{:?}", p.encoder),
+            format!("{:.1}", p.quality.value),
+        ),
         Err(_) => ("ERR".into(), "-".into()),
     }
 }
@@ -156,7 +200,9 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr0) = center_crop(&img, 512) else { continue };
+            let Some(hr0) = center_crop(&img, 512) else {
+                continue;
+            };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             for (chain, gens) in CHAINS {
@@ -192,7 +238,14 @@ fn main() {
                         )
                         .expect("restore");
                         let (w, h) = (r.width, r.height);
-                        outs.push(("model", Rgb8Img { px: r.to_rgb8(), w, h }));
+                        outs.push((
+                            "model",
+                            Rgb8Img {
+                                px: r.to_rgb8(),
+                                w,
+                                h,
+                            },
+                        ));
                         let rn = restore_jpeg(
                             &data,
                             &model,
@@ -201,7 +254,14 @@ fn main() {
                                 .with_projection(Projection::Off),
                         )
                         .expect("restore-noproj");
-                        outs.push(("model_noproj", Rgb8Img { px: rn.to_rgb8(), w, h }));
+                        outs.push((
+                            "model_noproj",
+                            Rgb8Img {
+                                px: rn.to_rgb8(),
+                                w,
+                                h,
+                            },
+                        ));
                     }
                     for (arm, o) in &outs {
                         let s = score(&gt, o);

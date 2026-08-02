@@ -35,7 +35,9 @@ fn pinned_stem(fname: &str) -> String {
 /// (2026-07-23 postmortem, and again on 2026-08-02 when a pristine directory
 /// held only the JPEG-sourced subset). Returns None when no list is available,
 /// in which case the caller falls back to sorted order and says so.
-fn load_pinned(path: &str) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
+fn load_pinned(
+    path: &str,
+) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
     let text = std::fs::read_to_string(path).ok()?;
     let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
         std::collections::HashMap::new();
@@ -48,7 +50,11 @@ fn load_pinned(path: &str) -> Option<std::collections::HashMap<String, std::coll
             m.entry(d.to_string()).or_default().insert(pinned_stem(f));
         }
     }
-    if m.is_empty() { None } else { Some(m) }
+    if m.is_empty() {
+        None
+    } else {
+        Some(m)
+    }
 }
 
 fn tmpdir() -> PathBuf {
@@ -69,13 +75,29 @@ fn encode(ppm: &PathBuf, jpg: &PathBuf, enc: &str, q: u32, ss: &str) -> bool {
     let home = std::env::var("HOME").unwrap();
     let st = match enc {
         "turbo" => Command::new("cjpeg")
-            .args(["-quality", &q.to_string(), "-sample", if ss == "420" { "2x2" } else { "1x1" }, "-optimize", "-outfile"])
+            .args([
+                "-quality",
+                &q.to_string(),
+                "-sample",
+                if ss == "420" { "2x2" } else { "1x1" },
+                "-optimize",
+                "-outfile",
+            ])
             .arg(jpg)
             .arg(ppm)
             .status(),
         "mozjpeg" => Command::new(format!("{home}/tmp/ati-bin/mozjpeg-cjpeg"))
-            .env("LD_LIBRARY_PATH", format!("{home}/tmp/ati-bin/mozjpeg-lib64"))
-            .args(["-quality", &q.to_string(), "-sample", if ss == "420" { "2x2" } else { "1x1" }, "-outfile"])
+            .env(
+                "LD_LIBRARY_PATH",
+                format!("{home}/tmp/ati-bin/mozjpeg-lib64"),
+            )
+            .args([
+                "-quality",
+                &q.to_string(),
+                "-sample",
+                if ss == "420" { "2x2" } else { "1x1" },
+                "-outfile",
+            ])
             .arg(jpg)
             .arg(ppm)
             .status(),
@@ -108,7 +130,11 @@ fn zj_decode(data: &[u8], deblock_auto: bool) -> Rgb8Img {
         .decode(data, enough::Unstoppable)
         .expect("zenjpeg decode");
     let (w, h) = r.dimensions();
-    Rgb8Img { px: r.pixels_u8().expect("u8").to_vec(), w: w as usize, h: h as usize }
+    Rgb8Img {
+        px: r.pixels_u8().expect("u8").to_vec(),
+        w: w as usize,
+        h: h as usize,
+    }
 }
 
 /// Deployment policy: Knusperli (Auto) only for Annex-K-family files at
@@ -129,7 +155,10 @@ fn policy_wants_auto(data: &[u8]) -> bool {
 
 fn probe_cols(data: &[u8]) -> (String, String) {
     match zenjpeg::detect::probe(data) {
-        Ok(p) => (format!("{:?}", p.encoder), format!("{:.1}", p.quality.value)),
+        Ok(p) => (
+            format!("{:?}", p.encoder),
+            format!("{:.1}", p.quality.value),
+        ),
         Err(_) => ("ERR".into(), "-".into()),
     }
 }
@@ -163,7 +192,10 @@ fn main() {
     let custom_qs: Option<Vec<u32>> = std::env::var("ZENSR_EVAL_QS")
         .ok()
         .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect());
-    let qs: &[u32] = match (custom_qs.as_deref(), std::env::var("ZENSR_EVAL_GRID").as_deref()) {
+    let qs: &[u32] = match (
+        custom_qs.as_deref(),
+        std::env::var("ZENSR_EVAL_GRID").as_deref(),
+    ) {
         (Some(c), _) => c,
         (None, Ok("high")) => QS_HIGH,
         (None, Ok("low")) => QS_LOW,
@@ -210,14 +242,20 @@ fn main() {
                 seen_pinned.insert(stem);
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else { continue };
+            let Some(hr) = center_crop(&img, 512) else {
+                continue;
+            };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             // Ground-truth provenance: JPEG-sourced references are themselves
             // compressed, so the model gets penalised for removing artifacts
             // that are IN the reference (2026-07-31: 39% of the pinned eval
             // split, and it understated every absolute gain). Recorded per row;
             // ZENSR_EVAL_CLEAN_GT=1 skips them entirely.
-            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") {
+                "png"
+            } else {
+                "jpg"
+            };
             if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
                 continue;
             }
@@ -238,7 +276,9 @@ fn main() {
                         // by 2-4 Q, so gate + slack must be set against these,
                         // not just pristine single-generation encodes.
                         let gens: usize = std::env::var("ZENSR_EVAL_GENS")
-                            .ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(1);
                         for _ in 1..gens {
                             let d = zenjpeg::decoder::Decoder::new()
                                 .decode(&std::fs::read(&jpg).unwrap(), enough::Unstoppable)
@@ -246,10 +286,13 @@ fn main() {
                             let (dw, dh) = d.dimensions();
                             let mid = Rgb8Img {
                                 px: d.pixels_u8().expect("u8").to_vec(),
-                                w: dw as usize, h: dh as usize,
+                                w: dw as usize,
+                                h: dh as usize,
                             };
                             write_ppm(&mid, &ppm);
-                            if !encode(&ppm, &jpg, enc, q, ss) { break; }
+                            if !encode(&ppm, &jpg, enc, q, ss) {
+                                break;
+                            }
                         }
                         let data = std::fs::read(&jpg).unwrap();
                         let (pf, pq) = probe_cols(&data);
@@ -261,15 +304,22 @@ fn main() {
                         // TSV of the same grid) — those are ~2/3 of the compute.
                         let policy_only =
                             std::env::var("ZENSR_EVAL_ARMS").as_deref() == Ok("policy");
-                        let mut outs: Vec<(&str, &Rgb8Img, Option<&zensr_micro::adopted::AdoptedModel>)> =
-                            vec![("identity_off", &d_off, None)];
+                        let mut outs: Vec<(
+                            &str,
+                            &Rgb8Img,
+                            Option<&zensr_micro::adopted::AdoptedModel>,
+                        )> = vec![("identity_off", &d_off, None)];
                         if !policy_only {
                             outs.push(("identity_auto", &d_auto, None));
                             outs.push(("model_off", &d_off, Some(&m_off)));
                             outs.push(("model_auto", &d_auto, Some(&m_auto)));
                         }
                         if let Some(mp) = &m_policy {
-                            let src = if policy_wants_auto(&data) { &d_auto } else { &d_off };
+                            let src = if policy_wants_auto(&data) {
+                                &d_auto
+                            } else {
+                                &d_off
+                            };
                             outs.push(("model_policy", src, Some(mp)));
                         }
                         let proj_out = m_policy.as_ref().map(|mp| {
@@ -296,9 +346,13 @@ fn main() {
                                     .with_slack_abs(sa.parse().unwrap()),
                                 ));
                             }
-                            let r = zensr_zenjpeg::restore_jpeg(&data, mp, &rc)
-                            .expect("restore_jpeg");
-                            Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height }
+                            let r =
+                                zensr_zenjpeg::restore_jpeg(&data, mp, &rc).expect("restore_jpeg");
+                            Rgb8Img {
+                                px: r.to_rgb8(),
+                                w: r.width,
+                                h: r.height,
+                            }
                         });
                         if let Some(po) = &proj_out {
                             outs.push(("model_proj", po, None));

@@ -36,7 +36,11 @@ fn eval_pinned(root: &PathBuf) -> HashSet<(String, String)> {
             }
         }
     } else {
-        eprintln!("WARN: no {} (root {}), using first-8 only", pin.display(), root.display());
+        eprintln!(
+            "WARN: no {} (root {}), using first-8 only",
+            pin.display(),
+            root.display()
+        );
     }
     out
 }
@@ -67,7 +71,11 @@ fn main() {
     let mut tsv = header + "\n";
 
     for (sub, dir) in SUBCORPORA {
-        let label = if GRAPHICS.contains(sub) { "graphics" } else { "photo" };
+        let label = if GRAPHICS.contains(sub) {
+            "graphics"
+        } else {
+            "photo"
+        };
         let files = list_images(&root.join(dir));
         let mut used = 0usize;
         for (fi, f) in files.iter().enumerate() {
@@ -75,7 +83,9 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else { continue };
+            let Some(hr) = center_crop(&img, 512) else {
+                continue;
+            };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             // eval = pinned union first-8-sorted (the frozen model-eval files)
@@ -91,7 +101,14 @@ fn main() {
                 buf.extend_from_slice(&hr.px);
                 std::fs::write(&ppm, &buf).unwrap();
                 let ok = Command::new("cjpeg")
-                    .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+                    .args([
+                        "-quality",
+                        &q.to_string(),
+                        "-sample",
+                        "2x2",
+                        "-optimize",
+                        "-outfile",
+                    ])
                     .arg(&jpg)
                     .arg(&ppm)
                     .status()

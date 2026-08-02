@@ -37,3 +37,7 @@ archmage = { version = "0.9.28", features = ["testable_dispatch"] }
 [[bench]]
 name = "kernel_tiers"
 harness = false
+# The bench reaches into the SIMD kernels, which are crate-private
+# without this feature — without the gate `cargo build --all-targets`
+# fails on default features.
+required-features = ["internals"]

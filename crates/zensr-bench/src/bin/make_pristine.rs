@@ -73,7 +73,9 @@ fn main() {
             if !is_jpeg {
                 continue; // PNG sources are already pristine — left in place
             }
-            let Ok(bytes) = std::fs::read(&f) else { continue };
+            let Ok(bytes) = std::fs::read(&f) else {
+                continue;
+            };
             let Some((enc, q, kind)) = probe_quality(&bytes) else {
                 eprintln!("SKIP (probe failed) {name}");
                 n_skip += 1;
@@ -94,19 +96,23 @@ fn main() {
             let pix: Vec<rgb::Rgb<u8>> = small
                 .px
                 .chunks_exact(3)
-                .map(|c| rgb::Rgb { r: c[0], g: c[1], b: c[2] })
+                .map(|c| rgb::Rgb {
+                    r: c[0],
+                    g: c[1],
+                    b: c[2],
+                })
                 .collect();
             let iref = imgref::ImgRef::new(&pix, dw, dh);
             let cfg = EncodeConfig::default().with_compression(Compression::High);
-            let png = match encode_rgb8(iref, None, &cfg, &enough::Unstoppable, &enough::Unstoppable)
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("SKIP (encode {e:?}) {name}");
-                    n_skip += 1;
-                    continue;
-                }
-            };
+            let png =
+                match encode_rgb8(iref, None, &cfg, &enough::Unstoppable, &enough::Unstoppable) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("SKIP (encode {e:?}) {name}");
+                        n_skip += 1;
+                        continue;
+                    }
+                };
             let stem = Path::new(&name).file_stem().unwrap().to_string_lossy();
             let out_name = format!("{stem}__pristine{n}x.png");
             std::fs::write(ddir.join(&out_name), &png).unwrap();

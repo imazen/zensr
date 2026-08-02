@@ -28,9 +28,20 @@ fn encode_turbo(img: &Rgb8Img, q: u32, td: &PathBuf) -> Vec<u8> {
     buf.extend_from_slice(&img.px);
     std::fs::write(&ppm, buf).unwrap();
     // ZENSR_CHAIN_SS=444 switches the whole experiment to 4:4:4 (default 420)
-    let samp = if std::env::var("ZENSR_CHAIN_SS").as_deref() == Ok("444") { "1x1" } else { "2x2" };
+    let samp = if std::env::var("ZENSR_CHAIN_SS").as_deref() == Ok("444") {
+        "1x1"
+    } else {
+        "2x2"
+    };
     assert!(Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", samp, "-optimize", "-outfile"])
+        .args([
+            "-quality",
+            &q.to_string(),
+            "-sample",
+            samp,
+            "-optimize",
+            "-outfile"
+        ])
         .arg(&jpg)
         .arg(&ppm)
         .status()
@@ -80,26 +91,41 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 1024) else { continue };
+            let Some(hr) = center_crop(&img, 1024) else {
+                continue;
+            };
             if hr.w % 2 != 0 || hr.h % 2 != 0 {
                 continue;
             }
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
-            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
-            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") { continue; }
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") {
+                "png"
+            } else {
+                "jpg"
+            };
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
+                continue;
+            }
             let lr_clean = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
             for q in [35u32, 50, 75] {
                 let jpg = encode_turbo(&lr_clean, q, &td);
                 let lr = zj_decode_off(&jpg);
                 let mut outs: Vec<(String, Rgb8Img)> = vec![
-                    ("lanczos".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos)),
+                    (
+                        "lanczos".into(),
+                        resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
+                    ),
                     ("span_direct".into(), sr_x2(&span, &lr, threads)),
                     ("compact_direct".into(), sr_x2(&compact, &lr, threads)),
                 ];
                 // chained: full prod x1 restore (probe/policy/projection) then SR
-                let r = restore_jpeg(&jpg, &dejpeg, &RestoreConfig::default().with_threads(threads))
-                    .expect("restore");
+                let r = restore_jpeg(
+                    &jpg,
+                    &dejpeg,
+                    &RestoreConfig::default().with_threads(threads),
+                )
+                .expect("restore");
                 outs.push((
                     "span_chain".into(),
                     sr_x2_planes(&span, &r.planes, r.width, r.height, threads),
@@ -128,5 +154,9 @@ fn zj_decode_off(data: &[u8]) -> Rgb8Img {
         .decode(data, enough::Unstoppable)
         .expect("decode");
     let (w, h) = r.dimensions();
-    Rgb8Img { px: r.pixels_u8().expect("u8").to_vec(), w: w as usize, h: h as usize }
+    Rgb8Img {
+        px: r.pixels_u8().expect("u8").to_vec(),
+        w: w as usize,
+        h: h as usize,
+    }
 }

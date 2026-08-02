@@ -23,7 +23,10 @@ impl core::fmt::Display for PxError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             PxError::UnsupportedFormat(d) => {
-                write!(f, "unsupported pixel format {d:?}; need RGBF32 or RGBF32_LINEAR")
+                write!(
+                    f,
+                    "unsupported pixel format {d:?}; need RGBF32 or RGBF32_LINEAR"
+                )
             }
             PxError::EmptyInput => write!(f, "empty input"),
             PxError::Alloc(e) => write!(f, "output allocation failed: {e}"),

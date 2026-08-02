@@ -5,12 +5,31 @@
 //! PixelShuffle. Scalar-but-vectorizable safe Rust; magetypes SIMD comes later
 //! if the size/speed answer justifies it.
 #![forbid(unsafe_code)]
+// Three lints fight the kernel style rather than finding defects here:
+//
+// `too_many_arguments` — convolution kernels take their shape (in/out channels,
+//   width, height, stride, padding, group count) as scalars precisely so the
+//   optimiser sees constants at the call site. Bundling them into a struct is
+//   what the lint wants and is exactly what loses that.
+// `needless_range_loop` — indexed loops over fixed-size arrays are the pattern
+//   LLVM turns into shuffles and bounds-check-free code; the iterator rewrite
+//   the lint suggests has repeatedly failed to vectorise the same way.
+// `identity_op` — `+ 0` keeps a column of offsets in the layout table aligned
+//   and readable as a table.
+//
+// They are allowed crate-wide rather than at ~20 sites; every other clippy lint
+// is denied in CI.
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::identity_op)]
 
 pub mod adopted;
 pub mod consist;
-mod wino;
 pub mod guards;
+mod wino;
 // SPANF research kernels: crate-internal unless `internals` opts in.
+#[cfg(all(feature = "px", feature = "internals"))]
+pub mod px;
 #[cfg(feature = "internals")]
 pub mod simd;
 #[cfg(not(feature = "internals"))]
@@ -21,8 +40,6 @@ pub mod tiled;
 #[cfg(not(feature = "internals"))]
 #[allow(dead_code)]
 pub(crate) mod tiled;
-#[cfg(all(feature = "px", feature = "internals"))]
-pub mod px;
 #[cfg(all(feature = "px", feature = "internals"))]
 pub use px::{spanf_x4_px, PxError};
 #[cfg(feature = "internals")]
@@ -44,12 +61,12 @@ pub const TOTAL_FLOATS: usize = 148_288;
 /// Weight views into one flat buffer, in tools/dump_spanf_weights.py order.
 #[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub struct SpanfWeights<'a> {
-    pub conv_near: &'a [f32],                    // [48,1,3,3]
+    pub conv_near: &'a [f32],                     // [48,1,3,3]
     pub blocks: [[(&'a [f32], &'a [f32]); 3]; 5], // (w,b) per conv, per block
-    pub conv_cat_w: &'a [f32],                   // [32,112]
-    pub conv_cat_b: &'a [f32],                   // [32]
-    pub conv2_w: &'a [f32],                      // [48,32,3,3]
-    pub conv2_b: &'a [f32],                      // [48]
+    pub conv_cat_w: &'a [f32],                    // [32,112]
+    pub conv_cat_b: &'a [f32],                    // [32]
+    pub conv2_w: &'a [f32],                       // [48,32,3,3]
+    pub conv2_b: &'a [f32],                       // [48]
 }
 
 impl<'a> SpanfWeights<'a> {
@@ -77,7 +94,14 @@ impl<'a> SpanfWeights<'a> {
         let conv2_w = take(NEAR_CH * FC * 9);
         let conv2_b = take(NEAR_CH);
         debug_assert_eq!(off, TOTAL_FLOATS);
-        Ok(SpanfWeights { conv_near, blocks, conv_cat_w, conv_cat_b, conv2_w, conv2_b })
+        Ok(SpanfWeights {
+            conv_near,
+            blocks,
+            conv_cat_w,
+            conv_cat_b,
+            conv2_w,
+            conv2_b,
+        })
     }
 }
 
@@ -102,7 +126,7 @@ pub const TENSOR_LAYOUT: [(usize, usize); 17] = [
     (FC * FC * 9, FC),     // b5.c3
     (CAT_CH * FC + 0, FC), // conv_cat (1x1); conv_2 handled below
 ];
-/// conv_2 is the 18th tensor: (NEAR_CH*FC*9 weights, NEAR_CH bias).
+// conv_2 is the 18th tensor: (NEAR_CH*FC*9 weights, NEAR_CH bias).
 
 /// IEEE 754 half → f32 (safe, handles subnormals/inf/nan).
 #[inline]
@@ -213,7 +237,6 @@ pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
     Ok(out)
 }
 
-
 /// Repack a [cout][cin][3][3] conv weight into quad-major iteration order:
 /// per output-channel-quad q, per (ic, ky): 12 floats [ob0 t0,t1,t2, ob1 t0,..].
 pub(crate) fn pack_conv3x3(wts: &[f32], cin: usize, cout: usize) -> Vec<f32> {
@@ -265,8 +288,12 @@ impl SpanfModel {
         });
         let packed_cat = pack_conv1x1(w.conv_cat_w, CAT_CH, FC);
         let packed_conv2 = pack_conv3x3(w.conv2_w, FC, NEAR_CH);
-        drop(w);
-        Ok(SpanfModel { raw, packed_blocks, packed_cat, packed_conv2 })
+        Ok(SpanfModel {
+            raw,
+            packed_blocks,
+            packed_cat,
+            packed_conv2,
+        })
     }
 
     pub fn from_f16_bytes(bytes: &[u8]) -> Result<Self, String> {
@@ -355,7 +382,16 @@ fn conv3x3_acc_plane(inp: &[f32], out: &mut [f32], w: &[f32], h: usize, wd: usiz
 }
 
 /// Plain conv3x3, NCHW planes, bias, cin->cout.
-fn conv3x3(inp: &[f32], out: &mut [f32], w: &[f32], b: &[f32], cin: usize, cout: usize, h: usize, wd: usize) {
+fn conv3x3(
+    inp: &[f32],
+    out: &mut [f32],
+    w: &[f32],
+    b: &[f32],
+    cin: usize,
+    cout: usize,
+    h: usize,
+    wd: usize,
+) {
     let plane = h * wd;
     for oc in 0..cout {
         let orow = &mut out[oc * plane..(oc + 1) * plane];
@@ -379,11 +415,25 @@ fn conv3x3_grouped_near(inp: &[f32], out: &mut [f32], w: &[f32], h: usize, wd: u
         let ic = oc / S2;
         let orow = &mut out[oc * plane..(oc + 1) * plane];
         orow.fill(0.0);
-        conv3x3_acc_plane(&inp[ic * plane..(ic + 1) * plane], orow, &w[oc * 9..oc * 9 + 9], h, wd);
+        conv3x3_acc_plane(
+            &inp[ic * plane..(ic + 1) * plane],
+            orow,
+            &w[oc * 9..oc * 9 + 9],
+            h,
+            wd,
+        );
     }
 }
 
-fn conv1x1(inp: &[f32], out: &mut [f32], w: &[f32], b: &[f32], cin: usize, cout: usize, plane: usize) {
+fn conv1x1(
+    inp: &[f32],
+    out: &mut [f32],
+    w: &[f32],
+    b: &[f32],
+    cin: usize,
+    cout: usize,
+    plane: usize,
+) {
     for oc in 0..cout {
         let orow = &mut out[oc * plane..(oc + 1) * plane];
         orow.fill(b[oc]);
@@ -431,20 +481,49 @@ fn pixel_shuffle4(inp: &[f32], out: &mut [f32], h: usize, wd: usize) {
 }
 
 /// One SPAB block. `cin`==3 for block 1 (no gate), FC otherwise (gated).
-fn spab(inp: &[f32], out: &mut [f32], tmp: &mut [f32], convs: &[(&[f32], &[f32]); 3], cin: usize, h: usize, wd: usize) {
+fn spab(
+    inp: &[f32],
+    out: &mut [f32],
+    tmp: &mut [f32],
+    convs: &[(&[f32], &[f32]); 3],
+    cin: usize,
+    h: usize,
+    wd: usize,
+) {
     let plane = h * wd;
     conv3x3(inp, out, convs[0].0, convs[0].1, cin, FC, h, wd);
     silu_inplace(&mut out[..FC * plane]);
-    conv3x3(&out[..FC * plane], tmp, convs[1].0, convs[1].1, FC, FC, h, wd);
+    conv3x3(
+        &out[..FC * plane],
+        tmp,
+        convs[1].0,
+        convs[1].1,
+        FC,
+        FC,
+        h,
+        wd,
+    );
     silu_inplace(&mut tmp[..FC * plane]);
-    conv3x3(&tmp[..FC * plane], out, convs[2].0, convs[2].1, FC, FC, h, wd);
+    conv3x3(
+        &tmp[..FC * plane],
+        out,
+        convs[2].0,
+        convs[2].1,
+        FC,
+        FC,
+        h,
+        wd,
+    );
     if cin == FC {
         // gated: out = (out3 + inp) * (sigmoid(out3) - 0.5); reuse tmp as scratch
         tmp[..FC * plane].copy_from_slice(&out[..FC * plane]);
-        gate(&tmp[..FC * plane], &inp[..FC * plane], &mut out[..FC * plane]);
+        gate(
+            &tmp[..FC * plane],
+            &inp[..FC * plane],
+            &mut out[..FC * plane],
+        );
     }
 }
-
 
 /// Scale-generic strided pixel shuffle: [3*s*s, h, w] (stride cs) -> [3, s*h, s*w].
 pub(crate) fn pixel_shuffle_s_strided(
@@ -488,7 +567,13 @@ pub(crate) fn nearest_add(base: &[f32], out: &mut [f32], h: usize, wd: usize, s:
     }
 }
 
-pub(crate) fn pixel_shuffle4_strided(inp: &[f32], cstride: usize, out: &mut [f32], h: usize, wd: usize) {
+pub(crate) fn pixel_shuffle4_strided(
+    inp: &[f32],
+    cstride: usize,
+    out: &mut [f32],
+    h: usize,
+    wd: usize,
+) {
     let plane = h * wd;
     let (oh, ow) = (h * 4, wd * 4);
     for c in 0..3 {
@@ -512,7 +597,10 @@ pub(crate) fn pixel_shuffle4_strided(inp: &[f32], cstride: usize, out: &mut [f32
 pub(crate) fn nan_debug(stage: &str, data: &[f32]) {
     let bad = data.iter().filter(|v| !v.is_finite()).count();
     let first = data.iter().position(|v| !v.is_finite());
-    let mx = data.iter().cloned().fold(0.0f32, |a, v| if v.is_finite() { a.max(v.abs()) } else { a });
+    let mx = data.iter().cloned().fold(
+        0.0f32,
+        |a, v| if v.is_finite() { a.max(v.abs()) } else { a },
+    );
     eprintln!(
         "nan-debug {stage}: nonfinite={bad}/{} first={first:?} max_abs={mx:.3e}",
         data.len()
@@ -548,7 +636,15 @@ pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32
     cat[(NEAR_CH + FC) * plane..].copy_from_slice(&b1);
 
     let mut catd = vec![0.0f32; FC * plane];
-    conv1x1(&cat, &mut catd, w.conv_cat_w, w.conv_cat_b, CAT_CH, FC, plane);
+    conv1x1(
+        &cat,
+        &mut catd,
+        w.conv_cat_w,
+        w.conv_cat_b,
+        CAT_CH,
+        FC,
+        plane,
+    );
     let mut pre = vec![0.0f32; NEAR_CH * plane];
     conv3x3(&catd, &mut pre, w.conv2_w, w.conv2_b, FC, NEAR_CH, h, wd);
 
@@ -620,8 +716,18 @@ mod tests {
         let wbuf = lcg(TOTAL_FLOATS, 777, 0.12);
         let w = SpanfWeights::parse(&wbuf).unwrap();
         for &(h, wd) in &[
-            (1usize, 1usize), (1, 9), (2, 3), (3, 17), (5, 18), (8, 19),
-            (17, 2), (7, 33), (13, 13), (61, 47), (16, 16), (18, 18),
+            (1usize, 1usize),
+            (1, 9),
+            (2, 3),
+            (3, 17),
+            (5, 18),
+            (8, 19),
+            (17, 2),
+            (7, 33),
+            (13, 13),
+            (61, 47),
+            (16, 16),
+            (18, 18),
         ] {
             let input = lcg(3 * h * wd, (h * 131 + wd) as u32, 1.0);
             let a = spanf_x4(&input, h, wd, &w);
@@ -640,11 +746,11 @@ mod tests {
         for &(h, wd, tile) in &[
             (65usize, 33usize, 32usize), // 1-px core column+row at the edges
             (33, 65, 32),
-            (40, 40, 64),                // single tile > image
-            (5, 90, 32),                 // short strip, many tiles
-            (90, 5, 32),                 // narrow strip
-            (17, 17, 32),                // tiny single tile
-            (1, 90, 32),                 // 1-row image split across tiles
+            (40, 40, 64), // single tile > image
+            (5, 90, 32),  // short strip, many tiles
+            (90, 5, 32),  // narrow strip
+            (17, 17, 32), // tiny single tile
+            (1, 90, 32),  // 1-row image split across tiles
         ] {
             let input = lcg(3 * h * wd, (h * 977 + wd) as u32, 1.0);
             let whole = spanf_x4_simd(&input, h, wd, &w);
@@ -680,8 +786,8 @@ mod tests {
         let want = spanf_x4_simd(&planar, h, wd, &wv);
 
         let bytes: &[u8] = bytemuck::cast_slice(&inter);
-        let tight = PixelSlice::new(bytes, wd as u32, h as u32, wd * 12, PixelDescriptor::RGBF32)
-            .unwrap();
+        let tight =
+            PixelSlice::new(bytes, wd as u32, h as u32, wd * 12, PixelDescriptor::RGBF32).unwrap();
         let out_t = px::spanf_x4_px(&model, &tight, 2, 32).unwrap();
 
         // Same pixels behind a padded stride (5 extra px per row).

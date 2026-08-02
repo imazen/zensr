@@ -92,9 +92,9 @@ const WIN: usize = 256;
 
 /// libjpeg Annex K luma table (natural order) for claimed-quality estimation.
 const STD_LUMA_Q: [u16; 64] = [
-    16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69,
-    56, 14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81,
-    104, 113, 92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
+    16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56,
+    14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113,
+    92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
 ];
 
 fn fnv(s: &str) -> u64 {
@@ -120,12 +120,22 @@ fn encode(ppm: &Path, jpg: &Path, enc: &str, q: u32) -> bool {
     let home = std::env::var("HOME").unwrap();
     let st = match enc {
         "turbo" => Command::new("cjpeg")
-            .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+            .args([
+                "-quality",
+                &q.to_string(),
+                "-sample",
+                "2x2",
+                "-optimize",
+                "-outfile",
+            ])
             .arg(jpg)
             .arg(ppm)
             .status(),
         "mozjpeg" => Command::new(format!("{home}/tmp/ati-bin/mozjpeg-cjpeg"))
-            .env("LD_LIBRARY_PATH", format!("{home}/tmp/ati-bin/mozjpeg-lib64"))
+            .env(
+                "LD_LIBRARY_PATH",
+                format!("{home}/tmp/ati-bin/mozjpeg-lib64"),
+            )
             .args(["-quality", &q.to_string(), "-sample", "2x2", "-outfile"])
             .arg(jpg)
             .arg(ppm)
@@ -267,7 +277,10 @@ fn dft_pow(r: &[f64], f: f64) -> f64 {
 
 fn extract_features(data: &[u8]) -> Option<Feats> {
     let t0 = Instant::now();
-    let mut f = Feats { bytes: data.len(), ..Default::default() };
+    let mut f = Feats {
+        bytes: data.len(),
+        ..Default::default()
+    };
 
     // ---- coefficient-domain ----
     let tc = Instant::now();
@@ -279,12 +292,20 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
     let qt = dc.quant_tables[comp.quant_table_idx as usize]?;
 
     // claimed quality (libjpeg scaling of Annex K); median over entries
-    let mut scales: Vec<f64> =
-        (0..64).map(|i| qt[i] as f64 * 100.0 / STD_LUMA_Q[i] as f64).collect();
+    let mut scales: Vec<f64> = (0..64)
+        .map(|i| qt[i] as f64 * 100.0 / STD_LUMA_Q[i] as f64)
+        .collect();
     scales.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let sc = scales[32];
-    f.q_claim = if sc <= 100.0 { (200.0 - sc) / 2.0 } else { 5000.0 / sc };
-    f.qt_lo_mean = (1..10).map(|k| qt[ZIGZAG_TO_NATURAL[k]] as f64).sum::<f64>() / 9.0;
+    f.q_claim = if sc <= 100.0 {
+        (200.0 - sc) / 2.0
+    } else {
+        5000.0 / sc
+    };
+    f.qt_lo_mean = (1..10)
+        .map(|k| qt[ZIGZAG_TO_NATURAL[k]] as f64)
+        .sum::<f64>()
+        / 9.0;
 
     // fixed centered block window (size-leak guard: all counts below are
     // computed over at most WBLK x WBLK blocks regardless of image size)
@@ -309,7 +330,13 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
             dcv.push(blk[0] as i32);
             for k in 1..64 {
                 let c = blk[k] as i64;
-                let reg = if k <= 9 { 0 } else if k <= 27 { 1 } else { 2 };
+                let reg = if k <= 9 {
+                    0
+                } else if k <= 27 {
+                    1
+                } else {
+                    2
+                };
                 ntot[reg] += 1;
                 if c != 0 {
                     nz[reg] += 1;
@@ -390,7 +417,9 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
     let mut c_fill = (0.0f64, 0u32);
     for ci in 1..dc.components.len().min(3) {
         let cc = &dc.components[ci];
-        let Some(cqt) = dc.quant_tables[cc.quant_table_idx as usize] else { continue };
+        let Some(cqt) = dc.quant_tables[cc.quant_table_idx as usize] else {
+            continue;
+        };
         let _ = cqt;
         let cbw = cc.blocks_wide.min(WBLK / 2);
         let cbh = cc.blocks_high.min(WBLK / 2);
@@ -442,11 +471,17 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
     c_chis.sort_by(|a, b| b.partial_cmp(a).unwrap());
     f.c_chi_max = c_chis.first().copied().unwrap_or(0.0);
     f.c_gapc = c_gaps / c_chis.len().max(1) as f64;
-    f.c_dc_fill = if c_fill.1 > 0 { c_fill.0 / c_fill.1 as f64 } else { 1.0 };
+    f.c_dc_fill = if c_fill.1 > 0 {
+        c_fill.0 / c_fill.1 as f64
+    } else {
+        1.0
+    };
 
     // ---- pixel-domain (windowed) ----
     let tp = Instant::now();
-    let dec = zenjpeg::decoder::Decoder::new().decode(data, zenjpeg::encoder::Unstoppable).ok()?;
+    let dec = zenjpeg::decoder::Decoder::new()
+        .decode(data, zenjpeg::encoder::Unstoppable)
+        .ok()?;
     let (w, h) = dec.dimensions();
     let (w, h) = (w as usize, h as usize);
     f.w = w;
@@ -499,8 +534,11 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
                 ni += 1;
             }
         }
-        let ratio =
-            if ni > 0 && si > 0.0 { (sb / nbn.max(1) as f64) / (si / ni as f64) } else { 1.0 };
+        let ratio = if ni > 0 && si > 0.0 {
+            (sb / nbn.max(1) as f64) / (si / ni as f64)
+        } else {
+            1.0
+        };
         let mut pm = [0.0f64; 8];
         let mut pn = [0u32; 8];
         for (x, &v) in d.iter().enumerate().skip(1) {
@@ -510,7 +548,12 @@ fn extract_features(data: &[u8]) -> Option<Feats> {
         for p in 0..8 {
             pm[p] /= pn[p].max(1) as f64;
         }
-        let r: Vec<f64> = d.iter().enumerate().skip(1).map(|(x, &v)| v - pm[x % 8]).collect();
+        let r: Vec<f64> = d
+            .iter()
+            .enumerate()
+            .skip(1)
+            .map(|(x, &v)| v - pm[x % 8])
+            .collect();
         let e: f64 = r.iter().map(|v| v * v).sum();
         (ratio, r, e)
     };
@@ -584,7 +627,8 @@ fn fdct_luma(y: &[f32], w: usize, h: usize, bx: usize, by: usize) -> [f32; 64] {
     for (u, row) in m.iter_mut().enumerate() {
         let cu = if u == 0 { (0.5f32).sqrt() } else { 1.0 };
         for (x, v) in row.iter_mut().enumerate() {
-            *v = 0.5 * cu * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
+            *v =
+                0.5 * cu * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
         }
     }
     let mut px = [[0.0f32; 8]; 8];
@@ -619,7 +663,9 @@ fn truth_excess(truth: &Rgb8Img, jpg: &[u8], out: &mut Vec<f32>, out_nz: &mut Ve
         return false;
     };
     let comp = &dc.components[0];
-    let Some(qt) = dc.quant_tables[comp.quant_table_idx as usize] else { return false };
+    let Some(qt) = dc.quant_tables[comp.quant_table_idx as usize] else {
+        return false;
+    };
     let plane = truth.w * truth.h;
     let mut rgbp = vec![0.0f32; 3 * plane];
     for i in 0..plane {
@@ -651,18 +697,25 @@ fn truth_excess(truth: &Rgb8Img, jpg: &[u8], out: &mut Vec<f32>, out_nz: &mut Ve
 fn physics(root: &Path, per_sub: usize, td: &Path) {
     std::fs::create_dir_all(td).unwrap();
     println!("# gen_detect physics per_sub={per_sub} chains=gen1,gen2a,gen2r-roundtrip,gen2r-cdn (q1==q2, resize=0.75 catmullrom)");
-    println!("chain\tencoder\tq\tn\tp50\tp99\tp999\tmax\tviolation%\tn_nz\tp99_nz\tmax_nz\tviol%_nz");
+    println!(
+        "chain\tencoder\tq\tn\tp50\tp99\tp999\tmax\tviolation%\tn_nz\tp99_nz\tmax_nz\tviol%_nz"
+    );
     for enc in ["turbo", "mozjpeg"] {
         for q in [35u32, 75, 92] {
-            let mut acc: std::collections::BTreeMap<&str, (Vec<f32>, Vec<f32>)> = Default::default();
+            let mut acc: std::collections::BTreeMap<&str, (Vec<f32>, Vec<f32>)> =
+                Default::default();
             for (_, dir) in SUBCORPORA {
                 let mut used = 0usize;
                 for fpath in list_images(&root.join(dir)) {
                     if used >= per_sub {
                         break;
                     }
-                    let Some(img) = decode_any(&fpath) else { continue };
-                    let Some(hr) = center_crop(&img, 256) else { continue };
+                    let Some(img) = decode_any(&fpath) else {
+                        continue;
+                    };
+                    let Some(hr) = center_crop(&img, 256) else {
+                        continue;
+                    };
                     used += 1;
                     let ppm = td.join("p.ppm");
                     let jpg1 = td.join("p1.jpg");
@@ -703,12 +756,8 @@ fn physics(root: &Path, per_sub: usize, td: &Path) {
                             let pc = td.join("c.ppm");
                             write_ppm(&dn, &pc);
                             if encode(&pc, &jpg2, enc, q) {
-                                let truth_small = resize_rgb8(
-                                    &hr,
-                                    dn.w,
-                                    dn.h,
-                                    zenresize::Filter::CatmullRom,
-                                );
+                                let truth_small =
+                                    resize_rgb8(&hr, dn.w, dn.h, zenresize::Filter::CatmullRom);
                                 let data2 = std::fs::read(&jpg2).unwrap();
                                 let e = acc.entry("gen2r-cdn").or_default();
                                 truth_excess(&truth_small, &data2, &mut e.0, &mut e.1);
@@ -792,10 +841,15 @@ fn main() {
         return;
     }
     let mut args = std::env::args().skip(1);
-    let root = PathBuf::from(args.next().expect("usage: gen_detect <imazen26-root> <out.tsv>"));
+    let root = PathBuf::from(
+        args.next()
+            .expect("usage: gen_detect <imazen26-root> <out.tsv>"),
+    );
     if std::env::var("ZENSR_GD_PHYSICS").is_ok() {
-        let per_sub: usize =
-            std::env::var("ZENSR_GD_TRAIN_PER_SUB").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+        let per_sub: usize = std::env::var("ZENSR_GD_TRAIN_PER_SUB")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2);
         let home = std::env::var("HOME").unwrap();
         let td = PathBuf::from(&home)
             .join("tmp")
@@ -805,13 +859,19 @@ fn main() {
         return;
     }
     let out_path = PathBuf::from(args.next().expect("out.tsv"));
-    let per_sub: usize =
-        std::env::var("ZENSR_GD_TRAIN_PER_SUB").ok().and_then(|v| v.parse().ok()).unwrap_or(12);
+    let per_sub: usize = std::env::var("ZENSR_GD_TRAIN_PER_SUB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(12);
     let split_sel = std::env::var("ZENSR_GD_SPLIT").unwrap_or_else(|_| "both".into());
-    let threads: usize =
-        std::env::var("ZENSR_GD_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
-    let cap: usize =
-        std::env::var("ZENSR_GD_CAP").ok().and_then(|v| v.parse().ok()).unwrap_or(896);
+    let threads: usize = std::env::var("ZENSR_GD_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8);
+    let cap: usize = std::env::var("ZENSR_GD_CAP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(896);
     let encoders: Vec<String> = std::env::var("ZENSR_GD_ENCODERS")
         .unwrap_or_else(|_| "turbo,mozjpeg".into())
         .split(',')
@@ -851,7 +911,11 @@ fn main() {
         }
         if split_sel != "train" {
             for p in ev {
-                tasks.push_back(Task { split: "eval", sub: dir, path: p });
+                tasks.push_back(Task {
+                    split: "eval",
+                    sub: dir,
+                    path: p,
+                });
             }
         }
         if split_sel != "eval" {
@@ -897,8 +961,9 @@ fn main() {
     let done = std::sync::atomic::AtomicUsize::new(0);
 
     let home = std::env::var("HOME").unwrap();
-    let scratch =
-        PathBuf::from(&home).join("tmp").join(format!("zensr-gendet-{}", std::process::id()));
+    let scratch = PathBuf::from(&home)
+        .join("tmp")
+        .join(format!("zensr-gendet-{}", std::process::id()));
 
     std::thread::scope(|s| {
         for tid in 0..threads {

@@ -82,7 +82,12 @@ pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
         let row = &rgb[((y0 + y) * w + x0) * 3..][..cw * 3];
         crop.extend_from_slice(row);
     }
-    let res = analyze_features_rgb8(&crop, cw as u32, ch as u32, &AnalysisQuery::new(FeatureSet::SUPPORTED));
+    let res = analyze_features_rgb8(
+        &crop,
+        cw as u32,
+        ch as u32,
+        &AnalysisQuery::new(FeatureSet::SUPPORTED),
+    );
     let mut s = CHOOSER_BIAS;
     for &(name, med, iqr, wgt) in CHOOSER_FEATURES {
         let v = FeatureSet::SUPPORTED
@@ -96,7 +101,11 @@ pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
     }
     let p = 1.0 / (1.0 + (-s).exp());
     ChooserReport {
-        class: if p > CHOOSER_THRESHOLD { ContentClass::Graphics } else { ContentClass::Photo },
+        class: if p > CHOOSER_THRESHOLD {
+            ContentClass::Graphics
+        } else {
+            ContentClass::Photo
+        },
         p_graphics: p,
     }
 }

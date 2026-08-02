@@ -193,8 +193,7 @@ impl Restored {
         let mut out = vec![0u8; 3 * plane];
         for i in 0..plane {
             for c in 0..3 {
-                out[i * 3 + c] =
-                    (self.planes[c * plane + i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                out[i * 3 + c] = (self.planes[c * plane + i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
             }
         }
         out
@@ -252,7 +251,9 @@ pub fn restore_jpeg(
     cfg: &RestoreConfig,
 ) -> Result<Restored, RestoreError> {
     if model.scale != 1 {
-        return Err(RestoreError::UnsupportedModel("restore_jpeg is the x1 pipeline"));
+        return Err(RestoreError::UnsupportedModel(
+            "restore_jpeg is the x1 pipeline",
+        ));
     }
     let mut report = RestoreReport::default();
 
@@ -295,7 +296,12 @@ pub fn restore_jpeg(
     // already consistent, so projection is a no-op too: return it.
     if cfg.high_q_identity && policy_high_q_identity(&probe) {
         report.skipped_model_high_q = true;
-        return Ok(Restored { planes, width: w, height: h, report });
+        return Ok(Restored {
+            planes,
+            width: w,
+            height: h,
+            report,
+        });
     }
 
     // 3. model space: YCbCr-native models run directly in the space where
@@ -322,8 +328,7 @@ pub fn restore_jpeg(
     let pcfg = match cfg.projection {
         Projection::Off => None,
         Projection::Auto => Some(
-            ProjectionConfig::with_slack_q(slack_for(&probe))
-                .with_slack_abs(slack_abs_for(&probe)),
+            ProjectionConfig::with_slack_q(slack_for(&probe)).with_slack_abs(slack_abs_for(&probe)),
         ),
         Projection::Fixed(c) => Some(c),
     };
@@ -346,7 +351,11 @@ pub fn restore_jpeg(
         // the YCbCr space we reconstruct here — skip projection entirely.
         let ncomp = coeffs.components.len();
         let projectable = ncomp == 1 || ncomp == 3;
-        for (ci, comp) in coeffs.components.iter().enumerate().take(if projectable { 3 } else { 0 })
+        for (ci, comp) in coeffs
+            .components
+            .iter()
+            .enumerate()
+            .take(if projectable { 3 } else { 0 })
         {
             let Some(qt) = coeffs.quant_tables[comp.quant_table_idx as usize] else {
                 continue;
@@ -361,10 +370,14 @@ pub fn restore_jpeg(
             let target = &mut ycc[ci * plane..(ci + 1) * plane];
             match plane_geometry(comp.blocks_wide, comp.blocks_high, w, h) {
                 PlaneGeometry::Full => {
-                    report.projection.push(project_plane(target, w, h, &cv, &pcfg));
+                    report
+                        .projection
+                        .push(project_plane(target, w, h, &cv, &pcfg));
                 }
                 PlaneGeometry::HalfBoth => {
-                    report.projection.push(project_chroma_420(target, w, h, &cv, &pcfg));
+                    report
+                        .projection
+                        .push(project_chroma_420(target, w, h, &cv, &pcfg));
                 }
                 // 4:2:2 / 4:4:0 (half in ONE axis only): the 2x2 box
                 // back-projection would be wrong — leave unprojected.
@@ -373,9 +386,20 @@ pub fn restore_jpeg(
         }
     }
     let mut out = vec![0.0f32; 3 * plane];
-    ycbcr_to_rgb_planes(&ycc[..plane], &ycc[plane..2 * plane], &ycc[2 * plane..], &mut out, plane);
+    ycbcr_to_rgb_planes(
+        &ycc[..plane],
+        &ycc[plane..2 * plane],
+        &ycc[2 * plane..],
+        &mut out,
+        plane,
+    );
 
-    Ok(Restored { planes: out, width: w, height: h, report })
+    Ok(Restored {
+        planes: out,
+        width: w,
+        height: h,
+        report,
+    })
 }
 
 #[cfg(test)]
@@ -395,7 +419,13 @@ mod tests {
         v
     }
 
-    fn encode(w: usize, h: usize, rgb: &[u8], q: f32, ss: zenjpeg::encoder::ChromaSubsampling) -> Vec<u8> {
+    fn encode(
+        w: usize,
+        h: usize,
+        rgb: &[u8],
+        q: f32,
+        ss: zenjpeg::encoder::ChromaSubsampling,
+    ) -> Vec<u8> {
         let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(rgb);
         zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
             .encode(px, w as u32, h as u32)
@@ -406,9 +436,18 @@ mod tests {
     fn policy_never_fires_on_zenjpeg_own_files() {
         let rgb = synth_rgb(64, 64);
         for q in [5.0f32, 50.0, 90.0] {
-            let jpg = encode(64, 64, &rgb, q, zenjpeg::encoder::ChromaSubsampling::Quarter);
+            let jpg = encode(
+                64,
+                64,
+                &rgb,
+                q,
+                zenjpeg::encoder::ChromaSubsampling::Quarter,
+            );
             let p = zenjpeg::detect::probe(&jpg).unwrap();
-            assert!(!policy_wants_auto(&p), "AQ family must never trigger Auto (q={q})");
+            assert!(
+                !policy_wants_auto(&p),
+                "AQ family must never trigger Auto (q={q})"
+            );
         }
     }
 
@@ -443,7 +482,13 @@ mod tests {
             }
         }
         // and the real geometries still classify correctly
-        let jpg420 = encode(w, h, &rgb, 50.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let jpg420 = encode(
+            w,
+            h,
+            &rgb,
+            50.0,
+            zenjpeg::encoder::ChromaSubsampling::Quarter,
+        );
         let c420 = zenjpeg::decoder::Decoder::new()
             .decode_coefficients(&jpg420, enough::Unstoppable)
             .unwrap();
@@ -469,23 +514,49 @@ mod tests {
     fn high_q_identity_gate_fires_on_probe_scales() {
         // turbo/moz q>=95 and jpegli-family d<=0.6 must gate; q93-band must not
         let rgb = synth_rgb(64, 64);
-        let jpg = encode(64, 64, &rgb, 96.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let jpg = encode(
+            64,
+            64,
+            &rgb,
+            96.0,
+            zenjpeg::encoder::ChromaSubsampling::Quarter,
+        );
         let p = zenjpeg::detect::probe(&jpg).unwrap();
         // zenjpeg's own encodes probe as Cjpegli-family distance
         let scale = format!("{:?}", p.quality.scale);
         if scale == "ButteraugliDistance" {
-            assert!(policy_high_q_identity(&p), "q96 zenjpeg d={} must gate", p.quality.value);
+            assert!(
+                policy_high_q_identity(&p),
+                "q96 zenjpeg d={} must gate",
+                p.quality.value
+            );
         }
-        let jlow = encode(64, 64, &rgb, 55.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let jlow = encode(
+            64,
+            64,
+            &rgb,
+            55.0,
+            zenjpeg::encoder::ChromaSubsampling::Quarter,
+        );
         let pl = zenjpeg::detect::probe(&jlow).unwrap();
-        assert!(!policy_high_q_identity(&pl), "q55 must NOT gate (d={})", pl.quality.value);
+        assert!(
+            !policy_high_q_identity(&pl),
+            "q55 must NOT gate (d={})",
+            pl.quality.value
+        );
     }
 
     #[test]
     fn pipeline_420_projects_all_three_components() {
         let (w, h) = (64usize, 48usize);
         let rgb = synth_rgb(w, h);
-        let jpg = encode(w, h, &rgb, 35.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let jpg = encode(
+            w,
+            h,
+            &rgb,
+            35.0,
+            zenjpeg::encoder::ChromaSubsampling::Quarter,
+        );
         let coeffs = zenjpeg::decoder::Decoder::new()
             .decode_coefficients(&jpg, enough::Unstoppable)
             .unwrap();
@@ -494,7 +565,9 @@ mod tests {
         assert!(coeffs.components[0].blocks_wide * 8 >= w);
         assert!(coeffs.components[1].blocks_wide * 16 >= w);
         // exercise the projection branches directly on the decode
-        let dec = zenjpeg::decoder::Decoder::new().decode(&jpg, enough::Unstoppable).unwrap();
+        let dec = zenjpeg::decoder::Decoder::new()
+            .decode(&jpg, enough::Unstoppable)
+            .unwrap();
         let px = dec.pixels_u8().unwrap();
         let plane = w * h;
         let mut planes = vec![0.0f32; 3 * plane];
@@ -508,9 +581,18 @@ mod tests {
         let mut nproj = 0;
         for (ci, comp) in coeffs.components.iter().enumerate() {
             let qt = coeffs.quant_tables[comp.quant_table_idx as usize].unwrap();
-            let cv = CoeffView { coeffs: &comp.coeffs, blocks_wide: comp.blocks_wide,
-                blocks_high: comp.blocks_high, order: CoeffOrder::Zigzag, quant: &qt };
-            let t = match ci { 0 => &mut y, 1 => &mut cb, _ => &mut cr };
+            let cv = CoeffView {
+                coeffs: &comp.coeffs,
+                blocks_wide: comp.blocks_wide,
+                blocks_high: comp.blocks_high,
+                order: CoeffOrder::Zigzag,
+                quant: &qt,
+            };
+            let t = match ci {
+                0 => &mut y,
+                1 => &mut cb,
+                _ => &mut cr,
+            };
             let full = comp.blocks_wide * 8 >= w && comp.blocks_high * 8 >= h;
             let rep = if full {
                 project_plane(t, w, h, &cv, &ProjectionConfig::default())
@@ -519,7 +601,11 @@ mod tests {
             };
             // decode itself must be near-consistent on every component,
             // including the back-projected chroma path
-            assert!(rep.mean_abs_change < 4e-3, "comp {ci}: change {}", rep.mean_abs_change);
+            assert!(
+                rep.mean_abs_change < 4e-3,
+                "comp {ci}: change {}",
+                rep.mean_abs_change
+            );
             nproj += 1;
         }
         assert_eq!(nproj, 3);
@@ -562,8 +648,12 @@ mod tests {
         };
         let before = y.clone();
         let rep = project_plane(&mut y, w, h, &cv, &ProjectionConfig::default());
-        let mad: f32 =
-            y.iter().zip(before.iter()).map(|(a, b)| (a - b).abs()).sum::<f32>() / plane as f32;
+        let mad: f32 = y
+            .iter()
+            .zip(before.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f32>()
+            / plane as f32;
         assert!(
             mad < 3e-3,
             "projecting the decode itself must be a near-no-op (mad={mad}, clamped={})",
@@ -576,13 +666,20 @@ mod tests {
             .map(|(i, v)| (v + if (i / 5) % 2 == 0 { 0.25 } else { -0.25 }).clamp(0.0, 1.0))
             .collect();
         let rep2 = project_plane(&mut hall, w, h, &cv, &ProjectionConfig::default());
-        assert!(rep2.clamped_frac > 0.1, "hallucination must be clamped: {}", rep2.clamped_frac);
+        assert!(
+            rep2.clamped_frac > 0.1,
+            "hallucination must be clamped: {}",
+            rep2.clamped_frac
+        );
         let mad2: f32 = hall
             .iter()
             .zip(before.iter())
             .map(|(a, b)| (a - b).abs())
             .sum::<f32>()
             / plane as f32;
-        assert!(mad2 < 0.25, "projection must pull toward the consistent set (mad={mad2})");
+        assert!(
+            mad2 < 0.25,
+            "projection must pull toward the consistent set (mad={mad2})"
+        );
     }
 }

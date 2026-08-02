@@ -23,7 +23,12 @@ const ENCODERS: &[&str] = &["turbo", "mozjpeg", "jpegli", "zenjpeg"];
 
 fn env_list(name: &str, default: Vec<String>) -> Vec<String> {
     std::env::var(name)
-        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or(default)
 }
 
@@ -31,19 +36,39 @@ fn encode(ppm: &PathBuf, jpg: &PathBuf, enc: &str, q: u32) -> bool {
     let home = std::env::var("HOME").unwrap();
     let st = match enc {
         "turbo" => Command::new("cjpeg")
-            .args(["-quality", &q.to_string(), "-sample", "1x1", "-optimize", "-outfile"])
-            .arg(jpg).arg(ppm).status(),
+            .args([
+                "-quality",
+                &q.to_string(),
+                "-sample",
+                "1x1",
+                "-optimize",
+                "-outfile",
+            ])
+            .arg(jpg)
+            .arg(ppm)
+            .status(),
         "mozjpeg" => Command::new(format!("{home}/tmp/ati-bin/mozjpeg-cjpeg"))
-            .env("LD_LIBRARY_PATH", format!("{home}/tmp/ati-bin/mozjpeg-lib64"))
+            .env(
+                "LD_LIBRARY_PATH",
+                format!("{home}/tmp/ati-bin/mozjpeg-lib64"),
+            )
             .args(["-quality", &q.to_string(), "-sample", "1x1", "-outfile"])
-            .arg(jpg).arg(ppm).status(),
+            .arg(jpg)
+            .arg(ppm)
+            .status(),
         "jpegli" => Command::new("cjpegli")
-            .arg(ppm).arg(jpg)
-            .args(["-q", &q.to_string(), "--chroma_subsampling=444"]).status(),
+            .arg(ppm)
+            .arg(jpg)
+            .args(["-q", &q.to_string(), "--chroma_subsampling=444"])
+            .status(),
         _ => {
             let me = std::env::current_exe().unwrap();
             Command::new(me.parent().unwrap().join("zjtool"))
-                .arg("enc").arg(ppm).arg(jpg).args([&q.to_string(), "444"]).status()
+                .arg("enc")
+                .arg(ppm)
+                .arg(jpg)
+                .args([&q.to_string(), "444"])
+                .status()
         }
     };
     st.map(|s| s.success()).unwrap_or(false)
@@ -56,7 +81,8 @@ fn fdct_luma(y: &[f32], w: usize, h: usize, bx: usize, by: usize) -> [f32; 64] {
     for (u, row) in m.iter_mut().enumerate() {
         let cu = if u == 0 { (0.5f32).sqrt() } else { 1.0 };
         for (x, v) in row.iter_mut().enumerate() {
-            *v = 0.5 * cu * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
+            *v =
+                0.5 * cu * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
         }
     }
     let mut px = [[0.0f32; 8]; 8];
@@ -87,7 +113,9 @@ fn main() {
     let root = PathBuf::from(args.next().expect("corpus root"));
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(2);
     let home = std::env::var("HOME").unwrap();
-    let td = PathBuf::from(&home).join("tmp").join(format!("zensr-slack-{}", std::process::id()));
+    let td = PathBuf::from(&home)
+        .join("tmp")
+        .join(format!("zensr-slack-{}", std::process::id()));
     std::fs::create_dir_all(&td).unwrap();
 
     // provenance (sweep discipline): commit, host, config
@@ -98,7 +126,10 @@ fn main() {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
     let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
-    let encoders = env_list("ZENSR_SLACK_ENCODERS", ENCODERS.iter().map(|s| s.to_string()).collect());
+    let encoders = env_list(
+        "ZENSR_SLACK_ENCODERS",
+        ENCODERS.iter().map(|s| s.to_string()).collect(),
+    );
     let qs: Vec<u32> = env_list("ZENSR_SLACK_QS", QS.iter().map(|q| q.to_string()).collect())
         .iter()
         .map(|s| s.parse().expect("q"))
@@ -121,9 +152,13 @@ fn main() {
             for (_, dir) in SUBCORPORA {
                 let mut used = 0usize;
                 for f in list_images(&root.join(dir)) {
-                    if used >= per_sub { break; }
+                    if used >= per_sub {
+                        break;
+                    }
                     let Some(img) = decode_any(&f) else { continue };
-                    let Some(hr) = center_crop(&img, 256) else { continue };
+                    let Some(hr) = center_crop(&img, 256) else {
+                        continue;
+                    };
                     used += 1;
                     let ppm = td.join("s.ppm");
                     let jpg = td.join("s.jpg");
@@ -143,40 +178,62 @@ fn main() {
                     let mut cur_ppm = ppm.clone();
                     let mut ok = true;
                     for gi in 0..gens {
-                        if !encode(&cur_ppm, &jpg, enc, q) { ok = false; break; }
+                        if !encode(&cur_ppm, &jpg, enc, q) {
+                            ok = false;
+                            break;
+                        }
                         if gi + 1 < gens {
                             let mid = td.join(format!("m{gi}.ppm"));
                             let me = std::env::current_exe().unwrap();
                             let st = Command::new(me.parent().unwrap().join("zjtool"))
-                                .arg("dec").arg(&jpg).arg(&mid).arg("off").status();
-                            if !st.map(|s| s.success()).unwrap_or(false) { ok = false; break; }
+                                .arg("dec")
+                                .arg(&jpg)
+                                .arg(&mid)
+                                .arg("off")
+                                .status();
+                            if !st.map(|s| s.success()).unwrap_or(false) {
+                                ok = false;
+                                break;
+                            }
                             // ZENSR_SLACK_RESIZE=1: resample between generations
                             // (the CDN thumbnail flow). Destroys the previous
                             // block grid, so the next encode sees a resampled
                             // signal rather than an aligned re-quantization —
                             // the violation physics should differ.
                             if std::env::var("ZENSR_SLACK_RESIZE").as_deref() == Ok("1") {
-                                let Some(dimg) = decode_any(&mid) else { ok = false; break };
+                                let Some(dimg) = decode_any(&mid) else {
+                                    ok = false;
+                                    break;
+                                };
                                 let half = resize_rgb8(
-                                    &dimg, dimg.w * 3 / 4, dimg.h * 3 / 4,
+                                    &dimg,
+                                    dimg.w * 3 / 4,
+                                    dimg.h * 3 / 4,
                                     zenresize::Filter::CatmullRom,
                                 );
-                                let back = resize_rgb8(
-                                    &half, hr.w, hr.h, zenresize::Filter::CatmullRom,
-                                );
-                                let mut b2 = format!("P6\n{} {}\n255\n", back.w, back.h).into_bytes();
+                                let back =
+                                    resize_rgb8(&half, hr.w, hr.h, zenresize::Filter::CatmullRom);
+                                let mut b2 =
+                                    format!("P6\n{} {}\n255\n", back.w, back.h).into_bytes();
                                 b2.extend_from_slice(&back.px);
                                 std::fs::write(&mid, &b2).unwrap();
                             }
                             cur_ppm = mid;
                         }
                     }
-                    if !ok { continue; }
+                    if !ok {
+                        continue;
+                    }
                     let data = std::fs::read(&jpg).unwrap();
                     let Ok(dc) = zenjpeg::decoder::Decoder::new()
-                        .decode_coefficients(&data, enough::Unstoppable) else { continue };
+                        .decode_coefficients(&data, enough::Unstoppable)
+                    else {
+                        continue;
+                    };
                     let comp = &dc.components[0];
-                    let Some(qt) = dc.quant_tables[comp.quant_table_idx as usize] else { continue };
+                    let Some(qt) = dc.quant_tables[comp.quant_table_idx as usize] else {
+                        continue;
+                    };
                     // true luma from the ORIGINAL (pre-encode) pixels
                     let plane = hr.w * hr.h;
                     let mut rgbp = vec![0.0f32; 3 * plane];
@@ -185,7 +242,8 @@ fn main() {
                             rgbp[c * plane + i] = hr.px[i * 3 + c] as f32 / 255.0;
                         }
                     }
-                    let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
+                    let (mut y, mut cb, mut cr) =
+                        (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
                     rgb_to_ycbcr_planes(&rgbp, plane, &mut y, &mut cb, &mut cr);
                     for by in 0..comp.blocks_high {
                         for bx in 0..comp.blocks_wide {
@@ -208,12 +266,17 @@ fn main() {
             }
             excess.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let n = excess.len();
-            if n == 0 { continue; }
+            if n == 0 {
+                continue;
+            }
             let pct = |p: f64| excess[((n as f64 - 1.0) * p) as usize];
             let viol = excess.iter().filter(|e| **e > 0.0).count() as f64 / n as f64 * 100.0;
             println!(
                 "{enc}\t{q}\t{n}\t{:.3}\t{:.3}\t{:.3}\t{:.2}",
-                pct(0.5), pct(0.99), excess[n - 1], viol
+                pct(0.5),
+                pct(0.99),
+                excess[n - 1],
+                viol
             );
             excess_nz.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let nn = excess_nz.len();
@@ -223,7 +286,10 @@ fn main() {
                     excess_nz.iter().filter(|e| **e > 0.0).count() as f64 / nn as f64 * 100.0;
                 println!(
                     "{enc}-nz\t{q}\t{nn}\t{:.3}\t{:.3}\t{:.3}\t{:.2}",
-                    pcn(0.5), pcn(0.99), excess_nz[nn - 1], violn
+                    pcn(0.5),
+                    pcn(0.99),
+                    excess_nz[nn - 1],
+                    violn
                 );
             }
             // per-quantizer-value tail stats: if the violation tail is an

@@ -1,7 +1,7 @@
 //! Thin C ABI over zensr-micro (zentract-abi pattern: FFI unsafe isolated here;
 //! the algorithm crate stays forbid(unsafe_code)). Size-probe target.
 
-use zensr_micro::{SpanfWeights, spanf_x4_simd, TOTAL_FLOATS};
+use zensr_micro::{spanf_x4_simd, SpanfWeights, TOTAL_FLOATS};
 
 /// SPANF x4 on [3,h,w] f32 NCHW. `weights` = TOTAL_FLOATS f32, dump order.
 /// `out` must hold 3*h*w*16 f32. Returns 0 on success, negative on error.

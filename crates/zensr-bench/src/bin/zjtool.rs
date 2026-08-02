@@ -36,7 +36,11 @@ fn read_ppm(p: &str) -> Rgb8Img {
     pos += 1; // single whitespace after maxval
     let (w, h, maxv) = (vals[0], vals[1], vals[2]);
     assert_eq!(maxv, 255, "maxval");
-    Rgb8Img { px: d[pos..pos + 3 * w * h].to_vec(), w, h }
+    Rgb8Img {
+        px: d[pos..pos + 3 * w * h].to_vec(),
+        w,
+        h,
+    }
 }
 
 fn write_ppm(img: &Rgb8Img, p: &str) {
@@ -77,7 +81,14 @@ fn main() {
             let (w, h) = r.dimensions();
             let px = r.pixels_u8().expect("u8 pixels").to_vec();
             assert_eq!(px.len(), 3 * w as usize * h as usize, "expect RGB8");
-            write_ppm(&Rgb8Img { px, w: w as usize, h: h as usize }, &a[2]);
+            write_ppm(
+                &Rgb8Img {
+                    px,
+                    w: w as usize,
+                    h: h as usize,
+                },
+                &a[2],
+            );
         }
         // dmap <in.jpg> <out.pgm16> : per-8x8-luma-block damage map (S10 math)
         //   damage = sum over bands of Q[u,v]^2/12 where coeff==0 (erased detail
@@ -88,8 +99,7 @@ fn main() {
                 .decode_coefficients(&data, enough::Unstoppable)
                 .expect("coeffs");
             let y = &dc.components[0];
-            let qt = dc.quant_tables[y.quant_table_idx as usize]
-                .expect("luma quant table");
+            let qt = dc.quant_tables[y.quant_table_idx as usize].expect("luma quant table");
             let (bw, bh) = (y.blocks_wide, y.blocks_high);
             let mut out = vec![0u16; bw * bh];
             for b in 0..bw * bh {

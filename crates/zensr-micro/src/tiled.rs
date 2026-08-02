@@ -93,10 +93,8 @@ pub fn spanf_x4_tiled(
             let mut guard = out.lock().unwrap();
             for c in 0..3 {
                 for y in 0..ch {
-                    let src =
-                        &tile_out[c * (4 * eh) * (4 * ew) + (cy + y) * (4 * ew) + cx..][..cw];
-                    guard[c * oh * ow + (y0 * 4 + y) * ow + x0 * 4..][..cw]
-                        .copy_from_slice(src);
+                    let src = &tile_out[c * (4 * eh) * (4 * ew) + (cy + y) * (4 * ew) + cx..][..cw];
+                    guard[c * oh * ow + (y0 * 4 + y) * ow + x0 * 4..][..cw].copy_from_slice(src);
                 }
             }
         }

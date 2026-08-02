@@ -74,11 +74,13 @@ impl AdoptedModel {
 
     pub fn load_compact(raw: &[f32], nf: usize, nc: usize, scale: usize) -> Result<Self, String> {
         let s2 = scale * scale;
-        let expect = (3 * nf * 9 + nf + nf)
-            + nc * (nf * nf * 9 + nf + nf)
-            + (nf * 3 * s2 * 9 + 3 * s2);
+        let expect =
+            (3 * nf * 9 + nf + nf) + nc * (nf * nf * 9 + nf + nf) + (nf * 3 * s2 * 9 + 3 * s2);
         if raw.len() != expect {
-            return Err(format!("compact: expected {expect} floats, got {}", raw.len()));
+            return Err(format!(
+                "compact: expected {expect} floats, got {}",
+                raw.len()
+            ));
         }
         // final cout must be a multiple of 4 for the quad-blocked kernel; pad
         // with zero output channels (s=1: 3->4, s=3: 27->28). The pixel shuffle
@@ -102,7 +104,10 @@ impl AdoptedModel {
             let wraw = take(&mut buf, nf * nf * 9);
             packed.push(pack_conv3x3(wraw, nf, nf));
             if use_wino {
-                wino.push(Some((crate::wino::wino_weights(wraw, nf, nf), wraw.to_vec())));
+                wino.push(Some((
+                    crate::wino::wino_weights(wraw, nf, nf),
+                    wraw.to_vec(),
+                )));
             } else {
                 wino.push(None);
             }
@@ -122,7 +127,15 @@ impl AdoptedModel {
         bfin.resize(cpad, 0.0);
         biases.push(bfin);
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Compact { nf, nc }, scale, space: ModelSpace::Rgb, packed, biases, slopes, wino })
+        Ok(AdoptedModel {
+            arch: Arch::Compact { nf, nc },
+            scale,
+            space: ModelSpace::Rgb,
+            packed,
+            biases,
+            slopes,
+            wino,
+        })
     }
 
     pub fn load_span48(raw: &[f32], scale: usize) -> Result<Self, String> {
@@ -134,7 +147,10 @@ impl AdoptedModel {
             + (4 * fc * fc + fc)
             + (fc * 3 * s2 * 9 + 3 * s2);
         if raw.len() != expect {
-            return Err(format!("span48: expected {expect} floats, got {}", raw.len()));
+            return Err(format!(
+                "span48: expected {expect} floats, got {}",
+                raw.len()
+            ));
         }
         let mut buf = raw;
         let mut packed = Vec::new();
@@ -152,7 +168,15 @@ impl AdoptedModel {
         packed.push(pack_conv3x3(take(&mut buf, fc * 3 * s2 * 9), fc, 3 * s2)); // upsampler
         biases.push(take(&mut buf, 3 * s2).to_vec());
         debug_assert!(buf.is_empty());
-        Ok(AdoptedModel { arch: Arch::Span48, scale, space: ModelSpace::Rgb, packed, biases, slopes: Vec::new() , wino: Vec::new() })
+        Ok(AdoptedModel {
+            arch: Arch::Span48,
+            scale,
+            space: ModelSpace::Rgb,
+            packed,
+            biases,
+            slopes: Vec::new(),
+            wino: Vec::new(),
+        })
     }
 
     /// Whole-tile forward: input [3,h,w] tight -> out [3,s*h,s*w] tight.
@@ -167,21 +191,49 @@ impl AdoptedModel {
                 let s2 = s * s;
                 let mut inp3 = vec![0.0f32; 3 * cs];
                 for c in 0..3 {
-                    inp3[c * cs..c * cs + plane].copy_from_slice(&input[c * plane..(c + 1) * plane]);
+                    inp3[c * cs..c * cs + plane]
+                        .copy_from_slice(&input[c * plane..(c + 1) * plane]);
                 }
                 let mut cur = vec![0.0f32; nf * cs];
                 let mut nxt = vec![0.0f32; nf * cs];
                 let span3 = 2 * cs + plane;
                 let span_nf = (nf - 1) * cs + plane;
-                conv3x3_packed_dispatch(&inp3[..span3], 3, &self.packed[0], &self.biases[0], &mut cur, nf, h, w, cs);
+                conv3x3_packed_dispatch(
+                    &inp3[..span3],
+                    3,
+                    &self.packed[0],
+                    &self.biases[0],
+                    &mut cur,
+                    nf,
+                    h,
+                    w,
+                    cs,
+                );
                 prelu_dispatch(&mut cur[..span_nf], &self.slopes[0], nf, plane, cs);
                 for i in 0..nc {
                     match self.wino.get(1 + i).and_then(|o| o.as_ref()) {
                         Some((u, raw)) => crate::simd::conv3x3_wino_dispatch(
-                            &cur[..span_nf], nf, u, raw, &self.biases[1 + i], &mut nxt, nf, h, w, cs,
+                            &cur[..span_nf],
+                            nf,
+                            u,
+                            raw,
+                            &self.biases[1 + i],
+                            &mut nxt,
+                            nf,
+                            h,
+                            w,
+                            cs,
                         ),
                         None => conv3x3_packed_dispatch(
-                            &cur[..span_nf], nf, &self.packed[1 + i], &self.biases[1 + i], &mut nxt, nf, h, w, cs,
+                            &cur[..span_nf],
+                            nf,
+                            &self.packed[1 + i],
+                            &self.biases[1 + i],
+                            &mut nxt,
+                            nf,
+                            h,
+                            w,
+                            cs,
                         ),
                     }
                     prelu_dispatch(&mut nxt[..span_nf], &self.slopes[1 + i], nf, plane, cs);
@@ -189,7 +241,17 @@ impl AdoptedModel {
                 }
                 let cpad = (3 * s2).next_multiple_of(4);
                 let mut pre = vec![0.0f32; cpad * cs];
-                conv3x3_packed_dispatch(&cur[..span_nf], nf, &self.packed[1 + nc], &self.biases[1 + nc], &mut pre, cpad, h, w, cs);
+                conv3x3_packed_dispatch(
+                    &cur[..span_nf],
+                    nf,
+                    &self.packed[1 + nc],
+                    &self.biases[1 + nc],
+                    &mut pre,
+                    cpad,
+                    h,
+                    w,
+                    cs,
+                );
                 pixel_shuffle_s_strided(&pre, cs, out, h, w, s);
                 nearest_add(input, out, h, w, s);
             }
@@ -213,7 +275,17 @@ impl AdoptedModel {
                 let span3 = 2 * cs + plane;
                 let span_fc = (fc - 1) * cs + plane;
                 let mut feat = vec![0.0f32; fc * cs];
-                conv3x3_packed_dispatch(&inp3[..span3], 3, &self.packed[0], &self.biases[0], &mut feat, fc, h, w, cs);
+                conv3x3_packed_dispatch(
+                    &inp3[..span3],
+                    3,
+                    &self.packed[0],
+                    &self.biases[0],
+                    &mut feat,
+                    fc,
+                    h,
+                    w,
+                    cs,
+                );
 
                 let mut b_prev = vec![0.0f32; fc * cs];
                 b_prev[..span_fc].copy_from_slice(&feat[..span_fc]);
@@ -223,16 +295,46 @@ impl AdoptedModel {
                 let mut t2 = vec![0.0f32; fc * cs];
                 for blk in 0..6 {
                     let base = 1 + blk * 3;
-                    conv3x3_packed_dispatch(&b_prev[..span_fc], fc, &self.packed[base], &self.biases[base], &mut t1, fc, h, w, cs);
+                    conv3x3_packed_dispatch(
+                        &b_prev[..span_fc],
+                        fc,
+                        &self.packed[base],
+                        &self.biases[base],
+                        &mut t1,
+                        fc,
+                        h,
+                        w,
+                        cs,
+                    );
                     silu_all_dispatch(&mut t1[..span_fc]);
                     // official SPAB uses SiLU(inplace=True): the out1 returned to the
                     // final concat is the POST-activation tensor (keep for block 6)
                     if blk == 5 {
                         b6_o1[..span_fc].copy_from_slice(&t1[..span_fc]);
                     }
-                    conv3x3_packed_dispatch(&t1[..span_fc], fc, &self.packed[base + 1], &self.biases[base + 1], &mut t2, fc, h, w, cs);
+                    conv3x3_packed_dispatch(
+                        &t1[..span_fc],
+                        fc,
+                        &self.packed[base + 1],
+                        &self.biases[base + 1],
+                        &mut t2,
+                        fc,
+                        h,
+                        w,
+                        cs,
+                    );
                     silu_all_dispatch(&mut t2[..span_fc]);
-                    conv3x3_packed_dispatch(&t2[..span_fc], fc, &self.packed[base + 2], &self.biases[base + 2], &mut t1, fc, h, w, cs);
+                    conv3x3_packed_dispatch(
+                        &t2[..span_fc],
+                        fc,
+                        &self.packed[base + 2],
+                        &self.biases[base + 2],
+                        &mut t1,
+                        fc,
+                        h,
+                        w,
+                        cs,
+                    );
                     // gate: out = (o3 + x) * (sigmoid(o3) - 0.5)   (always, official SPAB)
                     gate_all_dispatch(&t1[..span_fc], &b_prev[..span_fc], &mut t2[..span_fc]);
                     core::mem::swap(&mut b_prev, &mut t2);
@@ -241,7 +343,17 @@ impl AdoptedModel {
                     }
                 }
                 // conv_2 on b6
-                conv3x3_packed_dispatch(&b_prev[..span_fc], fc, &self.packed[19], &self.biases[19], &mut t1, fc, h, w, cs);
+                conv3x3_packed_dispatch(
+                    &b_prev[..span_fc],
+                    fc,
+                    &self.packed[19],
+                    &self.biases[19],
+                    &mut t1,
+                    fc,
+                    h,
+                    w,
+                    cs,
+                );
                 // cat [feat, conv_2(b6), b1, b6_o1] -> conv1x1 -> upsampler
                 let mut catd = vec![0.0f32; fc * cs];
                 conv1x1_gen_dispatch(
@@ -260,7 +372,17 @@ impl AdoptedModel {
                     cs,
                 );
                 let mut pre = vec![0.0f32; 3 * s2 * cs];
-                conv3x3_packed_dispatch(&catd[..span_fc], fc, &self.packed[21], &self.biases[21], &mut pre, 3 * s2, h, w, cs);
+                conv3x3_packed_dispatch(
+                    &catd[..span_fc],
+                    fc,
+                    &self.packed[21],
+                    &self.biases[21],
+                    &mut pre,
+                    3 * s2,
+                    h,
+                    w,
+                    cs,
+                );
                 pixel_shuffle_s_strided(&pre, cs, out, h, w, s);
             }
         }
@@ -322,8 +444,8 @@ impl AdoptedModel {
                 let mut guard = out.lock().unwrap();
                 for c in 0..3 {
                     for y in 0..ch {
-                        let src = &tile_out
-                            [c * (s * eh) * (s * ew) + (cy + y) * (s * ew) + cx..][..cw];
+                        let src =
+                            &tile_out[c * (s * eh) * (s * ew) + (cy + y) * (s * ew) + cx..][..cw];
                         guard[c * oh * ow + (y0 * s + y) * ow + x0 * s..][..cw]
                             .copy_from_slice(src);
                     }

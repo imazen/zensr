@@ -28,7 +28,9 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else { continue };
+            let Some(hr) = center_crop(&img, 512) else {
+                continue;
+            };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             used += 1;
             for deg in ["q75", "q50", "q35"] {

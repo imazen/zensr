@@ -206,7 +206,10 @@ pub fn guarded_merge(
         };
         (mk(ow, tcw), mk(oh, tch))
     } else {
-        ((Vec::new(), Vec::new(), Vec::new()), (Vec::new(), Vec::new(), Vec::new()))
+        (
+            (Vec::new(), Vec::new(), Vec::new()),
+            (Vec::new(), Vec::new(), Vec::new()),
+        )
     };
 
     let tau = cfg.residual_clamp;
@@ -377,7 +380,9 @@ mod tests {
     #[test]
     fn separable_matches_direct_reference() {
         let (h, w, s) = (23usize, 17usize, 4usize);
-        let lr: Vec<f32> = (0..3 * h * w).map(|i| ((i * 37) % 251) as f32 / 251.0).collect();
+        let lr: Vec<f32> = (0..3 * h * w)
+            .map(|i| ((i * 37) % 251) as f32 / 251.0)
+            .collect();
         let got = bilinear_up(&lr, h, w, s);
         let (oh, ow) = (h * s, w * s);
         let fs = s as f32;

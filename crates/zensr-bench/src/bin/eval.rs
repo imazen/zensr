@@ -13,10 +13,10 @@
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
-use zensr_bench::*;
 use std::time::Instant;
+use zensr_bench::*;
 
-use zensr_micro::{SpanfModel, spanf_x4_tiled};
+use zensr_micro::{spanf_x4_tiled, SpanfModel};
 
 const SUBCORPORA: &[(&str, &str)] = &[
     ("photos", "lilith"),
@@ -29,27 +29,19 @@ const SUBCORPORA: &[(&str, &str)] = &[
     ("textures", "unsplash-textures"),
 ];
 
-
-
-
-
-
-
-
-
-
-
-
-
 fn main() {
     let mut args = std::env::args().skip(1);
-    let root = PathBuf::from(args.next().expect("usage: eval <corpus-root> <out-tsv> [per-sub] [threads]"));
+    let root = PathBuf::from(
+        args.next()
+            .expect("usage: eval <corpus-root> <out-tsv> [per-sub] [threads]"),
+    );
     let out_path = PathBuf::from(args.next().expect("out tsv"));
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(16);
 
     let wdir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../models");
-    let wbytes = std::fs::read(wdir.join("spanf_weights.raw")).expect("spanf_weights.raw (just dump)");
+    let wbytes =
+        std::fs::read(wdir.join("spanf_weights.raw")).expect("spanf_weights.raw (just dump)");
     let wbuf: Vec<f32> = wbytes
         .chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
@@ -61,7 +53,10 @@ fn main() {
         tsv,
         "# zensr imazen-26 eval; LR=CatmullRom/4 (linear-light; NOTE: SPANF trained on encoded-space bicubic — conservative); HR cap 512; per-sub {per_sub}; threads {threads}"
     );
-    let _ = writeln!(tsv, "subcorpus\tfile\tmethod\tpsnr\tssim2\tbutter_n3\tsr_ms");
+    let _ = writeln!(
+        tsv,
+        "subcorpus\tfile\tmethod\tpsnr\tssim2\tbutter_n3\tsr_ms"
+    );
 
     for (name, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));
@@ -129,15 +124,31 @@ fn print_summary(tsv: &str) {
             c[4].parse().unwrap_or(f64::NAN),
             c[5].parse().unwrap_or(f64::NAN),
         ];
-        acc.entry((c[0].into(), c[2].into())).or_default().push(vals);
+        acc.entry((c[0].into(), c[2].into()))
+            .or_default()
+            .push(vals);
     }
     println!("subcorpus\tmethod\tn\tpsnr_med\tssim2_med\tbutter_n3_med");
     for ((sub, m), rows) in acc {
         let med = |i: usize| {
-            let mut v: Vec<f64> = rows.iter().map(|r| r[i]).filter(|x| x.is_finite()).collect();
+            let mut v: Vec<f64> = rows
+                .iter()
+                .map(|r| r[i])
+                .filter(|x| x.is_finite())
+                .collect();
             v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            if v.is_empty() { f64::NAN } else { v[v.len() / 2] }
+            if v.is_empty() {
+                f64::NAN
+            } else {
+                v[v.len() / 2]
+            }
         };
-        println!("{sub}\t{m}\t{}\t{:.2}\t{:.2}\t{:.3}", rows.len(), med(0), med(1), med(2));
+        println!(
+            "{sub}\t{m}\t{}\t{:.2}\t{:.2}\t{:.3}",
+            rows.len(),
+            med(0),
+            med(1),
+            med(2)
+        );
     }
 }

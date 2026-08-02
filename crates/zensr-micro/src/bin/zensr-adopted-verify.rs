@@ -12,7 +12,9 @@ fn read_f32(path: &std::path::Path) -> Vec<f32> {
 
 fn meta_field(meta: &str, key: &str) -> String {
     let pat = format!("\"{key}\":");
-    let i = meta.find(&pat).unwrap_or_else(|| panic!("meta missing {key}"));
+    let i = meta
+        .find(&pat)
+        .unwrap_or_else(|| panic!("meta missing {key}"));
     let rest = &meta[i + pat.len()..];
     rest.trim_start()
         .trim_start_matches('"')
@@ -109,7 +111,10 @@ fn main() {
             if !ok16 {
                 fails += 1;
             }
-            println!("{name} f16: max={mx:.2e} {}", if ok16 { "OK" } else { "FAIL" });
+            println!(
+                "{name} f16: max={mx:.2e} {}",
+                if ok16 { "OK" } else { "FAIL" }
+            );
         }
     }
     if fails > 0 {

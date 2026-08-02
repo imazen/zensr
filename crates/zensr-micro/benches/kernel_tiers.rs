@@ -22,14 +22,20 @@ type TierToken = archmage::NeonToken;
 type TierToken = archmage::X64V3Token;
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
-const TIER_NAME: &str = if cfg!(target_arch = "aarch64") { "neon" } else { "v3(avx2)" };
+const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
+    "neon"
+} else {
+    "v3(avx2)"
+};
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(enabled: bool) -> bool {
     TierToken::dangerously_disable_token_process_wide(!enabled).is_ok()
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-fn set_simd(_e: bool) -> bool { false }
+fn set_simd(_e: bool) -> bool {
+    false
+}
 
 fn ramp(n: usize, seed: u32) -> Vec<f32> {
     let mut s = seed | 1;
@@ -85,9 +91,7 @@ fn bench_kernels(suite: &mut Suite) {
                     vec![0f32; COUT * H * WD]
                 })
                 .run(move |mut out| {
-                    zensr_micro::simd::conv3x3_dispatch(
-                        inp, CIN, wts, bias, &mut out, COUT, H, WD,
-                    );
+                    zensr_micro::simd::conv3x3_dispatch(inp, CIN, wts, bias, &mut out, COUT, H, WD);
                     out
                 })
             });

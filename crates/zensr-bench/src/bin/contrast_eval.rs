@@ -34,7 +34,14 @@ fn encode_turbo(img: &Rgb8Img, q: u32, td: &PathBuf) -> Vec<u8> {
     buf.extend_from_slice(&img.px);
     std::fs::write(&ppm, buf).unwrap();
     assert!(Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+        .args([
+            "-quality",
+            &q.to_string(),
+            "-sample",
+            "2x2",
+            "-optimize",
+            "-outfile"
+        ])
         .arg(&jpg)
         .arg(&ppm)
         .status()
@@ -128,11 +135,19 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(gt) = center_crop(&img, 512) else { continue };
+            let Some(gt) = center_crop(&img, 512) else {
+                continue;
+            };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
-            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") { "png" } else { "jpg" };
-            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") { continue; }
+            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") {
+                "png"
+            } else {
+                "jpg"
+            };
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
+                continue;
+            }
             let buckets = bucket_map(&gt);
             let total = (gt.w * gt.h) as f64;
             for &q in QS {
@@ -140,11 +155,22 @@ fn main() {
                 let dec = zenjpeg::decoder::Decoder::new()
                     .decode(&jpg, enough::Unstoppable)
                     .unwrap();
-                let ident =
-                    Rgb8Img { px: dec.pixels_u8().unwrap().to_vec(), w: gt.w, h: gt.h };
-                let r = restore_jpeg(&jpg, &model, &RestoreConfig::default().with_threads(threads))
-                    .expect("restore");
-                let m = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
+                let ident = Rgb8Img {
+                    px: dec.pixels_u8().unwrap().to_vec(),
+                    w: gt.w,
+                    h: gt.h,
+                };
+                let r = restore_jpeg(
+                    &jpg,
+                    &model,
+                    &RestoreConfig::default().with_threads(threads),
+                )
+                .expect("restore");
+                let m = Rgb8Img {
+                    px: r.to_rgb8(),
+                    w: r.width,
+                    h: r.height,
+                };
                 let bi = bucket_mse(&gt, &ident, &buckets, nb);
                 let bm = bucket_mse(&gt, &m, &buckets, nb);
                 for b in 0..nb {

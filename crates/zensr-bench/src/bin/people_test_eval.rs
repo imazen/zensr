@@ -29,20 +29,32 @@ fn main() {
     let mut n = 0usize;
     for f in list_images(&root) {
         let Some(img) = decode_any(&f) else { continue };
-        let Some(hr) = center_crop(&img, 512) else { continue };
+        let Some(hr) = center_crop(&img, 512) else {
+            continue;
+        };
         let fname = f.file_name().unwrap().to_string_lossy().to_string();
         n += 1;
         let half = resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom);
         for deg in ["clean", "q75", "q50", "q35"] {
             let lr = match deg {
-                "clean" => Rgb8Img { px: half.px.clone(), w: half.w, h: half.h },
+                "clean" => Rgb8Img {
+                    px: half.px.clone(),
+                    w: half.w,
+                    h: half.h,
+                },
                 "q75" => turbo_jpeg(&half, 75),
                 "q50" => turbo_jpeg(&half, 50),
                 _ => turbo_jpeg(&half, 35),
             };
             let mut outs: Vec<(String, Rgb8Img)> = vec![
-                ("lanczos".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos)),
-                ("catmullrom".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::CatmullRom)),
+                (
+                    "lanczos".into(),
+                    resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
+                ),
+                (
+                    "catmullrom".into(),
+                    resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::CatmullRom),
+                ),
             ];
             for (m, label) in &models {
                 outs.push(((*label).into(), run_guarded(m, &lr, threads, true)));

@@ -164,7 +164,10 @@ fn run<R: Runtime>(name: &str) {
         println!("{name}: correctness OK (max diff {mx:.2e})");
     }
     // topology timings
-    for (label, nf, nc) in [("quality nf64 nc16", 64usize, 16usize), ("rt nf24 nc8", 24, 8)] {
+    for (label, nf, nc) in [
+        ("quality nf64 nc16", 64usize, 16usize),
+        ("rt nf24 nc8", 24, 8),
+    ] {
         for side in [512usize, 1024, 2048] {
             let (h, w) = (side, side);
             let plane = h * w;
@@ -202,10 +205,10 @@ fn run<R: Runtime>(name: &str) {
                     conv3x3_prelu::launch_unchecked::<R>(
                         &client,
                         {
-                    let g = (n as u32).div_ceil(256);
-                    let gx = g.min(65535);
-                    CubeCount::Static(gx, g.div_ceil(gx), 1)
-                },
+                            let g = (n as u32).div_ceil(256);
+                            let gx = g.min(65535);
+                            CubeCount::Static(gx, g.div_ceil(gx), 1)
+                        },
                         CubeDim::new_1d(256),
                         ArrayArg::from_raw_parts(hin.clone(), cin * plane),
                         ArrayArg::from_raw_parts(hw_.clone(), cout * cin * 9),
@@ -223,7 +226,11 @@ fn run<R: Runtime>(name: &str) {
             let t1 = Instant::now();
             launch(&h_in, &h_w0, &h_bnf, &h_a, 3, nf, 1);
             for i in 0..nc {
-                let (src, dst) = if i % 2 == 0 { (&h_a, &h_b) } else { (&h_b, &h_a) };
+                let (src, dst) = if i % 2 == 0 {
+                    (&h_a, &h_b)
+                } else {
+                    (&h_b, &h_a)
+                };
                 launch(src, &h_wm, &h_bnf, dst, nf, nf, 1);
             }
             let last_in = if nc % 2 == 0 { &h_a } else { &h_b };

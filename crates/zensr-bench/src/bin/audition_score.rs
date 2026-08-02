@@ -67,7 +67,10 @@ fn main() {
             .iter()
             .map(|(s, ss, _)| (s.as_str(), *ss))
             .collect();
-        let wins = rows.iter().filter(|(s, ss, _)| *ss > lan[s.as_str()]).count();
+        let wins = rows
+            .iter()
+            .filter(|(s, ss, _)| *ss > lan[s.as_str()])
+            .count();
         let mut ss: Vec<f64> = rows.iter().map(|r| r.1).collect();
         let mut bb: Vec<f64> = rows.iter().map(|r| r.2).collect();
         println!(
@@ -86,6 +89,11 @@ fn main() {
         }
         let mut ss: Vec<f64> = rows.iter().map(|r| r.1).collect();
         let mut bb: Vec<f64> = rows.iter().map(|r| r.2).collect();
-        println!("{sub}\t{deg}\tlanczos\t{}\t{:.2}\t{:.3}\t-", rows.len(), med(&mut ss), med(&mut bb));
+        println!(
+            "{sub}\t{deg}\tlanczos\t{}\t{:.2}\t{:.3}\t-",
+            rows.len(),
+            med(&mut ss),
+            med(&mut bb)
+        );
     }
 }

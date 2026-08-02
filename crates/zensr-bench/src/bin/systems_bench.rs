@@ -26,16 +26,43 @@ fn load(dir: &str, arch: &str, nf: usize, nc: usize, scale: usize) -> Option<Ado
 }
 
 fn main() {
-    let reps: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(5);
+    let reps: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
     // (label, dir, arch, nf, nc, scale, input h=w)
     let mut cases: Vec<(&str, Option<AdoptedModel>, usize)> = vec![
-        ("S-A x2 span", load("nomosuni_span_2x", "span48", 48, 6, 2), 512),
-        ("S-A x4 span", load("nomosuni_span_4x", "span48", 48, 6, 4), 256),
-        ("S-B x4 general", load("general_x4v3", "compact", 64, 32, 4), 256),
-        ("S-C x1 compact2x", load("nomosuni_compact_2x", "compact", 64, 16, 2), 512),
-        ("S-D x4 anime", load("animevideo_x4v3", "compact", 64, 16, 4), 256),
+        (
+            "S-A x2 span",
+            load("nomosuni_span_2x", "span48", 48, 6, 2),
+            512,
+        ),
+        (
+            "S-A x4 span",
+            load("nomosuni_span_4x", "span48", 48, 6, 4),
+            256,
+        ),
+        (
+            "S-B x4 general",
+            load("general_x4v3", "compact", 64, 32, 4),
+            256,
+        ),
+        (
+            "S-C x1 compact2x",
+            load("nomosuni_compact_2x", "compact", 64, 16, 2),
+            512,
+        ),
+        (
+            "S-D x4 anime",
+            load("animevideo_x4v3", "compact", 64, 16, 4),
+            256,
+        ),
         ("S-E x2 rt", load("rt_distill_2x", "compact", 24, 8, 2), 512),
-        ("S-E2 x2 rt32", load("rt32_distill_2x", "compact", 32, 12, 2), 512),
+        (
+            "S-E2 x2 rt32",
+            load("rt32_distill_2x", "compact", 32, 12, 2),
+            512,
+        ),
     ];
     println!("system\tin\tout_mp\tthreads\tmin_ms\tmp_out_per_s\tguard_ms");
     for (name, m, n) in cases.iter_mut() {

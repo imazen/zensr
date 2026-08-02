@@ -40,7 +40,9 @@ fn ramp(n: usize) -> Vec<f32> {
 }
 
 fn main() {
-    let dir = std::env::args().nth(1).expect("usage: zensr-verify <models-dir>");
+    let dir = std::env::args()
+        .nth(1)
+        .expect("usage: zensr-verify <models-dir>");
     let dir = std::path::Path::new(&dir);
     let wbuf = read_f32(&dir.join("spanf_weights.raw"));
     let input = read_f32(&dir.join("spanf_in_64.raw"));
@@ -86,10 +88,19 @@ fn main() {
 
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     for (name, out) in [
-        ("v4x", zensr_micro::simd::spanf_x4_simd_force_v4x(&input, 64, 64, &w)),
+        (
+            "v4x",
+            zensr_micro::simd::spanf_x4_simd_force_v4x(&input, 64, 64, &w),
+        ),
         #[cfg(feature = "tier_v4")]
-        ("v4", zensr_micro::simd::spanf_x4_simd_force_v4(&input, 64, 64, &w)),
-        ("v3", zensr_micro::simd::spanf_x4_simd_force_v3(&input, 64, 64, &w)),
+        (
+            "v4",
+            zensr_micro::simd::spanf_x4_simd_force_v4(&input, 64, 64, &w),
+        ),
+        (
+            "v3",
+            zensr_micro::simd::spanf_x4_simd_force_v3(&input, 64, 64, &w),
+        ),
     ] {
         match out {
             Some(o) => {

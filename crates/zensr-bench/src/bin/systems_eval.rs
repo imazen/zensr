@@ -41,9 +41,12 @@ fn box_down2(img: &Rgb8Img) -> Rgb8Img {
         for x in 0..w {
             for c in 0..3 {
                 let s = |yy: usize, xx: usize| img.px[(yy * img.w + xx) * 3 + c] as u32;
-                px[(y * w + x) * 3 + c] =
-                    ((s(2 * y, 2 * x) + s(2 * y, 2 * x + 1) + s(2 * y + 1, 2 * x) + s(2 * y + 1, 2 * x + 1) + 2)
-                        / 4) as u8;
+                px[(y * w + x) * 3 + c] = ((s(2 * y, 2 * x)
+                    + s(2 * y, 2 * x + 1)
+                    + s(2 * y + 1, 2 * x)
+                    + s(2 * y + 1, 2 * x + 1)
+                    + 2)
+                    / 4) as u8;
             }
         }
     }
@@ -68,10 +71,13 @@ fn main() {
     let compact2 = load_adopted("nomosuni_compact_2x").expect("compact2x");
     let anime4 = load_adopted("animevideo_x4v3").expect("anime");
     let gen_raw = read_f32_file(&PathBuf::from("models/adopted/general_x4v3/weights.raw"));
-    let wdn_raw = read_f32_file(&PathBuf::from("models/adopted/general_wdn_x4v3/weights.raw"));
+    let wdn_raw = read_f32_file(&PathBuf::from(
+        "models/adopted/general_wdn_x4v3/weights.raw",
+    ));
     let rt = load_adopted("rt_distill_2x"); // may not exist yet (training)
-    let spanf = zensr_micro::SpanfModel::new(read_f32_file(&PathBuf::from("models/spanf_weights.raw")))
-        .expect("spanf");
+    let spanf =
+        zensr_micro::SpanfModel::new(read_f32_file(&PathBuf::from("models/spanf_weights.raw")))
+            .expect("spanf");
     // wdn severity blends keyed by degradation level
     let b_for = |deg: &str| -> AdoptedModel {
         let t = match deg {
@@ -85,7 +91,10 @@ fn main() {
 
     let mut tsv = String::new();
     let _ = writeln!(tsv, "# systems eval; LR degraded with SYSTEM cjpeg (libjpeg-turbo, 4:2:0, -optimize); guards=default; per_sub={per_sub}");
-    let _ = writeln!(tsv, "subcorpus\tfile\ttrack\tdeg\tsystem\tpsnr\tssim2\tbutter_n3");
+    let _ = writeln!(
+        tsv,
+        "subcorpus\tfile\ttrack\tdeg\tsystem\tpsnr\tssim2\tbutter_n3"
+    );
 
     for (sub, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));
@@ -95,14 +104,20 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else { continue };
+            let Some(hr) = center_crop(&img, 512) else {
+                continue;
+            };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             used += 1;
 
             for deg in ["clean", "q75", "q50", "q35"] {
                 let degrade = |im: &Rgb8Img| -> Rgb8Img {
                     match deg {
-                        "clean" => Rgb8Img { px: im.px.clone(), w: im.w, h: im.h },
+                        "clean" => Rgb8Img {
+                            px: im.px.clone(),
+                            w: im.w,
+                            h: im.h,
+                        },
                         "q75" => turbo_jpeg(im, 75),
                         "q50" => turbo_jpeg(im, 50),
                         _ => turbo_jpeg(im, 35),
@@ -110,35 +125,71 @@ fn main() {
                 };
                 // ---- x2 track
                 {
-                    let lr = degrade(&resize_rgb8(&hr, hr.w / 2, hr.h / 2, zenresize::Filter::CatmullRom));
+                    let lr = degrade(&resize_rgb8(
+                        &hr,
+                        hr.w / 2,
+                        hr.h / 2,
+                        zenresize::Filter::CatmullRom,
+                    ));
                     let mut outs: Vec<(String, Rgb8Img)> = vec![
-                        ("lanczos".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos)),
-                        ("catmullrom".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::CatmullRom)),
+                        (
+                            "lanczos".into(),
+                            resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
+                        ),
+                        (
+                            "catmullrom".into(),
+                            resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::CatmullRom),
+                        ),
                         ("A2_span".into(), run_guarded(&span2, &lr, threads, true)),
-                        ("A2_span_raw".into(), run_guarded(&span2, &lr, threads, false)),
-                        ("A2c_compact".into(), run_guarded(&compact2, &lr, threads, true)),
+                        (
+                            "A2_span_raw".into(),
+                            run_guarded(&span2, &lr, threads, false),
+                        ),
+                        (
+                            "A2c_compact".into(),
+                            run_guarded(&compact2, &lr, threads, true),
+                        ),
                     ];
                     if let Some(rtm) = &rt {
                         outs.push(("E_rt".into(), run_guarded(rtm, &lr, threads, true)));
                     }
                     for (name, o) in &outs {
                         let s = score(&hr, o);
-                        let _ = writeln!(tsv, "{sub}\t{fname}\tx2\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}", s.psnr, s.ssim2, s.butter);
+                        let _ = writeln!(
+                            tsv,
+                            "{sub}\t{fname}\tx2\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}",
+                            s.psnr, s.ssim2, s.butter
+                        );
                     }
                 }
                 // ---- x4 track
                 {
-                    let lr = degrade(&resize_rgb8(&hr, hr.w / 4, hr.h / 4, zenresize::Filter::CatmullRom));
+                    let lr = degrade(&resize_rgb8(
+                        &hr,
+                        hr.w / 4,
+                        hr.h / 4,
+                        zenresize::Filter::CatmullRom,
+                    ));
                     let outs: Vec<(String, Rgb8Img)> = vec![
-                        ("lanczos".into(), resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos)),
+                        (
+                            "lanczos".into(),
+                            resize_rgb8(&lr, hr.w, hr.h, zenresize::Filter::Lanczos),
+                        ),
                         ("A4_span".into(), run_guarded(&span4, &lr, threads, true)),
                         ("F_spanf".into(), run_guarded_spanf(&spanf, &lr, threads)),
-                        ("B_quality".into(), run_guarded(&b_for(deg), &lr, threads, true)),
+                        (
+                            "B_quality".into(),
+                            run_guarded(&b_for(deg), &lr, threads, true),
+                        ),
                         ("D_anime".into(), run_guarded(&anime4, &lr, threads, true)),
                     ];
                     for (name, o) in &outs {
                         let s = score(&hr, o);
-                        let _ = writeln!(tsv, "{sub}\t{fname}\tx4\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}", s.psnr, s.ssim2, s.butter);
+                        let _ = writeln!(
+                            tsv,
+                            "{sub}\t{fname}\tx4\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}",
+                            s.psnr, s.ssim2, s.butter
+                        );
                     }
                 }
                 // ---- x1 repair track (jpeg the full-res image, restore at 1x)
@@ -154,7 +205,11 @@ fn main() {
                         ("C_repair_cr", &repaired_cr),
                     ] {
                         let s = score(&hr, o);
-                        let _ = writeln!(tsv, "{sub}\t{fname}\tx1\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}", s.psnr, s.ssim2, s.butter);
+                        let _ = writeln!(
+                            tsv,
+                            "{sub}\t{fname}\tx1\t{deg}\t{name}\t{:.3}\t{:.3}\t{:.4}",
+                            s.psnr, s.ssim2, s.butter
+                        );
                     }
                 }
             }
@@ -198,7 +253,9 @@ fn summarize(tsv: &str) {
         let key = (c[2].to_string(), c[3].to_string(), c[1].to_string());
         if let Some(base) = lanc.get(&key) {
             let s2: f64 = c[6].parse().unwrap_or(f64::NAN);
-            let e = rates.entry((c[2].into(), c[3].into(), c[4].into())).or_default();
+            let e = rates
+                .entry((c[2].into(), c[3].into(), c[4].into()))
+                .or_default();
             e.1 += 1;
             if s2 < *base {
                 e.0 += 1;
@@ -216,10 +273,29 @@ fn summarize(tsv: &str) {
             x.sort_by(|a, b| a.partial_cmp(b).unwrap());
             x
         };
-        let med = |x: &Vec<f64>| if x.is_empty() { f64::NAN } else { x[x.len() / 2] };
-        let p10 = |x: &Vec<f64>| if x.is_empty() { f64::NAN } else { x[x.len() / 10] };
-        let (worse, tot) = rates.get(&(track.clone(), deg.clone(), sys.clone())).copied().unwrap_or((0, 0));
-        let rate = if tot > 0 { 100.0 * worse as f64 / tot as f64 } else { f64::NAN };
+        let med = |x: &Vec<f64>| {
+            if x.is_empty() {
+                f64::NAN
+            } else {
+                x[x.len() / 2]
+            }
+        };
+        let p10 = |x: &Vec<f64>| {
+            if x.is_empty() {
+                f64::NAN
+            } else {
+                x[x.len() / 10]
+            }
+        };
+        let (worse, tot) = rates
+            .get(&(track.clone(), deg.clone(), sys.clone()))
+            .copied()
+            .unwrap_or((0, 0));
+        let rate = if tot > 0 {
+            100.0 * worse as f64 / tot as f64
+        } else {
+            f64::NAN
+        };
         let (p, s2, b) = (col(0), col(1), col(2));
         println!(
             "{track}\t{deg}\t{sys}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.3}\t{rate:.0}",

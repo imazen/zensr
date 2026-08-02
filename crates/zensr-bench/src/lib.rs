@@ -73,7 +73,11 @@ pub fn decode_any(path: &Path) -> Option<Rgb8Img> {
             if px.len() != w as usize * h as usize * 3 {
                 return None; // grayscale/CMYK: skip for eval v1
             }
-            Some(Rgb8Img { px: px.to_vec(), w: w as usize, h: h as usize })
+            Some(Rgb8Img {
+                px: px.to_vec(),
+                w: w as usize,
+                h: h as usize,
+            })
         }
         _ => None,
     }
@@ -96,17 +100,16 @@ pub fn center_crop(img: &Rgb8Img, cap: usize) -> Option<Rgb8Img> {
 }
 
 pub fn resize_rgb8(img: &Rgb8Img, dw: usize, dh: usize, filter: zenresize::Filter) -> Rgb8Img {
-    let config = zenresize::ResizeConfig::builder(
-        img.w as u32,
-        img.h as u32,
-        dw as u32,
-        dh as u32,
-    )
-    .filter(filter)
-    .format(zenresize::PixelDescriptor::RGB8_SRGB)
-    .build();
+    let config = zenresize::ResizeConfig::builder(img.w as u32, img.h as u32, dw as u32, dh as u32)
+        .filter(filter)
+        .format(zenresize::PixelDescriptor::RGB8_SRGB)
+        .build();
     let out = zenresize::Resizer::new(&config).resize(&img.px);
-    Rgb8Img { px: out, w: dw, h: dh }
+    Rgb8Img {
+        px: out,
+        w: dw,
+        h: dh,
+    }
 }
 
 pub fn to_planar_f32(img: &Rgb8Img) -> Vec<f32> {
@@ -172,7 +175,9 @@ pub fn list_images(dir: &Path) -> Vec<PathBuf> {
         if depth > 4 {
             return;
         }
-        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
         for e in rd.filter_map(|e| e.ok()) {
             let p = e.path();
             if p.is_dir() {
@@ -286,7 +291,14 @@ pub fn turbo_jpeg(img: &Rgb8Img, q: u32) -> Rgb8Img {
     buf.extend_from_slice(&img.px);
     std::fs::write(&ppm, &buf).unwrap();
     let st = std::process::Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+        .args([
+            "-quality",
+            &q.to_string(),
+            "-sample",
+            "2x2",
+            "-optimize",
+            "-outfile",
+        ])
         .arg(&jpg)
         .arg(&ppm)
         .status()

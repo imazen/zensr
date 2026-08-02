@@ -45,7 +45,14 @@ fn enc_turbo(img: &Rgb8Img, q: u32, td: &PathBuf, ss: &str) -> Vec<u8> {
     let jpg = td.join("p.jpg");
     write_ppm(img, &ppm);
     assert!(Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", ss, "-optimize", "-outfile"])
+        .args([
+            "-quality",
+            &q.to_string(),
+            "-sample",
+            ss,
+            "-optimize",
+            "-outfile"
+        ])
         .arg(&jpg)
         .arg(&ppm)
         .status()
@@ -59,7 +66,11 @@ fn dec(data: &[u8]) -> Rgb8Img {
         .decode(data, enough::Unstoppable)
         .expect("decode");
     let (w, h) = d.dimensions();
-    Rgb8Img { px: d.pixels_u8().expect("u8").to_vec(), w: w as usize, h: h as usize }
+    Rgb8Img {
+        px: d.pixels_u8().expect("u8").to_vec(),
+        w: w as usize,
+        h: h as usize,
+    }
 }
 
 fn main() {
@@ -88,7 +99,9 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(base) = center_crop(&img, 1024) else { continue };
+            let Some(base) = center_crop(&img, 1024) else {
+                continue;
+            };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             for &sq in SRC_QS {
@@ -114,9 +127,14 @@ fn main() {
                     // does using B as the reference change a MEASURED gain?
                     let jb = enc_turbo(&a, EVAL_Q, &td, "2x2");
                     let id_a = dec(&jb);
-                    let r = restore_jpeg(&jb, &model, &RestoreConfig::default().with_threads(threads))
-                        .expect("restore");
-                    let rest = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
+                    let r =
+                        restore_jpeg(&jb, &model, &RestoreConfig::default().with_threads(threads))
+                            .expect("restore");
+                    let rest = Rgb8Img {
+                        px: r.to_rgb8(),
+                        w: r.width,
+                        h: r.height,
+                    };
                     let gain_true = score(&a, &rest).ssim2 - score(&a, &id_a).ssim2;
                     let gain_jpegsrc = score(&b, &rest).ssim2 - score(&b, &id_a).ssim2;
                     let _ = writeln!(

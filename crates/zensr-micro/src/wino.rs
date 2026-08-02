@@ -252,9 +252,11 @@ mod tests {
     fn wino_dispatch_matches_direct() {
         // sizes chosen so nt >= 16 (exercises the VECTOR kernel incl. the
         // f32x16 tier), plus odd/even w and h and non-tight stride
-        for &(cin, cout, h, wd) in
-            &[(8usize, 8usize, 40usize, 70usize), (16, 16, 23, 37), (8, 8, 24, 36)]
-        {
+        for &(cin, cout, h, wd) in &[
+            (8usize, 8usize, 40usize, 70usize),
+            (16, 16, 23, 37),
+            (8, 8, 24, 36),
+        ] {
             let cs = h * wd + 5;
             let raw = lcg(cout * cin * 9, 3);
             let bias = lcg(cout, 5);
@@ -279,9 +281,12 @@ mod tests {
 
     #[test]
     fn wino_matches_direct() {
-        for &(cin, cout, h, wd) in
-            &[(8usize, 8usize, 13usize, 11usize), (16, 16, 12, 20), (4, 8, 5, 4), (8, 4, 4, 9)]
-        {
+        for &(cin, cout, h, wd) in &[
+            (8usize, 8usize, 13usize, 11usize),
+            (16, 16, 12, 20),
+            (4, 8, 5, 4),
+            (8, 4, 4, 9),
+        ] {
             let cs = h * wd + 3; // non-tight channel stride
             let raw = lcg(cout * cin * 9, 7);
             let bias = lcg(cout, 11);

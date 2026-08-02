@@ -30,7 +30,14 @@ fn encode_turbo(img: &Rgb8Img, q: u32, td: &PathBuf) -> Vec<u8> {
     buf.extend_from_slice(&img.px);
     std::fs::write(&ppm, buf).unwrap();
     assert!(Command::new("cjpeg")
-        .args(["-quality", &q.to_string(), "-sample", "2x2", "-optimize", "-outfile"])
+        .args([
+            "-quality",
+            &q.to_string(),
+            "-sample",
+            "2x2",
+            "-optimize",
+            "-outfile"
+        ])
         .arg(&jpg)
         .arg(&ppm)
         .status()
@@ -84,7 +91,9 @@ fn main() {
                 break;
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else { continue };
+            let Some(hr) = center_crop(&img, 512) else {
+                continue;
+            };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             let plane = hr.w * hr.h;
@@ -97,13 +106,25 @@ fn main() {
                     .decode(&jpg, enough::Unstoppable)
                     .unwrap();
                 let px = dec.pixels_u8().unwrap();
-                let dimg = Rgb8Img { px: px.to_vec(), w: hr.w, h: hr.h };
+                let dimg = Rgb8Img {
+                    px: px.to_vec(),
+                    w: hr.w,
+                    h: hr.h,
+                };
                 let dplanes = rgb8_to_planar(&dimg);
                 let (dy, _, _) = split_ycc(&dplanes, plane);
                 // restored arm
-                let r = restore_jpeg(&jpg, &model, &RestoreConfig::default().with_threads(threads))
-                    .expect("restore");
-                let rimg = Rgb8Img { px: r.to_rgb8(), w: r.width, h: r.height };
+                let r = restore_jpeg(
+                    &jpg,
+                    &model,
+                    &RestoreConfig::default().with_threads(threads),
+                )
+                .expect("restore");
+                let rimg = Rgb8Img {
+                    px: r.to_rgb8(),
+                    w: r.width,
+                    h: r.height,
+                };
                 let (ry, _, _) = split_ycc(&r.planes, plane);
                 // lattice floor: GT chroma box-downsampled 2x2 + bilinear-up,
                 // GT luma untouched, NO quantization — the pure subsampling loss.
@@ -114,8 +135,10 @@ fn main() {
                     for xx in 0..hw {
                         let i00 = (2 * yy) * hr.w + 2 * xx;
                         let i10 = (2 * yy + 1) * hr.w + 2 * xx;
-                        lcb[yy * hw + xx] = 0.25 * (gcb[i00] + gcb[i00 + 1] + gcb[i10] + gcb[i10 + 1]);
-                        lcr[yy * hw + xx] = 0.25 * (gcr[i00] + gcr[i00 + 1] + gcr[i10] + gcr[i10 + 1]);
+                        lcb[yy * hw + xx] =
+                            0.25 * (gcb[i00] + gcb[i00 + 1] + gcb[i10] + gcb[i10 + 1]);
+                        lcr[yy * hw + xx] =
+                            0.25 * (gcr[i00] + gcr[i00 + 1] + gcr[i10] + gcr[i10 + 1]);
                     }
                 }
                 let up = |half: &Vec<f32>| -> Vec<f32> {
@@ -136,7 +159,8 @@ fn main() {
                     full
                 };
                 let (gy_full, _, _) = split_ycc(&gt_planes, plane);
-                let lattice = merge_y_with_oracle_chroma(&gy_full, &up(&lcb), &up(&lcr), hr.w, hr.h);
+                let lattice =
+                    merge_y_with_oracle_chroma(&gy_full, &up(&lcb), &up(&lcr), hr.w, hr.h);
                 // joint-bilateral 2x upsample of the SAME clean half-res chroma,
                 // guided by full-res GT luma: the classic guided-upsampling bound.
                 let jbu = |half: &Vec<f32>| -> Vec<f32> {
@@ -182,9 +206,15 @@ fn main() {
                     ("lattice_floor", lattice),
                     ("lattice_jbu", lattice_jbu),
                     ("decode", dimg),
-                    ("decode_oc", merge_y_with_oracle_chroma(&dy, &gcb, &gcr, hr.w, hr.h)),
+                    (
+                        "decode_oc",
+                        merge_y_with_oracle_chroma(&dy, &gcb, &gcr, hr.w, hr.h),
+                    ),
                     ("restored", rimg),
-                    ("restored_oc", merge_y_with_oracle_chroma(&ry, &gcb, &gcr, hr.w, hr.h)),
+                    (
+                        "restored_oc",
+                        merge_y_with_oracle_chroma(&ry, &gcb, &gcr, hr.w, hr.h),
+                    ),
                 ];
                 for (arm, o) in &arms {
                     let s = score(&hr, o);

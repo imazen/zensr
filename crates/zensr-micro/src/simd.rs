@@ -51,7 +51,7 @@ macro_rules! define_kernels {
                 let qbase = q * cin * 36; // cin * 3ky * 12
 
                 let mut x = 1usize;
-                while x + W + 1 <= wd {
+                while x + W < wd {
                     let mut acc = [
                         V::<T>::splat(token, bias[oc0]),
                         V::<T>::splat(token, bias[oc0 + 1]),
@@ -159,7 +159,7 @@ macro_rules! define_kernels {
                         let ky_lo = if oy == 0 { 1usize } else { 0 };
                         let ky_hi = if oy + 1 == h { 1usize } else { 2 };
                         let mut x = 1usize;
-                        while x + W + 1 <= wd {
+                        while x + W < wd {
                             let mut acc = V::<T>::zero(token);
                             for ky in ky_lo..=ky_hi {
                                 let irow = &ip[(oy + ky - 1) * wd..][..wd];
@@ -328,12 +328,7 @@ macro_rules! define_kernels {
 
             /// out = (a + skip) * (sigmoid(a) - 0.5)
             #[inline(always)]
-            pub(crate) fn gate<T: Backend>(
-                token: T,
-                a: &[f32],
-                skip: &[f32],
-                out: &mut [f32],
-            ) {
+            pub(crate) fn gate<T: Backend>(token: T, a: &[f32], skip: &[f32], out: &mut [f32]) {
                 const W: usize = $w;
                 let one = V::<T>::splat(token, 1.0);
                 let half = V::<T>::splat(token, 0.5);
@@ -410,17 +405,46 @@ macro_rules! define_kernels {
                     for x in 0..wd {
                         out[oc * cs + x] =
                             crate::wino::direct_px(inp, cin, raw, bias[oc], oc, 0, x, h, wd, cs);
-                        out[oc * cs + (h - 1) * wd + x] =
-                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, h - 1, x, h, wd, cs);
+                        out[oc * cs + (h - 1) * wd + x] = crate::wino::direct_px(
+                            inp,
+                            cin,
+                            raw,
+                            bias[oc],
+                            oc,
+                            h - 1,
+                            x,
+                            h,
+                            wd,
+                            cs,
+                        );
                     }
                     for y in 1..h - 1 {
                         out[oc * cs + y * wd] =
                             crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, 0, h, wd, cs);
-                        out[oc * cs + y * wd + wd - 1] =
-                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, wd - 1, h, wd, cs);
+                        out[oc * cs + y * wd + wd - 1] = crate::wino::direct_px(
+                            inp,
+                            cin,
+                            raw,
+                            bias[oc],
+                            oc,
+                            y,
+                            wd - 1,
+                            h,
+                            wd,
+                            cs,
+                        );
                         if extra_col {
                             out[oc * cs + y * wd + wd - 2] = crate::wino::direct_px(
-                                inp, cin, raw, bias[oc], oc, y, wd - 2, h, wd, cs,
+                                inp,
+                                cin,
+                                raw,
+                                bias[oc],
+                                oc,
+                                y,
+                                wd - 2,
+                                h,
+                                wd,
+                                cs,
                             );
                         }
                     }
@@ -499,17 +523,14 @@ macro_rules! define_kernels {
                                 let lane0 = bi * W;
                                 let mut acc = [V::<T>::splat(token, 0.0); 4];
                                 for ic in 0..cin {
-                                    let vv = V::<T>::from_slice(
-                                        token,
-                                        &vb[vpb + ic * ntp + lane0..],
-                                    );
+                                    let vv =
+                                        V::<T>::from_slice(token, &vb[vpb + ic * ntp + lane0..]);
                                     let w4: &[f32; 4] = (&uq
                                         [upb + (q * cin + ic) * 4..upb + (q * cin + ic) * 4 + 4])
                                         .try_into()
                                         .unwrap();
                                     for ob in 0..4 {
-                                        acc[ob] =
-                                            vv.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
+                                        acc[ob] = vv.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
                                     }
                                 }
                                 for ob in 0..4 {
@@ -528,10 +549,8 @@ macro_rules! define_kernels {
                             let lane0 = bi * W;
                             let mut mm = [V::<T>::splat(token, 0.0); 16];
                             for (p, m) in mm.iter_mut().enumerate() {
-                                *m = V::<T>::from_slice(
-                                    token,
-                                    &mb[(p * cout + oc) * ntp + lane0..],
-                                );
+                                *m =
+                                    V::<T>::from_slice(token, &mb[(p * cout + oc) * ntp + lane0..]);
                             }
                             let mut t0 = [V::<T>::splat(token, 0.0); 4];
                             let mut t1 = [V::<T>::splat(token, 0.0); 4];
@@ -560,7 +579,6 @@ macro_rules! define_kernels {
                         }
                     }
                 }
-            
             }
 
             #[inline(always)]
@@ -579,9 +597,31 @@ macro_rules! define_kernels {
                 let span = (FC - 1) * cs + h * wd;
                 conv3x3(token, inp, cin, convs[0].0, convs[0].1, out, FC, h, wd, cs);
                 silu(token, &mut out[..span]);
-                conv3x3(token, &out[..span], FC, convs[1].0, convs[1].1, tmp, FC, h, wd, cs);
+                conv3x3(
+                    token,
+                    &out[..span],
+                    FC,
+                    convs[1].0,
+                    convs[1].1,
+                    tmp,
+                    FC,
+                    h,
+                    wd,
+                    cs,
+                );
                 silu(token, &mut tmp[..span]);
-                conv3x3(token, &tmp[..span], FC, convs[2].0, convs[2].1, out, FC, h, wd, cs);
+                conv3x3(
+                    token,
+                    &tmp[..span],
+                    FC,
+                    convs[2].0,
+                    convs[2].1,
+                    out,
+                    FC,
+                    h,
+                    wd,
+                    cs,
+                );
                 if cin == FC {
                     tmp[..span].copy_from_slice(&out[..span]);
                     gate(token, &tmp[..span], &inp[..span], &mut out[..span]);
@@ -604,31 +644,56 @@ macro_rules! define_kernels {
                 let cs = sc.cs;
                 debug_assert!(sc.h == h && sc.w == wd, "scratch shape mismatch");
                 for c in 0..3 {
-                    sc.inp3[c * cs..c * cs + plane].copy_from_slice(&input[c * plane..(c + 1) * plane]);
+                    sc.inp3[c * cs..c * cs + plane]
+                        .copy_from_slice(&input[c * plane..(c + 1) * plane]);
                 }
                 let span3 = 2 * cs + plane;
                 let span_fc = (FC - 1) * cs + plane;
                 let span_near = (NEAR_CH - 1) * cs + plane;
-                conv_near(token, &sc.inp3[..span3], w.conv_near, &mut sc.near, h, wd, cs);
+                conv_near(
+                    token,
+                    &sc.inp3[..span3],
+                    w.conv_near,
+                    &mut sc.near,
+                    h,
+                    wd,
+                    cs,
+                );
                 crate::nan_debug("near", &sc.near);
 
                 spab(
-                    token, &sc.inp3[..span3],
-                    &[(&pk.packed_blocks[0][0], w.blocks[0][0].1),
-                      (&pk.packed_blocks[0][1], w.blocks[0][1].1),
-                      (&pk.packed_blocks[0][2], w.blocks[0][2].1)],
-                    3, &mut sc.b1, &mut sc.tmp, h, wd, cs,
+                    token,
+                    &sc.inp3[..span3],
+                    &[
+                        (&pk.packed_blocks[0][0], w.blocks[0][0].1),
+                        (&pk.packed_blocks[0][1], w.blocks[0][1].1),
+                        (&pk.packed_blocks[0][2], w.blocks[0][2].1),
+                    ],
+                    3,
+                    &mut sc.b1,
+                    &mut sc.tmp,
+                    h,
+                    wd,
+                    cs,
                 );
                 crate::nan_debug("b1", &sc.b1);
 
                 sc.b_out[..span_fc].copy_from_slice(&sc.b1[..span_fc]);
                 for bi in 1..5 {
                     spab(
-                        token, &sc.b_out,
-                        &[(&pk.packed_blocks[bi][0], w.blocks[bi][0].1),
-                          (&pk.packed_blocks[bi][1], w.blocks[bi][1].1),
-                          (&pk.packed_blocks[bi][2], w.blocks[bi][2].1)],
-                        FC, &mut sc.cur, &mut sc.tmp, h, wd, cs,
+                        token,
+                        &sc.b_out,
+                        &[
+                            (&pk.packed_blocks[bi][0], w.blocks[bi][0].1),
+                            (&pk.packed_blocks[bi][1], w.blocks[bi][1].1),
+                            (&pk.packed_blocks[bi][2], w.blocks[bi][2].1),
+                        ],
+                        FC,
+                        &mut sc.cur,
+                        &mut sc.tmp,
+                        h,
+                        wd,
+                        cs,
                     );
                     core::mem::swap(&mut sc.b_out, &mut sc.cur);
                     crate::nan_debug("block", &sc.b_out);
@@ -636,7 +701,11 @@ macro_rules! define_kernels {
 
                 conv1x1_multi(
                     token,
-                    &[(&sc.near[..span_near], NEAR_CH), (&sc.b_out[..span_fc], FC), (&sc.b1[..span_fc], FC)],
+                    &[
+                        (&sc.near[..span_near], NEAR_CH),
+                        (&sc.b_out[..span_fc], FC),
+                        (&sc.b1[..span_fc], FC),
+                    ],
                     &pk.packed_cat,
                     w.conv_cat_b,
                     &mut sc.catd,
@@ -646,7 +715,18 @@ macro_rules! define_kernels {
                     cs,
                 );
                 crate::nan_debug("catd", &sc.catd);
-                conv3x3(token, &sc.catd, FC, &pk.packed_conv2, w.conv2_b, &mut sc.pre, NEAR_CH, h, wd, cs);
+                conv3x3(
+                    token,
+                    &sc.catd,
+                    FC,
+                    &pk.packed_conv2,
+                    w.conv2_b,
+                    &mut sc.pre,
+                    NEAR_CH,
+                    h,
+                    wd,
+                    cs,
+                );
                 crate::nan_debug("pre", &sc.pre);
                 crate::pixel_shuffle4_strided(&sc.pre, cs, out, h, wd);
             }
@@ -690,18 +770,45 @@ fn prelu_lay(
 }
 #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
 #[arcane]
-fn prelu_lay_v4(token: X64V4Token, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+fn prelu_lay_v4(
+    token: X64V4Token,
+    data: &mut [f32],
+    slopes: &[f32],
+    channels: usize,
+    plane: usize,
+    cs: usize,
+) {
     k16::prelu(token, data, slopes, channels, plane, cs);
 }
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn prelu_lay_v4x(token: X64V4xToken, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+fn prelu_lay_v4x(
+    token: X64V4xToken,
+    data: &mut [f32],
+    slopes: &[f32],
+    channels: usize,
+    plane: usize,
+    cs: usize,
+) {
     k16::prelu(token, data, slopes, channels, plane, cs);
 }
-pub(crate) fn prelu_dispatch(data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
+pub(crate) fn prelu_dispatch(
+    data: &mut [f32],
+    slopes: &[f32],
+    channels: usize,
+    plane: usize,
+    cs: usize,
+) {
     incant!(
         prelu_lay(data, slopes, channels, plane, cs),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
 
@@ -835,10 +942,16 @@ pub(crate) fn conv3x3_packed_dispatch(
 ) {
     incant!(
         conv3x3_lay(inp, cin, packed, bias, out, cout, h, wd, cs),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
-
 
 #[magetypes(v3, neon, wasm128, scalar)]
 #[allow(clippy::too_many_arguments)]
@@ -909,7 +1022,14 @@ pub(crate) fn conv3x3_wino_dispatch(
 ) {
     incant!(
         wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
 
@@ -923,7 +1043,14 @@ pub(crate) fn silu_all_dispatch(data: &mut [f32]) {
 pub(crate) fn gate_all_dispatch(a: &[f32], skip: &[f32], out: &mut [f32]) {
     incant!(
         gate_lay(a, skip, out),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
 
@@ -940,7 +1067,14 @@ pub(crate) fn conv1x1_gen_dispatch(
 ) {
     incant!(
         conv1x1_gen_lay(srcs, wts, bias, out, cout, cin_total, plane, cs),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
 
@@ -1054,7 +1188,14 @@ pub(crate) fn forward_dispatch(
     let w = model.weights();
     incant!(
         spanf_forward_impl(input, h, wd, &w, model, sc, out),
-        [v4x(cfg(avx512)), v4(cfg(tier_v4)), v3, neon, wasm128, scalar]
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
     );
 }
 
@@ -1086,7 +1227,12 @@ pub fn spanf_x4_simd(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Ve
 
 /// Tier-forced variants for debugging/bench isolation.
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-pub fn spanf_x4_simd_force_v4x(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
+pub fn spanf_x4_simd_force_v4x(
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+) -> Option<Vec<f32>> {
     use archmage::prelude::*;
     let token = X64V4xToken::summon()?;
     let (model, mut sc, mut out) = force_setup(w, h, wd);
@@ -1096,7 +1242,12 @@ pub fn spanf_x4_simd_force_v4x(input: &[f32], h: usize, wd: usize, w: &SpanfWeig
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-pub fn spanf_x4_simd_force_v4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
+pub fn spanf_x4_simd_force_v4(
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+) -> Option<Vec<f32>> {
     use archmage::prelude::*;
     let token = X64V4Token::summon()?;
     let (model, mut sc, mut out) = force_setup(w, h, wd);
@@ -1106,7 +1257,12 @@ pub fn spanf_x4_simd_force_v4(input: &[f32], h: usize, wd: usize, w: &SpanfWeigh
 }
 
 #[cfg(target_arch = "x86_64")]
-pub fn spanf_x4_simd_force_v3(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Option<Vec<f32>> {
+pub fn spanf_x4_simd_force_v3(
+    input: &[f32],
+    h: usize,
+    wd: usize,
+    w: &SpanfWeights,
+) -> Option<Vec<f32>> {
     let (model, mut sc, mut out) = force_setup(w, h, wd);
     let wv = model.weights();
     incant!(
@@ -1117,7 +1273,11 @@ pub fn spanf_x4_simd_force_v3(input: &[f32], h: usize, wd: usize, w: &SpanfWeigh
 }
 
 #[cfg(target_arch = "x86_64")]
-fn force_setup(w: &SpanfWeights, h: usize, wd: usize) -> (crate::SpanfModel, crate::Scratch, Vec<f32>) {
+fn force_setup(
+    w: &SpanfWeights,
+    h: usize,
+    wd: usize,
+) -> (crate::SpanfModel, crate::Scratch, Vec<f32>) {
     let mut raw = Vec::with_capacity(crate::TOTAL_FLOATS);
     raw.extend_from_slice(w.conv_near);
     for b in &w.blocks {

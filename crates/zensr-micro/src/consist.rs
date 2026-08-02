@@ -21,9 +21,9 @@
 
 /// Zigzag index -> natural (row-major) index, JPEG standard order.
 pub const ZIGZAG_TO_NATURAL: [usize; 64] = [
-    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27,
-    20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58,
-    59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
+    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
+    13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,
+    52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
 /// Order of the caller's per-block coefficient slices.
@@ -68,9 +68,10 @@ pub struct ProjectionConfig {
 
 impl ProjectionConfig {
     pub fn with_slack_q(slack_q: f32) -> Self {
-        let mut c = Self::default();
-        c.slack_q = slack_q;
-        c
+        Self {
+            slack_q,
+            ..Self::default()
+        }
     }
     pub fn with_slack_abs(mut self, slack_abs: f32) -> Self {
         self.slack_abs = slack_abs;
@@ -81,7 +82,10 @@ impl ProjectionConfig {
 impl Default for ProjectionConfig {
     fn default() -> Self {
         // strict box + a hair for decoder IDCT/rounding noise
-        ProjectionConfig { slack_q: 0.05, slack_abs: 0.0 }
+        ProjectionConfig {
+            slack_q: 0.05,
+            slack_abs: 0.0,
+        }
     }
 }
 
@@ -103,9 +107,8 @@ fn basis() -> [[f32; B]; B] {
     for (u, row) in m.iter_mut().enumerate() {
         let cu = if u == 0 { (0.5f32).sqrt() } else { 1.0 };
         for (x, v) in row.iter_mut().enumerate() {
-            *v = 0.5
-                * cu
-                * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
+            *v =
+                0.5 * cu * (((2 * x + 1) as f32) * (u as f32) * core::f32::consts::PI / 16.0).cos();
         }
     }
     m
@@ -126,7 +129,10 @@ pub fn project_plane(
     cfg: &ProjectionConfig,
 ) -> ProjectionReport {
     assert_eq!(plane.len(), w * h);
-    assert!(cv.blocks_wide * B >= w && cv.blocks_high * B >= h, "coeff grid too small");
+    assert!(
+        cv.blocks_wide * B >= w && cv.blocks_high * B >= h,
+        "coeff grid too small"
+    );
     assert_eq!(cv.coeffs.len(), cv.blocks_wide * cv.blocks_high * 64);
     let m = basis();
     let mut clamped = 0usize;
@@ -226,8 +232,18 @@ pub fn project_plane(
 
 /// JFIF full-range RGB<->YCbCr (BT.601 constants from the spec). All in [0,1];
 /// Cb/Cr carry the +0.5 offset.
-pub fn rgb_to_ycbcr_planes(rgb: &[f32], plane: usize, y: &mut [f32], cb: &mut [f32], cr: &mut [f32]) {
-    let (r, g, b) = (&rgb[..plane], &rgb[plane..2 * plane], &rgb[2 * plane..3 * plane]);
+pub fn rgb_to_ycbcr_planes(
+    rgb: &[f32],
+    plane: usize,
+    y: &mut [f32],
+    cb: &mut [f32],
+    cr: &mut [f32],
+) {
+    let (r, g, b) = (
+        &rgb[..plane],
+        &rgb[plane..2 * plane],
+        &rgb[2 * plane..3 * plane],
+    );
     for i in 0..plane {
         let yy = 0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i];
         y[i] = yy;
@@ -268,7 +284,10 @@ pub fn project_chroma_420(
         for x in 0..hw {
             let (x0, x1) = (2 * x, (2 * x + 1).min(w - 1));
             down[y * hw + x] = 0.25
-                * (plane[y0 * w + x0] + plane[y0 * w + x1] + plane[y1 * w + x0] + plane[y1 * w + x1]);
+                * (plane[y0 * w + x0]
+                    + plane[y0 * w + x1]
+                    + plane[y1 * w + x0]
+                    + plane[y1 * w + x1]);
         }
     }
     let before = down.clone();
@@ -316,7 +335,9 @@ mod tests {
         let bh = h.div_ceil(B);
         let mut rng = seed;
         let mut next = || {
-            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             ((rng >> 33) as u32 as f32) / (u32::MAX >> 1) as f32 * 0.5
         };
         let orig: Vec<f32> = (0..w * h).map(|_| 0.25 + next()).collect();
@@ -400,8 +421,23 @@ mod tests {
         let qt = qt_flat(24);
         let (mut dec, coeffs) = simulate(w, h, &qt, 7);
         let before = dec.clone();
-        let cv = CoeffView { coeffs: &coeffs, blocks_wide: 4, blocks_high: 3, order: CoeffOrder::Natural, quant: &qt };
-        let rep = project_plane(&mut dec, w, h, &cv, &ProjectionConfig { slack_q: 0.05, slack_abs: 0.0 });
+        let cv = CoeffView {
+            coeffs: &coeffs,
+            blocks_wide: 4,
+            blocks_high: 3,
+            order: CoeffOrder::Natural,
+            quant: &qt,
+        };
+        let rep = project_plane(
+            &mut dec,
+            w,
+            h,
+            &cv,
+            &ProjectionConfig {
+                slack_q: 0.05,
+                slack_abs: 0.0,
+            },
+        );
         for (a, b) in dec.iter().zip(before.iter()) {
             assert!((a - b).abs() < 2e-3, "decode should already be consistent");
         }
@@ -413,15 +449,34 @@ mod tests {
         let (w, h) = (32, 32);
         let qt = qt_flat(40);
         let (dec, coeffs) = simulate(w, h, &qt, 42);
-        let cv = CoeffView { coeffs: &coeffs, blocks_wide: 4, blocks_high: 4, order: CoeffOrder::Natural, quant: &qt };
+        let cv = CoeffView {
+            coeffs: &coeffs,
+            blocks_wide: 4,
+            blocks_high: 4,
+            order: CoeffOrder::Natural,
+            quant: &qt,
+        };
         // adversarial "model": decode + big hallucinated texture
         let mut out: Vec<f32> = dec
             .iter()
             .enumerate()
             .map(|(i, v)| (v + if (i / 3) % 2 == 0 { 0.3 } else { -0.3 }).clamp(0.0, 1.0))
             .collect();
-        let rep = project_plane(&mut out, w, h, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
-        assert!(rep.clamped_frac > 0.2, "should clamp a lot: {}", rep.clamped_frac);
+        let rep = project_plane(
+            &mut out,
+            w,
+            h,
+            &cv,
+            &ProjectionConfig {
+                slack_q: 0.0,
+                slack_abs: 0.0,
+            },
+        );
+        assert!(
+            rep.clamped_frac > 0.2,
+            "should clamp a lot: {}",
+            rep.clamped_frac
+        );
         // after projection, re-quantizing must reproduce the file's coefficients
         let m = basis();
         for by in 0..4 {
@@ -465,32 +520,67 @@ mod tests {
         for (i, v) in full.iter_mut().enumerate() {
             *v = (*v + if (i / 7) % 2 == 0 { 0.15 } else { -0.15 }).clamp(0.0, 1.0);
         }
-        let cv = CoeffView { coeffs: &coeffs, blocks_wide: 2, blocks_high: 2, order: CoeffOrder::Natural, quant: &qt };
+        let cv = CoeffView {
+            coeffs: &coeffs,
+            blocks_wide: 2,
+            blocks_high: 2,
+            order: CoeffOrder::Natural,
+            quant: &qt,
+        };
         let viol = |p: &[f32]| -> f32 {
             // measure half-res box violation: project a copy, see how far it moves
             let mut d = vec![0.0f32; hw * hh];
             for y in 0..hh {
                 for x in 0..hw {
                     d[y * hw + x] = 0.25
-                        * (p[2 * y * w + 2 * x] + p[2 * y * w + 2 * x + 1]
-                            + p[(2 * y + 1) * w + 2 * x] + p[(2 * y + 1) * w + 2 * x + 1]);
+                        * (p[2 * y * w + 2 * x]
+                            + p[2 * y * w + 2 * x + 1]
+                            + p[(2 * y + 1) * w + 2 * x]
+                            + p[(2 * y + 1) * w + 2 * x + 1]);
                 }
             }
             let before = d.clone();
-            project_plane(&mut d, hw, hh, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
-            d.iter().zip(before.iter()).map(|(a, b)| (a - b).abs()).sum::<f32>() / (hw * hh) as f32
+            project_plane(
+                &mut d,
+                hw,
+                hh,
+                &cv,
+                &ProjectionConfig {
+                    slack_q: 0.0,
+                    slack_abs: 0.0,
+                },
+            );
+            d.iter()
+                .zip(before.iter())
+                .map(|(a, b)| (a - b).abs())
+                .sum::<f32>()
+                / (hw * hh) as f32
         };
         let v0 = viol(&full);
-        project_chroma_420(&mut full, w, h, &cv, &ProjectionConfig { slack_q: 0.0, slack_abs: 0.0 });
+        project_chroma_420(
+            &mut full,
+            w,
+            h,
+            &cv,
+            &ProjectionConfig {
+                slack_q: 0.0,
+                slack_abs: 0.0,
+            },
+        );
         let v1 = viol(&full);
         assert!(v0 > 0.01, "test setup must start violated (v0={v0})");
-        assert!(v1 < 2e-3, "one back-projection pass must satisfy the half-res box (v0={v0} -> v1={v1})");
+        assert!(
+            v1 < 2e-3,
+            "one back-projection pass must satisfy the half-res box (v0={v0} -> v1={v1})"
+        );
     }
 
     #[test]
     fn ycbcr_roundtrip() {
         let plane = 64;
-        let rgb: Vec<f32> = (0..3 * plane).map(|i| ((i * 37) % 251) as f32 / 251.0).collect();
+        let rgb: Vec<f32> = (0..3 * plane)
+            .map(|i| ((i * 37) % 251) as f32 / 251.0)
+            .collect();
         let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
         rgb_to_ycbcr_planes(&rgb, plane, &mut y, &mut cb, &mut cr);
         let mut back = vec![0.0f32; 3 * plane];
