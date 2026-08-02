@@ -54,6 +54,13 @@ the gate short-circuited restoration so the first ladder measured *itself*, and
 | jpegli  | 420 | none    | +0.40 | +0.16 | -0.04 | -0.05 | +0.20 |
 | turbo   | 444 | **q92** | +0.05 | -0.37 | -0.80 | -1.43 | -2.01 |
 | mozjpeg | 444 | **q90** | -0.14 | -0.38 | -0.72 | -1.19 | -2.06 |
+| jpegli  | 444 | **q95** | +0.02 | +0.06 | -0.34 | -0.72 | -1.50 |
+| zenjpeg | 444 | **q88** | -0.04 | -0.13 | -0.45 | -0.85 | -1.71 |
+
+(jpegli/zenjpeg 4:4:4 measured on an 88-100 grid,
+`benchmarks/pinned_gate_jpegli444_2026-08-02.tsv`. zenjpeg is already negative
+at the lowest point sampled, so its floor is not yet located — a q40-88 sweep
+is running.)
 
 **The gate ignores chroma subsampling, and that is a shipping defect.** At
 4:4:4 restoration is already negative at q90 (mozjpeg) / q92 (turbo) and gets
@@ -63,10 +70,26 @@ gate fires at `>= 94.5`, so the whole q90-94 band at 444 is unprotected and
 already losing. At 420 the same constant is mildly early (turbo q96, zenjpeg
 q95) or late (mozjpeg q99).
 
-Likely cause, stated as hypothesis not measurement: the dejpeg training sets
-are 4:2:0, so the model has effectively never seen 4:4:4 input. That is
-testable by training one arm with mixed subsampling — it is not established
-here. What IS established is the harm.
+**Mechanism, measured rather than guessed.** It is *not* that the model never
+saw 4:4:4 — `restore_jpeg` builds full-resolution RGB planes from the decode,
+so the model's input format is identical either way. What differs is how
+damaged that input is. Median `identity_off` ssim2 against the clean
+reference (`--absolute identity_off`):
+
+| q | 90 | 92 | 94 | 96 | 98 | 100 |
+|---|---|---|---|---|---|---|
+| turbo 420 | 85.54 | 86.82 | 88.04 | 89.68 | 91.10 | 91.69 |
+| turbo 444 | 87.84 | 89.11 | 90.75 | 92.47 | 94.07 | 95.26 |
+
+**4:4:4 at q90 is as clean as 4:2:0 at q94** (87.84 vs 88.04). The gate keys on
+nominal quality, but the same nominal quality means a materially less damaged
+image at 4:4:4 — so a threshold calibrated on 4:2:0 lets the model loose on
+inputs it should already be skipping. This is the same F3 effect (the model
+harms near-pristine input), reached by a different route.
+
+That accounts for turbo's 4-point offset (crossover q96 vs q92). It does NOT
+fully account for mozjpeg's (q99 vs q90), so damage-equivalence is part of the
+story and not all of it. Do not present it as the whole explanation.
 
 **The projection's value grows with quality, on both subsamplings** — the
 opposite shape to the model's own contribution, and it survived the selection

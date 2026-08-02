@@ -35,6 +35,10 @@ def main():
     ap.add_argument("--base", default="identity_off")
     ap.add_argument("--metric", default="ssim2")
     ap.add_argument("--harm-eps", type=float, default=0.1)
+    ap.add_argument("--absolute", metavar="ARM",
+                    help="instead of a delta, report the median ABSOLUTE metric for "
+                         "this arm per cell — how damaged the input actually is, which "
+                         "is what a quality-keyed gate is really trying to proxy")
     a = ap.parse_args()
 
     rows = list(csv.DictReader(open(a.tsv), delimiter="\t"))
@@ -43,6 +47,20 @@ def main():
     for col in ("arm", "q", "encoder", "file", a.metric):
         if col not in rows[0]:
             sys.exit(f"{a.tsv}: missing column {col!r} (have: {', '.join(rows[0])})")
+
+    if a.absolute:
+        cells = defaultdict(list)
+        for r in rows:
+            if r["arm"] == a.absolute:
+                cells[(r["encoder"], r.get("ss", ""), int(r["q"]))].append(float(r[a.metric]))
+        if not cells:
+            sys.exit(f"no rows for arm {a.absolute!r}")
+        print(f"# median absolute {a.metric} for arm {a.absolute}")
+        print("encoder\tss\tq\tn\tmedian")
+        for k in sorted(cells):
+            v = cells[k]
+            print(f"{k[0]}\t{k[1]}\t{k[2]}\t{len(v)}\t{statistics.median(v):.2f}")
+        return
 
     # (encoder, ss, q, file) -> {arm: value}
     by = defaultdict(dict)
