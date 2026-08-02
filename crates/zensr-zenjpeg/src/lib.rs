@@ -90,11 +90,37 @@ pub fn slack_abs_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
 /// exact q (q96 -> 96.0); Cjpegli-family Butteraugli distance reads
 /// 0.3-0.5 at q96 vs 0.7-1.0 at q93 (which stays modeled — positive with
 /// slack_abs).
+///
+/// **The threshold depends on chroma subsampling, not just quality**
+/// (pinned clean-reference ladders, 2026-08-02, n=64/cell, `ROADMAP.md` 1.1).
+/// The same nominal quality is a materially *less damaged* image at 4:4:4 —
+/// measured, 4:4:4 at q90 decodes as cleanly as 4:2:0 at q94 — so a threshold
+/// calibrated on 4:2:0 turns the model loose on inputs it should be skipping.
+/// Per-file median deltas cross zero at:
+///
+/// | family | 4:2:0 | 4:4:4 |
+/// |---|---|---|
+/// | turbo (IJG)   | q96 | q92 |
+/// | mozjpeg       | q99 | q90 |
+/// | cjpegli       | -   | q95 |
+/// | zenjpeg       | q95 | q88 |
+///
+/// zenjpeg and cjpegli both probe as `ButteraugliDistance`, so one threshold
+/// has to cover both; each arm takes the conservative (earlier-gating) of the
+/// pair. Left ungated, 4:4:4 reaches -1.5..-2.1 ssim2 by q100 with up to 91%
+/// of files harmed. 4:2:2 and 4:4:0 are untested and keep the 4:2:0 threshold,
+/// being chroma-subsampled and so closer to that case.
 pub fn policy_high_q_identity(probe: &zenjpeg::detect::JpegProbe) -> bool {
+    // Debug-string match for the same reason as `policy_wants_auto`: the probe
+    // enums are `#[non_exhaustive]` upstream and `zenjpeg::types` is not a
+    // public path, so the name is the stable handle across the version range.
+    let full_chroma = format!("{:?}", probe.subsampling) == "S444";
     let scale = format!("{:?}", probe.quality.scale);
     match scale.as_str() {
-        "IjgQuality" | "MozjpegQuality" => probe.quality.value >= 94.5,
-        "ButteraugliDistance" => probe.quality.value <= 0.6,
+        "IjgQuality" | "MozjpegQuality" => {
+            probe.quality.value >= if full_chroma { 88.0 } else { 94.5 }
+        }
+        "ButteraugliDistance" => probe.quality.value <= if full_chroma { 1.3 } else { 0.6 },
         _ => false,
     }
 }
@@ -430,6 +456,45 @@ mod tests {
         zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
             .encode(px, w as u32, h as u32)
             .expect("encode")
+    }
+
+    /// The gate must be stricter at 4:4:4: the same nominal quality is a less
+    /// damaged image there (4:4:4 q90 decodes as cleanly as 4:2:0 q94), and
+    /// left ungated the model loses up to 2 ssim2 by q100. Measured crossovers
+    /// in ROADMAP 1.1; this pins the resulting behaviour.
+    #[test]
+    fn high_q_gate_is_stricter_at_444() {
+        use zenjpeg::encoder::ChromaSubsampling;
+        let rgb = synth_rgb(64, 64);
+        // zenjpeg reports the Butteraugli-distance scale, where LOWER is
+        // better, so a high `q` here is a small distance.
+        for q in [90.0f32, 92.0] {
+            let full = encode(64, 64, &rgb, q, ChromaSubsampling::None);
+            let quarter = encode(64, 64, &rgb, q, ChromaSubsampling::Quarter);
+            let (pf, pq) = (
+                zenjpeg::detect::probe(&full).unwrap(),
+                zenjpeg::detect::probe(&quarter).unwrap(),
+            );
+            assert_eq!(
+                format!("{:?}", pf.subsampling),
+                "S444",
+                "expected the ChromaSubsampling::None encode to probe as 4:4:4"
+            );
+            assert!(
+                policy_high_q_identity(&pf),
+                "4:4:4 at q{q} must gate (probe {:?} = {})",
+                pf.quality.scale,
+                pf.quality.value
+            );
+            // Same content and quality at 4:2:0 is more damaged, so the model
+            // still has something to do there.
+            assert!(
+                !policy_high_q_identity(&pq),
+                "4:2:0 at q{q} must NOT gate (probe {:?} = {})",
+                pq.quality.scale,
+                pq.quality.value
+            );
+        }
     }
 
     #[test]
