@@ -30,6 +30,17 @@ INIT = os.environ.get("ZENSR_INIT", "")
 # cadence when a dual-boot box flipped OS), so short runs on shared hardware
 # should set this well below the default.
 CKPT_EVERY = int(os.environ.get("ZENSR_CKPT_EVERY", "10000"))
+# Feature/affinity KD (ROADMAP 1.4). ZENSR_FKD_TEACHER points at a teacher .pth
+# and switches targets to that teacher computed ONLINE — intermediate features
+# cannot be precomputed at corpus scale, and computing the output target the
+# same way keeps the paired arms identical apart from the affinity term.
+# ZENSR_FKD_W=0 is the output-KD control arm; >0 adds affinity supervision.
+FKD_TEACHER = os.environ.get("ZENSR_FKD_TEACHER", "")
+FKD_W = float(os.environ.get("ZENSR_FKD_W", "0"))
+FKD_TNF = int(os.environ.get("ZENSR_FKD_TNF", "64"))
+FKD_TNC = int(os.environ.get("ZENSR_FKD_TNC", "16"))
+FKD_POOL = int(os.environ.get("ZENSR_FKD_POOL", "16"))
+FKD_TAPS = int(os.environ.get("ZENSR_FKD_TAPS", "3"))
 LOSS_SPACE = os.environ.get("ZENSR_LOSS_SPACE", "")  # "" | ycbcr
 CHROMA_W = float(os.environ.get("ZENSR_CHROMA_W", "1"))
 EDGE_W = float(os.environ.get("ZENSR_EDGE_W", "0"))
@@ -37,17 +48,61 @@ OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", 
 
 
 class Student(nn.Module):
-    def __init__(self):
+    def __init__(self, nf=None, nc=None):
         super().__init__()
-        body = [nn.Conv2d(3, NF, 3, 1, 1), nn.PReLU(NF)]
-        for _ in range(NC):
-            body += [nn.Conv2d(NF, NF, 3, 1, 1), nn.PReLU(NF)]
-        body += [nn.Conv2d(NF, 3 * SCALE * SCALE, 3, 1, 1)]
+        nf = NF if nf is None else nf
+        nc = NC if nc is None else nc
+        body = [nn.Conv2d(3, nf, 3, 1, 1), nn.PReLU(nf)]
+        for _ in range(nc):
+            body += [nn.Conv2d(nf, nf, 3, 1, 1), nn.PReLU(nf)]
+        body += [nn.Conv2d(nf, 3 * SCALE * SCALE, 3, 1, 1)]
         self.body = nn.Sequential(*body)
 
-    def forward(self, x):
-        out = F.pixel_shuffle(self.body(x), SCALE)
-        return out + F.interpolate(x, scale_factor=SCALE, mode="nearest")
+    def forward(self, x, taps=()):
+        if not taps:
+            out = F.pixel_shuffle(self.body(x), SCALE)
+            return out + F.interpolate(x, scale_factor=SCALE, mode="nearest")
+        h, got = x, []
+        for i, layer in enumerate(self.body):
+            h = layer(h)
+            if i in taps:
+                got.append(h)
+        out = F.pixel_shuffle(h, SCALE)
+        return out + F.interpolate(x, scale_factor=SCALE, mode="nearest"), got
+
+
+def prelu_taps(nc, k):
+    """Body indices of the k evenly-spaced PReLU outputs in a body of nc blocks.
+
+    Layout is [conv, prelu] + nc*[conv, prelu] + [conv], so PReLU outputs sit
+    at the odd indices 1..2*nc+1. Spacing them by relative depth is what lets a
+    24-wide/8-deep student be compared against a 64-wide/16-deep teacher.
+    """
+    odd = list(range(1, 2 * nc + 2, 2))
+    if k >= len(odd):
+        return tuple(odd)
+    step = len(odd) / (k + 1)
+    return tuple(odd[min(len(odd) - 1, int(round((i + 1) * step)) - 1)] for i in range(k))
+
+
+def affinity(f, pool):
+    """Spatial self-similarity of a feature map: B,C,H,W -> B,P,P (P=pool*pool).
+
+    Normalising along channels before the Gram product makes this independent
+    of channel count, which is the whole reason affinity KD works between
+    architectures of different width — no learned projector to tune, so the
+    arm differs from output-KD by exactly one loss term.
+    """
+    g = F.adaptive_avg_pool2d(f, pool).flatten(2)
+    g = F.normalize(g, dim=1)
+    return torch.bmm(g.transpose(1, 2), g)
+
+
+def affinity_loss(s_taps, t_taps, pool):
+    return sum(
+        (affinity(s.float(), pool) - affinity(t.float(), pool)).abs().mean()
+        for s, t in zip(s_taps, t_taps)
+    ) / max(1, len(s_taps))
 
 
 def _edge_weight(y):
@@ -134,20 +189,37 @@ def main():
     print(f"device={dev} amp={amp_on} dtype={amp_dt if amp_on else 'fp32'}", flush=True)
     torch.manual_seed(7)
     lr_all = np.load(os.path.join(D, "lr_u8.npy"), mmap_mode="r")
-    # f16 targets (teacher distillation) take precedence over u8 GT/targets
-    hr_f16 = os.path.exists(os.path.join(D, "hr_f16.npy"))
-    hr_all = np.load(os.path.join(D, "hr_f16.npy" if hr_f16 else "hr_u8.npy"), mmap_mode="r")
-    tgt_div = 1.0 if hr_f16 else 255.0
+    # Online-teacher mode needs no target array at all: the teacher supplies
+    # both the output target and the intermediate features, from the LR crops.
+    teacher = None
+    if FKD_TEACHER:
+        teacher = Student(FKD_TNF, FKD_TNC).to(dev).eval()
+        tsd = torch.load(FKD_TEACHER, map_location="cpu", weights_only=True)
+        tsd = tsd.get("sd", tsd)
+        teacher.load_state_dict({k: v for k, v in tsd.items() if k.startswith("body.")})
+        for p in teacher.parameters():
+            p.requires_grad_(False)
+    hr_f16 = (teacher is None) and os.path.exists(os.path.join(D, "hr_f16.npy"))
+    if teacher is None:
+        # f16 targets (teacher distillation) take precedence over u8 GT/targets
+        hr_all = np.load(os.path.join(D, "hr_f16.npy" if hr_f16 else "hr_u8.npy"), mmap_mode="r")
+        tgt_div = 1.0 if hr_f16 else 255.0
+    else:
+        hr_all, tgt_div = None, 1.0
     n = lr_all.shape[0] - 512
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
-    val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(tgt_div).to(dev)
+    if teacher is None:
+        val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(tgt_div).to(dev)
+    else:
+        with torch.no_grad():
+            val_hr = torch.cat([teacher(val_lr[i:i + 128]) for i in range(0, 512, 128)])
     # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
     # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
     # hang in waitUntilCompleted) and on small-VRAM cards (ian's 1660 Ti).
     # Auto: keep data host-side when it would not comfortably fit in VRAM.
     # MPS always (multi-GB .to(mps) wedges); CUDA when the arrays exceed half
     # of free device memory (the 100k-crop set is 9.9 GB vs 8 GB cards).
-    need_bytes = lr_all[:n].nbytes + hr_all[:n].nbytes
+    need_bytes = lr_all[:n].nbytes + (hr_all[:n].nbytes if hr_all is not None else 0)
     auto_cpu = dev == "mps"
     if dev == "cuda":
         free, _total = torch.cuda.mem_get_info()
@@ -157,7 +229,7 @@ def main():
     cpu_data = os.environ.get("ZENSR_CPU_DATA", "1" if auto_cpu else "0") == "1"
     dloc = "cpu" if cpu_data else dev
     lr_gpu = torch.from_numpy(lr_all[:n].copy()).to(dloc)
-    hr_gpu = torch.from_numpy(hr_all[:n].copy()).to(dloc)
+    hr_gpu = None if hr_all is None else torch.from_numpy(hr_all[:n].copy()).to(dloc)
     # ZENSR_QBOOST: oversample high-q + clean pairs (index duplication) using
     # <data>/../pairs.tsv (dejpeg-v2 layout). Closes the q90 identity gap
     # without runtime gating.
@@ -187,6 +259,17 @@ def main():
     opt = torch.optim.AdamW(m.parameters(), lr=lr0, weight_decay=0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr0 / 50)
     rng = np.random.default_rng(11)
+    # Tap indices, chosen by relative depth so the shallower student lines up
+    # with proportional points in the deeper teacher.
+    s_taps_s = prelu_taps(NC, FKD_TAPS) if FKD_W > 0 else ()
+    s_taps_t = prelu_taps(FKD_TNC, FKD_TAPS) if teacher is not None else ()
+    if teacher is not None:
+        if SPACE == "ycbcr":
+            raise SystemExit("ZENSR_FKD_TEACHER with ZENSR_LOSS_SPACE=ycbcr is "
+                             "unsupported: the teacher expects RGB input")
+        print(f"teacher online: {os.path.basename(FKD_TEACHER)} nf={FKD_TNF} nc={FKD_TNC} "
+              f"fkd_w={FKD_W} pool={FKD_POOL} taps student={s_taps_s} teacher={s_taps_t}",
+              flush=True)
     print(f"train n={n} steps={steps} batch={batch} lr={lr0} nf={NF} nc={NC} "
           f"params={sum(p.numel() for p in m.parameters())}", flush=True)
     for step in range(1, steps + 1):
@@ -195,10 +278,18 @@ def main():
         else:
             idx = torch.from_numpy(rng.integers(0, n, batch)).to(dloc)
         x = to_space(lr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(255))
-        y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(tgt_div))
+        if teacher is None:
+            y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(tgt_div))
         with torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
-            out = m(x)
-            loss = charbonnier(out, y)
+            if teacher is not None:
+                with torch.no_grad():
+                    y, t_taps = teacher(x, s_taps_t)
+            if FKD_W > 0:
+                out, s_taps = m(x, s_taps_s)
+                loss = charbonnier(out, y) + FKD_W * affinity_loss(s_taps, t_taps, FKD_POOL)
+            else:
+                out = m(x)
+                loss = charbonnier(out, y)
         opt.zero_grad(set_to_none=True)
         if scaler.is_enabled():
             scaler.scale(loss).backward()
@@ -215,7 +306,13 @@ def main():
                     vo = m(to_space(val_lr[i:i + 128])).float()
                     mse = ((vo - to_space(val_hr[i:i + 128])) ** 2).mean().item()
                     vps.append(-10 * np.log10(max(mse, 1e-10)))
-                print(f"step {step} loss {loss.item():.5f} val_psnr_vs_GT {np.mean(vps):.2f}", flush=True)
+                # hr_f16.npy is written only by make_teacher_targets.py, so when
+                # it is present the target — and therefore this metric — is the
+                # TEACHER's output, not ground truth. Reporting it as "vs_GT"
+                # overstated what was measured.
+                print(f"step {step} loss {loss.item():.5f} "
+                      f"val_psnr_vs_{'teacher' if hr_f16 or teacher is not None else 'GT'} "
+                      f"{np.mean(vps):.2f}", flush=True)
         if step % CKPT_EVERY == 0 or step == steps:
             torch.save({"sd": getattr(m, "_orig_mod", m).state_dict(), "step": step},
                        os.path.join(D, f"{OUT_NAME}_{step}.pth"))
