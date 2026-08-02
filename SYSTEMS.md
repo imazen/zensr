@@ -1211,6 +1211,27 @@ Both directions agree: 400 epochs over 24k crops was the binding constraint,
 not capacity (falsified 3x) or architecture. Roadmap 1.2 confirmed as the
 lever; 1.3 ("better teacher") only works THROUGH data, not through steps.
 
+**SECOND CORRECTION 2026-08-02 — the teacher side is also null, and BOTH
+tests are confounded.** dejpeg12_teacher_big (100,000 pairs vs dejpeg11's
+24,000, both 120k steps / batch 48 / lr 1e-4 / qboost 3 / nf=64 nc=16) is not
+better on clean references: overall median -0.033, win_frac 0.40, -0.13 at
+q15, +0.04 at q75 (benchmarks/teacher12_vs_teacher11_2026-08-02.tsv).
+
+So both directions of the scale-up — student and teacher — failed to improve
+clean-reference quality despite improving the training-time metrics that
+originally motivated the claim above. **But neither test is clean:**
+  - the student run was warm-restarted mid-way (AdamW moments and cosine reset)
+  - the teacher runs differ in TWO further variables besides the dataset:
+    their inits differ (sha 01b51a5411287c6d vs a0a8c67ec73fd406) and their
+    AMP dtypes differ (bf16 on Ampere vs fp16 on Turing).
+Therefore: the data scale-up is NOT established as a quality lever, and it is
+NOT falsified either. It is untested under control. What IS established is
+that the training-time metrics which motivated it (val_psnr_vs_teacher, and
+the teacher's own val curve) do not predict clean-reference quality.
+
+Both confounds were catchable only because meta.json records init_sha256_16
+and amp_dtype — the repro block paying for itself.
+
 **CORRECTION 2026-08-02 — the scale-up did NOT produce a better product
 model.** The finished 100k-crop student (dejpeg_rt24big_r2, 173k steps,
 38.97 dB teacher-fidelity vs 36.89) was compared per-file against the shipped

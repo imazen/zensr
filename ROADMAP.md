@@ -147,7 +147,21 @@ pick unilaterally, so it stays as-is until the API split exists.
 Caveats: n=64/cell, 512-crop, single generation, and the pristine references
 are downscaled 2-3x so they run smaller than native inputs.
 
-### 1.2 Training data scale-up *(strongest untested quality lever)*
+### 1.2 Training data scale-up — MEASURED NULL, BUT BOTH TESTS CONFOUNDED (2026-08-02)
+
+Student (100k vs 24k crops): no gain on clean references, median -0.023,
+win_frac 0.45, worse at low q. Teacher (100k vs 24k pairs): also no gain,
+median -0.033, win_frac 0.40. Both improved their training-time metrics
+substantially, and neither improved the product.
+
+Neither test is controlled: the student run was warm-restarted mid-way, and
+the two teachers differ in init (hashes recorded) and AMP dtype (bf16 vs fp16)
+as well as dataset size. **So this is not falsified — it is untested under
+control.** A clean rerun varies only the dataset: same init, same dtype, same
+schedule, no restart. Until then do not cite the scale-up as a lever OR as a
+dead end.
+
+
 200k steps × batch 48 over 24k pairs = **~400 epochs**. The corpus has 974
 source files; we are re-showing the same crops hundreds of times.
 - Build 100k+ crop datasets (CPU-only, generator already written; exclude

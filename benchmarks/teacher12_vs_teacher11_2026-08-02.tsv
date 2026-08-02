@@ -1,0 +1,29 @@
+# B(/home/lilith/tmp/teacher12_lowq.tsv) minus A(/home/lilith/tmp/teacher_lowq.tsv), arm model_proj, ssim2, per file
+encoder	ss	q	n	median	mean	win_frac
+turbo	420	15	32	-0.130	-0.573	0.34
+turbo	420	35	32	-0.045	-0.209	0.28
+turbo	420	55	32	-0.022	+0.004	0.44
+turbo	420	75	32	+0.044	+0.141	0.53
+
+# overall n=128 median -0.033 mean -0.159 win_frac 0.40
+
+# PROVENANCE — READ THE CONFOUNDS BEFORE USING THIS
+# A = dejpeg11_teacher  24,000 pairs, bfloat16, init sha 01b51a5411287c6d
+# B = dejpeg12_teacher_big 100,000 pairs, float16, init sha a0a8c67ec73fd406
+# Both: 120k steps, batch 48, lr 1e-4, qboost 3, nf=64 nc=16, crop 128.
+# corpus /mnt/v/imazen-26-clean, pinned split, n=32/cell, turbo 4:2:0, per file.
+#
+# RESULT: B is not better. Overall median -0.033, win_frac 0.40; -0.13 at q15,
+# +0.04 at q75.
+#
+# THIS IS NOT A CLEAN TEST OF "MORE DATA". Two variables move besides the
+# dataset:
+#   1. The inits DIFFER (hashes above). B started from different weights.
+#   2. The AMP dtype differs — bf16 on Ampere vs fp16 on Turing, which is a
+#      real numerics change for a 64-wide/16-deep net (this same architecture
+#      was measured to overflow to NaN under fp16 autocast at inference today,
+#      though B's training logs show no NaN).
+# So the data-scale-up question stays OPEN for the teacher. A controlled rerun
+# (same init, same dtype, only the dataset varying) is what would settle it.
+# The confounds were catchable only because meta.json records init_sha256_16
+# and amp_dtype.
