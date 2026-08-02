@@ -631,7 +631,10 @@ is slack_abs in Auto projection):
   My earlier "q96 residual traced to calibration tails" was only part of
   the story; "solved by slack_abs" (113722d7 commit message) was premature.
 - **Fix: measured high-q identity gate** (`policy_high_q_identity`, default
-  on): skip the model at probe q>=94.5 (IJG/Moz scale, exact at these q) or
+  on) — **SUPERSEDED 2026-08-02, see "CHROMA SUBSAMPLING BREAKS THE HIGH-Q
+  GATE" at the end of this file: these thresholds are 4:2:0-only, and 4:4:4
+  needs q>=88 / d<=1.3.**
+  Skip the model at probe q>=94.5 (IJG/Moz scale, exact at these q) or
   d<=0.6 (Cjpegli family; q96 reads 0.3–0.5, q93 reads 0.7–1.0 and stays
   modeled). Top-end analog of the user-endorsed low-q deblock policy; the
   decode is already consistent so projection is skipped too (no-op).
