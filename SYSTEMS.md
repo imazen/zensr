@@ -1212,3 +1212,64 @@ Infra fix that made it possible: train_people now measures free VRAM and
 places the dataset host-side when it would not fit (the 9.9-14.7 GB sets vs
 8 GB cards). Previously auto-only on MPS, so CUDA boxes OOM'd on the first
 large dataset. It now prints the decision.
+
+### CHROMA SUBSAMPLING BREAKS THE HIGH-Q GATE (2026-08-02) — SHIPPED FIX
+
+Supersedes the gate description above ("skip the model at probe q>=94.5 ... or
+d<=0.6"): that threshold is correct for 4:2:0 and WRONG for 4:4:4.
+
+Measured on the new clean corpus (`/mnt/v/imazen-26-clean`, 974 refs, 0 JPEG),
+files taken from the pinned eval split, n=64/cell, gate disabled so the ladder
+could see past it. Per-file median delta (model+projection vs plain decode)
+crosses zero at:
+
+    4:2:0   turbo q96   mozjpeg q99   zenjpeg q95   jpegli never
+    4:4:4   turbo q92   mozjpeg q90   zenjpeg q88   jpegli q95
+
+Left ungated at 4:4:4 the model reaches -1.5..-2.1 ssim2 by q100, with 91% of
+files harmed (mozjpeg q99/q100: win_frac 0.06, harm_frac 0.91).
+
+MECHANISM (measured, and NOT the one I first assumed). It is not that the
+model never saw 4:4:4 — restore_jpeg builds full-resolution RGB planes from
+the decode, so the model's input format does not depend on subsampling at all.
+What depends on it is how damaged that input is. Median identity ssim2 vs the
+clean reference:
+
+    q          90     92     94     96     98    100
+    turbo 420  85.54  86.82  88.04  89.68  91.10  91.69
+    turbo 444  87.84  89.11  90.75  92.47  94.07  95.26
+
+4:4:4 at q90 is as clean as 4:2:0 at q94. A quality-keyed gate calibrated on
+4:2:0 therefore turns the model loose on inputs it should already skip — the
+same near-pristine harm as before, reached by a different route. This accounts
+for turbo's 4-point offset but NOT mozjpeg's 9-point one, so it is part of the
+story and not all of it.
+
+FIX: policy_high_q_identity now takes subsampling into account — 4:4:4 gates at
+q88 (IJG/mozjpeg scale) / distance 1.3 (Butteraugli scale). zenjpeg and cjpegli
+both probe as ButteraugliDistance so one threshold covers both; each arm takes
+the conservative member of its pair. 4:2:2 and 4:4:0 are untested and keep the
+4:2:0 threshold. 4:2:0 is unchanged deliberately: its crossovers sit ABOVE the
+shipped 94.5, so raising them trades median gain for more per-file regressions
+(harm_frac 0.3-0.45 across that band) — an Intent decision, not a constant to
+pick unilaterally.
+
+VERIFIED AFTER THE FIX: every 4:4:4 cell q88-q100 now reads exactly +0.000 with
+harm_frac 0.00. benchmarks/gated_444_after_2026-08-02.tsv.
+
+Two measurement defects had to be fixed to get here, both of which silently
+produced clean-looking wrong answers:
+- The first ladder measured the GATE, not the crossover: with the gate live
+  every cell at q>=96 read exactly 0.000. ZENSR_EVAL_NOGATE=1 now exists.
+- "First N sorted" file selection admitted TRAINING images (the photos
+  subcorpus contributed 4 of 32, none in the pinned split, because the pristine
+  directory held only the JPEG-sourced subset and the sort slid past the native
+  PNGs). dejpeg_eval now selects from eval_split/imazen26_eval_files.tsv by
+  stem. Same failure shape as the 2026-07-23 haberdoedas postmortem.
+
+Also measured on the same runs: THE PROJECTION'S VALUE GROWS WITH QUALITY, on
+both subsamplings — +0.39 to +1.31 (turbo 420, q90->q100), +0.32 to +1.09
+(turbo 444), monotone, no crossover anywhere in either grid. So the composite
+crossovers above are the model degrading while the projection increasingly
+offsets it. require_consistency in docs/API_DESIGN.md is load-bearing, not
+merely a safety property.
