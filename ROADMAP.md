@@ -106,12 +106,20 @@ restoration survives as far up the scale as it does *because* the
 quantisation box constrains it. Direct support for `require_consistency` in
 `docs/API_DESIGN.md` being load-bearing rather than merely a safety property.
 
-**What should change:** the gate needs a subsampling term (at minimum, gate
-4:4:4 from ~q90 for every family), and per-family 420 thresholds of roughly
-turbo 96 / zenjpeg 95 / mozjpeg 99, with jpegli left ungated. Whether to move
-the 420 constants at all is intent-dependent — harm_frac at 420 runs 0.3-0.45
-across the band where the median is still positive, so `DoNoHarm` wants the
-current 94.5 while `Fidelity` wants the numbers above.
+**What changed (SHIPPED):** `policy_high_q_identity` now takes chroma
+subsampling into account — 4:4:4 gates at q88 (IJG/mozjpeg scale) and at
+distance 1.3 (Butteraugli scale), covered by a test that encodes the same
+content both ways. The low-q sweep confirms the harmful band is bounded below:
+at 4:4:4 the model is strongly positive at low quality (+2.2 to +3.3 median at
+q40) and decays to zero around q85-88, so q88 is a floor and not a guess.
+
+**What deliberately did NOT change:** the 4:2:0 thresholds. The measured
+crossovers there (turbo q96, zenjpeg q95, mozjpeg q99, jpegli none) sit above
+the shipped 94.5, so moving them would trade a small median gain for more
+regressions — harm_frac at 4:2:0 runs 0.3-0.45 across exactly the band where
+the median is still positive. `DoNoHarm` wants the current 94.5; `Fidelity`
+wants the higher numbers. That is an `Intent` decision, not a constant to
+pick unilaterally, so it stays as-is until the API split exists.
 
 Caveats: n=64/cell, 512-crop, single generation, and the pristine references
 are downscaled 2-3x so they run smaller than native inputs.
