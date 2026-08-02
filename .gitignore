@@ -22,3 +22,10 @@ models/adopted/dejpeg_rt24g/*
 .cargo/
 .cargo/config.toml
 
+
+# Python bytecode from tools/ (the pre-remote local snapshot ignored these; the
+# remote never has). Deliberately NOT porting that snapshot's *.tsv / benchmarks/*.tsv
+# / models/ rules — this repo TRACKS those on purpose (107 benchmark TSVs and a
+# shipped model), so those ignores would have hidden real content.
+__pycache__/
+*.pyc

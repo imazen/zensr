@@ -26,3 +26,14 @@ nan-debug = []
 name = "zensr-verify"
 path = "src/bin/zensr-verify.rs"
 required-features = ["internals"]
+
+[dev-dependencies]
+# First ARM tier measurement for this crate (2026-08-01). `testable_dispatch`
+# lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON
+# kernels can be compared against a real forced-scalar arm.
+zenbench = "0.1.9"
+archmage = { version = "0.9.28", features = ["testable_dispatch"] }
+
+[[bench]]
+name = "kernel_tiers"
+harness = false
