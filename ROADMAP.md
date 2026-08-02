@@ -195,6 +195,15 @@ was falsified twice and the student is optimization-bound.
   worse. Pass = positive per-file median with win_frac > 0.5 on the clean
   corpus, with low q (q15-35) weighted as the deciding band. Writing this down
   now so the metric is not chosen after seeing the result.
+- **Scope bound, measured before the treatment arm finished.** Arm A (25k
+  steps, online teacher) is well short of the shipped rt24g (200k steps,
+  precomputed targets): per-file median -0.354, win_frac 0.24, and worst at
+  low q (-2.23 turbo q15, -2.01 mozjpeg q15). So both arms sit far from
+  convergence, and the rung answers "does affinity KD help at a 25k-step
+  budget", NOT "at convergence". A positive result would justify a
+  full-budget rerun; a null result does not rule out a benefit that only
+  appears later in training. Stated up front so the conclusion is not
+  over-read either way.
 - Box note: ian is a GTX 1660 Ti (6 GB, Turing cc 7.5), **not** the RTX 3070
   the fleet runbook guesses. The trainer's compute-capability gate correctly
   selects fp16+GradScaler there; inductor is unavailable (triton cannot build
