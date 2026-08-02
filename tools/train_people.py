@@ -285,8 +285,15 @@ def main():
             y = to_space(hr_gpu[idx].to(dev).permute(0, 3, 1, 2).float().div_(tgt_div))
         with torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
             if teacher is not None:
-                with torch.no_grad():
-                    y, t_taps = teacher(x, s_taps_t)
+                # fp32, NOT the student's AMP dtype: the 64-wide/16-deep teacher
+                # overflows to NaN under fp16 autocast (measured on Turing —
+                # finite in fp32 with absmax 1.09, all-NaN in fp16), which
+                # silently voids every step via the GradScaler. Beyond the
+                # crash, a target that changes with the student's precision is
+                # wrong on its own terms, so it is computed at full precision
+                # on every device, bf16 boxes included.
+                with torch.no_grad(), torch.autocast(dev, enabled=False):
+                    y, t_taps = teacher(x.float(), s_taps_t)
             if FKD_W > 0:
                 out, s_taps = m(x, s_taps_s)
                 base = charbonnier(out, y)

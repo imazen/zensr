@@ -29,7 +29,11 @@ PY="${ZENSR_PY:-$HOME/zensr-env/bin/python}"
 cd "${ZENSR_REPO:-$HOME/zensr-ablation}"
 
 run_arm() {
-  local name="$1" w="$2" log="$HOME/fkd_${name}.log"
+  local name="$1"
+  local w="$2"
+  # separate statements: under `set -u`, referencing a name assigned
+  # earlier in the SAME `local` is an unbound-variable error
+  local log="$HOME/fkd_${name}.log"
   echo "== arm $name (ZENSR_FKD_W=$w) -> $log"
   ZENSR_COMPILE="${ZENSR_COMPILE:-0}" \
   ZENSR_DATA="$DATA" ZENSR_SCALE=1 ZENSR_NF=24 ZENSR_NC=8 ZENSR_QBOOST=3 \

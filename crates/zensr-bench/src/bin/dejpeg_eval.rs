@@ -219,8 +219,16 @@ fn main() {
                         let proj_out = m_policy.as_ref().map(|mp| {
                             // ZENSR_SLACK_Q / ZENSR_SLACK_ABS override the
                             // family-calibrated projection slack (tail study)
+                            // ZENSR_EVAL_NOGATE=1 disables the shipped high-q
+                            // identity gate. Without it the gate short-circuits
+                            // restoration above its threshold and every cell up
+                            // there reads exactly 0.000 — measuring the gate,
+                            // not the crossover it is supposed to sit at.
                             let mut rc = zensr_zenjpeg::RestoreConfig::default()
-                                .with_threads(threads);
+                                .with_threads(threads)
+                                .with_high_q_identity(
+                                    std::env::var("ZENSR_EVAL_NOGATE").as_deref() != Ok("1"),
+                                );
                             if let (Ok(sq), Ok(sa)) = (
                                 std::env::var("ZENSR_SLACK_Q"),
                                 std::env::var("ZENSR_SLACK_ABS"),

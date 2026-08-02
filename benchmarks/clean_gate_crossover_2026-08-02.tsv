@@ -1,0 +1,40 @@
+# model_proj minus identity_off, ssim2, per file
+encoder	ss	q	n	median	mean	p10	p90	win_frac	harm_frac
+mozjpeg	420	90	32	+0.407	+0.820	-0.561	+3.443	0.69	0.28
+mozjpeg	420	92	32	+0.254	+0.669	-0.433	+3.025	0.62	0.28
+mozjpeg	420	94	32	+0.457	+0.320	-0.813	+2.338	0.62	0.34
+mozjpeg	420	95	32	+0.237	+0.225	-0.705	+1.911	0.62	0.34
+mozjpeg	420	96	32	+0.099	+0.312	-1.079	+1.836	0.59	0.41
+mozjpeg	420	97	32	+0.042	+0.155	-1.477	+1.568	0.50	0.44
+mozjpeg	420	98	32	+0.038	+0.049	-1.896	+1.439	0.53	0.44
+mozjpeg	420	99	32	-0.133	-0.062	-2.296	+1.658	0.47	0.53
+mozjpeg	420	100	32	-0.369	-0.180	-2.753	+1.835	0.41	0.56
+turbo	420	90	32	+0.346	+0.628	-0.376	+2.413	0.72	0.19
+turbo	420	92	32	+0.227	+0.346	-0.811	+1.734	0.66	0.25
+turbo	420	94	32	+0.124	+0.091	-0.754	+1.127	0.56	0.41
+turbo	420	95	32	+0.088	-0.010	-0.787	+0.895	0.53	0.41
+turbo	420	96	32	+0.017	-0.119	-1.281	+0.914	0.50	0.41
+turbo	420	97	32	-0.182	-0.212	-1.318	+1.125	0.44	0.53
+turbo	420	98	32	-0.108	-0.257	-1.695	+1.319	0.41	0.53
+turbo	420	99	32	-0.145	-0.309	-2.315	+1.698	0.44	0.53
+turbo	420	100	32	-0.231	-0.333	-2.518	+1.927	0.41	0.56
+
+# crossover: lowest q whose median delta is <= 0 and stays <= 0 above it
+mozjpeg	420	crossover q99	[90:+0.41 92:+0.25 94:+0.46 95:+0.24 96:+0.10 97:+0.04 98:+0.04 99:-0.13 100:-0.37]
+turbo	420	crossover q97	[90:+0.35 92:+0.23 94:+0.12 95:+0.09 96:+0.02 97:-0.18 98:-0.11 99:-0.14 100:-0.23]
+
+# PROVENANCE
+# commit:   (this commit)
+# corpus:   /mnt/v/imazen-26-clean — 674 refs, 0 JPEG (pristine replacements for
+#           the 4 JPEG-sourced dirs + native-PNG dirs), built by make_pristine
+# raw TSVs: /mnt/v/output/zensr/clean-gate-2026-08-02/
+#           clean_gate_nogate.tsv  sha256:7fd171f289f6c5a8...  (gate DISABLED)
+#           clean_gate_proj.tsv    sha256:22d6672ee1991665...  (gate enabled)
+#           clean_gate_ladder.tsv  sha256:938f48ad012b1a9f...  (no proj arm)
+# command:  ZENSR_EVAL_NOGATE=1 ZENSR_EVAL_QS=90,92,94,95,96,97,98,99,100 \
+#           ZENSR_EVAL_ENCODERS=turbo,mozjpeg ZENSR_EVAL_SS=420 ZENSR_EVAL_ARMS=policy \
+#           dejpeg_eval /mnt/v/imazen-26-clean <out> 4 8 dejpeg_rt24g x3
+# n:        32 files per cell (4 per subcorpus x 8), 420 only, 2 encoders
+# LIMITS:   n=32 does not resolve differences below ~0.1 ssim2 — the mozjpeg
+#           q94 median (+0.46) sitting above q92 (+0.25) is noise, not signal.
+#           References are downscaled 2-3x, so sizes are smaller than native.

@@ -32,7 +32,45 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 
 ## 1. Open rungs, ranked by expected value
 
-### 1.1 Re-derive the identity gate on clean references *(blocking a shipped constant)*
+### 1.1 Re-derive the identity gate on clean references — MEASURED 2026-08-02
+
+Measured on `/mnt/v/imazen-26-clean` (674 refs, 0 JPEG), gate DISABLED so the
+ladder sees past it, q90-100, 32 files/cell, 420, turbo + mozjpeg. Summary:
+`benchmarks/clean_gate_crossover_2026-08-02.tsv`; raw in
+`/mnt/v/output/zensr/clean-gate-2026-08-02/`.
+
+**The first run measured the gate, not the crossover.** With the gate live,
+every cell at q>=96 read *exactly* 0.000 on all 32 files — restoration was
+being skipped, and the "crossover" was just the constant reporting itself.
+`ZENSR_EVAL_NOGATE=1` exists so this cannot happen silently again.
+
+Ungated, per-file median delta (model_proj - identity_off):
+
+| q | 90 | 92 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
+|---|---|---|---|---|---|---|---|---|---|
+| turbo   | +0.35 | +0.23 | +0.12 | +0.09 | +0.02 | -0.18 | -0.11 | -0.14 | -0.23 |
+| mozjpeg | +0.41 | +0.25 | +0.46 | +0.24 | +0.10 | +0.04 | +0.04 | -0.13 | -0.37 |
+
+Crossover (first q that is non-positive and stays so): **turbo q97, mozjpeg
+q99**. The shipped gate fires at **>= 94.5** for both families, so it is
+EARLY by ~2.5 q (turbo) and ~4.5 q (mozjpeg) against a pure-median objective.
+
+**It does not follow that the constant should move.** Across that same band
+the win rate collapses to ~50% and `harm_frac` (files worse by >0.1 ssim2)
+climbs to 0.41 at q96 and 0.44 at q97. Restoring there buys a median of
++0.02..+0.10 while making four files in ten worse. So:
+- under `Intent::Fidelity` (maximise median), the gate belongs near q96.5
+  (turbo) / q98.5 (mozjpeg);
+- under `Intent::DoNoHarm`, 94.5 is already generous — the harm fraction is
+  0.34 at q94.
+The gate is therefore **intent-dependent**, which is an argument for the
+`Intent` split in `docs/API_DESIGN.md` rather than for one new number.
+
+Caveats that bound this: n=32/cell does not resolve <0.1 ssim2 (the mozjpeg
+q94 bump above q92 is noise), 420 only, two encoders, and the pristine
+references are downscaled 2-3x so they run smaller than native inputs.
+
+*(original framing below)*
 The realtime gate sits at q82 because q90 measured −0.23. On clean references
 q90 is **+0.35**. The gate may be discarding real gains.
 - Run the granular q sweep (q40…q85, both slack settings) filtered to clean
