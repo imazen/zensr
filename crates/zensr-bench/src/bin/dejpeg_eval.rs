@@ -117,6 +117,16 @@ fn main() {
     let m_off_dir = args.next().unwrap_or_else(|| "dejpeg2_off".into());
     let m_auto_dir = args.next().unwrap_or_else(|| "dejpeg2_auto".into());
     // ZENSR_EVAL_QS=40,50,60,... overrides the named grids entirely
+    // ZENSR_EVAL_ENCODERS / ZENSR_EVAL_SS trim the grid the same way
+    // ZENSR_EVAL_QS does. A full 4-encoder x 2-subsampling sweep is 8x the
+    // cheapest useful cell, which is the difference between a run that fits
+    // beside another session's build and one that takes the whole box.
+    let encoders: Vec<String> = std::env::var("ZENSR_EVAL_ENCODERS")
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_else(|_| ENCODERS.iter().map(|s| s.to_string()).collect());
+    let subsamplings: Vec<String> = std::env::var("ZENSR_EVAL_SS")
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_else(|_| vec!["420".into(), "444".into()]);
     let custom_qs: Option<Vec<u32>> = std::env::var("ZENSR_EVAL_QS")
         .ok()
         .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect());
@@ -157,8 +167,8 @@ fn main() {
             }
             used += 1;
             let ppm = td.join("hr.ppm");
-            for enc in ENCODERS {
-                for ss in ["420", "444"] {
+            for enc in encoders.iter().map(|s| s.as_str()) {
+                for ss in subsamplings.iter().map(|s| s.as_str()) {
                     for &q in qs {
                         let jpg = td.join("e.jpg");
                         let _ = std::fs::remove_file(&jpg);
