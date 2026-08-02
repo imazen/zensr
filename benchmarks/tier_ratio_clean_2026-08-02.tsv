@@ -1,0 +1,25 @@
+# Realtime tier as a fraction of the quality tier, on CLEAN references.
+# Median per-file gain over the plain decode (arm model_proj minus identity_off),
+# same files for both tiers.
+q	quality_tier	realtime	realtime_pct	readme_claim_pct
+15	+11.62	+6.88	59	68-79
+35	+6.18	+4.14	67	68-79
+55	+4.02	+3.06	76	68-79
+75	+2.05	+1.58	77	68-79
+#
+# PROVENANCE
+# quality = dejpeg11_teacher (595k params), realtime = dejpeg_rt24g (43k)
+# corpus /mnt/v/imazen-26-clean, pinned split, 4 files/subcorpus, n=32/cell,
+# turbo 4:2:0 only, per file. Raw: ~/tmp/{teacher,student}_lowq.tsv ->
+# /mnt/v/output/zensr/pinned-gate-2026-08-02/
+#
+# TWO corrections to the README table, in OPPOSITE directions:
+# 1. Both tiers' absolute gains are much LARGER than published (quality +11.62
+#    vs +7.1 at q15; realtime +6.88 vs +5.0) — contaminated references
+#    penalised removing artifacts that were in the reference.
+# 2. The RATIO is SMALLER than published at low q: 59% at q15 vs the claimed
+#    68-79% band. "Contamination understated everything" is too simple.
+#
+# SCOPE: turbo only, 4:2:0 only, n=32. The README figures were computed over a
+# different (blended) grid, so this is a first clean measurement, not a
+# drop-in replacement.
