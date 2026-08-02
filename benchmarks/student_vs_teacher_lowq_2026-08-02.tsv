@@ -1,0 +1,17 @@
+# B(/home/lilith/tmp/student_lowq.tsv) minus A(/home/lilith/tmp/teacher_lowq.tsv), arm model_proj, ssim2, per file
+encoder	ss	q	n	median	mean	win_frac
+turbo	420	15	32	-3.578	-5.119	0.03
+turbo	420	35	32	-1.587	-1.961	0.03
+turbo	420	55	32	-1.120	-1.162	0.03
+turbo	420	75	32	-0.606	-0.839	0.09
+
+# overall n=128 median -1.473 mean -2.270 win_frac 0.05
+
+# PROVENANCE
+# A = dejpeg11_teacher (595k params, 1.16 MB), B = dejpeg_rt24g (43k, 84 KB)
+# corpus /mnt/v/imazen-26-clean, pinned split, 4 files/subcorpus, n=32/cell,
+# turbo 4:2:0, arm model_proj, per file.
+# Purpose: test the hypothesis that rt24g beats its teacher at low q, which was
+# offered as the explanation for the 100k-crop student's low-q regression.
+# RESULT: FALSIFIED. The student is far BELOW its teacher everywhere
+# (-3.58 median at q15, win_frac 0.03). The hypothesis was wrong.

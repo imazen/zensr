@@ -1224,12 +1224,25 @@ n=64/cell, arm model_proj):
     q85-94   -0.01..-0.14 median
 
 So ~2 dB of extra teacher-fidelity bought nothing against clean references and
-LOST ground at low q. The reading: fidelity-to-teacher is not quality. rt24g
-had been BEATING its teacher at low q (a normal KD outcome), and training the
-student to imitate the teacher more precisely converged it toward the teacher,
-giving that advantage back. This is direct evidence for 1.3 — the teacher is
-the ceiling — and a warning that `val_psnr_vs_teacher` must never be read as a
-product metric.
+LOST ground at low q. The reading that SURVIVES: fidelity-to-teacher is not quality, and
+`val_psnr_vs_teacher` must never be read as a product metric.
+
+Two candidate explanations were offered and BOTH are now falsified:
+1. "rt24g had been beating its teacher at low q, and closer imitation gave
+   that advantage back." **Falsified** — measured head-to-head on clean
+   references, rt24g is far BELOW dejpeg11_teacher everywhere: median -3.58 at
+   q15, -1.59 at q35, -1.12 at q55, -0.61 at q75, win_frac 0.03-0.09
+   (benchmarks/student_vs_teacher_lowq_2026-08-02.tsv). The student never had
+   an advantage to give back.
+2. "The 100k set has a different quality distribution." **Falsified** — the
+   two sets' pairs.tsv q percentiles are identical: min 5, p10 14, p50 51,
+   p90 87, max 96 for both.
+
+So the cause of the 100k student's low-q regression is UNEXPLAINED. The one
+untested candidate is the schedule: that run was warm-restarted from a 20k
+checkpoint, so AdamW moments reset and a fresh cosine ran over the remaining
+173k steps. A schedule-matched rerun is the way to settle it. Do not repeat
+either falsified explanation.
 
 CAVEAT, stated because it is load-bearing: the 100k run was warm-restarted
 from a 20k checkpoint after a mid-run OS flip, so AdamW moments and the cosine
