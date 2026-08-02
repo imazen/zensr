@@ -177,6 +177,17 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
 - A probe that produces **no rows must fail loudly**, not silently succeed.
 - Kernel files get committed *before* iterating on them (a bad edit anchor
   amputated `simd.rs` mid-session).
+- **A teacher must be evaluated in fp32, never the student's AMP dtype.** The
+  64-wide/16-deep teacher overflows to all-NaN under fp16 autocast (measured on
+  Turing: finite in fp32 with absmax 1.09, NaN in fp16), and because the
+  GradScaler then skips every step, training looks *alive* — loss prints `nan`
+  but the run continues and val sits frozen at its init value. bf16 boxes hid
+  it entirely. Beyond the crash, a distillation target that varies with the
+  student's precision is wrong on its own terms.
+- **A measurement must not be able to observe its own gate.** The first clean
+  ladder reported a q96 crossover that was entirely the shipped identity gate
+  short-circuiting restoration. Any harness that evaluates a policy needs a
+  documented way to disable it (`ZENSR_EVAL_NOGATE=1`).
 - **Two dependencies are pinned to git revisions and must be unpinned when they
   publish**: `zenjpeg` at `e277e9c9` (0.9.0 — 0.8.4 keeps `DeblockMode`
   crate-private) and `zenanalyze` at `a7d8224` (0.2, the feature IDs the chooser
