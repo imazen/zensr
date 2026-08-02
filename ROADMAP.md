@@ -35,10 +35,22 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    (`ZENSR_EVAL_PIN`) and warns loudly if no list is found. Same failure shape
    as the 2026-07-23 haberdoedas postmortem; it recurred because the fix then
    was a regenerated list rather than a harness that enforces it.
-2. **Report granularity matters.** "Zero negative cells" was true at
+2. **Training-time metrics do not predict clean-reference quality
+   (2026-08-02).** This one invalidated two conclusions in a single day. The
+   100k-crop student improved `val_psnr_vs_teacher` by ~2 dB (36.89 -> 38.97)
+   and went slightly BACKWARDS on clean references. The 100k-pair teacher
+   improved its own val curve and did not improve its output either. Both had
+   been written up as confirmations of the data scale-up on the strength of
+   those curves alone.
+   → **No rung is decided on a training curve.** Every verdict goes through
+   `tools/model_ab.py` on the clean corpus, per file, before it is written
+   down. `val_psnr_vs_teacher` in particular measures imitation of a target
+   that is itself imperfect — the teacher beats the 84 KB student by +3.58
+   ssim2 at q15, so converging on it is not the same as getting better.
+3. **Report granularity matters.** "Zero negative cells" was true at
    encoder×q *mean* granularity and false per-file. Always report per-file
    negative counts and worst case alongside means.
-3. **Metric ceiling.** Differences below ~0.3 ssim2 are at the edge of what our
+4. **Metric ceiling.** Differences below ~0.3 ssim2 are at the edge of what our
    metrics resolve. Anything smaller needs human judgment (§4) rather than a
    bigger eval grid.
 
