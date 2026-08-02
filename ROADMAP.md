@@ -115,6 +115,13 @@ content both ways. The low-q sweep confirms the harmful band is bounded below:
 at 4:4:4 the model is strongly positive at low quality (+2.2 to +3.3 median at
 q40) and decays to zero around q85-88, so q88 is a floor and not a guess.
 
+**Verified after the fix** (`benchmarks/gated_444_after_2026-08-02.tsv`, same
+corpus and pinned selection, gate live): every 4:4:4 cell from q88 to q100 now
+reads exactly +0.000 with harm_frac 0.00 for both families. The worst case
+went from a -2.06 median with 91% of files harmed (mozjpeg q100) to no change
+at all — the model is skipped and the decode returned, which is also the
+cheaper path.
+
 **What deliberately did NOT change:** the 4:2:0 thresholds. The measured
 crossovers there (turbo q96, zenjpeg q95, mozjpeg q99, jpegli none) sit above
 the shipped 94.5, so moving them would trade a small median gain for more
