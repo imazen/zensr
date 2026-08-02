@@ -254,8 +254,11 @@ def main():
     m = Student().to(dev)
     if INIT:
         load_init(m)
-    if dev == "cuda":  # inductor; MPS compile is flaky, eager is fine there
-        m = torch.compile(m)
+    # ZENSR_COMPILE=0 falls back to eager: inductor needs a C compiler, which
+    # a fresh worker box may not have. Speed-only, so an A/B stays valid as
+    # long as both arms use the same setting.
+    if dev == "cuda" and os.environ.get("ZENSR_COMPILE", "1") != "0":
+        m = torch.compile(m)  # MPS compile is flaky; eager is fine there
     opt = torch.optim.AdamW(m.parameters(), lr=lr0, weight_decay=0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr0 / 50)
     rng = np.random.default_rng(11)
@@ -286,7 +289,9 @@ def main():
                     y, t_taps = teacher(x, s_taps_t)
             if FKD_W > 0:
                 out, s_taps = m(x, s_taps_s)
-                loss = charbonnier(out, y) + FKD_W * affinity_loss(s_taps, t_taps, FKD_POOL)
+                base = charbonnier(out, y)
+                aff = affinity_loss(s_taps, t_taps, FKD_POOL)
+                loss = base + FKD_W * aff
             else:
                 out = m(x)
                 loss = charbonnier(out, y)
@@ -312,7 +317,13 @@ def main():
                 # overstated what was measured.
                 print(f"step {step} loss {loss.item():.5f} "
                       f"val_psnr_vs_{'teacher' if hr_f16 or teacher is not None else 'GT'} "
-                      f"{np.mean(vps):.2f}", flush=True)
+                      f"{np.mean(vps):.2f}"
+                      # both components, so the weight can be judged from the
+                      # log instead of guessed: an affinity term that dwarfs
+                      # reconstruction is not a KD arm, it is a different loss
+                      + (f" base {base.item():.5f} aff {aff.item():.5f} "
+                         f"aff_share {FKD_W * aff.item() / max(1e-12, loss.item()):.2f}"
+                         if FKD_W > 0 else ""), flush=True)
         if step % CKPT_EVERY == 0 or step == steps:
             torch.save({"sd": getattr(m, "_orig_mod", m).state_dict(), "step": step},
                        os.path.join(D, f"{OUT_NAME}_{step}.pth"))

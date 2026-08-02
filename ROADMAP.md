@@ -54,11 +54,25 @@ it has never had the f16-target + long-budget recipe that the students got.
 - Retrain the quality tier with the validated recipe, then re-distil.
 - Decision: whether the realtime tier's remaining gap is teacher-limited.
 
-### 1.4 Feature/affinity KD (task #13, still open)
+### 1.4 Feature/affinity KD (task #13, RUNNING 2026-08-02)
 Output-KD plateaus the student ~33 dB from its teacher. Feature-level targets
 give denser supervision. Case is *stronger* than when queued, because capacity
 was falsified twice and the student is optimization-bound.
 - Paired against output-KD at matched budget/seed/box.
+- Design: `tools/run_fkd_pair.sh`. Arms differ by exactly one loss term —
+  both take the output target from the SAME online teacher, so the only
+  difference is the affinity supervision. Affinity (FAKD-style) rather than a
+  projected feature match, because channel-normalised Gram products compare a
+  24-wide student to a 64-wide teacher with no learned projector whose own
+  capacity would confound the result.
+- The weight is calibrated from a probe (the trainer prints `base`/`aff`/
+  `aff_share`), not guessed: on random features the affinity term is ~30x the
+  reconstruction loss, so an arbitrary weight silently replaces the objective
+  instead of augmenting it.
+- Box note: ian is a GTX 1660 Ti (6 GB, Turing cc 7.5), **not** the RTX 3070
+  the fleet runbook guesses. The trainer's compute-capability gate correctly
+  selects fp16+GradScaler there; inductor is unavailable (triton cannot build
+  its CUDA shim), so both arms run eager via `ZENSR_COMPILE=0`.
 
 ### 1.5 Q-balanced sampling
 The long cosine schedule traded q75 for q15 (89.5% → 67.8% of quality tier).
