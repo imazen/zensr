@@ -1,0 +1,51 @@
+# B(/home/lilith/tmp/fkd_ab_b_affinity.tsv) minus A(/home/lilith/tmp/fkd_ab_a_outkd.tsv), arm model_proj, ssim2, per file
+encoder	ss	q	n	median	mean	win_frac
+mozjpeg	420	15	64	+0.153	+0.132	0.75
+mozjpeg	420	35	64	+0.058	+0.103	0.66
+mozjpeg	420	55	64	+0.041	+0.040	0.61
+mozjpeg	420	75	64	+0.002	-0.182	0.52
+mozjpeg	420	85	64	-0.014	-0.178	0.48
+mozjpeg	420	90	64	-0.012	-0.092	0.47
+mozjpeg	420	94	64	-0.062	-0.092	0.45
+turbo	420	15	64	+0.163	+0.223	0.86
+turbo	420	35	64	+0.077	+0.173	0.62
+turbo	420	55	64	+0.038	+0.075	0.56
+turbo	420	75	64	-0.006	-0.157	0.48
+turbo	420	85	64	-0.020	-0.128	0.45
+turbo	420	90	64	-0.021	-0.078	0.42
+turbo	420	94	64	+0.007	-0.070	0.52
+
+# overall n=896 median +0.030 mean -0.017 win_frac 0.56
+
+# SIGN TEST (two-sided exact binomial, H0 p=0.5) — magnitudes here sit below
+# the ~0.3 ssim2 single-comparison resolution, so the SIGN pattern is what
+# carries the information.
+# cell          n  wins  win%   median      p
+# mozjpeg q15  64    48  0.75  +0.153  7.7e-05
+# mozjpeg q35  64    42  0.66  +0.058  1.7e-02
+# turbo   q15  64    55  0.86  +0.163  3.5e-09
+# turbo   q35  64    40  0.62  +0.077  6.0e-02
+# q55          64  36-39 0.56-0.61  +0.04   n.s.
+# q75-q94    all   27-33 0.42-0.52  ~0      n.s.
+# low-q band (q15+q35): n=256 wins=185 (0.72) median +0.109  p=6.8e-13
+# overall:              n=896 wins=503 (0.56) median +0.030  p=2.7e-04
+#
+# PROVENANCE
+# A = fkd_a_outkd (output-KD only), B = fkd_b_affinity (ZENSR_FKD_W=0.027).
+# Identical box (jason), data, seeds, budget (25k steps), online fp32 teacher
+# supplying BOTH arms' output target — the arms differ by exactly one loss term.
+# Weight derived from a probe (base 0.0091 / aff 0.1092 -> ~25% share), not
+# guessed; measured aff_share held 0.18-0.22 through training.
+# corpus /mnt/v/imazen-26-clean, pinned split, n=64/cell, turbo+mozjpeg 4:2:0.
+#
+# VERDICT vs the rule fixed BEFORE the data existed (ROADMAP 1.4): PASS.
+# Positive per-file median, win_frac > 0.5, low q clearly positive.
+# HONEST QUALIFIERS:
+#  - The effect is CONCENTRATED at low q and is null-to-slightly-negative from
+#    q75 up (no cell there reaches significance in either direction).
+#  - Magnitudes are ~0.1 ssim2, an order of magnitude below the 0.3 ceiling for
+#    a single comparison. What is established is the systematic DIRECTION, not
+#    a difference a viewer would see on one image.
+#  - Both arms sit at 25k steps, far from the shipped model's 200k (arm A is
+#    -0.354 median against rt24g). This says affinity KD helps at a 25k budget;
+#    it does not establish that the gain survives to convergence.

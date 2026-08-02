@@ -206,7 +206,34 @@ it has never had the f16-target + long-budget recipe that the students got.
   a teacher improvement only matters to the product if it survives
   distillation. A better teacher that the student cannot follow moves nothing.
 
-### 1.4 Feature/affinity KD (task #13, RUNNING 2026-08-02)
+### 1.4 Feature/affinity KD (task #13) — PASSED 2026-08-02, low q only
+**RESULT: passes the pre-registered rule, with the effect confined to low q.**
+Per-file on the clean corpus, arm B minus arm A
+(`benchmarks/fkd_affinity_vs_outkd_2026-08-02.tsv`):
+
+| | q15 | q35 | q55 | q75 | q90 |
+|---|---|---|---|---|---|
+| turbo median | **+0.163** | +0.077 | +0.038 | -0.006 | -0.021 |
+| turbo win% | **0.86** | 0.62 | 0.56 | 0.48 | 0.42 |
+| mozjpeg median | **+0.153** | +0.058 | +0.041 | +0.002 | -0.012 |
+| mozjpeg win% | **0.75** | 0.66 | 0.61 | 0.52 | 0.47 |
+
+Sign test (two-sided exact binomial): turbo q15 p=3.5e-9, mozjpeg q15
+p=7.7e-5, low-q band (q15+q35) 185/256 wins p=6.8e-13, overall 503/896
+p=2.7e-4. From q75 up nothing reaches significance in either direction.
+
+**Read it carefully.** The magnitudes (~0.1 ssim2) are an order of magnitude
+below the ~0.3 single-comparison resolution in §0. What n=256 and p=6.8e-13
+establish is the systematic DIRECTION at low q, not a difference a viewer
+would notice on one image. And both arms sit at 25k steps against the shipped
+model's 200k, so this says affinity KD helps *at a 25k budget* — per the scope
+bound recorded before the run, that justifies a full-budget rerun rather than
+a shipping decision.
+
+**Next:** rerun the pair at the full 200k-step budget, since that is the only
+way to learn whether the low-q gain survives to convergence or is an
+early-training artifact that the output loss catches up on.
+
 Output-KD plateaus the student ~33 dB from its teacher. Feature-level targets
 give denser supervision. Case is *stronger* than when queued, because capacity
 was falsified twice and the student is optimization-bound.
