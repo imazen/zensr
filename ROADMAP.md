@@ -32,78 +32,66 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 
 ## 1. Open rungs, ranked by expected value
 
-### 1.1 Re-derive the identity gate on clean references — MEASURED 2026-08-02
+### 1.1 Identity gate re-derived on clean references — MEASURED 2026-08-02
 
-> **SELECTION DEFECT — these numbers are being re-measured (2026-08-02).** The
-> run below picked files by "first N sorted", which admitted TRAINING images:
-> the `photos` subcorpus contributed 4 of 32 files, none of them in the pinned
-> eval split, because the pristine directory held only the JPEG-sourced subset
-> and the sort slid past the native PNGs. The merged root also dropped the
-> already-clean native PNGs entirely for those four directories. Both are
-> fixed — the corpus is now a proper union (974 refs) and `dejpeg_eval`
-> selects from the pinned split by stem (`ZENSR_EVAL_PIN`, tolerant of the
-> `__pristineNx` suffix) — and the ladders are re-running at 8 files/subcorpus.
-> Treat every figure in this section as provisional until replaced.
+Corpus `/mnt/v/imazen-26-clean` (974 refs, 0 JPEG: native PNGs unioned with
+downscaled-to-pristine replacements). Files selected from the **pinned split**,
+8 per subcorpus, n=64 per cell, gate DISABLED so the ladder can see past it.
+Summaries `benchmarks/pinned_gate_{main,s444,jpegli}_2026-08-02.tsv`; raw in
+`/mnt/v/output/zensr/pinned-gate-2026-08-02/`.
 
-Measured on `/mnt/v/imazen-26-clean` (674 refs, 0 JPEG), gate DISABLED so the
-ladder sees past it, q90-100, 32 files/cell, 420, turbo + mozjpeg. Summary:
-`benchmarks/clean_gate_crossover_2026-08-02.tsv`; raw in
-`/mnt/v/output/zensr/clean-gate-2026-08-02/`.
+Two defects had to be fixed to get here, both recorded under Infrastructure:
+the gate short-circuited restoration so the first ladder measured *itself*, and
+"first N sorted" selection admitted training images.
 
-**The first run measured the gate, not the crossover.** With the gate live,
-every cell at q>=96 read *exactly* 0.000 on all 32 files — restoration was
-being skipped, and the "crossover" was just the constant reporting itself.
-`ZENSR_EVAL_NOGATE=1` exists so this cannot happen silently again.
+**Crossover (first q that is non-positive and stays so), per-file medians:**
 
-Ungated, per-file median delta (model_proj - identity_off):
+| encoder | ss | crossover | q90 | q94 | q96 | q98 | q100 |
+|---|---|---|---|---|---|---|---|
+| turbo   | 420 | **q96** | +0.32 | +0.05 | -0.02 | -0.19 | -0.30 |
+| mozjpeg | 420 | **q99** | +0.23 | +0.46 | +0.18 | +0.01 | -0.37 |
+| zenjpeg | 420 | **q95** | +0.11 | +0.08 | -0.05 | -0.19 | -0.06 |
+| jpegli  | 420 | none    | +0.40 | +0.16 | -0.04 | -0.05 | +0.20 |
+| turbo   | 444 | **q92** | +0.05 | -0.37 | -0.80 | -1.43 | -2.01 |
+| mozjpeg | 444 | **q90** | -0.14 | -0.38 | -0.72 | -1.19 | -2.06 |
 
-| q | 90 | 92 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
-|---|---|---|---|---|---|---|---|---|---|
-| turbo   | +0.35 | +0.23 | +0.12 | +0.09 | +0.02 | -0.18 | -0.11 | -0.14 | -0.23 |
-| mozjpeg | +0.41 | +0.25 | +0.46 | +0.24 | +0.10 | +0.04 | +0.04 | -0.13 | -0.37 |
+**The gate ignores chroma subsampling, and that is a shipping defect.** At
+4:4:4 restoration is already negative at q90 (mozjpeg) / q92 (turbo) and gets
+monotonically worse: by q100 the median is **-2.06 ssim2 with 91% of files
+harmed** (mozjpeg 444 q99/q100: win_frac 0.06, harm_frac 0.91). The shipped
+gate fires at `>= 94.5`, so the whole q90-94 band at 444 is unprotected and
+already losing. At 420 the same constant is mildly early (turbo q96, zenjpeg
+q95) or late (mozjpeg q99).
 
-Crossover (first q that is non-positive and stays so): **turbo q97, mozjpeg
-q99**. The shipped gate fires at **>= 94.5** for both families, so it is
-EARLY by ~2.5 q (turbo) and ~4.5 q (mozjpeg) against a pure-median objective.
+Likely cause, stated as hypothesis not measurement: the dejpeg training sets
+are 4:2:0, so the model has effectively never seen 4:4:4 input. That is
+testable by training one arm with mixed subsampling — it is not established
+here. What IS established is the harm.
 
-**It does not follow that the constant should move.** Across that same band
-the win rate collapses to ~50% and `harm_frac` (files worse by >0.1 ssim2)
-climbs to 0.41 at q96 and 0.44 at q97. Restoring there buys a median of
-+0.02..+0.10 while making four files in ten worse. So:
-- under `Intent::Fidelity` (maximise median), the gate belongs near q96.5
-  (turbo) / q98.5 (mozjpeg);
-- under `Intent::DoNoHarm`, 94.5 is already generous — the harm fraction is
-  0.34 at q94.
-The gate is therefore **intent-dependent**, which is an argument for the
-`Intent` split in `docs/API_DESIGN.md` rather than for one new number.
+**The projection's value grows with quality, on both subsamplings** — the
+opposite shape to the model's own contribution, and it survived the selection
+fix at doubled n (`model_proj` minus `model_policy`):
 
-Caveats that bound this: n=32/cell does not resolve <0.1 ssim2 (the mozjpeg
-q94 bump above q92 is noise), 420 only, two encoders, and the pristine
-references are downscaled 2-3x so they run smaller than native inputs.
+| encoder | ss | q90 | q94 | q96 | q98 | q100 |
+|---|---|---|---|---|---|---|
+| turbo   | 444 | +0.32 | +0.39 | +0.43 | +0.62 | +1.09 |
+| mozjpeg | 444 | +0.55 | +0.49 | +0.39 | +0.53 | +1.02 |
 
-**The projection is worth MORE the higher the quality** — the opposite shape to
-the model's own contribution. Isolating it (`model_proj` minus `model_policy`,
-same runs, `benchmarks/clean_projection_value_2026-08-02.tsv`):
+Monotone, no crossover anywhere in the grid. So the composite crossovers above
+are the model degrading while the projection increasingly offsets it, and
+restoration survives as far up the scale as it does *because* the
+quantisation box constrains it. Direct support for `require_consistency` in
+`docs/API_DESIGN.md` being load-bearing rather than merely a safety property.
 
-| q | 90 | 92 | 94 | 95 | 96 | 97 | 98 | 99 | 100 |
-|---|---|---|---|---|---|---|---|---|---|
-| turbo   | +0.33 | +0.26 | +0.41 | +0.49 | +0.59 | +0.70 | +0.67 | +0.97 | +1.06 |
-| mozjpeg | +0.41 | +0.39 | +0.46 | +0.50 | +0.59 | +0.55 | +0.67 | +0.77 | +0.98 |
+**What should change:** the gate needs a subsampling term (at minimum, gate
+4:4:4 from ~q90 for every family), and per-family 420 thresholds of roughly
+turbo 96 / zenjpeg 95 / mozjpeg 99, with jpegli left ungated. Whether to move
+the 420 constants at all is intent-dependent — harm_frac at 420 runs 0.3-0.45
+across the band where the median is still positive, so `DoNoHarm` wants the
+current 94.5 while `Fidelity` wants the numbers above.
 
-Monotone in q, 72-94% of files improved, harm fraction 0.03-0.25 — a far
-cleaner signal than the gate deltas above. So the composite crossover at
-q97/q99 is the model degrading while the projection increasingly offsets it,
-and restoration stays safe further up the scale *because* the box constrains
-it. This is direct support for `require_consistency` in the API design: the
-guarantee is not just a safety property, it is carrying the high-q gain.
-
-*(original framing below)*
-The realtime gate sits at q82 because q90 measured −0.23. On clean references
-q90 is **+0.35**. The gate may be discarding real gains.
-- Run the granular q sweep (q40…q85, both slack settings) filtered to clean
-  references; find the true crossover.
-- Decision: the shipped `RestoreOptions::realtime_tier()` threshold (currently
-  82.0 / d≤1.0 in zenjpeg PR #191).
+Caveats: n=64/cell, 512-crop, single generation, and the pristine references
+are downscaled 2-3x so they run smaller than native inputs.
 
 ### 1.2 Training data scale-up *(strongest untested quality lever)*
 200k steps × batch 48 over 24k pairs = **~400 epochs**. The corpus has 974

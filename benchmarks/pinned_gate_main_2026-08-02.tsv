@@ -1,0 +1,56 @@
+# model_proj minus identity_off, ssim2, per file
+encoder	ss	q	n	median	mean	p10	p90	win_frac	harm_frac
+mozjpeg	420	90	64	+0.232	+0.800	-1.058	+3.443	0.61	0.34
+mozjpeg	420	92	64	+0.322	+0.647	-1.131	+2.991	0.61	0.34
+mozjpeg	420	94	64	+0.457	+0.438	-1.058	+2.326	0.62	0.36
+mozjpeg	420	95	64	+0.275	+0.330	-1.115	+2.045	0.59	0.38
+mozjpeg	420	96	64	+0.179	+0.386	-1.341	+2.140	0.59	0.41
+mozjpeg	420	97	64	+0.193	+0.238	-1.645	+1.818	0.56	0.41
+mozjpeg	420	98	64	+0.007	+0.136	-1.896	+1.927	0.50	0.42
+mozjpeg	420	99	64	-0.222	+0.032	-2.296	+1.862	0.47	0.53
+mozjpeg	420	100	64	-0.369	-0.044	-2.498	+2.081	0.42	0.55
+turbo	420	90	64	+0.323	+0.647	-1.055	+2.493	0.66	0.30
+turbo	420	92	64	+0.159	+0.372	-1.131	+1.741	0.59	0.33
+turbo	420	94	64	+0.054	+0.157	-1.070	+1.245	0.53	0.41
+turbo	420	95	64	+0.015	+0.054	-0.982	+1.205	0.50	0.45
+turbo	420	96	64	-0.021	-0.042	-1.360	+1.269	0.47	0.45
+turbo	420	97	64	-0.268	-0.124	-1.672	+1.479	0.41	0.56
+turbo	420	98	64	-0.194	-0.170	-1.926	+1.426	0.41	0.56
+turbo	420	99	64	-0.222	-0.170	-2.315	+1.752	0.42	0.55
+turbo	420	100	64	-0.300	-0.165	-2.377	+2.003	0.42	0.56
+
+# crossover: lowest q whose median delta is <= 0 and stays <= 0 above it
+mozjpeg	420	crossover q99	[90:+0.23 92:+0.32 94:+0.46 95:+0.27 96:+0.18 97:+0.19 98:+0.01 99:-0.22 100:-0.37]
+turbo	420	crossover q96	[90:+0.32 92:+0.16 94:+0.05 95:+0.02 96:-0.02 97:-0.27 98:-0.19 99:-0.22 100:-0.30]
+# model_proj minus model_policy, ssim2, per file
+encoder	ss	q	n	median	mean	p10	p90	win_frac	harm_frac
+mozjpeg	420	90	64	+0.464	+0.747	+0.046	+1.469	0.97	0.02
+mozjpeg	420	92	64	+0.524	+0.792	+0.043	+1.694	0.95	0.03
+mozjpeg	420	94	64	+0.535	+0.851	-0.048	+2.380	0.88	0.09
+mozjpeg	420	95	64	+0.514	+0.921	-0.008	+2.426	0.89	0.06
+mozjpeg	420	96	64	+0.657	+1.183	-0.143	+2.817	0.86	0.11
+mozjpeg	420	97	64	+0.745	+1.296	-0.131	+3.126	0.83	0.11
+mozjpeg	420	98	64	+0.928	+1.505	-0.082	+3.553	0.78	0.09
+mozjpeg	420	99	64	+0.967	+1.729	-0.243	+3.972	0.83	0.16
+mozjpeg	420	100	64	+1.181	+1.932	-0.352	+4.098	0.84	0.14
+turbo	420	90	64	+0.390	+0.668	+0.064	+1.993	0.94	0.05
+turbo	420	92	64	+0.383	+0.713	+0.011	+1.914	0.91	0.06
+turbo	420	94	64	+0.484	+0.854	-0.132	+1.900	0.78	0.17
+turbo	420	95	64	+0.486	+0.929	-0.197	+2.354	0.78	0.17
+turbo	420	96	64	+0.724	+1.103	-0.330	+2.765	0.77	0.22
+turbo	420	97	64	+0.775	+1.248	-0.358	+3.189	0.78	0.20
+turbo	420	98	64	+0.962	+1.459	-0.224	+3.520	0.80	0.14
+turbo	420	99	64	+1.145	+1.714	-0.091	+3.996	0.81	0.09
+turbo	420	100	64	+1.307	+1.869	-0.085	+4.153	0.83	0.09
+
+# crossover: lowest q whose median delta is <= 0 and stays <= 0 above it
+mozjpeg	420	no crossover in grid (still helping at q100)	[90:+0.46 92:+0.52 94:+0.53 95:+0.51 96:+0.66 97:+0.74 98:+0.93 99:+0.97 100:+1.18]
+turbo	420	no crossover in grid (still helping at q100)	[90:+0.39 92:+0.38 94:+0.48 95:+0.49 96:+0.72 97:+0.78 98:+0.96 99:+1.14 100:+1.31]
+
+# PROVENANCE — supersedes clean_gate_crossover_2026-08-02.tsv (which used
+# "first N sorted" and admitted training images; see ROADMAP 1.1)
+# corpus:  /mnt/v/imazen-26-clean — 974 refs, 0 JPEG (union: native PNGs +
+#          downscaled-to-pristine replacements for JPEG-sourced files)
+# select:  pinned split eval_split/imazen26_eval_files.tsv, 8 files/subcorpus
+# n:       64 files per cell; gate DISABLED (ZENSR_EVAL_NOGATE=1)
+# raw:     /mnt/v/output/zensr/pinned-gate-2026-08-02/
