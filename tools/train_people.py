@@ -25,6 +25,11 @@ SCALE = int(os.environ.get("ZENSR_SCALE", "2"))
 OUT_NAME = os.environ.get("ZENSR_OUT", "people_rtc_2x")
 SPACE = os.environ.get("ZENSR_SPACE", "rgb")  # rgb | ycbcr (JFIF full-range)
 INIT = os.environ.get("ZENSR_INIT", "")
+# Checkpoint cadence. A run on a box we do not exclusively own can lose
+# everything since its last checkpoint (2026-08-01: 7k steps lost to a 10k
+# cadence when a dual-boot box flipped OS), so short runs on shared hardware
+# should set this well below the default.
+CKPT_EVERY = int(os.environ.get("ZENSR_CKPT_EVERY", "10000"))
 LOSS_SPACE = os.environ.get("ZENSR_LOSS_SPACE", "")  # "" | ycbcr
 CHROMA_W = float(os.environ.get("ZENSR_CHROMA_W", "1"))
 EDGE_W = float(os.environ.get("ZENSR_EDGE_W", "0"))
@@ -211,7 +216,7 @@ def main():
                     mse = ((vo - to_space(val_hr[i:i + 128])) ** 2).mean().item()
                     vps.append(-10 * np.log10(max(mse, 1e-10)))
                 print(f"step {step} loss {loss.item():.5f} val_psnr_vs_GT {np.mean(vps):.2f}", flush=True)
-        if step % 10000 == 0 or step == steps:
+        if step % CKPT_EVERY == 0 or step == steps:
             torch.save({"sd": getattr(m, "_orig_mod", m).state_dict(), "step": step},
                        os.path.join(D, f"{OUT_NAME}_{step}.pth"))
 
