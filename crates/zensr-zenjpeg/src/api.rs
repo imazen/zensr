@@ -422,6 +422,75 @@ const PHOTO444: [(f32, f32); 10] = [
     (100.0, -3.71),
 ];
 
+/// The distance curves split by content class, measured 2026-08-03 on the same
+/// jpegli/zenjpeg ladder as [`DIST420`]/[`DIST444`], which are these pooled.
+///
+/// Validated over 20 random image splits rather than one: the split beats the
+/// pooled curve on **19 of 20**, mean +0.7941 against +0.7357 ssim2, capturing
+/// 72% of what perfect content labels would give (+0.8168). The single-split
+/// check that sufficed for the quality curves was not enough here — the effect
+/// is a quarter the size, so it needed the stronger evidence.
+///
+/// The gap between classes is large across the whole range (1.0–3.8 ssim2), but
+/// the *routing* headroom is small because the pooled curve already restores
+/// conservatively on this family — most of the grid sits near-pristine, where
+/// both classes agree to skip.
+///
+/// `GRAPHIC_ZERO_AC_THRESHOLD` transfers unchanged: on distance-quantised files
+/// it measures precision 0.63–0.89 and recall 0.55–0.88 across the range, so no
+/// separate threshold is needed.
+const GRAPHIC_DIST420: [(f32, f32); 10] = [
+    (0.0, -0.34),
+    (0.3, -0.26),
+    (0.5, -0.04),
+    (0.7, -0.02),
+    (1.3, 0.47),
+    (1.8, 1.35),
+    (3.0, 2.38),
+    (5.2, 3.73),
+    (7.2, 4.16),
+    (14.2, 5.25),
+];
+
+const GRAPHIC_DIST444: [(f32, f32); 10] = [
+    (0.0, -0.56),
+    (0.3, -0.31),
+    (0.5, -0.14),
+    (0.7, 0.00),
+    (1.3, 0.24),
+    (1.8, 0.77),
+    (3.0, 1.96),
+    (5.2, 3.24),
+    (7.2, 3.94),
+    (14.2, 5.27),
+];
+
+const PHOTO_DIST420: [(f32, f32); 10] = [
+    (0.0, -2.06),
+    (0.3, -1.50),
+    (0.5, -0.99),
+    (0.7, -0.66),
+    (1.3, -0.57),
+    (1.8, -0.35),
+    (3.0, -0.12),
+    (5.2, 0.16),
+    (7.2, 0.35),
+    (14.2, 2.06),
+];
+
+const PHOTO_DIST444: [(f32, f32); 10] = [
+    (0.0, -3.61),
+    (0.3, -2.21),
+    (0.5, -1.54),
+    (0.7, -1.16),
+    (1.3, -0.71),
+    (1.8, -0.50),
+    (3.0, -0.16),
+    (5.2, 0.17),
+    (7.2, 0.74),
+    (14.2, 2.59),
+];
+
 /// Same, for 4:4:4. Full chroma is cleaner at equal distance, so it turns
 /// negative sooner — the same ordering the quality curves show.
 const DIST444: [(f32, f32); 10] = [
@@ -513,10 +582,7 @@ pub(crate) fn estimate_gain_for(
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
     if scale == "ButteraugliDistance" {
-        // The distance curves are not split by content yet — the jpegli ladder
-        // measured encoders, not content classes. Falls back to the pooled
-        // distance curve rather than guessing a split that was never measured.
-        return gain_at_distance(full, probe.quality.value);
+        return gain_at_distance(full, probe.quality.value, content);
     }
     let q = probe.quality.value;
     match content {
@@ -528,8 +594,16 @@ pub(crate) fn estimate_gain_for(
 
 /// Gain curve for distance-quantised encoders, separated from probing so it can
 /// be tested at exact distances.
-fn gain_at_distance(full: bool, d: f32) -> f32 {
-    lerp(if full { &DIST444 } else { &DIST420 }, d)
+fn gain_at_distance(full: bool, d: f32, content: Option<Content>) -> f32 {
+    let pts = match (content, full) {
+        (Some(Content::Graphic), false) => &GRAPHIC_DIST420,
+        (Some(Content::Graphic), true) => &GRAPHIC_DIST444,
+        (Some(Content::Photographic), false) => &PHOTO_DIST420,
+        (Some(Content::Photographic), true) => &PHOTO_DIST444,
+        (None, false) => &DIST420,
+        (None, true) => &DIST444,
+    };
+    lerp(pts, d)
 }
 
 /// Linear interpolation over an ascending table, clamped at both ends.
@@ -1021,11 +1095,68 @@ mod tests {
     /// the sign errors the `100 - 12·d` mapping made. Measured against clean
     /// references, restoration costs quality from distance 0.0 to about 1.3
     /// (cjpegli -q 100 down to -q 90); the old mapping predicted gain there.
+    /// Graphic content is worth restoring further down the distance scale than
+    /// photographic, mirroring the quality curves. An inversion means the pairs
+    /// were swapped.
+    #[test]
+    fn graphic_distance_curve_dominates_photographic() {
+        for full in [false, true] {
+            let mut d = 0.0f32;
+            while d <= 16.0 {
+                let (g, p) = (
+                    gain_at_distance(full, d, Some(Content::Graphic)),
+                    gain_at_distance(full, d, Some(Content::Photographic)),
+                );
+                assert!(
+                    g > p,
+                    "full_chroma={full} distance {d}: graphic {g:+.3} <= photographic {p:+.3}"
+                );
+                d += 0.1;
+            }
+        }
+    }
+
+    /// Every distance curve rises with distance, content-split included.
+    #[test]
+    fn all_distance_curves_never_decrease_with_distance() {
+        for content in [None, Some(Content::Graphic), Some(Content::Photographic)] {
+            for full in [false, true] {
+                let mut prev = f32::NEG_INFINITY;
+                let mut d = 0.0f32;
+                while d <= 16.0 {
+                    let g = gain_at_distance(full, d, content);
+                    assert!(
+                        g >= prev - 1e-4,
+                        "{content:?} full={full} distance {d}: fell to {g:+.3} from {prev:+.3}"
+                    );
+                    prev = g;
+                    d += 0.1;
+                }
+            }
+        }
+    }
+
+    /// Even graphic content loses at distance 0 — a pristine file has nothing
+    /// to recover regardless of what it depicts. This is the guard that stops a
+    /// content split from reintroducing the sign error the pooled curve had.
+    #[test]
+    fn no_content_class_predicts_gain_on_a_pristine_file() {
+        for full in [false, true] {
+            for content in [None, Some(Content::Graphic), Some(Content::Photographic)] {
+                let g = gain_at_distance(full, 0.0, content);
+                assert!(
+                    g < 0.0,
+                    "{content:?} full={full} distance 0 predicts {g:+.3}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn distance_curve_is_negative_on_near_pristine_input() {
         for full in [false, true] {
             for d in [0.0f32, 0.3, 0.5, 0.7, 1.3] {
-                let g = gain_at_distance(full, d);
+                let g = gain_at_distance(full, d, None);
                 assert!(
                     g < 0.0,
                     "full_chroma={full} distance {d} predicts {g:+.3} — near-pristine \
@@ -1035,25 +1166,10 @@ mod tests {
         }
     }
 
-    /// Gain rises with distance, because distance rises with damage. This is the
-    /// opposite direction to the quality curves, which is exactly why the two
-    /// must not share a table.
-    #[test]
-    fn distance_curve_never_decreases_with_distance() {
-        for full in [false, true] {
-            let mut prev = f32::NEG_INFINITY;
-            let mut d = 0.0f32;
-            while d <= 16.0 {
-                let g = gain_at_distance(full, d);
-                assert!(
-                    g >= prev - 1e-4,
-                    "full_chroma={full} distance {d}: gain fell to {g:+.3} from {prev:+.3}"
-                );
-                prev = g;
-                d += 0.1;
-            }
-        }
-    }
+    // The monotonicity check that lived here is superseded by
+    // `all_distance_curves_never_decrease_with_distance`, which covers the
+    // pooled curve and both content-split curves rather than the pooled one
+    // alone.
 
     /// A cjpegli file must reach the distance curve, not the quality curve. If
     /// the scale match regresses, the raw distance (0.0..~15) is read as a
@@ -1073,7 +1189,7 @@ mod tests {
             let g = estimate_gain(&p);
             assert_eq!(
                 g,
-                gain_at_distance(full, p.quality.value),
+                gain_at_distance(full, p.quality.value, None),
                 "{ss:?}: estimate_gain did not use the distance curve"
             );
             assert!(g < 0.0, "{ss:?} pristine predicted {g:+.3}");
