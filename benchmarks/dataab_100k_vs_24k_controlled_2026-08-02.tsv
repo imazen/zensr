@@ -1,0 +1,45 @@
+# B(/home/lilith/tmp/dataab_dataab_big.tsv) minus A(/home/lilith/tmp/dataab_dataab_small.tsv), arm model_proj, ssim2, per file
+encoder	ss	q	n	median	mean	win_frac
+mozjpeg	420	15	64	+0.062	+0.096	0.58
+mozjpeg	420	35	64	+0.004	+0.040	0.50
+mozjpeg	420	55	64	-0.033	-0.097	0.42
+mozjpeg	420	75	64	-0.048	-0.062	0.42
+mozjpeg	420	85	64	+0.020	-0.038	0.53
+mozjpeg	420	90	64	-0.006	-0.001	0.48
+mozjpeg	420	94	64	-0.022	+0.037	0.42
+turbo	420	15	64	+0.425	+0.379	0.73
+turbo	420	35	64	+0.019	+0.095	0.59
+turbo	420	55	64	-0.003	-0.048	0.50
+turbo	420	75	64	+0.000	-0.027	0.50
+turbo	420	85	64	-0.006	-0.035	0.48
+turbo	420	90	64	+0.009	+0.002	0.52
+turbo	420	94	64	-0.010	-0.027	0.47
+
+# overall n=896 median +0.007 mean +0.022 win_frac 0.51
+
+# SIGN TEST (two-sided exact binomial, H0 p=0.5)
+# turbo q15 alone : n=64  wins=47 (0.73) median +0.425  p=2.3e-04
+# q15 (both enc)  : n=128 wins=84 (0.66) median +0.235  p=5.2e-04
+# low q (15+35)   : n=256 wins=154 (0.60) median +0.062 p=1.4e-03
+# q>=55           : n=640 wins=304 (0.47) median -0.007 p=0.22   (null)
+# overall         : n=896 wins=458 (0.51) median +0.007 p=0.53   (null)
+#
+# THE CONTROLLED TEST. Only ZENSR_DATA differs. The 24k arm is a SUBSET sliced
+# from the 100k set (tools/make_data_subset.py), so both arms share generation
+# process, teacher, target dtype (f16), crop size and the IDENTICAL val tail.
+# Same box (so same bf16), same init (none, from scratch), same 120k steps,
+# batch 48, lr 3e-4, qboost 3, same seeds. No warm restart.
+# corpus /mnt/v/imazen-26-clean, pinned split, n=64/cell, turbo+mozjpeg 4:2:0.
+#
+# RESULT: 4x the training data helps ONLY at the lowest quality. Significant at
+# q15 (p=2.3e-04 for turbo, median +0.425 — near the 0.3 resolution threshold,
+# so this one is plausibly a real difference rather than only a direction),
+# fading by q35, and indistinguishable from zero at q55 and above.
+#
+# This RESOLVES the two earlier confounded attempts: both averaged over the
+# whole q range, where a q15-only effect washes out to nothing. Their "null"
+# was not wrong so much as the wrong question.
+#
+# Training-metric check, again: the big arm's val_psnr_vs_teacher was 38.42 vs
+# the small arm's 38.19 across ALL q. That gap predicted neither the size nor
+# the location of the real effect.

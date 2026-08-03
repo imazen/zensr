@@ -159,19 +159,39 @@ pick unilaterally, so it stays as-is until the API split exists.
 Caveats: n=64/cell, 512-crop, single generation, and the pristine references
 are downscaled 2-3x so they run smaller than native inputs.
 
-### 1.2 Training data scale-up — MEASURED NULL, BUT BOTH TESTS CONFOUNDED (2026-08-02)
+### 1.2 Training data scale-up — RESOLVED 2026-08-02: a low-q lever only
 
-Student (100k vs 24k crops): no gain on clean references, median -0.023,
-win_frac 0.45, worse at low q. Teacher (100k vs 24k pairs): also no gain,
-median -0.033, win_frac 0.40. Both improved their training-time metrics
-substantially, and neither improved the product.
+**Controlled test** (`benchmarks/dataab_100k_vs_24k_controlled_2026-08-02.tsv`).
+Only `ZENSR_DATA` differs: the 24k arm is a SUBSET sliced from the 100k set,
+so both share generation process, teacher, target dtype, crop size and the
+identical val tail; same box, same bf16, same 120k steps, from scratch, no
+restart.
 
-Neither test is controlled: the student run was warm-restarted mid-way, and
-the two teachers differ in init (hashes recorded) and AMP dtype (bf16 vs fp16)
-as well as dataset size. **So this is not falsified — it is untested under
-control.** A clean rerun varies only the dataset: same init, same dtype, same
-schedule, no restart. Until then do not cite the scale-up as a lever OR as a
-dead end.
+| band | n | win% | median | sign-test p |
+|---|---|---|---|---|
+| turbo q15 | 64 | 0.73 | **+0.425** | 2.3e-04 |
+| q15 both encoders | 128 | 0.66 | +0.235 | 5.2e-04 |
+| low q (15+35) | 256 | 0.60 | +0.062 | 1.4e-03 |
+| q>=55 | 640 | 0.47 | -0.007 | 0.22 (null) |
+| overall | 896 | 0.51 | +0.007 | 0.53 (null) |
+
+**4x the data buys quality only at the lowest quality**, and nothing from q55
+up. The q15 effect is also the one result today whose magnitude (+0.425)
+approaches the ~0.3 resolution threshold in §0, so it is plausibly a real
+visible difference rather than only an established direction.
+
+This resolves the two earlier confounded attempts rather than contradicting
+them: both averaged over the whole q range, where a q15-only effect washes out.
+Their "null" answered the wrong question.
+
+**Consequence for how data is spent:** more crops of the same distribution pay
+off only where damage is heaviest. If low-q is the target (it is — web
+compression), scaling data is worth it; if the goal is the q75-q94 band, this
+lever is spent and the effort belongs elsewhere.
+
+Note the training metric misled a third time: the big arm's
+`val_psnr_vs_teacher` was 38.42 vs 38.19, a gap spread across all q, which
+predicted neither the size nor the location of the real effect.
 
 
 200k steps × batch 48 over 24k pairs = **~400 epochs**. The corpus has 974
