@@ -273,6 +273,13 @@ impl Pixels {
 /// This predicts a **median over files at that (quality, subsampling)**, not
 /// the outcome for one image. Per-file spread is wide; the estimate is for
 /// deciding whether to spend cycles, not for reporting quality.
+///
+/// **This is the quality-only estimate, and the library's own routing is
+/// better than it.** [`Routing::Auto`] additionally classifies the image as
+/// graphic or photographic from its coefficients, which is worth about +0.15
+/// ssim2 of realized routing quality. That signal needs the compressed bytes,
+/// not just a header probe, so it cannot be offered through this signature.
+/// Expect `Auto` to make decisions this function would not.
 /// Median restore gain by 4:2:0 quality, in ssim2 points.
 ///
 /// Anchors are measured medians; between them the curve is smooth and monotone,
@@ -351,6 +358,70 @@ const DIST420: [(f32, f32); 10] = [
     (14.2, 3.39),
 ];
 
+/// Gain curves split by content class, IJG quality axis, measured 2026-08-03 on
+/// clean references (`benchmarks/content_routing_2026-08-03.md`). Same corpus,
+/// grid and method as [`G420`]/[`G444`], which are these two pooled together.
+///
+/// The split is worth roughly +0.15 ssim2 of realized routing quality on
+/// held-out images — an order of magnitude above the metric floor, and by far
+/// the largest lever found after quality itself. Graphic content stays worth
+/// restoring up to about q96; photographic content stops paying at about q75.
+/// Pooling them splits the difference and is wrong for both.
+// The q15 anchor is 6.28, a measured median that happens to land near tau.
+// Coincidence, not a constant — do not "fix" it by substituting one.
+#[allow(clippy::approx_constant)]
+const GRAPHIC420: [(f32, f32); 10] = [
+    (15.0, 6.28),
+    (35.0, 5.81),
+    (55.0, 4.75),
+    (75.0, 3.77),
+    (85.0, 2.58),
+    (90.0, 1.93),
+    (94.0, 0.94),
+    (96.0, 0.35),
+    (98.0, -0.15),
+    (100.0, -0.33),
+];
+
+const GRAPHIC444: [(f32, f32); 10] = [
+    (15.0, 6.10),
+    (35.0, 5.66),
+    (55.0, 4.74),
+    (75.0, 3.51),
+    (85.0, 2.44),
+    (90.0, 1.79),
+    (94.0, 0.86),
+    (96.0, 0.24),
+    (98.0, -0.24),
+    (100.0, -0.52),
+];
+
+const PHOTO420: [(f32, f32); 10] = [
+    (15.0, 3.69),
+    (35.0, 1.89),
+    (55.0, 0.88),
+    (75.0, 0.10),
+    (85.0, -0.21),
+    (90.0, -0.47),
+    (94.0, -0.60),
+    (96.0, -1.04),
+    (98.0, -1.58),
+    (100.0, -2.30),
+];
+
+const PHOTO444: [(f32, f32); 10] = [
+    (15.0, 4.08),
+    (35.0, 1.94),
+    (55.0, 0.85),
+    (75.0, -0.09),
+    (85.0, -0.43),
+    (90.0, -0.83),
+    (94.0, -1.24),
+    (96.0, -1.82),
+    (98.0, -2.62),
+    (100.0, -3.71),
+];
+
 /// Same, for 4:4:4. Full chroma is cleaner at equal distance, so it turns
 /// negative sooner — the same ordering the quality curves show.
 const DIST444: [(f32, f32); 10] = [
@@ -368,12 +439,90 @@ const DIST444: [(f32, f32); 10] = [
 
 #[must_use]
 pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
+    estimate_gain_for(probe, None)
+}
+
+/// Whether an image is synthetic (flat regions, sharp edges, limited palette)
+/// or photographic (stochastic detail, grain, stippling).
+///
+/// This is the single largest signal the router has after quality. Measured
+/// 2026-08-03 on clean references: at q75 the median restore gain is +3.77 on
+/// graphic content and +0.10 on photographic — a gap of nearly 4 ssim2 that a
+/// quality-only curve averages away, restoring photos it should skip and
+/// skipping graphics it should restore.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Content {
+    Graphic,
+    Photographic,
+}
+
+/// Fraction of luma blocks with no AC coefficients, above which an image is
+/// treated as graphic.
+///
+/// Selected on the calibrate half of the pinned split by maximising realized
+/// ssim2, then reported on the held-out half — 0.25 sits in the middle of a
+/// flat 0.20–0.30 plateau, so it is not balanced on a peak. Deliberately NOT
+/// zenjpeg's `SCREENSHOT_ZERO_AC_THRESHOLD` (0.10): that one is calibrated for
+/// choosing a deblock strategy, a different decision with a different loss.
+pub(crate) const GRAPHIC_ZERO_AC_THRESHOLD: f32 = 0.25;
+
+/// Classify from the file's own luma coefficients.
+///
+/// Chosen over the pixel-domain chooser (`crate::chooser`) on measured value,
+/// not on accuracy — the chooser is slightly more accurate and **16x** more
+/// expensive. Held-out on the pinned split, as realized routing quality:
+///
+/// | router | ssim2 | share of oracle-label gain | marginal cost |
+/// |---|---|---|---|
+/// | quality only | +1.2969 | 0% | 0 |
+/// | this, threshold 0.25 | +1.4452 | 82% | **0.29 ms** |
+/// | chooser at t=0.75 | +1.4511 | 85% | 4.54 ms |
+/// | oracle labels | +1.4781 | 100% | — |
+///
+/// The 0.006 ssim2 the chooser buys is an order of magnitude below the metric
+/// floor, against 4.25 ms — about 11% of a 512-crop realtime restore. Full
+/// record: `benchmarks/content_routing_2026-08-03.md`.
+pub(crate) fn classify_content(jpeg: &[u8]) -> Option<Content> {
+    let coeffs = zenjpeg::decoder::Decoder::new()
+        .decode_coefficients(jpeg, enough::Unstoppable)
+        .ok()?;
+    let luma = coeffs.components.first()?;
+    let nblocks = luma.coeffs.len() / 64;
+    if nblocks == 0 {
+        return None;
+    }
+    let zero_ac = luma.coeffs[..nblocks * 64]
+        .chunks_exact(64)
+        .filter(|b| b[1..].iter().all(|&c| c == 0))
+        .count();
+    Some(
+        if zero_ac as f32 / nblocks as f32 >= GRAPHIC_ZERO_AC_THRESHOLD {
+            Content::Graphic
+        } else {
+            Content::Photographic
+        },
+    )
+}
+
+/// [`estimate_gain`] with an optional content class. `None` reproduces the
+/// quality-only estimate exactly.
+pub(crate) fn estimate_gain_for(
+    probe: &zenjpeg::detect::JpegProbe,
+    content: Option<Content>,
+) -> f32 {
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
     if scale == "ButteraugliDistance" {
-        gain_at_distance(full, probe.quality.value)
-    } else {
-        gain_at(full, probe.quality.value)
+        // The distance curves are not split by content yet — the jpegli ladder
+        // measured encoders, not content classes. Falls back to the pooled
+        // distance curve rather than guessing a split that was never measured.
+        return gain_at_distance(full, probe.quality.value);
+    }
+    let q = probe.quality.value;
+    match content {
+        None => gain_at(full, q),
+        Some(Content::Graphic) => lerp(if full { &GRAPHIC444 } else { &GRAPHIC420 }, q),
+        Some(Content::Photographic) => lerp(if full { &PHOTO444 } else { &PHOTO420 }, q),
     }
 }
 
@@ -597,7 +746,17 @@ impl<'a> Request<'a> {
         // only), so a skip here costs a decode and nothing more.
         let probe_for_routing =
             zenjpeg::detect::probe(self.jpeg).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
-        let predicted = estimate_gain(&probe_for_routing);
+        // Content class comes from the file's own luma coefficients, and is
+        // worth ~+0.15 ssim2 of realized routing quality — the largest lever
+        // after quality itself. It costs a coefficient parse (~0.29 ms on a
+        // 512 crop) even on files that then skip, which is why it is computed
+        // only when the decision can actually turn on it. `None` falls back to
+        // the pooled curve, so an unparseable file routes exactly as before.
+        let content = match self.routing {
+            Routing::Auto { .. } => classify_content(self.jpeg),
+            _ => None,
+        };
+        let predicted = estimate_gain_for(&probe_for_routing, content);
         let skip = match self.routing {
             Routing::Always => false,
             Routing::Never => true,
@@ -919,6 +1078,108 @@ mod tests {
             );
             assert!(g < 0.0, "{ss:?} pristine predicted {g:+.3}");
         }
+    }
+
+    /// Graphic content is worth restoring further up the quality range than
+    /// photographic content — that ordering IS the routing signal, and if it
+    /// ever inverts the two curve pairs have been swapped.
+    #[test]
+    fn graphic_content_always_predicts_more_gain_than_photographic() {
+        for full in [false, true] {
+            let mut q = 10.0f32;
+            while q <= 100.0 {
+                let (g, p) = (
+                    lerp(if full { &GRAPHIC444 } else { &GRAPHIC420 }, q),
+                    lerp(if full { &PHOTO444 } else { &PHOTO420 }, q),
+                );
+                assert!(
+                    g > p,
+                    "full_chroma={full} q{q}: graphic {g:+.3} <= photographic {p:+.3}"
+                );
+                q += 0.5;
+            }
+        }
+    }
+
+    /// Both content curves fall as quality rises, for the same reason the
+    /// pooled curve does: less damage leaves less to recover.
+    #[test]
+    fn content_curves_never_increase_with_quality() {
+        for pts in [&GRAPHIC420, &GRAPHIC444, &PHOTO420, &PHOTO444] {
+            let mut prev = f32::INFINITY;
+            let mut q = 10.0f32;
+            while q <= 100.0 {
+                let g = lerp(pts, q);
+                assert!(
+                    g <= prev + 1e-4,
+                    "q{q}: gain rose to {g:+.3} from {prev:+.3}"
+                );
+                prev = g;
+                q += 0.5;
+            }
+        }
+    }
+
+    /// Passing no content class must reproduce the quality-only estimate
+    /// exactly. A caller who cannot classify has to get the old behaviour, not
+    /// a silently different one.
+    #[test]
+    fn absent_content_reproduces_the_pooled_estimate() {
+        use zenjpeg::encoder::ChromaSubsampling as Cs;
+        for ss in [Cs::None, Cs::Quarter] {
+            for q in [20.0f32, 50.0, 75.0, 90.0, 100.0] {
+                let jpg = jpeg_at(q, ss);
+                let p = zenjpeg::detect::probe(&jpg).expect("probe");
+                assert_eq!(estimate_gain_for(&p, None), estimate_gain(&p));
+            }
+        }
+    }
+
+    /// The classifier must run on real files without panicking and must return
+    /// a class for ordinary baseline JPEGs. A synthetic gradient is
+    /// photographic-ish by construction (dense AC), which also checks the
+    /// threshold is not so low that everything reads as graphic.
+    #[test]
+    fn content_classifier_handles_real_files() {
+        use zenjpeg::encoder::ChromaSubsampling as Cs;
+        for q in [30.0f32, 75.0, 95.0] {
+            let jpg = jpeg_at(q, Cs::Quarter);
+            assert_eq!(
+                classify_content(&jpg),
+                Some(Content::Photographic),
+                "q{q}: synthetic noise field should not classify as graphic"
+            );
+        }
+        // Truncated input must decline to classify rather than panic; routing
+        // then falls back to the pooled curve.
+        assert_eq!(classify_content(&[0xFF, 0xD8, 0xFF]), None);
+        assert_eq!(classify_content(&[]), None);
+    }
+
+    /// A flat image is nearly all zero-AC blocks, so it must read as graphic.
+    /// This is the positive half of the classifier check.
+    #[test]
+    fn flat_content_classifies_as_graphic() {
+        let (w, h) = (64usize, 64usize);
+        let mut rgb = vec![200u8; 3 * w * h];
+        // A few hard edges, as a UI screenshot would have — still overwhelmingly
+        // flat, which is exactly the signal the threshold keys on.
+        for y in 20..24 {
+            for x in 0..w {
+                let i = (y * w + x) * 3;
+                rgb[i] = 20;
+                rgb[i + 1] = 20;
+                rgb[i + 2] = 20;
+            }
+        }
+        let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&rgb);
+        let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(
+            85.0,
+            zenjpeg::encoder::ChromaSubsampling::Quarter,
+        )
+        .encode(px, w as u32, h as u32)
+        .expect("encode");
+        assert_eq!(classify_content(&jpg), Some(Content::Graphic));
     }
 
     /// The probe path reaches the curve. A real q100 encode has enough margin

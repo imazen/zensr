@@ -9,7 +9,9 @@ publish = false
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "a7d8224" }
 tract-onnx = "0.23.4"
 zensr-micro = { path = "../zensr-micro", features = ["internals"] }
-zensr-zenjpeg = { path = "../zensr-zenjpeg" }
+# `chooser` pulls zenanalyze in — needed by content_probe, which measures the
+# chooser against the coefficient-domain detector.
+zensr-zenjpeg = { path = "../zensr-zenjpeg", features = ["chooser"] }
 zenpixels = "0.2.14"
 zenpng = "0.1.4"
 # zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
