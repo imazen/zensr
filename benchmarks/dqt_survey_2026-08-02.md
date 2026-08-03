@@ -140,3 +140,78 @@ Crawl's columnar index is already on disk (`cc-index/`, 10 parquets, ~74M URLs
 with `content_mime_detected` + WARC offsets), which allows sampling archived
 bytes by HTTP Range — header-only, stratified by registered domain — without
 touching live sites.
+
+## Exact detection via the mozjpeg preset matrix (2026-08-02, follow-up)
+
+mozjpeg ships **nine** quantization-table presets, and our own `mozjpeg-rs`
+carries all of them as data (`src/consts.rs`,
+`STD_LUMINANCE_QUANT_TBL[9][64]` / `STD_CHROMINANCE_QUANT_TBL[9][64]`):
+
+| idx | preset | luma first row |
+|---|---|---|
+| 0 | JPEG Annex K | 16 11 10 16 24 40 51 61 |
+| 1 | Flat | 16 16 16 16 16 16 16 16 |
+| 2 | MSSIM-tuned | 12 17 20 21 30 34 56 63 |
+| 3 | **Robidoux (= ImageMagick)** | 16 16 16 18 25 37 56 85 |
+| 4 | PSNR-HVS-M | 9 10 12 14 27 32 51 62 |
+| 5 | Klein/Silverstein/Carney | 10 12 14 19 26 38 57 86 |
+| 6 | Watson/Taylor/Borthwick | 7 8 10 14 23 44 95 241 |
+| 7 | Ahumada/Watson/Peterson | 15 11 11 12 15 19 25 32 |
+| 8 | Peterson/Ahumada/Watson | 14 10 11 14 19 25 34 45 |
+
+Expanding those over quality 1..100 and both `force_baseline` modes
+(`scale = 5000/q` below 50, `200-2q` at or above; `(base*scale+50)/100` clamped
+to 255 or 32767) yields **1,131 distinct luma tables**. Matching the corpus
+against that matrix:
+
+| match tolerance | files identified | share |
+|---|---|---|
+| exact | 13,714 | 79.9% |
+| max abs delta ≤ 1 | 14,823 | 86.4% |
+| ≤ 2 | 15,116 | 88.1% |
+| ≤ 3 | 15,624 | 91.1% |
+| ≤ 5 | 15,904 | 92.7% |
+
+**A ≤1 tolerance is the sweet spot** — it captures encoders that round the
+scale slightly differently while staying far from a different preset, and it
+alone lifts identification from 79.9% to 86.4%.
+
+By preset, exact hits: Annex K 13,488 files, Robidoux 180, Klein 37, Flat 7,
+MSSIM 2. The four psychovisual presets (PSNR-HVS-M, Watson, Ahumada, Peterson)
+appear **zero** times — worth knowing before spending effort on them.
+
+### The probe's family detection is marker-based, not table-based
+
+The probe reports `ImageMagick` for **9,626 files**, but only **180** actually
+use the Robidoux/ImageMagick table — the rest are Annex K. So that verdict
+comes from a marker or comment, not the quantization. It is not wrong as
+provenance, but it must not be read as evidence about quantizer behaviour,
+which is what `slack_for` keys on.
+
+### What remains after the matrix (tolerance ≤ 2)
+
+2,040 files across 275 tables:
+
+| probe says | tables | files |
+|---|---|---|
+| Unknown | 253 | 1,550 |
+| **Photoshop** | 18 | 475 |
+| Cjpegli (Xyb + Ycbcr) | 7 | 12 |
+
+**Photoshop is the next win**: 18 tables covering 475 files, and its
+Save-for-Web / Save-As table sets are well documented — a bounded, addable set.
+After that the residue is 253 genuinely unidentified tables, which is what the
+live e-commerce scrape is being collected to characterise.
+
+### Proposed detection system
+
+1. Match against the 9-preset × 100-quality × 2-baseline matrix with a ≤1
+   tolerance — 86.4% of this corpus, and it returns *preset + quality*, not
+   just a family name.
+2. Add the Photoshop table set — a further ~2.8%.
+3. Keep a lookup of identified custom tables (the iOS/SDWebImage table at 385
+   files is the largest single entry).
+4. Fall back to `Unknown` **conservatively**: today that silently selects the
+   round-to-nearest slack of 0.15, which is the tightest box we have. An
+   unidentified encoder should get the *widest* calibrated slack, not the
+   narrowest.
