@@ -564,7 +564,57 @@ input quality alone under-describes damage on downscaled files).
 
 ---
 
-### 1.12 Content-aware routing — MEASURED 2026-08-03, biggest open lever
+### 1.15 `renders` metric disagreement — CLOSED 2026-08-03, not a model defect
+
+Full record `benchmarks/renders_metric_disagreement_2026-08-03.md`; images at
+`/mnt/v/output/zensr/renders-2026-08-03/`.
+
+SPANF has lower error than Lanczos in flat regions (**8/8** files, 3–11×), on
+the brightest 1% of pixels (**8/8**, 2–3×), and on 5/8 edge regions. PSNR and
+butteraugli both favour it. **No evidence it degrades this content**; the
+question was whether SSIM2's dissent indicated a real defect, and it does not.
+
+Three explanations tested and **all falsified** — do not re-run:
+1. SSIM2 weighting the flat regions where Lanczos rings — correlation of Δssim2
+   with the flat-region advantage is +0.268, with the edge advantage +0.043.
+2. SPANF softer at edges — it wins 5/8 edge regions; losses within ~15%.
+3. SPANF breaking thin specular highlights into beads — **this one came from
+   looking at the pixels and is still wrong**: SPANF's highlight error is lower
+   on 8/8 files, and the highlight winner matches the SSIM2 verdict on 3/8.
+
+A fourth attempt needs a mechanism *inside the metric*. Error decomposition has
+now been tried at three spatial scales and explains nothing. Worth raising with
+zensim: SSIM-family metrics behave oddly at very low local variance, and these
+are dark smooth images almost everywhere.
+
+### 1.12 Content-aware routing — SHIPPED 2026-08-03 (was: biggest open lever)
+
+**Landed in `035aba7`.** `Routing::Auto` now classifies graphic vs
+photographic from the file's own luma coefficients and reads split curves.
+Held-out, threshold selected on the calibrate half only: **+1.4452 ssim2 at
+0.46 restored, against +1.2969 for quality-only — 82% of the oracle-label
+ceiling, for 0.29 ms.** Full record `benchmarks/content_routing_2026-08-03.md`.
+
+**The cheaper classifier won on value, not accuracy.** Measured head-to-head,
+the existing pixel-domain chooser is the better classifier (F1 0.900 at t=0.75
+vs 0.846) and reaches 85% of the ceiling — but costs 4.54 ms against 0.29 ms.
+The 0.006 ssim2 it buys is an order of magnitude *below* the metric floor, for
+16× the cost (11% of a 512-crop realtime restore versus 0.7%). Note this
+corrects the earlier estimate in this section: simulating the chooser from its
+*fit-record* operating points predicted only 39% of the ceiling, because those
+were measured on a different corpus. Measured on this one it reaches 85%.
+
+Honest cost: restoring in more places also harms more, 2% of cells → 4%. The
+oracle-label router harms 3%, so most of that is inherent to the extra
+restoring rather than to misclassification.
+
+Still open: the `ButteraugliDistance` curves are **not** split by content — that
+ladder measured encoders, not content classes, so cjpegli/zenjpeg files fall
+back to the pooled distance curve. That is the obvious next measurement.
+
+*Original measurement, which motivated the work:*
+
+
 
 `tools/routing_headroom.py`. Ceilings on identical held-out cells (n=1360, all
 rules fit on the calibrate half):
