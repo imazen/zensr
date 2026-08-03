@@ -16,7 +16,8 @@ mod data {
     pub use crate::qtables_data::*;
 }
 pub use data::{
-    ENCODER_LUMA_TABLES, MOZJPEG_LUMA_BASES, MOZJPEG_PRESET_NAMES, PHOTOSHOP_LUMA_TABLES,
+    ENCODER_LUMA_TABLES, ENCODER_NAMES, MOZJPEG_LUMA_BASES, MOZJPEG_PRESET_NAMES,
+    PHOTOSHOP_LUMA_TABLES,
 };
 
 /// What a table was identified as.
@@ -66,6 +67,12 @@ pub fn preset_table(preset: usize, quality: u8, force_baseline: bool) -> [u16; 6
     out
 }
 
+/// Stored tables are u8 (baseline DQT is 8-bit); probed tables are u16 because
+/// a 12-bit JPEG can exceed 255. Compare without widening the stored side.
+fn eq_u8(stored: &[u8; 64], probed: &[u16; 64]) -> bool {
+    (0..64).all(|i| stored[i] as u16 == probed[i])
+}
+
 fn max_abs_delta(a: &[u16; 64], b: &[u16; 64]) -> u16 {
     (0..64)
         .map(|i| a[i].abs_diff(b[i]))
@@ -98,14 +105,14 @@ pub fn identify_luma(table: &[u16; 64], tolerance: u16) -> TableId {
         }
     }
     for (i, t) in PHOTOSHOP_LUMA_TABLES.iter().enumerate() {
-        if t == table {
+        if eq_u8(t, table) {
             return TableId::Photoshop { index: i as u8 };
         }
     }
-    for (name, quality, t) in ENCODER_LUMA_TABLES.iter() {
-        if t == table {
+    for (name_idx, quality, t) in ENCODER_LUMA_TABLES.iter() {
+        if eq_u8(t, table) {
             return TableId::Encoder {
-                name,
+                name: ENCODER_NAMES[*name_idx as usize],
                 quality: *quality,
             };
         }
@@ -173,8 +180,9 @@ mod tests {
     #[test]
     fn photoshop_tables_are_not_reachable_as_presets() {
         for (i, t) in PHOTOSHOP_LUMA_TABLES.iter().enumerate() {
+            let widened: [u16; 64] = std::array::from_fn(|k| t[k] as u16);
             assert_eq!(
-                identify_luma(t, 0),
+                identify_luma(&widened, 0),
                 TableId::Photoshop { index: i as u8 },
                 "photoshop table {i} is also a mozjpeg preset — drop it"
             );
