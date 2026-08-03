@@ -619,9 +619,29 @@ Honest cost: restoring in more places also harms more, 2% of cells → 4%. The
 oracle-label router harms 3%, so most of that is inherent to the extra
 restoring rather than to misclassification.
 
-Still open: the `ButteraugliDistance` curves are **not** split by content — that
-ladder measured encoders, not content classes, so cjpegli/zenjpeg files fall
-back to the pooled distance curve. That is the obvious next measurement.
+**Distance curves now split too** (2026-08-03, `cf77b82`). Validated over 20
+random image splits because the effect is a quarter the size: content-split
++0.7941 against +0.7357 pooled, beating pooled on **19/20**, capturing 72% of
+the oracle-label gain. The 0.25 threshold transfers to jpegli/zenjpeg unchanged.
+
+**The class is at its ceiling — nine features could not beat it.**
+`benchmarks/routing_features_2026-08-03.md`. Tested over 20 splits against the
+shipped binary: `mean_abs_ac` (correlates better than the shipped signal *and*
+better than the true content label at q75) 7/20; `ac_count_spread` 9/20; spatial
+clustering 0/20; every combination worse than its best member; quantile-bucketing
+the shipped signal 3–6 ways within noise of binary. Oracle content labels only
+*tie* the shipped binary (+1.4798 vs +1.4806).
+
+**One of these looked like a clear win on a single split and was not** — the
+linear `mean_abs_ac` model scored +1.5346 vs +1.4518 shipped, apparently beating
+perfect labels while restoring less and harming less. Over 20 splits: +1.4536,
+winning 7/20. Same lesson as the per-encoder crossover, reached from a different
+direction, and it nearly shipped.
+
+The binding constraint is **corpus size, not feature choice**: the correlations
+(0.5–0.67 at fixed quality) say the signal exists, but a per-cell linear model is
+40 parameters on 64 images and the across-split spread (±0.3) swamps the effects
+being chased (±0.05). More images is the productive lever; more features is not.
 
 *Original measurement, which motivated the work:*
 

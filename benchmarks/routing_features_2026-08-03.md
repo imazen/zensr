@@ -98,12 +98,47 @@ construction.
   router can do. Further gain requires a different *kind* of signal, not a
   better classifier.
 
+## 3. Spatial damage — also falsified
+
+The six features above all say how *much* was quantised away; none says
+*where*. A uniformly degraded image and one with a few destroyed regions score
+identically under all of them. Three spatial statistics were added to the same
+pass:
+
+- `ac_count_spread` — stdev across blocks of surviving-AC count
+- `gutted_block_frac` — share of blocks below a quarter of the image's own mean
+- `gutted_clustering` — share of gutted blocks adjacent to another gutted block
+
+`ac_count_spread` correlates as well as anything tested (+0.62 at q75). It still
+does not route better:
+
+| router | mean over 20 splits | beats shipped |
+|---|---|---|
+| **binary zero-AC (shipped)** | **+1.4755** | — |
+| linear `ac_count_spread` | +1.4506 | 9/20 |
+| linear `zero_ac_blocks` + `mean_abs_ac` + both spatial | +1.4336 | 5/20 |
+| linear `zero_ac_blocks` + `gutted_clustering` | +1.3858 | 0/20 |
+| linear `gutted_clustering` | +1.3414 | 0/20 |
+
 ## Where that leaves it
 
-Routing now captures roughly 40% of the per-image oracle headroom on the IJG
-family and 72% of the content-label headroom on the distance family. The
-remaining gap needs something these six features do not carry — plausibly
-something spatial (where the damage is, not how much), which none of them
-measure.
+**Nine features, three of them spatial, several combinations and two model
+forms — nothing beats a single binary threshold on `zero_ac_blocks`.**
+
+The pattern across all of them is the same and worth stating plainly: several
+features correlate strongly with per-image gain at fixed quality (0.5–0.67), and
+none converts that into better routing. Correlation with the *magnitude* of gain
+is not the same as improving a *threshold decision*, and a per-cell linear model
+is 40 parameters fitted on 64 images — the across-split spread (±0.3) swamps the
+effects being chased (±0.05).
+
+So the binding constraint is **corpus size, not feature choice**. The
+correlations say the signal is there; 64 images cannot fit a model to exploit
+it. The productive next step is more images, not more features — and until then
+the binary class is the right thing to ship, being one parameter rather than
+forty.
+
+Routing currently captures roughly 40% of the per-image oracle headroom on the
+IJG family and 72% of the content-label headroom on the distance family.
 
 Raw: `/mnt/v/zensr/features/2026-08-03/` with `SHA256SUMS`.
