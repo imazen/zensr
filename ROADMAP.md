@@ -131,6 +131,35 @@ single cell. **Do not derive per-encoder thresholds from a 64-image ladder.**
 Folding the effect in as a paired offset — the sound form — costs 0.011 ssim2
 for 4 points less work, an order of magnitude under the metric floor.
 
+### 1.1c jpegli/zenjpeg gain curve measured — FIXED 2026-08-03
+
+The distance-quantised family (`CjpegliYcbcr`: cjpegli and zenjpeg) had **never
+been measured on clean references**. `estimate_gain` converted butteraugli
+distance to a pseudo-quality with `100 − 12·d` and read the IJG curves.
+
+Measured (2,560 paired cells, 10 qualities × 2 subsamplings × 2 encoders, 64
+pinned files, 100% PNG): the mapping is optimistic in **39 of 40 cells**, median
++0.68 and up to **+4.72** ssim2, with the **wrong sign in 9** — promising gain
+from distance 0.3 to 1.3, where restoration costs quality. It fails worst
+mid-range: distance 7.2 maps to "quality 13.6" and predicts +5.70 against a
+true +1.31, because a jpegli file at distance 7.2 is far better than an IJG file
+at q14 — the point of the encoder, and a linear inversion cannot express it.
+
+Replaced by `DIST420`/`DIST444`, keyed on distance directly. Held-out:
+
+| rule | mean ssim2 | restored | harmed |
+|---|---|---|---|
+| IJG curve via 100−12·d | +0.7998 | 0.60 | **0.17** |
+| measured distance curve | +0.7940 | **0.30** | **0.03** |
+
+Quality is a tie (0.006, far under the metric floor); the new curve gets it for
+**half the cycles and one sixth the harm**. Full report
+`benchmarks/clean_ladder_jpegli_2026-08-03.md`.
+
+Secondary finding: distance-quantised encoders leave less to repair. At q75,
+turbo +0.82 / mozjpeg +0.46 / cjpegli +0.19 / zenjpeg +0.19 — our own encoder is
+the least improvable of the four, which is the right outcome.
+
 ### 1.1 Identity gate re-derived on clean references — MEASURED 2026-08-02
 
 Corpus `/mnt/v/imazen-26-clean` (974 refs, 0 JPEG: native PNGs unioned with
@@ -299,7 +328,51 @@ it has never had the f16-target + long-budget recipe that the students got.
   a teacher improvement only matters to the product if it survives
   distillation. A better teacher that the student cannot follow moves nothing.
 
-### 1.4 Feature/affinity KD (task #13) — PASSED 2026-08-02, low q only
+### 1.4 Feature/affinity KD — REPLICATED at full budget 2026-08-03, but the recipe is not competitive
+
+**Full 200k-step pair, both arms complete** (the 2026-08-02 result below ran to
+22.5k). Seed 7 on the 3070; a second pair at seed 2 is running on the 5070 to
+separate the effect from one seed's luck. Per file on the clean corpus, arm B
+(affinity) minus arm A (output-KD only), pooled over encoders, `ZENSR_EVAL_QS`
+15/35/55/75, 4:2:0, n=128 per cell:
+
+| q | median | mean | signs +/− | p |
+|---|---|---|---|---|
+| 15 | **+0.497** | +0.488 | 95/33 | **3.8e-08** |
+| 35 | +0.133 | +0.125 | 70/58 | 0.33 |
+| 55 | +0.056 | +0.089 | 72/56 | 0.18 |
+| 75 | −0.028 | +0.044 | 60/68 | 0.54 |
+| ALL | +0.111 | +0.186 | 297/215 | 3.3e-04 |
+
+**The effect narrowed as the budget grew.** At 22.5k steps it was significant
+across the low-q band; at 200k it survives only at q15 — where it is now
+**+0.497, above the ~0.3 metric floor** and so plausibly visible, not merely
+directional. The natural reading is that affinity supervision mostly
+*accelerates*, and output-KD catches up given enough steps, except in the
+heaviest damage regime where the extra signal still buys something real.
+
+**But neither arm is shippable.** Against the shipped `dejpeg_rt24g`, both lose
+at every cell:
+
+| | q15 | q35 | q55 | q75 | overall |
+|---|---|---|---|---|---|
+| affinity − rt24g (turbo) | −0.433 | −0.220 | −0.087 | −0.027 | **−0.109** (win 0.37) |
+| output-KD − rt24g (turbo) | −0.898 | −0.315 | −0.127 | −0.128 | **−0.192** (win 0.34) |
+
+So the rung's question — does affinity KD beat output-KD? — is answered **yes at
+q15**, and affinity roughly halves the deficit to the shipped model there. The
+follow-on question — is this KD recipe worth adopting? — is **no, not yet**: the
+whole branch sits behind `dejpeg_rt24g`. Adopt the affinity term into a recipe
+that is already competitive rather than shipping either arm.
+
+Data: `~/tmp/kd_{fkd_a_outkd,fkd_b_affinity,dejpeg_rt24g}.tsv`, compared with
+`tools/model_ab.py` per the pre-registered rule. Note the training metric was
+again uninformative: final `val_psnr_vs_teacher` was 37.13 (A) vs 37.17 (B),
+a 0.04 dB gap that predicts neither the q15 win nor the deficit to rt24g.
+
+---
+
+*(2026-08-02, 22.5k steps — superseded by the run above, kept for the trend.)*
 **RESULT: passes the pre-registered rule, with the effect confined to low q.**
 Per-file on the clean corpus, arm B minus arm A
 (`benchmarks/fkd_affinity_vs_outkd_2026-08-02.tsv`):
@@ -490,6 +563,82 @@ dropped from 0.1 only because the damage estimator does not exist (see 1.8;
 input quality alone under-describes damage on downscaled files).
 
 ---
+
+### 1.12 Content-aware routing — MEASURED 2026-08-03, biggest open lever
+
+`tools/routing_headroom.py`. Ceilings on identical held-out cells (n=1360, all
+rules fit on the calibrate half):
+
+| rule | mean ssim2 | restored |
+|---|---|---|
+| always restore | +0.6573 | 1.00 |
+| q-only curve (what ships) | +1.2969 | 0.35 |
+| **+ graphic/photographic split (2 classes)** | **+1.4781** | **0.46** |
+| + subcorpus (8 classes) | +1.4854 | 0.47 |
+| per-image oracle (unreachable) | +1.7049 | 0.58 |
+
+**A binary content split captures 44% of the entire remaining headroom**, and
+it restores *more* while doing so — it is not trading work for quality, it is
+making better decisions in both directions. Eight classes add +0.007 over two,
+so a binary classifier is enough; there is no case for fine-grained content
+typing.
+
+Why this survives n=64 when the per-encoder refit (§1.1b) did not: the content
+effect is **~5 ssim2 of spread at every quality**, against 0.3–0.5 for the
+encoder effect. Median gain at q75 runs documents +4.18, maps +3.27, screen
++2.83, then renders +0.30, photos +0.27, people +0.15, textures −0.01,
+art-scans −1.28.
+
+Where a content-aware rule disagrees with the shipped one at `min_gain: 0.25`:
+**graphic content should be restored up to q94–96; photographic content should
+be skipped from q75 up.** The pooled curve splits the difference and is wrong
+for both.
+
+Not an artifact of the `__pristine3x` corpus rebuild: native photographic
+content (photos, art-scans) tracks the photographic group, and art-scans —
+native PNG, never downscaled — is the worst cell of all.
+
+**To build it** the router needs a runtime graphic/photographic signal. zensr
+already has adjacent machinery (the graphics-specialist model, `gen_detect`,
+`chooser_probe`), and zenanalyze exists precisely for cheap feature extraction.
+Open question is cost: the classifier must be far cheaper than the restore pass
+it decides against, or it eats its own margin.
+
+### 1.13 The model actively harms art-scans — MEASURED 2026-08-03
+
+At q75 the restore pass makes **91% of art-scan images worse** (median −1.28,
+win 0.09, n=32), and it is negative from q75 all the way up. This is the one
+content class where restoration is a net defect across almost the whole quality
+range, and no gate currently knows it.
+
+The corpus is Haeckel lithographs — engraved stippling and fine hatching. The
+plausible mechanism is that the model reads high-frequency stipple as ringing
+and smooths it, which is the same failure the `renders` metric disagreement
+(§0.3) hints at. Worth confirming by eye before theorising further.
+
+Cheapest fix is §1.12 — a content-aware gate would skip these. Alternative is a
+training-side fix (more line-art/engraving in the mix), which is slower and may
+trade against the classes that currently work.
+
+### 1.14 Angles opened by the 2026-08-03 measurements, not yet run
+
+- **Asymmetric routing objective.** The threshold sweep shows `min_gain` 0.10–0.15
+  maximises mean quality (+1.3051) while the shipped 0.25 gives +1.2754 — but
+  0.25 harms fewer images (5% of cells vs 6%). Mean ssim2 treats a missed gain
+  and an inflicted harm as equal; users do not. An explicit asymmetric loss
+  would make that trade a decision rather than an accident of the default.
+- **Harm is concentrated and large.** At `min_gain: 0.25` the restores that go
+  wrong average **−1.45 ssim2** — far above the metric floor, i.e. visible. A
+  predictor of *harm probability* may be more useful than a predictor of median
+  gain, and the two are not the same model.
+- **Most routing decisions live under the metric floor.** Cell medians between
+  q75 and q94 sit in ±0.5 ssim2 while per-image spread runs −4 to +4. Widening
+  the eval grid cannot resolve these; only human judgment (§4, squintly) can.
+  Worth pointing squintly at exactly the q85–94 band where the gate lives.
+- **`CjpegliXyb` is unmeasured.** The jpegli distance curve (§1.1c) covers `CjpegliYcbcr`
+  only. The XYB path is a separate family and may need its own curve.
+- **Multi-generation jpegli.** Every clean-reference ladder so far is single
+  generation.
 
 ## 2. CLOSED — do not re-attempt without new information
 
