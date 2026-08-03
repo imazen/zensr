@@ -103,7 +103,7 @@ pub enum Budget {
 }
 
 /// Why a file was returned unmodified.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum SkipReason {
     /// The input is near-pristine for its chroma subsampling, where the model
@@ -113,6 +113,10 @@ pub enum SkipReason {
     /// Consistency was required but cannot be certified for this file's
     /// chroma geometry.
     ConsistencyUnavailable(NotCertified),
+    /// [`Routing::Auto`] estimated the benefit below the caller's threshold,
+    /// or [`Routing::Never`] was set. Carries the estimate so the decision is
+    /// auditable rather than opaque.
+    NotWorthIt { estimated_gain: f32 },
     /// The colour model is not one restoration understands — 4-component
     /// (CMYK/YCCK) files are decoded and returned untouched.
     UnsupportedColorModel,
@@ -257,6 +261,125 @@ impl Pixels {
     }
 }
 
+/// Estimated benefit of restoring a file, in ssim2 points, from header
+/// information alone — no decode, no model run.
+///
+/// Fitted on 4,096 per-file measurements across the clean corpus. Only two
+/// features are used because only two carry most of the signal: the probe's
+/// quality and the chroma subsampling. Subsampling matters as much as quality
+/// does, because 4:4:4 at q90 is as clean as 4:2:0 at q94 and the model loses
+/// on clean input.
+///
+/// This predicts a **median over files at that (quality, subsampling)**, not
+/// the outcome for one image. Per-file spread is wide; the estimate is for
+/// deciding whether to spend cycles, not for reporting quality.
+#[must_use]
+pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
+    // Anchors are measured medians; between them the curve is smooth and
+    // monotone, so linear interpolation is honest.
+    const G420: [(f32, f32); 9] = [
+        (15.0, 5.70),
+        (35.0, 3.07),
+        (55.0, 1.80),
+        (75.0, 0.65),
+        (85.0, 0.46),
+        (90.0, 0.26),
+        (94.0, 0.15),
+        (96.0, 0.05),
+        (100.0, -0.17),
+    ];
+    const G444: [(f32, f32); 6] = [
+        (90.0, -0.04),
+        (92.0, -0.13),
+        (94.0, -0.38),
+        (96.0, -0.78),
+        (98.0, -1.38),
+        (100.0, -2.04),
+    ];
+    // 4:4:4 was only measured from q90 up, where it is the interesting case.
+    // Below that it tracks 4:2:0 shifted about 4 points cleaner, which is the
+    // measured damage equivalence; extrapolating the negative branch downward
+    // would invent a loss that was never observed.
+    let full = crate::chroma_full_of(probe) == Some(true);
+    let scale = format!("{:?}", probe.quality.scale);
+    // Butteraugli distance runs the other way; map it onto the quality axis
+    // rather than maintaining a second curve.
+    let q = if scale == "ButteraugliDistance" {
+        (100.0 - probe.quality.value * 12.0).clamp(1.0, 100.0)
+    } else {
+        probe.quality.value
+    };
+    let interp = |pts: &[(f32, f32)]| -> f32 {
+        if q <= pts[0].0 {
+            return pts[0].1;
+        }
+        for w in pts.windows(2) {
+            let ((x0, y0), (x1, y1)) = (w[0], w[1]);
+            if q <= x1 {
+                let t = if x1 > x0 { (q - x0) / (x1 - x0) } else { 0.0 };
+                return y0 + t * (y1 - y0);
+            }
+        }
+        pts[pts.len() - 1].1
+    };
+    if full && q >= 90.0 {
+        // Measured directly: this is where 4:4:4 turns negative.
+        interp(&G444)
+    } else if full {
+        // Below q90 only 4:2:0 was measured. 4:4:4 at q is about as damaged as
+        // 4:2:0 at q+4 (measured: 4:4:4 q90 decodes as cleanly as 4:2:0 q94),
+        // so read the 4:2:0 curve 4 points higher. Shifting the anchors down
+        // by 4 is the same thing and keeps `interp` reading a sorted table.
+        let mut pts = G420;
+        for a in &mut pts {
+            a.0 -= 4.0;
+        }
+        interp(&pts)
+    } else {
+        interp(&G420)
+    }
+}
+
+/// When to spend cycles on restoration.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum Routing {
+    /// Restore whenever the near-pristine gate allows it.
+    Always,
+    /// Never restore; decode and return. Useful for A/B and for kill switches.
+    Never,
+    /// Restore only when [`estimate_gain`] reaches `min_gain` ssim2.
+    ///
+    /// Held-out measurement (predictor fitted on one half of the images,
+    /// evaluated on the other half), per-file averages over the whole set:
+    ///
+    /// | `min_gain` | files skipped | gain forgone | harm avoided | net |
+    /// |---|---|---|---|---|
+    /// | 0.00 | 25% | 0.043 | 0.342 | **+0.299** |
+    /// | 0.10 | 50% | 0.218 | 0.522 | **+0.304** |
+    /// | 0.25 | 72% | 0.348 | 0.655 | **+0.307** |
+    /// | 0.50 | 84% | 0.438 | 0.710 | +0.271 |
+    /// | 1.00 | 88% | 0.478 | 0.722 | +0.244 |
+    ///
+    /// Every threshold is **net positive on quality while also saving
+    /// cycles** — skipping avoids more harm than the gain it gives up. That is
+    /// not a tradeoff curve; it means restoring everything is worse than
+    /// restoring selectively on both axes at once.
+    ///
+    /// `0.25` skips roughly seven files in ten for the best measured net, and
+    /// drops the regression rate among the files still processed from 41% to
+    /// 23%. Above ~1.0 the net starts falling again as real gains are lost.
+    Auto { min_gain: f32 },
+}
+
+impl Default for Routing {
+    /// [`Routing::Auto`] at 0.25 — the best measured net, and it saves ~72%
+    /// of restoration cycles.
+    fn default() -> Self {
+        Routing::Auto { min_gain: 0.25 }
+    }
+}
+
 /// A reusable restorer. Build once, use for many images.
 ///
 /// Holds one model per [`Budget`] tier the caller chooses to load. Requesting
@@ -305,6 +428,7 @@ impl Restorer {
             intent: Intent::Fidelity,
             provenance: Provenance::Unknown,
             budget: Budget::Realtime,
+            routing: Routing::default(),
             require_consistency: false,
             threads: 0,
         }
@@ -318,6 +442,7 @@ pub struct Request<'a> {
     intent: Intent,
     provenance: Provenance,
     budget: Budget,
+    routing: Routing,
     require_consistency: bool,
     threads: usize,
 }
@@ -361,6 +486,15 @@ impl<'a> Request<'a> {
         self
     }
 
+    /// When to spend cycles at all. Defaults to [`Routing::Auto`] at 0.25,
+    /// which held-out measurement shows skips ~72% of files while *improving*
+    /// average quality — skipping avoids more harm than the gain it forgoes.
+    #[must_use]
+    pub fn routing(mut self, r: Routing) -> Self {
+        self.routing = r;
+        self
+    }
+
     /// Worker threads; 0 means choose automatically.
     #[must_use]
     pub fn threads(mut self, n: usize) -> Self {
@@ -374,6 +508,17 @@ impl<'a> Request<'a> {
             .restorer
             .tier(self.budget)
             .ok_or(RestoreError::TierNotLoaded)?;
+
+        // Routing decides before any model work. The probe is cheap (header
+        // only), so a skip here costs a decode and nothing more.
+        let probe_for_routing =
+            zenjpeg::detect::probe(self.jpeg).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
+        let predicted = estimate_gain(&probe_for_routing);
+        let skip = match self.routing {
+            Routing::Always => false,
+            Routing::Never => true,
+            Routing::Auto { min_gain } => predicted < min_gain,
+        };
 
         // Slack, gate thresholds and deblock policy are derived from the probe
         // and the caller's declarations — never surfaced.
@@ -396,6 +541,11 @@ impl<'a> Request<'a> {
         // hard-coded here.
         let _ = self.provenance;
 
+        // A routed-out file still gets a faithful decode; the caller needs
+        // pixels either way, and Unchanged is a first-class outcome.
+        if skip {
+            cfg = cfg.with_projection(Projection::Off);
+        }
         let r = restore_jpeg(self.jpeg, model, &cfg)?;
         let chroma = match r.report.chroma_full {
             Some(true) => Chroma::Full,
@@ -415,6 +565,15 @@ impl<'a> Request<'a> {
             width: r.width,
             height: r.height,
         };
+        if skip {
+            return Ok(Outcome::Unchanged {
+                pixels,
+                why: SkipReason::NotWorthIt {
+                    estimated_gain: predicted,
+                },
+                report,
+            });
+        }
         if r.report.skipped_model_high_q {
             return Ok(Outcome::Unchanged {
                 pixels,

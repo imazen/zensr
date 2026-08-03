@@ -353,6 +353,31 @@ Tooling: `tools/jpeg_inspect.rs` (probe + policy + optional `--restore` delta).
 
 ---
 
+### 1.11 Training hardware: the local 5070 is the fastest box, and WSL2 is not a tax
+
+Matched microbenchmark — the real student (nf=24 nc=8), batch 48 at 96x96,
+forward+backward+step, timed after warmup with a sync barrier (host timers lie
+about async GPU work). `~/tmp/gpubench.py`.
+
+| box | GPU | AMP | steps/min | note |
+|---|---|---|---|---|
+| this box (WSL2) | RTX 5070 cc12.0 | bf16 | **4,601** | idle, clean |
+| lianli (native) | RTX 2080 cc7.5 | fp16 | 2,478 | idle, clean |
+| jason (native) | RTX 3070 cc8.6 | bf16 | 1,331 | **CONTENDED — invalid** |
+
+**WSL2 is not a handicap for CUDA compute.** The 5070 under WSL2 is 1.9x an
+idle 2080. The known WSL2 problems are NVML under snap-docker and inbound UDP,
+neither of which touches training throughput.
+
+The 3070 figure was taken while jason was running the KD pair at 100% GPU, so
+it is contention, not hardware — a 2080 does not beat a 3070. Re-measure when
+jason is free before quoting any 5070:3070 ratio.
+
+Second reason to prefer this box: 12 GB of VRAM against the 3070's 8 GB. The
+dataset-placement logic falls back to host-side batches when the data exceeds
+half of free VRAM, and the 100k-crop set (14.7 GB) triggered that on every
+8 GB card — which is exactly what made the online-teacher runs slow.
+
 ### 1.9 Per-generation slack mapping *(blocks restoring `Provenance::Generations`)*
 
 `Provenance::Generations(u8)` was implemented and then REMOVED from the 0.1
