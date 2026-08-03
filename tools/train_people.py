@@ -42,6 +42,12 @@ FKD_TNC = int(os.environ.get("ZENSR_FKD_TNC", "16"))
 FKD_POOL = int(os.environ.get("ZENSR_FKD_POOL", "16"))
 FKD_TAPS = int(os.environ.get("ZENSR_FKD_TAPS", "3"))
 LOSS_SPACE = os.environ.get("ZENSR_LOSS_SPACE", "")  # "" | ycbcr
+# Seeds. Configurable so the same arm can be replicated on a second box to
+# separate a real effect from one seed's luck; the defaults reproduce every
+# run made before they became settable. Whatever is used here is what the
+# repro JSON records — the two must never drift apart.
+SEED_TORCH = int(os.environ.get("ZENSR_SEED_TORCH", "7"))
+SEED_NUMPY = int(os.environ.get("ZENSR_SEED_NUMPY", "11"))
 CHROMA_W = float(os.environ.get("ZENSR_CHROMA_W", "1"))
 EDGE_W = float(os.environ.get("ZENSR_EDGE_W", "0"))
 OUTM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "adopted", OUT_NAME)
@@ -187,7 +193,7 @@ def main():
         amp_dt = torch.float16
     scaler = torch.amp.GradScaler(dev, enabled=amp_on and amp_dt == torch.float16)
     print(f"device={dev} amp={amp_on} dtype={amp_dt if amp_on else 'fp32'}", flush=True)
-    torch.manual_seed(7)
+    torch.manual_seed(SEED_TORCH)
     lr_all = np.load(os.path.join(D, "lr_u8.npy"), mmap_mode="r")
     # Online-teacher mode needs no target array at all: the teacher supplies
     # both the output target and the intermediate features, from the LR crops.
@@ -261,7 +267,7 @@ def main():
         m = torch.compile(m)  # MPS compile is flaky; eager is fine there
     opt = torch.optim.AdamW(m.parameters(), lr=lr0, weight_decay=0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr0 / 50)
-    rng = np.random.default_rng(11)
+    rng = np.random.default_rng(SEED_NUMPY)
     # Tap indices, chosen by relative depth so the shallower student lines up
     # with proportional points in the deeper teacher.
     s_taps_s = prelu_taps(NC, FKD_TAPS) if FKD_W > 0 else ()
@@ -392,7 +398,8 @@ def main():
         sp.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
                cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip() or None)
     repro = {
-        "argv": sys.argv, "env": env, "seed_torch": 7, "seed_numpy": 11,
+        "argv": sys.argv, "env": env,
+        "seed_torch": SEED_TORCH, "seed_numpy": SEED_NUMPY,
         "trainer": os.path.basename(__file__), "commit": commit,
         "host": platform.node(), "torch": torch.__version__,
         "device": dev, "amp_dtype": str(amp_dt) if amp_on else "fp32",
