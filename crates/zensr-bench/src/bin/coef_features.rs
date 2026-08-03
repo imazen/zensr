@@ -258,7 +258,7 @@ fn main() {
                             continue;
                         };
                         let nb = luma.coeffs.len() / 64;
-                        let Some(ft) = features(&luma.coeffs, nb, luma.blocks_wide as usize) else {
+                        let Some(ft) = features(&luma.coeffs, nb, luma.blocks_wide) else {
                             continue;
                         };
                         let _ = writeln!(
