@@ -32,7 +32,7 @@ turbo	420	94	64	+0.007	-0.070	0.52
 #
 # PROVENANCE
 # A = fkd_a_outkd (output-KD only), B = fkd_b_affinity (ZENSR_FKD_W=0.027).
-# Identical box (jason), data, seeds, budget (25k steps), online fp32 teacher
+# Identical box (node-2), data, seeds, budget (25k steps), online fp32 teacher
 # supplying BOTH arms' output target — the arms differ by exactly one loss term.
 # Weight derived from a probe (base 0.0091 / aff 0.1092 -> ~25% share), not
 # guessed; measured aff_share held 0.18-0.22 through training.

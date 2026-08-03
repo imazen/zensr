@@ -171,7 +171,7 @@ validation, no hand-distilled N=1 anchors). Falsified branches get recorded in P
 - **Compute placement (USER 2026-07-25): compute jobs run on lianli or mac — the dev box is
   the operator.** lianli (.27, RTX 2080 + 24c) carries GPU training AND Rust eval jobs (zensr
   source + pinned eval slice at ~/data/imazen-26-eval + encoders + models provisioned
-  2026-07-25); mac (.224, M4 Pro 12c/24G) is the CPU spare. Kids' boxes (jason/ian) only per
+  2026-07-25); mac (M4 Pro 12c/24G) is the CPU spare. Shared boxes (node-2/node-3) only per
   explicit user direction, idle-verified, flags returned to-windows after.
 - **Compute (USER DIRECTIVE 2026-07-22): LAN nodes only — no rented cloud compute.** CPU data
   generation and GPU training run on our own machines (this box: 7950X + RTX 5070 12 GB; plus
@@ -384,7 +384,7 @@ repro.sh + full meta.repro; f16 baked into train_people.py export.
   support first. Live landscape survey (NPUs/AVX10) pending via WebSearch.
 - #13 feature-KD falsification rung (design in task; expect null — rt24d saturated).
 - Winograd: CLOSED opt-in (3 rungs falsified, root cause instruction-bound IPC 5.0).
-- jason: rebooted to kid use (host key changed) — hands off until verified idle; ian
+- node-2: rebooted to owner use (host key changed) — hands off until verified idle; node-3
   needs physical power button (WoL runbook in zenmetrics/NODES.md).
 
 ## Standing engineering rules for this repo

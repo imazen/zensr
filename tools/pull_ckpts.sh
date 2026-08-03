@@ -12,9 +12,9 @@
 #   ZENSR_BOXES="name=user@host name=user@host ..."
 #
 # Usage: pull_ckpts.sh <box-name> [remote-dir] [local-dir] [interval-seconds]
-#   pull_ckpts.sh jason                      # defaults, loops every 10 min
+#   pull_ckpts.sh node-2                      # defaults, loops every 10 min
 #   pull_ckpts.sh lianli ~/zensr-big ~/tmp/zensr-ckpts/lianli 300
-#   ONESHOT=1 pull_ckpts.sh jason            # single pass, for cron
+#   ONESHOT=1 pull_ckpts.sh node-2            # single pass, for cron
 set -euo pipefail
 
 NAME="${1:?box name (key in ZENSR_BOXES)}"

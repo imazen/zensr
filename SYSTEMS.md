@@ -464,8 +464,8 @@ advantage into the model itself, retiring even the decoder flag.
 
 ### Conditioning ablation, part 1 (2026-07-25, LAN fleet): precision confound dead, S2a falsified
 
-Distributed over the household fleet (lianli 2080 / jason 3070 / ian
-1660Ti; ian lost mid-run to a power-off — kids' box). Matched arms
+Distributed over the home fleet (lianli 2080 / node-2 3070 / node-3
+1660Ti; node-3 lost mid-run to a power-off — shared boxes). Matched arms
 (24k v4 pairs, policy-mix decode, 14k steps, batch 48, warm from
 dejpeg4): **none-Turing 32.59 ≡ none-Ampere 32.61** (every stratum
 within 0.06 dB) — bf16-vs-fp32-fallback compile paths do NOT matter;
@@ -489,9 +489,9 @@ no training, hard re-encode-consistency guarantee), not input channels.
 The shipping architecture stays pixels-in/pixels-out.
 
 Fleet postscript: 6 training runs + 1 confound probe across lianli/
-jason/ian in one afternoon; ian was lost mid-run to a physical power-off
-(kids' box — WoL unarmed after hard cut; needs the button) and its arm
-completed on lianli. Kids' boxes flipped back to Windows at wrap-up.
+node-2/node-3 in one afternoon; node-3 was lost mid-run to a physical power-off
+(shared boxes — WoL unarmed after hard cut; needs the button) and its arm
+completed on lianli. Shared boxes flipped back to Windows at wrap-up.
 
 ### S10 projection — shipped and measured (2026-07-25/26)
 
@@ -695,7 +695,7 @@ vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
   +0.296 median / +0.405 mean (wins clearly). S5b stays falsified as the
   general pipeline (also lost the high grid outright) but is a real
   GRAPHICS-specialist trait → compounding rung dejpeg9_gfxycc (graphics data
-  x YCbCr space) training on jason.
+  x YCbCr space) training on node-2.
 - gen-aware (dejpeg8): deep chains +0.3..+0.45, light chains −0.1..−0.2,
   singles −0.05 — a wash for typical traffic, only deep-gen corpora want it.
   Not default; available as a routing option if gen-heavy traffic emerges.
@@ -715,7 +715,7 @@ vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
   q75 ->0.84 — 26-69% of teacher quality at 0.68 s/MP (7.9x faster).
   q90 -0.00 neutral (near-clean edge traded away; the >=q95 gate covers the
   top). Ship shape: quality tier = dejpeg7-class; realtime = rt32d-class.
-- Pending: dejpeg9_gfxycc compound rung (graphics x YCbCr, jason) — decides
+- Pending: dejpeg9_gfxycc compound rung (graphics x YCbCr, node-2) — decides
   whether the chooser routes graphics to a compound specialist or retires;
   rt24 rung (mac) for the speed floor.
 
@@ -759,7 +759,7 @@ levels carry the box difference.)
 
 User challenge: the warm-start comparisons inherited RGB-tuned convs — was the
 S5b falsification an artifact? From-scratch pair (identical seed/box/steps/LR,
-jason 3070, 16k @2e-4), paired ycc−rgb:
+node-2 3070, 16k @2e-4), paired ycc−rgb:
 
 - ALL −0.137 median / −0.444 mean (416/960); photo −0.360 median / −1.031 mean.
 - graphics rows: **+0.131 median** — same direction/size class as warm-start
@@ -822,7 +822,7 @@ REDIRECT: the recoverable pool is GUIDED CHROMA SR — luma-guided sharpening
 past the lattice (the 6.8-point pool; the model already SEES full-res luma but
 RGB charbonnier underweights chroma so it doesn't try). Cheapest lever first:
 chroma-weighted loss (ZENSR_LOSS_SPACE=ycbcr + ZENSR_CHROMA_W, loss-only
-change, model stays RGB drop-in). Paired experiment launched on jason:
+change, model stays RGB drop-in). Paired experiment launched on node-2:
 dejpeg10_chw3 (w=3) vs dejpeg10_ctl (plain), both warm from dejpeg7_16000.
 Caveats: decomposition is a crude subtraction in ssim2 space; bilinear
 lattice floor slightly understates the best resampler; ssim2 (XYB-based)
@@ -1059,7 +1059,7 @@ autocast bf16 +2%, channels_last +1-11% on isolated convs only.
 METHOD NOTE: an earlier 0.9 s/step mac figure was inflated ~5x by calling
 torch.mps.synchronize() every step in the bench harness (real training never
 does). True rate ~0.2 s/step at nf24 vs lianli 0.023 -> 8.7x.
-FLEET RULE: train on lianli (2080, 44 steps/s nf24) + jason (3070); mac is
+FLEET RULE: train on lianli (2080, 44 steps/s nf24) + node-2 (3070); mac is
 for INFERENCE benches (best per-thread CPU + healthy GPU forward) and CPU
 work. Revisit if PyTorch fixes MPS conv backward.
 
@@ -1075,7 +1075,7 @@ benchmarks/rt24{d,e,f}_std_*.tsv):
   75   +0.86    +0.87    +1.09       +1.22     89.5%  <- MET
 No size increase. Confirms the optimization-bound diagnosis (rt32e fit its
 teacher WORSE than rt24e at equal steps). REMAINING FRONTIER: q15 (39.7%) —
-in flight: rt24g 200k steps on jason 3070 (12.5x budget, lr 3e-4), rt48e
+in flight: rt24g 200k steps on node-2 3070 (12.5x budget, lr 3e-4), rt48e
 ~500KB capacity fill on lianli. Next lever after budget: feature-KD (#13),
 whose case is now much stronger (student is under-taught, not saturated).
 
@@ -1179,7 +1179,7 @@ chains before a constant lands.
 ### Teacher retrain on the SAME data — NULL (4th flat continuation), 2026-08-01
 
 Roadmap 1.3 as first attempted: dejpeg11_teacher = dejpeg7 warm-start, 120k
-steps, nf64/nc16, GT targets, jason 3070, 4.55 h wall (0.137 s/step —
+steps, nf64/nc16, GT targets, node-2 3070, 4.55 h wall (0.137 s/step —
 legitimate; an early "too fast" suspicion was my own elapsed-time error, and
 checking it was right). val_psnr 32.50 -> 32.71 -> 32.65 = FLAT.
 This is the FOURTH flat continuation of dejpeg7 on this dataset (see the

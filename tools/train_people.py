@@ -215,7 +215,7 @@ def main():
             val_hr = torch.cat([teacher(val_lr[i:i + 128]) for i in range(0, 512, 128)])
     # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
     # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
-    # hang in waitUntilCompleted) and on small-VRAM cards (ian's 1660 Ti).
+    # hang in waitUntilCompleted) and on small-VRAM cards (node-3's 1660 Ti).
     # Auto: keep data host-side when it would not comfortably fit in VRAM.
     # MPS always (multi-GB .to(mps) wedges); CUDA when the arrays exceed half
     # of free device memory (the 100k-crop set is 9.9 GB vs 8 GB cards).

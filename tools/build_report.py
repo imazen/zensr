@@ -591,7 +591,7 @@ on 13/14 chains (−0.05 only on up-q, neutral). Bonus: the up-q chain (probe sa
 model corrects +3.37 from pixels) independently re-falsifies severity conditioning.</div>
 
 <h2 id="ladder"><span class="no">§12d</span>Production model ladder (2026-07-27 autonomous wave)</h2>
-<p>One night of LAN-fleet dispatch (jason RTX 3070 native-bf16 at 0.18 s/step trained seven
+<p>One night of LAN-fleet dispatch (node-2 RTX 3070 native-bf16 at 0.18 s/step trained seven
 595k-param models in ~12–50 min each) closed the remaining design questions with
 control-adjusted A/Bs. A +16k-step control on the original mix measured FLAT — so every
 delta below is a real effect, not training time:</p>

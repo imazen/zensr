@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Distributed conditioning ablation (S2a/S7/S10) over the household LAN fleet.
 # Local box generates data + orchestrates; each box trains one matched arm:
-#   lianli (RTX 2080)  -> C0 none    jason (RTX 3070) -> C1 scalar
-#   ian    (RTX 3070?) -> C2 dmap
+#   lianli (RTX 2080)  -> C0 none    node-2 (RTX 3070) -> C1 scalar
+#   node-3    (RTX 3070?) -> C2 dmap
 # Usage: run_cond_ablation.sh sync|launch|status|collect
 set -euo pipefail
 DATA=~/tmp/zensr-dejpeg-v4
@@ -13,7 +13,7 @@ for kv in ${ZENSR_BOXES:-}; do BOX[${kv%%=*}]="${kv#*=}"; done
 if [ ${#BOX[@]} -eq 0 ]; then
   echo "set ZENSR_BOXES, e.g. ZENSR_BOXES='a=user@host-a b=user@host-b'" >&2; exit 2
 fi
-declare -A ARM=( [lianli]="none" [jason]="scalar" [ian]="dmap" )
+declare -A ARM=( [lianli]="none" [node-2]="scalar" [node-3]="dmap" )
 STEPS=${STEPS:-14000}
 BATCH=${BATCH:-48}
 

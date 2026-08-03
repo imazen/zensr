@@ -287,7 +287,7 @@ was falsified twice and the student is optimization-bound.
   full-budget rerun; a null result does not rule out a benefit that only
   appears later in training. Stated up front so the conclusion is not
   over-read either way.
-- Box note: ian is a GTX 1660 Ti (6 GB, Turing cc 7.5), **not** the RTX 3070
+- Box note: node-3 is a GTX 1660 Ti (6 GB, Turing cc 7.5), **not** the RTX 3070
   the fleet runbook guesses. The trainer's compute-capability gate correctly
   selects fp16+GradScaler there; inductor is unavailable (triton cannot build
   its CUDA shim), so both arms run eager via `ZENSR_COMPILE=0`.
