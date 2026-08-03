@@ -328,47 +328,58 @@ it has never had the f16-target + long-budget recipe that the students got.
   a teacher improvement only matters to the product if it survives
   distillation. A better teacher that the student cannot follow moves nothing.
 
-### 1.4 Feature/affinity KD — REPLICATED at full budget 2026-08-03, but the recipe is not competitive
+### 1.4 Feature/affinity KD — REPLICATED across two seeds 2026-08-03; recipe still not competitive
 
-**Full 200k-step pair, both arms complete** (the 2026-08-02 result below ran to
-22.5k). Seed 7 on the 3070; a second pair at seed 2 is running on the 5070 to
-separate the effect from one seed's luck. Per file on the clean corpus, arm B
-(affinity) minus arm A (output-KD only), pooled over encoders, `ZENSR_EVAL_QS`
-15/35/55/75, 4:2:0, n=128 per cell:
+**Two independent full 200k-step pairs**, seed 7 on the 3070 and seed 2 on the
+5070. Both arms of each pair share a seed, so the comparison is within-pair;
+comparing across seeds would confound seed with treatment. Per file on the clean
+corpus, arm B (affinity) minus arm A (output-KD only), pooled over encoders,
+4:2:0, n=128 per cell:
 
-| q | median | mean | signs +/− | p |
-|---|---|---|---|---|
-| 15 | **+0.497** | +0.488 | 95/33 | **3.8e-08** |
-| 35 | +0.133 | +0.125 | 70/58 | 0.33 |
-| 55 | +0.056 | +0.089 | 72/56 | 0.18 |
-| 75 | −0.028 | +0.044 | 60/68 | 0.54 |
-| ALL | +0.111 | +0.186 | 297/215 | 3.3e-04 |
+| q | seed 7 median | signs | p | seed 2 median | signs | p |
+|---|---|---|---|---|---|---|
+| 15 | +0.497 | 95/33 | 3.8e-08 | **+1.092** | 117/11 | **1.6e-23** |
+| 35 | +0.133 | 70/58 | 0.33 | +0.436 | 104/23 | 1.7e-13 |
+| 55 | +0.056 | 72/56 | 0.18 | +0.256 | 98/30 | 1.3e-09 |
+| 75 | −0.028 | 60/68 | 0.54 | +0.097 | 80/47 | 0.0043 |
+| ALL | +0.111 | 297/215 | 3.3e-04 | **+0.414** | 399/111 | **3.9e-39** |
 
-**The effect narrowed as the budget grew.** At 22.5k steps it was significant
-across the low-q band; at 200k it survives only at q15 — where it is now
-**+0.497, above the ~0.3 metric floor** and so plausibly visible, not merely
-directional. The natural reading is that affinity supervision mostly
-*accelerates*, and output-KD catches up given enough steps, except in the
-heaviest damage regime where the extra signal still buys something real.
+**The direction replicates and is now firmly established** — every cell of seed
+2 is positive and significant, and the two seeds agree in sign wherever seed 7
+reached significance. **The magnitude does not replicate**: +0.414 against
++0.111 overall, a nearly 4x spread between seeds. Running the replication was
+what turned a one-seed result into a real finding *and* revealed that any single
+number for the effect size would have been wrong. Quote the direction; treat the
+magnitude as a range.
 
-**But neither arm is shippable.** Against the shipped `dejpeg_rt24g`, both lose
-at every cell:
+Seed 7 alone suggested the effect narrowed with budget (significant only at
+q15). Seed 2 contradicts that — it is significant at every quality. So the
+"affinity mostly accelerates" reading is **not** supported; drop it.
 
-| | q15 | q35 | q55 | q75 | overall |
-|---|---|---|---|---|---|
-| affinity − rt24g (turbo) | −0.433 | −0.220 | −0.087 | −0.027 | **−0.109** (win 0.37) |
-| output-KD − rt24g (turbo) | −0.898 | −0.315 | −0.127 | −0.128 | **−0.192** (win 0.34) |
+**But no arm is shippable.** Against the shipped `dejpeg_rt24g`, overall
+per-file median (n=512):
 
-So the rung's question — does affinity KD beat output-KD? — is answered **yes at
-q15**, and affinity roughly halves the deficit to the shipped model there. The
-follow-on question — is this KD recipe worth adopting? — is **no, not yet**: the
-whole branch sits behind `dejpeg_rt24g`. Adopt the affinity term into a recipe
-that is already competitive rather than shipping either arm.
+| arm | seed 7 | seed 2 |
+|---|---|---|
+| output-KD only | −0.192 (win 0.34) | −0.318 (win 0.25) |
+| **affinity** | **−0.109** (win 0.37) | **−0.057** (win 0.42) |
 
-Data: `~/tmp/kd_{fkd_a_outkd,fkd_b_affinity,dejpeg_rt24g}.tsv`, compared with
-`tools/model_ab.py` per the pre-registered rule. Note the training metric was
-again uninformative: final `val_psnr_vs_teacher` was 37.13 (A) vs 37.17 (B),
-a 0.04 dB gap that predicts neither the q15 win nor the deficit to rt24g.
+Affinity roughly halves the deficit in both pairs, and seed 2's affinity arm
+gets within 0.06 ssim2 of the shipped model — it even edges ahead on mozjpeg at
+q35/55/75 (+0.03 to +0.04, win 0.58). But it still loses on turbo throughout and
+at q15 by −0.70, and everything except q15 sits under the metric floor.
+
+So the rung's question — does affinity KD beat output-KD? — is **yes,
+replicated, at every quality in one seed and at q15 in both**. The follow-on
+question — is this recipe worth adopting? — is **no**: the whole branch sits
+behind `dejpeg_rt24g`. Adopt the affinity term into a recipe that is already
+competitive rather than shipping either arm.
+
+Data: `~/tmp/kd_*.tsv` (seed 7) and `~/tmp/kd2_*.tsv` (seed 2), compared with
+`tools/model_ab.py` per the pre-registered rule. The training metric was again
+uninformative in both pairs: seed 7 ended 37.13 (A) vs 37.17 (B) and seed 2
+36.98 vs 37.28 — gaps of 0.04 and 0.30 dB that predict neither the size of the
+affinity effect nor the deficit to rt24g.
 
 ---
 
