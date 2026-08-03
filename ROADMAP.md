@@ -63,14 +63,19 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    each image against the *distribution* of the other method instead of against
    itself. That produced the published "textures −1.7, SR loses on stochastic
    detail" — the paired median on the very same data is **+8.79 with SR
-   winning** — while reporting the model's one genuine loss, `renders`
-   (**paired −1.81, win 0.38**, and the only subcorpus where butteraugli agrees
-   it is worse), as a +5.93 win. A plausible mechanism ("SR can't invent
-   stochastic detail") kept it unchallenged for eleven days.
-   → **Always pair.** Median of per-file differences plus win fraction, never
-   the difference of per-method medians. Pairing is also what made the encoder
-   effect in §1.1b measurable at all. Full write-up:
-   `benchmarks/sr_pinned_2026-08-03.md`. README correction pending review.
+   winning** — while hiding the one subcorpus where the metrics genuinely
+   disagree, `renders` (paired ssim2 −1.81 / win 0.38, but PSNR +0.92 on **8 of
+   8** files and butteraugli −0.924 on 7 of 8), reporting it as a flat +5.93
+   win. A plausible mechanism ("SR can't invent stochastic detail") kept the
+   textures figure unchallenged for eleven days.
+   → **Always pair, and pair every metric.** Median of per-file differences plus
+   win fraction, never the difference of per-method medians. Pairing is also
+   what made the encoder effect in §1.1b measurable at all. I made this exact
+   mistake *inside the writeup of this finding* — quoting unpaired butteraugli
+   medians (7.459 vs 7.397) as confirmation of the renders loss, when paired
+   butteraugli says the opposite. It is easy to make and invisible without the
+   per-file table. Full write-up: `benchmarks/sr_pinned_2026-08-03.md`. README
+   correction pending review.
 4. **Metric ceiling.** Differences below ~0.3 ssim2 are at the edge of what our
    metrics resolve. Anything smaller needs human judgment (§4) rather than a
    bigger eval grid.
