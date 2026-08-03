@@ -25,7 +25,7 @@ pub const MOZJPEG_PRESET_NAMES: [&str; 9] = [
     "Peterson",
 ];
 
-pub const MOZJPEG_LUMA_BASES: [[u16; 64]; 9] = [
+pub static MOZJPEG_LUMA_BASES: [[u16; 64]; 9] = [
     // JpegAnnexK
     [
         16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69,
@@ -89,7 +89,7 @@ pub const MOZJPEG_LUMA_BASES: [[u16; 64]; 9] = [
 /// are EXTRACTED FROM MEASURED FILES the probe identifies as Photoshop and
 /// which no mozjpeg preset produces — not transcribed from documentation.
 /// 18 tables, covering 875 files of the survey.
-pub const PHOTOSHOP_LUMA_TABLES: [[u16; 64]; 18] = [
+pub static PHOTOSHOP_LUMA_TABLES: [[u16; 64]; 18] = [
     // 247 files
     [
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1,
@@ -212,7 +212,7 @@ pub const PHOTOSHOP_LUMA_TABLES: [[u16; 64]; 18] = [
 /// survey corpus these explain 25% of what remained unidentified — almost all
 /// of it one table, ffmpeg-mjpeg at q19, which alone accounts for 385 files
 /// and had been the single largest unknown.
-pub const ENCODER_LUMA_TABLES: [(&str, u8, [u16; 64]); 127] = [
+pub static ENCODER_LUMA_TABLES: [(&str, u8, [u16; 64]); 127] = [
     (
         "cjpegli",
         1,
