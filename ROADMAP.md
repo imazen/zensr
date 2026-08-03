@@ -35,6 +35,14 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    (`ZENSR_EVAL_PIN`) and warns loudly if no list is found. Same failure shape
    as the 2026-07-23 haberdoedas postmortem; it recurred because the fix then
    was a regenerated list rather than a harness that enforces it.
+   **2026-08-03:** the SR eval (`eval.rs`) still had *both* defects — unpinned
+   selection and no `gt_src` — and the selection one bit harder there, because
+   it also drops images below the 512 crop and each drop slides one file deeper
+   into training data. Fixed, and the helpers now live in `zensr_bench`
+   (`pinned_stem` / `load_pinned` / `gt_src_of`) so the two evals cannot drift.
+   For SR a JPEG reference biases the *opposite* way to restoration: detail the
+   model correctly reconstructs was quantised out of the reference, so sharper
+   output scores worse. **Any new eval binary must use the shared helpers.**
 2. **Training-time metrics do not predict clean-reference quality
    (2026-08-02).** This one invalidated two conclusions in a single day. The
    100k-crop student improved `val_psnr_vs_teacher` by ~2 dB (36.89 -> 38.97)
@@ -57,6 +65,53 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 ---
 
 ## 1. Open rungs, ranked by expected value
+
+### 1.1b Routing estimator validated on clean references — MEASURED 2026-08-03
+
+Full report `benchmarks/clean_ladder_2026-08-03.md`; raw rows pointer-filed at
+`benchmarks/clean_ladder_2026-08-03.pointer.md`. Grid: the 64 pinned files ×
+{turbo, mozjpeg} × {4:2:0, 4:4:4} × q{15,35,55,75,85,90,94} (+ a q{94,96,98,100}
+tail run), 100% PNG references, `gt_src` verified on every row. Analysis splits
+30 calibrate / 34 validate **by image**.
+
+**The shipped routing estimator survives and nothing beat it.** Scored on the
+validate half by summing the actual measured delta on each cell a rule chose to
+restore: shipped estimator **+2.0274 at 79% restored**, vs +1.9993 for the
+subsampling-threshold gate, +1.8561 for always-restore, +1.8544 for a
+per-encoder refit. Routing is worth its complexity (+0.17 over always-restore
+while skipping 21% of the work) and the version already shipped is the best of
+six. Expectation going in was that contaminated calibration would need redoing
+wholesale; it did not.
+
+**Fixed:** the far tail was wrong in sign. The 4:2:0 curve predicted **+0.15 at
+q94 where clean references measure −0.27**, and **−0.17 at q100 where they
+measure −1.89** — 11× too small. Anchors at q≥94 are now measured
+(`G420`/`G444` in `crates/zensr-zenjpeg/src/api.rs`, landed in `4fc80c9`, whose
+message describes only the eval fixes that rode along with it). At the default
+`min_gain: 0.25` this changes 3 of 2000 sampled decisions; at `min_gain: 0.05`
+it changes 45. Pinned by `gain_curve_is_negative_on_near_pristine_input` —
+predicting gain on near-pristine input is the one error that spends cycles to
+make an image worse, and it had survived the entire suite.
+
+**Left alone deliberately:** anchors at q≤90 agree with clean measurement to
+within 0.05 through q75 (5.70/5.66, 3.07/3.07, 1.80/1.75, 0.65/0.64). They read
+~0.23 high at q85–90, but the calibrate/validate spread there is 0.23–0.64, so
+the gap is inside the noise — and re-fitting the mid-range scored *worse*
+held-out. The `S444_SHIFT = 4` approximation likewise over-predicts 4:4:4 gain
+by 0.3–0.6 below q90; no decision depends on it and no re-fit improved it.
+Recorded as a known bias in the source rather than silently corrected.
+
+**NEGATIVE — per-encoder crossover thresholds are not identifiable at n=64.**
+libjpeg-turbo images genuinely gain more from restoration than mozjpeg at every
+q from 15 to 85, both subsamplings, paired sign test p from 1.4e-17 to 1.1e-5
+(mozjpeg's trellis and tables leave less damage to repair). But the *crossover
+point* swings across the split: mozjpeg 4:4:4 reads q75 on calibrate and q90 on
+validate. Pooling all 64 files would have justified lowering that gate to ~q83.
+Pairing makes the magnitude precise because it cancels image-to-image variance;
+an unpaired cell median does not, and per-image spread runs −1.4..+4.2 in a
+single cell. **Do not derive per-encoder thresholds from a 64-image ladder.**
+Folding the effect in as a paired offset — the sound form — costs 0.011 ssim2
+for 4 points less work, an order of magnitude under the metric floor.
 
 ### 1.1 Identity gate re-derived on clean references — MEASURED 2026-08-02
 
