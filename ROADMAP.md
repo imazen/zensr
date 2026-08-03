@@ -317,6 +317,42 @@ first — trellis families (mozjpeg) already violate 9–15 Q at gen1.
 
 ---
 
+### 1.8 Estimated quality under-describes damage on downscaled input *(new 2026-08-02, from real-world e-commerce files)*
+
+A real Amazon CDN sample probed at q82-87 — mid-to-high — yet reads visually
+much worse. Measured, it is not blocking (blockiness 1.10-1.44 against a
+calibration where q20 gives 3.61 and q95 gives 1.24) and not chroma
+subsampling behaving oddly (the per-plane chroma deficits match a reference
+encode to within 0.1 dB). It is **detail density**:
+
+| | Y roundtrip PSNR @/2 |
+|---|---|
+| native 420 crop, q83 | 52.0 dB |
+| same source downscaled to 420, q83 | 34.2 dB |
+| downscaled to 270, q83 | 33.4 dB |
+| **the Amazon files** | **21.0 - 34.9 dB** |
+
+Aggressive downscaling (their filenames record 1500 -> 420 and 750 -> 270)
+packs all content into the highest spatial frequencies — exactly the band the
+quantiser coarsens. So **damage = quantiser x content spectrum**, and the
+probe's scalar quality only measures the first factor. A q83 downscaled image
+carries far more damage than a q83 native one.
+
+**Why this matters to the pipeline:** every routing decision we have keys on
+estimated quality — the identity gate, the deblock policy, the tier choice. On
+downscaled input that estimate is systematically optimistic, so the gate will
+skip files that would benefit. A detail-density signal is cheap (one
+downscale-upscale roundtrip on Y) and is a concrete candidate for the damage
+estimator `Budget::Adaptive` needs in `docs/API_DESIGN.md`.
+
+Also worth noting for corpus building: these files probe as encoder family
+`Unknown`, so `slack_for` falls back to the 0.15 round-to-nearest assumption.
+If the CDN encoder trellises, the projection box is too tight on real traffic.
+
+Tooling: `tools/jpeg_inspect.rs` (probe + policy + optional `--restore` delta).
+
+---
+
 ## 2. CLOSED — do not re-attempt without new information
 
 | # | Idea | Why it's closed |
