@@ -47,8 +47,25 @@ pub enum Provenance {
     Unknown,
     /// This process encoded it, once, from an uncompressed source.
     FreshEncode,
-    /// The caller tracked the chain — CDN re-saves, editor round-trips.
-    Generations(u8),
+    // `Generations(u8)` was here and has been REMOVED, not deferred.
+    //
+    // Two separate reasons, and the second is the disqualifying one:
+    //
+    // 1. Generation count is not recoverable from a file. Detection was
+    //    implemented and falsified — no operating point exists where a
+    //    conservative answer is possible, and resizing (which CDNs do
+    //    constantly) destroys the double-quantisation periodicity it relies
+    //    on. So only a caller could supply it, and few can.
+    // 2. Nothing validated existed to DO with it. The measurement is "each
+    //    generation adds roughly 1-2.5 quantizer steps of excess" — an
+    //    ABSOLUTE figure, i.e. `slack_abs`. A first implementation here wired
+    //    it into `slack_q`, which is a FRACTION of the quantizer, with an
+    //    invented per-generation coefficient. Wrong units and a fabricated
+    //    constant.
+    //
+    // Treating it as `Unknown` would have been safe but decorative: identical
+    // behaviour under a different name. Restore the variant when the
+    // n -> slack_abs mapping is measured end to end (ROADMAP 1.9).
 }
 
 /// Compute budget. The library picks the model; callers should never name one.
@@ -58,13 +75,30 @@ pub enum Provenance {
 /// was aggressively downscaled carries far more damage than a q83 native file,
 /// because downscaling packs content into the frequencies the quantiser
 /// coarsens.
+///
+/// **The tiers are far apart on damaged input and close together on clean
+/// input**, which is the opposite of how compute budgets usually behave.
+/// Measured per-file median gain on clean references, and the gap expressed
+/// in multiples of the ~0.3 ssim2 the metric can actually resolve:
+///
+/// | input quality | Quality | Realtime | gap | gap vs metric floor |
+/// |---|---|---|---|---|
+/// | q15 | +11.62 | +6.88 | 4.74 | **15.8x** |
+/// | q35 | +6.18 | +4.14 | 2.04 | 6.8x |
+/// | q55 | +4.02 | +3.06 | 0.96 | 3.2x |
+/// | q75 | +2.05 | +1.58 | 0.47 | **1.6x** |
+///
+/// So at q75 the 16x compute buys a difference only 1.6x the metric's own
+/// resolution — hard to justify. At q15 it buys nearly twice the gain. If you
+/// are choosing one tier for mixed traffic, `Realtime` is defensible above
+/// roughly q50 and `Quality` earns its cost below it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Budget {
     /// ~0.16 s/MP at 12 threads, 84 KB of weights.
     Realtime,
-    /// ~2.7 s/MP, 1.16 MB. 1.4-3.4x the gain depending on how damaged the
-    /// input is.
+    /// ~2.7 s/MP, 1.16 MB — 16x the compute. Worth it on heavily damaged
+    /// input, marginal above ~q75; see the table above.
     Quality,
 }
 
@@ -356,16 +390,11 @@ impl<'a> Request<'a> {
             Intent::Conservative => 6.0,
         });
 
-        // Provenance widens the box. Each additional generation adds roughly
-        // 1-2.5 quantizer steps of excess beyond what the file's own tables
-        // certify, so a box sized for a single generation would clamp truth
-        // that was never inside it.
-        if let Provenance::Generations(n) = self.provenance {
-            let extra = 0.25 * f32::from(n.min(8));
-            cfg = cfg.with_projection(Projection::Fixed(
-                crate::ProjectionConfig::with_slack_q(0.45 + extra).with_slack_abs(1.5),
-            ));
-        }
+        // Provenance currently affects only whether the strict box is
+        // available. `FreshEncode` is the one claim that unlocks anything, and
+        // even that is left to the family calibration today rather than
+        // hard-coded here.
+        let _ = self.provenance;
 
         let r = restore_jpeg(self.jpeg, model, &cfg)?;
         let chroma = match r.report.chroma_full {

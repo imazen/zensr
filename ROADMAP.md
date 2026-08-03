@@ -353,6 +353,46 @@ Tooling: `tools/jpeg_inspect.rs` (probe + policy + optional `--restore` delta).
 
 ---
 
+### 1.9 Per-generation slack mapping *(blocks restoring `Provenance::Generations`)*
+
+`Provenance::Generations(u8)` was implemented and then REMOVED from the 0.1
+API, because nothing validated existed to do with it. The measurement we have
+is "each generation adds roughly 1-2.5 quantizer steps of excess" — an
+absolute figure, i.e. `slack_abs`. A first implementation wired it into
+`slack_q`, a *fraction* of the quantizer, with an invented per-generation
+coefficient; wrong units and a fabricated constant.
+
+To restore the variant, measure the mapping directly: encode gen-1..gen-N
+chains (`gen_eval` already builds them, `ZENSR_EVAL_GENS`), and for each
+generation count fit the `slack_abs` that contains the p99 of the observed
+coefficient excess. That yields a table, not a guess.
+
+Until then `Provenance` carries only `Unknown` and `FreshEncode`. Keeping
+`Generations(n)` while treating it as `Unknown` was rejected as decorative —
+a variant that does nothing is the same defect as a parameter that is accepted
+and ignored.
+
+### 1.10 Tier routing: the gap is quality-dependent, and steeply
+
+Measured per-file median gain on clean references, gap in multiples of the
+~0.3 ssim2 the metric resolves:
+
+| input | Quality | Realtime | gap | vs metric floor |
+|---|---|---|---|---|
+| q15 | +11.62 | +6.88 | 4.74 | **15.8x** |
+| q35 | +6.18 | +4.14 | 2.04 | 6.8x |
+| q55 | +4.02 | +3.06 | 0.96 | 3.2x |
+| q75 | +2.05 | +1.58 | 0.47 | **1.6x** |
+
+At q75 the quality tier's 16x compute buys a difference only 1.6x the metric's
+own resolution. At q15 it buys nearly double the gain. A fixed tier choice is
+therefore leaving a lot on the table in both directions, and a router keyed on
+damage would pay for itself — which is the argument for `Budget::Adaptive`,
+dropped from 0.1 only because the damage estimator does not exist (see 1.8;
+input quality alone under-describes damage on downscaled files).
+
+---
+
 ## 2. CLOSED — do not re-attempt without new information
 
 | # | Idea | Why it's closed |
