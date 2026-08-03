@@ -61,8 +61,16 @@ fn main() {
     }
     let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&rgb);
     println!("q\tfamily\tdistance\tvalues");
-    for qi in 1..=100u32 {
-        let q = qi as f32;
+    // quality is f32, so sweep finer than integers to find the TRUE size
+    // of the reachable table space rather than assuming 100.
+    let step: f32 = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1.0);
+    let n = ((100.0 - 1.0) / step) as u32;
+    for i in 0..=n {
+        let q = 1.0 + i as f32 * step;
+        let qi = q;
         let jpg = EncoderConfig::ycbcr(q, ChromaSubsampling::Quarter)
             .encode(px, w as u32, h as u32)
             .expect("encode");

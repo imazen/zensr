@@ -11,6 +11,7 @@
 
 #[cfg(feature = "chooser")]
 pub mod chooser;
+pub mod jpegli_params;
 pub mod qtables;
 mod qtables_data;
 
