@@ -315,18 +315,87 @@ const G444: [(f32, f32); 5] = [
     (100.0, -3.10),
 ];
 
+/// Median restore gain by butteraugli distance, for encoders that quantise on a
+/// distance scale (cjpegli and zenjpeg, which share a quant law).
+///
+/// This used to map distance onto the IJG quality axis with `100 - 12·d` and
+/// reuse [`G420`]/[`G444`]. That mapping is not what damage does: measured
+/// against clean references on 2026-08-03 it was optimistic in **39 of 40**
+/// cells, by a median of +0.68 and up to +4.72 ssim2, and it had the wrong sign
+/// in 9 — predicting gain from distance 0.3 to 1.3, where restoration actually
+/// costs quality. It breaks worst in the middle: distance 7.2 maps to "quality
+/// 13.6" and predicts +5.70 where the truth is +1.31, because a jpegli file at
+/// distance 7.2 is far less damaged than an IJG file at q14.
+///
+/// Held-out (30 calibrate / 34 validate images, split by image), against the
+/// mapping it replaces: same realized quality (+0.7940 vs +0.7998 ssim2, a gap
+/// an order of magnitude under the metric floor) for **half the work** (restores
+/// 30% of cells vs 60%) and **one sixth the harm** (3% of cells made worse vs
+/// 17%). Same quality, half the cycles, far less damage.
+///
+/// Distance ascends with damage, so gain ascends with distance — the opposite
+/// direction to the quality curves above.
+///
+/// Source: `benchmarks/clean_ladder_jpegli_2026-08-03.md`, n=64 per cell,
+/// cjpegli and zenjpeg pooled (they agree within 0.1 ssim2 below distance 5).
+const DIST420: [(f32, f32); 10] = [
+    (0.0, -1.77),
+    (0.3, -1.17),
+    (0.5, -0.71),
+    (0.7, -0.38),
+    (1.3, -0.11),
+    (1.8, 0.08),
+    (3.0, 0.19),
+    (5.2, 0.73),
+    (7.2, 1.08),
+    (14.2, 3.39),
+];
+
+/// Same, for 4:4:4. Full chroma is cleaner at equal distance, so it turns
+/// negative sooner — the same ordering the quality curves show.
+const DIST444: [(f32, f32); 10] = [
+    (0.0, -3.00),
+    (0.3, -1.77),
+    (0.5, -1.09),
+    (0.7, -0.77),
+    (1.3, -0.26),
+    (1.8, -0.06),
+    (3.0, 0.23),
+    (5.2, 0.55),
+    (7.2, 1.54),
+    (14.2, 3.50),
+];
+
 #[must_use]
 pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
-    // Butteraugli distance runs the other way; map it onto the quality axis
-    // rather than maintaining a second curve.
-    let q = if scale == "ButteraugliDistance" {
-        (100.0 - probe.quality.value * 12.0).clamp(1.0, 100.0)
+    if scale == "ButteraugliDistance" {
+        gain_at_distance(full, probe.quality.value)
     } else {
-        probe.quality.value
-    };
-    gain_at(full, q)
+        gain_at(full, probe.quality.value)
+    }
+}
+
+/// Gain curve for distance-quantised encoders, separated from probing so it can
+/// be tested at exact distances.
+fn gain_at_distance(full: bool, d: f32) -> f32 {
+    lerp(if full { &DIST444 } else { &DIST420 }, d)
+}
+
+/// Linear interpolation over an ascending table, clamped at both ends.
+fn lerp(pts: &[(f32, f32)], x: f32) -> f32 {
+    if x <= pts[0].0 {
+        return pts[0].1;
+    }
+    for w in pts.windows(2) {
+        let ((x0, y0), (x1, y1)) = (w[0], w[1]);
+        if x <= x1 {
+            let t = if x1 > x0 { (x - x0) / (x1 - x0) } else { 0.0 };
+            return y0 + t * (y1 - y0);
+        }
+    }
+    pts[pts.len() - 1].1
 }
 
 /// The gain curve itself, separated from probing so it can be tested at exact
@@ -337,34 +406,21 @@ pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
 /// that slack is indistinguishable from a mistyped anchor. Both are worth
 /// testing — this is the half that says what the calibration claims.
 fn gain_at(full: bool, q: f32) -> f32 {
-    let interp = |pts: &[(f32, f32)]| -> f32 {
-        if q <= pts[0].0 {
-            return pts[0].1;
-        }
-        for w in pts.windows(2) {
-            let ((x0, y0), (x1, y1)) = (w[0], w[1]);
-            if q <= x1 {
-                let t = if x1 > x0 { (q - x0) / (x1 - x0) } else { 0.0 };
-                return y0 + t * (y1 - y0);
-            }
-        }
-        pts[pts.len() - 1].1
-    };
     if full && q >= 90.0 {
         // Measured directly: this is where 4:4:4 turns negative.
-        interp(&G444)
+        lerp(&G444, q)
     } else if full {
         // Below q90 only 4:2:0 was measured. 4:4:4 at q is about as damaged as
         // 4:2:0 at q+4 (measured: 4:4:4 q90 decodes as cleanly as 4:2:0 q94),
         // so read the 4:2:0 curve 4 points higher. Shifting the anchors down
-        // by 4 is the same thing and keeps `interp` reading a sorted table.
+        // by 4 is the same thing and keeps the table sorted.
         let mut pts = G420;
         for a in &mut pts {
             a.0 -= 4.0;
         }
-        interp(&pts)
+        lerp(&pts, q)
     } else {
-        interp(&G420)
+        lerp(&G420, q)
     }
 }
 
@@ -799,6 +855,69 @@ mod tests {
                 gain_at(false, qi)
             );
             qi += 0.5;
+        }
+    }
+
+    /// Distance-quantised encoders get their own curve, and it must not repeat
+    /// the sign errors the `100 - 12·d` mapping made. Measured against clean
+    /// references, restoration costs quality from distance 0.0 to about 1.3
+    /// (cjpegli -q 100 down to -q 90); the old mapping predicted gain there.
+    #[test]
+    fn distance_curve_is_negative_on_near_pristine_input() {
+        for full in [false, true] {
+            for d in [0.0f32, 0.3, 0.5, 0.7, 1.3] {
+                let g = gain_at_distance(full, d);
+                assert!(
+                    g < 0.0,
+                    "full_chroma={full} distance {d} predicts {g:+.3} — near-pristine \
+                     jpegli input loses quality when restored"
+                );
+            }
+        }
+    }
+
+    /// Gain rises with distance, because distance rises with damage. This is the
+    /// opposite direction to the quality curves, which is exactly why the two
+    /// must not share a table.
+    #[test]
+    fn distance_curve_never_decreases_with_distance() {
+        for full in [false, true] {
+            let mut prev = f32::NEG_INFINITY;
+            let mut d = 0.0f32;
+            while d <= 16.0 {
+                let g = gain_at_distance(full, d);
+                assert!(
+                    g >= prev - 1e-4,
+                    "full_chroma={full} distance {d}: gain fell to {g:+.3} from {prev:+.3}"
+                );
+                prev = g;
+                d += 0.1;
+            }
+        }
+    }
+
+    /// A cjpegli file must reach the distance curve, not the quality curve. If
+    /// the scale match regresses, the raw distance (0.0..~15) is read as a
+    /// quality and every near-pristine file is treated as maximally damaged.
+    #[test]
+    fn cjpegli_probe_routes_to_the_distance_curve() {
+        use zenjpeg::encoder::ChromaSubsampling as Cs;
+        // zenjpeg quantises on distance and probes as ButteraugliDistance, so
+        // its own output exercises the branch without needing cjpegli present.
+        for ss in [Cs::None, Cs::Quarter] {
+            let jpg = jpeg_at(100.0, ss);
+            let p = zenjpeg::detect::probe(&jpg).expect("probe");
+            if format!("{:?}", p.quality.scale) != "ButteraugliDistance" {
+                continue; // encoder built without the distance path
+            }
+            let full = crate::chroma_full_of(&p) == Some(true);
+            let g = estimate_gain(&p);
+            assert_eq!(
+                g,
+                gain_at_distance(full, p.quality.value),
+                "{ss:?}: estimate_gain did not use the distance curve"
+            );
+            assert!(g < 0.0, "{ss:?} pristine predicted {g:+.3}");
         }
     }
 
