@@ -11,6 +11,8 @@
 
 #[cfg(feature = "chooser")]
 pub mod chooser;
+pub mod qtables;
+mod qtables_data;
 
 use zensr_micro::consist::{
     project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,
@@ -48,15 +50,42 @@ pub fn policy_wants_auto(probe: &zenjpeg::detect::JpegProbe) -> bool {
 /// trellis-zero tail is a documented approximation (<=~4% of coefficients,
 /// where the box may exclude the truth and non-expansiveness doesn't hold —
 /// net effect measured in the eval).
+///
+/// **Unrecognised encoders get the WIDEST slack, not the narrowest** (fixed
+/// 2026-08-02). The `else` arm previously returned 0.15 — the round-to-nearest
+/// value — for both "known IJG-family" and "no idea what made this". That is
+/// backwards: 0.15 is the tightest box we have, so the case where we know
+/// least about the quantiser was getting the least room, and a trellising or
+/// adaptively-quantising encoder we failed to identify would have its
+/// coefficients clamped out of a box that never contained them.
+///
+/// This matters on real traffic, not hypothetically: a survey of 17,739
+/// corpus JPEGs found 18.2% unrecognised, and the sampled e-commerce CDN files
+/// probe as `Unknown` with a table no known preset produces
+/// (`benchmarks/dqt_survey_2026-08-02.md`).
 pub fn slack_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     let fam = format!("{:?}", probe.encoder);
     if fam.starts_with("Cjpegli") {
         0.45
     } else if fam == "Mozjpeg" {
         0.35
-    } else {
+    } else if is_round_to_nearest_family(&fam) {
         0.15
+    } else {
+        // Unknown / unrecognised: assume the worst-behaved encoder we have
+        // calibrated, so the box is wide enough to contain the truth.
+        0.45
     }
+}
+
+/// Families measured to quantise by plain round-to-nearest, for which the
+/// tight 0.15 box is justified. Anything NOT on this list is treated as
+/// unknown by `slack_for`, which is the conservative direction.
+fn is_round_to_nearest_family(fam: &str) -> bool {
+    matches!(
+        fam,
+        "LibjpegTurbo" | "IjgFamily" | "ImageMagick" | "WindowsImaging" | "Photoshop"
+    )
 }
 
 /// Family-conditional ABSOLUTE slack (coefficient units), calibrated
@@ -462,6 +491,30 @@ mod tests {
     /// damaged image there (4:4:4 q90 decodes as cleanly as 4:2:0 q94), and
     /// left ungated the model loses up to 2 ssim2 by q100. Measured crossovers
     /// in ROADMAP 1.1; this pins the resulting behaviour.
+    /// An unrecognised encoder must get the WIDEST calibrated slack, not the
+    /// narrowest. Before 2026-08-02 the fallback returned 0.15 — the
+    /// round-to-nearest box — for files we could not identify at all, which is
+    /// the tightest box we have.
+    #[test]
+    fn unknown_encoder_gets_the_widest_slack() {
+        use zenjpeg::encoder::ChromaSubsampling;
+        let rgb = synth_rgb(64, 64);
+        let jpg = encode(64, 64, &rgb, 75.0, ChromaSubsampling::Quarter);
+        let p = zenjpeg::detect::probe(&jpg).unwrap();
+        let known = slack_for(&p);
+        // Every family the calibration covers must land on a calibrated value.
+        assert!(
+            [0.15f32, 0.35, 0.45].contains(&known),
+            "unexpected slack {known} for {:?}",
+            p.encoder
+        );
+        // And the unknown fallback must be the widest of them, never 0.15.
+        assert!(
+            !is_round_to_nearest_family("Unknown") && !is_round_to_nearest_family("SomeNewEncoder"),
+            "unrecognised families must not be treated as round-to-nearest"
+        );
+    }
+
     #[test]
     fn high_q_gate_is_stricter_at_444() {
         use zenjpeg::encoder::ChromaSubsampling;
