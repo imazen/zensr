@@ -55,15 +55,49 @@ fn main() {
     );
     let _ = writeln!(
         tsv,
-        "subcorpus\tfile\tmethod\tpsnr\tssim2\tbutter_n3\tsr_ms"
+        "subcorpus\tfile\tmethod\tpsnr\tssim2\tbutter_n3\tsr_ms\tgt_src"
     );
+
+    // Pinned selection. This eval drops images that fail to decode AND images
+    // smaller than the crop, and every drop used to slide selection one file
+    // deeper into the training set — the same defect as the 2026-07-23
+    // postmortem, but more likely to fire here because the size filter rejects
+    // far more files than a decode failure does.
+    let pin_path = pin_path();
+    let pinned = load_pinned(&pin_path);
+    match &pinned {
+        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
+        None => eprintln!(
+            "WARNING: no pinned eval split at {pin_path} — falling back to sorted \
+             order, which can admit training images. Results are not comparable \
+             to pinned runs."
+        ),
+    }
 
     for (name, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));
+        let want = pinned.as_ref().and_then(|m| m.get(*dir));
+        let mut seen_pinned = std::collections::HashSet::new();
         let mut used = 0usize;
         for f in files {
             if used >= per_sub {
                 break;
+            }
+            let fname_raw = f.file_name().unwrap().to_string_lossy().to_string();
+            if let Some(w) = want {
+                let stem = pinned_stem(&fname_raw);
+                if !w.contains(&stem) {
+                    continue;
+                }
+                seen_pinned.insert(stem);
+            }
+            // Reference provenance. Super-resolution is penalised by a JPEG
+            // reference in the opposite direction to restoration: the detail it
+            // correctly reconstructs was quantised away in the reference, so
+            // sharper output scores worse. ZENSR_EVAL_CLEAN_GT=1 drops them.
+            let gt_src = gt_src_of(&fname_raw);
+            if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
+                continue;
             }
             let Some(img) = decode_any(&f) else {
                 eprintln!("skip (decode): {}", f.display());
@@ -93,7 +127,7 @@ fn main() {
             ] {
                 let _ = writeln!(
                     tsv,
-                    "{name}\t{fname}\t{m}\t{:.3}\t{:.3}\t{:.4}\t{ms:.1}",
+                    "{name}\t{fname}\t{m}\t{:.3}\t{:.3}\t{:.4}\t{ms:.1}\t{gt_src}",
                     psnr_rgb8(&hr, out),
                     ssim2(&hr, out),
                     butter_n3(&hr, out),
@@ -101,6 +135,25 @@ fn main() {
             }
             used += 1;
             eprintln!("{name}/{fname}: {}x{} done ({sr_ms:.0}ms SR)", hr.w, hr.h);
+        }
+        // A pinned file that never got scored means the split and the corpus
+        // disagree. Silence here would look identical to full coverage, which
+        // is how a short eval passes for a complete one.
+        //
+        // Only meaningful once the quota is unfilled: with per_sub below the
+        // pin count the loop stops early by design, and warning about the files
+        // it never reached would cry wolf on every short run.
+        if let (Some(w), true) = (want, used < per_sub) {
+            let missing: Vec<&String> = w.iter().filter(|s| !seen_pinned.contains(*s)).collect();
+            if !missing.is_empty() {
+                eprintln!(
+                    "== {name}: {used}/{per_sub} images; WARNING {} pinned file(s) missing from \
+                     corpus (split and corpus disagree): {:?}",
+                    missing.len(),
+                    missing
+                );
+                continue;
+            }
         }
         eprintln!("== {name}: {used} images");
     }

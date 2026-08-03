@@ -198,6 +198,72 @@ pub fn list_images(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
+/// Stem used to match a file against the pinned eval list: basename without
+/// extension, with any `__pristineNx` suffix removed so a downscaled-to-pristine
+/// replacement still matches the original it was derived from.
+pub fn pinned_stem(fname: &str) -> String {
+    let base = fname.rsplit_once('.').map(|(a, _)| a).unwrap_or(fname);
+    match base.find("__pristine") {
+        Some(i) => base[..i].to_string(),
+        None => base.to_string(),
+    }
+}
+
+/// The pinned eval split, keyed by directory.
+///
+/// Selecting files by "first N sorted" is not safe: the sort slides past
+/// decode-skipped and format-filtered files, which is how training images
+/// reached an eval run (2026-07-23 postmortem; again 2026-08-02 when a pristine
+/// directory held only the JPEG-sourced subset). Any eval that filters files
+/// for ANY reason — decode failure, minimum size, extension — needs this, since
+/// each skip slides selection one file deeper into the training set.
+///
+/// Returns None when no list is available, so the caller can fall back to
+/// sorted order and say so loudly.
+pub fn load_pinned(
+    path: &str,
+) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        let mut it = line.split('\t');
+        if let (Some(d), Some(f)) = (it.next(), it.next()) {
+            m.entry(d.to_string()).or_default().insert(pinned_stem(f));
+        }
+    }
+    if m.is_empty() {
+        None
+    } else {
+        Some(m)
+    }
+}
+
+/// Default location of the pinned split, overridable with `ZENSR_EVAL_PIN`.
+pub fn pin_path() -> String {
+    std::env::var("ZENSR_EVAL_PIN")
+        .unwrap_or_else(|_| "eval_split/imazen26_eval_files.tsv".to_string())
+}
+
+/// Provenance of a reference image: `"png"` if the ground truth is lossless,
+/// `"jpg"` if the reference is ITSELF a JPEG.
+///
+/// A JPEG reference is compressed, so it contains the very artifacts a restore
+/// model is asked to remove and the very detail a super-resolution model is
+/// asked to invent — the metric penalises correct output in both directions.
+/// On 2026-07-31 this was 39% of the pinned eval split and it understated every
+/// absolute gain. Record it per row so any run can be audited after the fact.
+pub fn gt_src_of(fname: &str) -> &'static str {
+    if fname.to_ascii_lowercase().ends_with(".png") {
+        "png"
+    } else {
+        "jpg"
+    }
+}
+
 /// zensim score (PreviewV0_2 default profile), 0-100-ish scale.
 pub fn zensim_score(a: &Rgb8Img, b: &Rgb8Img) -> f64 {
     use zensim::source::RgbSlice;

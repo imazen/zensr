@@ -273,33 +273,50 @@ impl Pixels {
 /// This predicts a **median over files at that (quality, subsampling)**, not
 /// the outcome for one image. Per-file spread is wide; the estimate is for
 /// deciding whether to spend cycles, not for reporting quality.
+/// Median restore gain by 4:2:0 quality, in ssim2 points.
+///
+/// Anchors are measured medians; between them the curve is smooth and monotone,
+/// so linear interpolation is honest.
+///
+/// Values at q<=90 come from the original calibration. Values at q>=94 were
+/// re-measured on 2026-08-03 against references that are 100% PNG
+/// (`benchmarks/clean_ladder_2026-08-03.md`); the originals had been fit partly
+/// against references that were themselves JPEGs, which flatters restoration
+/// and understated the loss badly up here — the old q100 anchor read -0.17
+/// where clean references measure -1.89.
+///
+/// The q<=90 anchors were re-checked against the same clean run and left alone:
+/// they agree to within 0.05 through q75 (5.70/5.66, 3.07/3.07, 1.80/1.75,
+/// 0.65/0.64). At q85-90 they read ~0.23 high, but a calibrate/validate split by
+/// image puts the uncertainty there at 0.23-0.64, so that gap is not resolvable
+/// at 64 images and re-fitting it scored WORSE on held-out images than leaving
+/// it. The tail is resolvable: the same split puts uncertainty at q94-100
+/// between 0.02 and 0.21.
+const G420: [(f32, f32); 10] = [
+    (15.0, 5.70),
+    (35.0, 3.07),
+    (55.0, 1.80),
+    (75.0, 0.65),
+    (85.0, 0.46),
+    (90.0, 0.26),
+    (94.0, -0.27),
+    (96.0, -0.48),
+    (98.0, -1.01),
+    (100.0, -1.89),
+];
+
+/// Same, for 4:4:4, measured directly from q90 up — the range where it matters
+/// and where it turns negative sooner than 4:2:0 does.
+const G444: [(f32, f32); 5] = [
+    (90.0, -0.24),
+    (94.0, -0.62),
+    (96.0, -1.10),
+    (98.0, -1.89),
+    (100.0, -3.10),
+];
+
 #[must_use]
 pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
-    // Anchors are measured medians; between them the curve is smooth and
-    // monotone, so linear interpolation is honest.
-    const G420: [(f32, f32); 9] = [
-        (15.0, 5.70),
-        (35.0, 3.07),
-        (55.0, 1.80),
-        (75.0, 0.65),
-        (85.0, 0.46),
-        (90.0, 0.26),
-        (94.0, 0.15),
-        (96.0, 0.05),
-        (100.0, -0.17),
-    ];
-    const G444: [(f32, f32); 6] = [
-        (90.0, -0.04),
-        (92.0, -0.13),
-        (94.0, -0.38),
-        (96.0, -0.78),
-        (98.0, -1.38),
-        (100.0, -2.04),
-    ];
-    // 4:4:4 was only measured from q90 up, where it is the interesting case.
-    // Below that it tracks 4:2:0 shifted about 4 points cleaner, which is the
-    // measured damage equivalence; extrapolating the negative branch downward
-    // would invent a loss that was never observed.
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
     // Butteraugli distance runs the other way; map it onto the quality axis
@@ -309,6 +326,17 @@ pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     } else {
         probe.quality.value
     };
+    gain_at(full, q)
+}
+
+/// The gain curve itself, separated from probing so it can be tested at exact
+/// qualities.
+///
+/// Going through a real encode to reach it does not test this: the probe
+/// recovers a quality a point or two off what the encoder was asked for, and
+/// that slack is indistinguishable from a mistyped anchor. Both are worth
+/// testing — this is the half that says what the calibration claims.
+fn gain_at(full: bool, q: f32) -> f32 {
     let interp = |pts: &[(f32, f32)]| -> f32 {
         if q <= pts[0].0 {
             return pts[0].1;
@@ -709,6 +737,82 @@ mod tests {
                 "{ss:?} mapped wrongly (probe saw {:?})",
                 p.subsampling
             );
+        }
+    }
+
+    /// Above q94 restoration LOSES quality against a clean reference, in both
+    /// subsamplings. Until 2026-08-03 the curve predicted a gain there (+0.15
+    /// at 4:2:0 q94, where clean references measure -0.27), because it had been
+    /// fit partly against references that were themselves JPEGs.
+    ///
+    /// That sign error survived the whole suite, so it is pinned here: a
+    /// prediction of gain on near-pristine input is the one error that makes
+    /// the library burn cycles to make an image worse.
+    #[test]
+    fn gain_curve_is_negative_on_near_pristine_input() {
+        for full in [false, true] {
+            for q in [94.0f32, 96.0, 98.0, 100.0] {
+                let g = gain_at(full, q);
+                assert!(
+                    g < 0.0,
+                    "full_chroma={full} q{q} predicts {g:+.3} — restoring \
+                     near-pristine input costs quality, so a positive estimate \
+                     spends cycles to make the image worse"
+                );
+            }
+        }
+    }
+
+    /// More damage never predicts less gain. Linear interpolation between
+    /// anchors preserves monotonicity, so a violation means an anchor was
+    /// mistyped or pasted out of order — the failure mode of a hand-edited
+    /// calibration table, and the reason the anchors are swept at 0.5 steps
+    /// here rather than only at the anchor points themselves.
+    #[test]
+    fn gain_curve_never_increases_with_quality() {
+        for full in [false, true] {
+            let mut prev = f32::INFINITY;
+            let mut qi = 10.0f32;
+            while qi <= 100.0 {
+                let g = gain_at(full, qi);
+                assert!(
+                    g <= prev + 1e-4,
+                    "full_chroma={full} q{qi}: gain rose to {g:+.3} from {prev:+.3}"
+                );
+                prev = g;
+                qi += 0.5;
+            }
+        }
+    }
+
+    /// 4:4:4 is cleaner than 4:2:0 at the same nominal quality, so it always
+    /// has less to gain from restoration. If this inverts, the two curves have
+    /// been swapped.
+    #[test]
+    fn full_chroma_never_gains_more_than_subsampled() {
+        let mut qi = 10.0f32;
+        while qi <= 100.0 {
+            assert!(
+                gain_at(true, qi) <= gain_at(false, qi) + 1e-4,
+                "q{qi}: 4:4:4 {:+.3} > 4:2:0 {:+.3}",
+                gain_at(true, qi),
+                gain_at(false, qi)
+            );
+            qi += 0.5;
+        }
+    }
+
+    /// The probe path reaches the curve. A real q100 encode has enough margin
+    /// over probe-inversion slack that this stays true regardless of how many
+    /// points the recovered quality is off by.
+    #[test]
+    fn probe_path_reaches_the_curve_on_a_pristine_encode() {
+        use zenjpeg::encoder::ChromaSubsampling as Cs;
+        for ss in [Cs::None, Cs::Quarter] {
+            let jpg = jpeg_at(100.0, ss);
+            let p = zenjpeg::detect::probe(&jpg).expect("probe");
+            let g = estimate_gain(&p);
+            assert!(g < 0.0, "{ss:?} q100 predicted {g:+.3}");
         }
     }
 }

@@ -18,45 +18,6 @@ const QS_HIGH: &[u32] = &[85, 90, 93, 96];
 const QS_LOW: &[u32] = &[5, 8, 12];
 const ENCODERS: &[&str] = &["turbo", "mozjpeg", "jpegli", "zenjpeg"];
 
-/// Stem used to match a file against the pinned eval list: basename without
-/// extension, with any `__pristineNx` suffix removed so a downscaled-to-pristine
-/// replacement still matches the original it was derived from.
-fn pinned_stem(fname: &str) -> String {
-    let base = fname.rsplit_once('.').map(|(a, _)| a).unwrap_or(fname);
-    match base.find("__pristine") {
-        Some(i) => base[..i].to_string(),
-        None => base.to_string(),
-    }
-}
-
-/// The pinned eval split, keyed by directory. Selecting files by "first N
-/// sorted" is not safe: the sort slides past decode-skipped and
-/// format-filtered files, which is how training images reached an eval run
-/// (2026-07-23 postmortem, and again on 2026-08-02 when a pristine directory
-/// held only the JPEG-sourced subset). Returns None when no list is available,
-/// in which case the caller falls back to sorted order and says so.
-fn load_pinned(
-    path: &str,
-) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
-    let text = std::fs::read_to_string(path).ok()?;
-    let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
-    for line in text.lines() {
-        if line.starts_with('#') || line.trim().is_empty() {
-            continue;
-        }
-        let mut it = line.split('\t');
-        if let (Some(d), Some(f)) = (it.next(), it.next()) {
-            m.entry(d.to_string()).or_default().insert(pinned_stem(f));
-        }
-    }
-    if m.is_empty() {
-        None
-    } else {
-        Some(m)
-    }
-}
-
 fn tmpdir() -> PathBuf {
     let d = PathBuf::from(std::env::var("HOME").unwrap())
         .join("tmp")
@@ -215,8 +176,7 @@ fn main() {
     // every subcorpus to the frozen eval files. Without it, "first N sorted"
     // silently admits training images whenever the directory listing differs
     // from the one the split was frozen against.
-    let pin_path = std::env::var("ZENSR_EVAL_PIN")
-        .unwrap_or_else(|_| "eval_split/imazen26_eval_files.tsv".to_string());
+    let pin_path = pin_path();
     let pinned = load_pinned(&pin_path);
     match &pinned {
         Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
@@ -246,16 +206,8 @@ fn main() {
                 continue;
             };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
-            // Ground-truth provenance: JPEG-sourced references are themselves
-            // compressed, so the model gets penalised for removing artifacts
-            // that are IN the reference (2026-07-31: 39% of the pinned eval
-            // split, and it understated every absolute gain). Recorded per row;
-            // ZENSR_EVAL_CLEAN_GT=1 skips them entirely.
-            let gt_src = if fname.to_ascii_lowercase().ends_with(".png") {
-                "png"
-            } else {
-                "jpg"
-            };
+            // Recorded per row; ZENSR_EVAL_CLEAN_GT=1 skips JPEG references.
+            let gt_src = gt_src_of(&fname);
             if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
                 continue;
             }

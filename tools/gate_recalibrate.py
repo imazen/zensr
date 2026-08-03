@@ -86,12 +86,12 @@ def load(path, arm, base):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("tsv")
+    ap.add_argument("tsv", nargs="+")
     ap.add_argument("--arm", default="model_policy")
     ap.add_argument("--base", default="identity_off")
     a = ap.parse_args()
 
-    data = load(a.tsv, a.arm, a.base)
+    data = [row for p in a.tsv for row in load(p, a.arm, a.base)]
     if not data:
         sys.exit(f"no paired rows for {a.arm} vs {a.base}")
     files = sorted({d[0] for d in data})
@@ -200,6 +200,16 @@ def main_part4(data, calib, files):
         half = interp(cur, q) / 2.0
         return half if e == "turbo" else -half
 
+    # Pooled-over-encoder curve per subsampling, calibrate images only.
+    pooled_cells = collections.defaultdict(list)
+    for fn, e, s, q, d in data:
+        if fn in calib:
+            pooled_cells[(s, q)].append(d)
+    pooled = {}
+    for s in sorted({k[0] for k in pooled_cells}):
+        pooled[s] = [(q, statistics.median(pooled_cells[(s, q)]))
+                     for q in sorted(qq for ss_, qq in pooled_cells if ss_ == s)]
+
     rules = [
         ("always restore", lambda e, s, q: True),
         ("never restore", lambda e, s, q: False),
@@ -218,10 +228,21 @@ def main_part4(data, calib, files):
         # paired offset around it rather than refitting each encoder alone.
         (f"shipped estimator + paired encoder offset, min_gain={MIN_GAIN}",
          lambda e, s, q: estimate_gain(s, q) + off(e, s, q) >= MIN_GAIN),
+        # Candidate replacement: one curve per subsampling, both measured
+        # directly, pooled over encoders (per §4, per-encoder curves hurt).
+        # This drops the "4:4:4 ~= 4:2:0 shifted 4 points" approximation, which
+        # over-predicts 4:4:4 gain by 0.3-0.6 across the whole range now that
+        # 4:4:4 is measured rather than inferred.
+        (f"measured curve (calibrate-fit, both ss direct), min_gain={MIN_GAIN}",
+         lambda e, s, q: interp(pooled[s], q) >= MIN_GAIN),
     ]
     for name, dec in rules:
         mq, fr = simulate(data, val_files, dec)
         print(f"{name}\t{mq:+.4f}\t{fr:.2f}")
+
+    print("\n# candidate shipping curve (calibrate images, pooled over encoders)")
+    for s, cur in sorted(pooled.items()):
+        print(f"G{s} = [" + ", ".join(f"({q:g}, {g:+.2f})" for q, g in cur) + "]")
 
     print("\n# encoder-aware curves fitted on the calibrate images")
     print("enc\tss\t" + "\t".join(f"q{q:g}" for q in qs))
