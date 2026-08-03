@@ -47,35 +47,52 @@ unrecognized files.
 A ~50-entry lookup would cover 92% of everything. Table recognition is a small
 problem, not an open-ended one.
 
-## The key result: most unrecognized tables are STANDARD
+## CORRECTED classification — the first pass here was wrong
 
-Classifying every distinct table by whether its implied IJG quality is
-consistent across frequency bands (Annex-K-shaped) or varies (custom base):
+**A superseded claim, kept visible.** The first version of this report said
+92.1% of files used "Annex-K-shaped" tables and that most unrecognized ones
+were "Annex K at q84-98 the probe should map". That was an artefact of the
+metric. Classifying by whether *implied IJG quality* is consistent across
+frequency bands fails at high quality: there the quantizer values are 1-10, so
+the inversion compresses every table into the 90-100 range and dissimilar
+tables all look "consistent". A direct check killed it — the probe *does* map
+freshly-encoded Annex K at q84-98, and the corpus tables it rejects differ from
+those in 51-57 of 64 positions with deltas up to 7.
 
-| shape | tables | files | share |
+The correct test is the **absolute residual against the best-fitting IJG
+table**, in quantizer units:
+
+| class | tables | files | share |
 |---|---|---|---|
-| Annex-K-shaped (implied-q spread ≤ 8) | 325 | 15,799 | **92.1%** |
-| custom base table (spread > 8) | 214 | 1,357 | 7.9% |
+| IJG exact (max abs delta <= 1) | 157 | 14,222 | 82.9% |
+| IJG-like (max abs delta <= 3) | 54 | 662 | 3.9% |
+| **custom base table (> 3)** | **328** | **2,272** | **13.2%** |
 
-And among the tables the probe calls `Unknown`/`ProbeErr`, the large majority
-are Annex-K-shaped at **q84–98**:
+And among the files the probe calls `Unknown`, **65% use genuinely custom
+tables** — not standard ones it should have mapped.
 
-| hash | files | DC/low | lo-mid | hi-mid | high | spread | diagnosis |
-|---|---|---|---|---|---|---|---|
-| `7901cdc07c3109d0` | 385 | 12.1 | 11.9 | 29.7 | 34.4 | 22.5 | custom |
-| `f015efdfb51e88be` | 163 | 93.8 | 90.7 | 92.4 | 94.4 | 3.7 | **Annex K @ q94** |
-| `cb348cef1f95fd85` | 156 | 97.9 | 95.8 | 95.8 | 96.2 | 2.1 | **Annex K @ q98** |
-| `ac6cd4e3d5cd8adc` | 154 | 93.8 | 92.6 | 93.0 | 93.1 | 1.2 | **Annex K @ q94** |
-| `ba2c7eeac39acc95` | 131 | 97.7 | 97.2 | 95.3 | 95.2 | 2.5 | **Annex K @ q98** |
-| `29e79833997abc97` | 99 | 97.9 | 98.3 | 98.7 | 98.8 | 0.9 | **Annex K @ q98** |
-| `de137a2edda3758b` | 75 | 84.1 | 82.8 | 88.7 | 86.0 | 5.9 | **Annex K @ q84** |
-| `2cb06a4c3a5d996f` | 63 | 65.9 | 66.5 | 89.5 | 94.4 | 28.5 | custom |
-| `d0f376970b4472a8` | 57 | 93.8 | 92.7 | 94.1 | 94.4 | 1.7 | **Annex K @ q94** |
+| hash | files | best-fit q | mean abs | max abs | class |
+|---|---|---|---|---|---|
+| `7901cdc07c3109d0` | 385 | 32 | 31.61 | 101 | custom |
+| `f015efdfb51e88be` | 163 | 93 | 1.64 | 5 | custom |
+| `cb348cef1f95fd85` | 156 | 96 | 0.84 | 3 | IJG-like |
+| `ac6cd4e3d5cd8adc` | 154 | 93 | 1.11 | 5 | custom |
+| `ba2c7eeac39acc95` | 131 | 95 | 0.11 | 1 | **IJG exact — a real probe miss** |
+| `29e79833997abc97` | 99 | 98 | 0.52 | 2 | IJG-like |
+| `de137a2edda3758b` | 75 | 87 | 2.86 | 12 | custom |
+| `2cb06a4c3a5d996f` | 63 | 93 | 6.38 | 18 | custom |
+| `9a5e1acec5b39d4e` | 55 | 93 | 0.08 | 1 | **IJG exact — a real probe miss** |
+| `b2bab93a7a9cf0ea` | 49 | 98 | 0.53 | 1 | **IJG exact — a real probe miss** |
 
-**So the gap is not exotic encoders.** The probe is failing to map ordinary
-Annex-K tables at high quality — spreads of 0.9–3.7 are unambiguous. That is
-one generalisation (invert the IJG scale rather than exact-match a known table
-set), not hundreds of lookup entries.
+**So there are two separate fixes, with a 35/65 split of the unrecognized
+population:**
+
+1. **~35% are IJG-exact or within 3** (`ba2c7eeac39acc95`, `9a5e1acec5b39d4e`,
+   `b2bab93a7a9cf0ea`, `29e79833997abc97`, `cb348cef1f95fd85` — 490 files in
+   the top ten alone). These are genuine probe misses: matching the IJG scale
+   with a small tolerance would recognise them.
+2. **~65% are genuinely custom** and need lookup entries. They are not a long
+   tail either — the top custom table alone is 385 files.
 
 ## The two custom tables worth adding by hand
 
