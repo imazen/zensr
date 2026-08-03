@@ -142,6 +142,13 @@ def bootstrap_crossover(data, iters=2000, seed=20260803):
     print("sample size — the point estimate is one draw from that spread.")
 
 
+# Subcorpora whose content is synthetic: flat regions, sharp edges, limited
+# palette. JPEG damage there is ringing and mosquito noise, which is both very
+# visible and very removable. The rest is photographic — stochastic detail,
+# grain, stippling — where the "artifacts" are entangled with real texture.
+GRAPHIC_SUBS = {"documents", "maps", "screen"}
+
+
 def content(data):
     section("4. CONTENT TYPE — does it predict gain beyond quality?")
     subs = sorted({s for s, *_ in data})
@@ -163,32 +170,61 @@ def content(data):
         f"{max(med(per[(s, q)]) for s in subs) - min(med(per[(s, q)]) for s in subs):8.2f}"
         for q in qs))
 
-    # Decision-level: does a subcorpus-aware rule beat the pooled one on
-    # held-out images? Same calibrate/validate discipline as everywhere else.
+    # Decision-level: does a content-aware rule beat the pooled one on held-out
+    # images? Same calibrate/validate discipline as everywhere else.
+    #
+    # READ THE CAVEAT BELOW BEFORE QUOTING THESE NUMBERS. Content class here is
+    # the ground-truth subcorpus directory, so both content-aware rows are
+    # ORACLE-LABEL CEILINGS. A real classifier misclassifies and lands lower;
+    # zensr's shipped chooser measures P=0.950 / R=0.594 at its 0.85 threshold,
+    # so recall alone would forfeit a large share of the graphic-side gain.
+    # Substitute real classifier output to get an achievable number.
     files = sorted({fn for _, fn, *_ in data})
     calib = {f for f in files if hstem(f) % 2 == 0}
-    pooled, bysub = collections.defaultdict(list), collections.defaultdict(list)
+    pooled = collections.defaultdict(list)
+    bysub = collections.defaultdict(list)
+    bybin = collections.defaultdict(list)
     for sub, fn, enc, ss, q, d in data:
         if fn in calib:
             pooled[(ss, q)].append(d)
             bysub[(sub, ss, q)].append(d)
+            bybin[(sub in GRAPHIC_SUBS, ss, q)].append(d)
     pooled = {k: med(v) for k, v in pooled.items()}
     bysub = {k: med(v) for k, v in bysub.items()}
-    n = tp = tb = rp = rb = 0
-    for sub, fn, enc, ss, q, d in data:
-        if fn in calib:
-            continue
-        n += 1
-        if pooled.get((ss, q), 0.0) >= MIN_GAIN:
-            tp += d
-            rp += 1
-        if bysub.get((sub, ss, q), pooled.get((ss, q), 0.0)) >= MIN_GAIN:
-            tb += d
-            rb += 1
-    print(f"\nHeld-out decision test at min_gain={MIN_GAIN} "
-          f"(n={n} cells, ~4 images per subcorpus per half):")
-    print(f"  pooled curve          {tp / n:+.4f} ssim2, restored {rp / n:.2f}")
-    print(f"  subcorpus-aware curve {tb / n:+.4f} ssim2, restored {rb / n:.2f}")
+    bybin = {k: med(v) for k, v in bybin.items()}
+
+    rules = {
+        "pooled curve (quality only)":
+            lambda sub, ss, q: pooled.get((ss, q), 0.0),
+        "+ binary graphic/photographic":
+            lambda sub, ss, q: bybin.get((sub in GRAPHIC_SUBS, ss, q),
+                                         pooled.get((ss, q), 0.0)),
+        f"+ subcorpus ({len(subs)} classes)":
+            lambda sub, ss, q: bysub.get((sub, ss, q), pooled.get((ss, q), 0.0)),
+    }
+    val = [x for x in data if x[1] not in calib]
+    n = len(val)
+    print(f"\nHeld-out decision test at min_gain={MIN_GAIN} (n={n} cells):")
+    print(f"{'rule':<38}{'mean_ssim2':>11}{'restored':>10}")
+    for name, f in rules.items():
+        t = r = 0
+        for sub, fn, enc, ss, q, d in val:
+            if f(sub, ss, q) >= MIN_GAIN:
+                t += d
+                r += 1
+        print(f"{name:<38}{t / n:>+11.4f}{r / n:>10.2f}")
+    print(f"{'per-image oracle (ceiling)':<38}"
+          f"{sum(d for *_, d in val if d > 0) / n:>+11.4f}"
+          f"{sum(1 for *_, d in val if d > 0) / n:>10.2f}")
+    print("\nCAVEAT: the content-aware rows use ground-truth labels and are")
+    print("CEILINGS, not achievable gains. See the comment above this test.")
+
+    print("\nBinary curves fitted on the calibrate images (what a router ships):")
+    for g, label in ((True, "graphic"), (False, "photographic")):
+        for ss in sorted({s for _, _, _, s, _, _ in data}):
+            pts = " ".join(f"q{q:g}:{bybin[(g, ss, q)]:+6.2f}"
+                           for q in qs if (g, ss, q) in bybin)
+            print(f"  {label:<14}{ss}  {pts}")
 
 
 def hstem(s):

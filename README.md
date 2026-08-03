@@ -19,11 +19,23 @@ quant-table conditioning via zenjpeg, fidelity-first). Model/runtime survey that
 projection (output provably re-encodes to the file's own coefficients; family-
 calibrated slack + absolute sample-quantization slack) → optional ×2 SR.
 
-| tier | model | params / f16 size | std-grid ssim2 gain q15/35/55/75/90 | s/MP @12T |
+| tier | model | params / f16 size | ssim2 gain q15/35/55/75/90 | s/MP @12T |
 |---|---|---|---|---|
-| quality (default) | dejpeg7_graphics | 595k / 1.16 MB | +7.1/+3.5/+2.6/+1.2/+0.1 class (beats dejpeg4 on both content classes; zero negative cells) | 5.3 |
-| realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | +5.0/+2.8/+2.0/+0.8 (q15/35/55/75) = 68–79% of quality tier | **0.16** |
-| low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 | 5.3 |
+| quality (default) | dejpeg7_graphics | 595k / 1.16 MB | **+10.65/+5.64/+3.53/+2.03/+0.95** | 5.3 |
+| realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | **+6.88/+3.36/+2.02/+1.15/+0.32** = 57–65% of quality tier | **0.16** |
+| low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 *(not yet re-measured on clean references)* | 5.3 |
+
+Both tier rows: clean PNG references (`/mnt/v/imazen-26-clean`), pinned eval
+split, libjpeg-turbo 4:2:0, **per-file median** gain over the plain decode,
+n=64/cell, shipped pipeline output (post-projection). Rows:
+`benchmarks/clean_ladder_2026-08-03.pointer.md`.
+
+> Corrected 2026-08-03, in **two opposite directions**. Absolute gains were
+> *understated* — the previous +7.1/+5.0 at q15 were measured against a partly
+> JPEG-sourced eval split, which penalised the model for removing artifacts
+> that were present in the reference. But realtime-as-a-fraction-of-quality was
+> *overstated*: measured **57–65%**, against the published 68–79%. "The
+> contamination understated everything" is too simple.
 
 
 Runtime: safe-Rust explicit SIMD throughout — one `#[magetypes]` f32x8 kernel
@@ -39,6 +51,15 @@ distance ≤0.6 / ≤1.3) — the same nominal quality is a less damaged image a
 4:4:4, measured as clean at q90 there as q94 at 4:2:0, and left ungated the
 model lost up to 2.1 ssim2 with 91% of files harmed; chain ×1 before SR when
 4:2:0 ∨ q≲50 (chain +1.9 ssim2 at 420 q35; skip at 444 high-q).
+
+Above that gate, `estimate_gain` predicts the median ssim2 a restore pass would
+buy, and `Routing::Auto { min_gain }` (default 0.25) skips the pass when it is
+not worth the cycles. Validated on clean references 2026-08-03: best of six
+rules on held-out images, **+0.17 ssim2 over restoring everything while skipping
+21% of the work**. IJG-family and distance-quantised encoders use separate
+measured curves — cjpegli and zenjpeg quantise on butteraugli distance, and
+converting that onto the IJG quality axis was optimistic in 39 of 40 cells and
+wrong-signed in 9 (`benchmarks/clean_ladder_jpegli_2026-08-03.md`).
 
 The per-tier threshold (identity above q82 for the 84 KB realtime model) lives
 in the zenjpeg integration branch's `RestoreOptions::realtime_tier`, **not in
@@ -109,24 +130,45 @@ Full grids: `benchmarks/tract_cpu_2026-07-22.tsv`, `benchmarks/quant_accuracy_20
   tokens — use f32x16 there.
 
 
-## imazen-26 quality eval (2026-07-22, n=8/subcorpus, medians; SPANF vs Lanczos-up)
+## imazen-26 quality eval (2026-08-03, n=8/subcorpus; SPANF vs Lanczos-up)
 
-| subcorpus | ΔPSNR | ΔSSIM2 | butteraugli n3 (lanczos→spanf, lower better) |
-|---|---|---|---|
-| documents | **+2.5 dB** | **+27.0** (−11.8→15.2) | 14.2→10.7 |
-| maps | **+2.7 dB** | +11.4 | 10.5→9.0 |
-| photos | +1.3 dB | +4.8 | 8.0→6.9 |
-| renders | +1.25 dB | +1.6 | 6.7→5.4 |
-| people | +0.9 dB | +3.8 | 6.4→5.6 |
-| art-scans | +0.9 dB | +6.6 | 7.2→7.5 (slightly worse) |
-| screen | +0.5 dB | +4.3 | 8.3→7.9 |
-| textures | **−1.2 dB** | −1.7 | 5.4→5.8 (SR loses on stochastic detail) |
+Paired per file — median of `spanf − lanczos` over images, with the fraction of
+files each metric improves. Not the difference of per-method medians, which
+compares each image against the *other method's distribution* and reports
+losses that no image experienced.
 
-SPANF wins 7/8 subcorpora, dominating text/line content. Harness: `eval` bin
-(zenpng/zenjpeg decode → CatmullRom ×4 down → {spanf, lanczos, catmullrom} up →
+| subcorpus | ΔPSNR | win | ΔSSIM2 | win | Δbutteraugli n3 | win |
+|---|---|---|---|---|---|---|
+| documents | **+2.44 dB** | 1.00 | **+26.86** | 1.00 | **−3.354** | 1.00 |
+| maps | **+2.16 dB** | 1.00 | +11.55 | 1.00 | −1.548 | 1.00 |
+| art-scans | +0.54 dB | 0.75 | +12.63 | 0.88 | −0.499 | 0.62 |
+| textures | +0.46 dB | 1.00 | +8.13 | 0.62 | −0.690 | 0.75 |
+| screen | +0.51 dB | 0.75 | +6.69 | 0.75 | −0.599 | 0.88 |
+| people | +0.77 dB | 1.00 | +6.38 | 1.00 | −0.609 | 0.88 |
+| photos | +1.16 dB | 1.00 | +5.49 | 0.88 | −0.702 | 1.00 |
+| renders | +0.92 dB | 1.00 | **−1.81** | 0.38 | −0.924 | 0.88 |
+| **all** | **+0.90 dB** | 0.94 | **+8.45** | 0.81 | **−0.837** | 0.88 |
+
+(Butteraugli: negative is better.)
+
+**SPANF wins 8/8 subcorpora on PSNR and butteraugli, 7/8 on SSIM2**, dominating
+text and line content. `renders` is the one disagreement: PSNR improves on all 8
+files and butteraugli on 7, while SSIM2 says the median image gets worse — a
+metric disagreement on synthetic content, not a demonstrated regression.
+
+References are 100% PNG (`/mnt/v/imazen-26-clean`), files pinned to
+`eval_split/imazen26_eval_files.tsv`. Harness: `eval` bin (zenpng/zenjpeg
+decode → CatmullRom ×4 down → {spanf, lanczos, catmullrom} up →
 psnr/ssimulacra2/butteraugli-n3 vs HR). Caveat: LR degradation is linear-light
 CatmullRom, not SPANF's encoded-space-bicubic training distribution — SPANF
-scores are conservative. Full rows: `benchmarks/imazen26_eval_2026-07-22.tsv`.
+scores are conservative. Rows: `benchmarks/sr_pinned_2026-08-03.tsv`; analysis
+`benchmarks/sr_pinned_2026-08-03.md`.
+
+> Superseded 2026-08-03: the previous table reported the difference of
+> per-method medians, which produced a "textures −1.7 dB / −1.7 SSIM2 (SR loses
+> on stochastic detail)" entry. Paired on that same data, textures is **+8.79
+> SSIM2 with SR winning 7 of 8 files**; the −1.7 compared two different images.
+> Per-file values are unchanged and reproduce exactly — only the statistic did.
 
 ## Reproduce
 
@@ -236,11 +278,13 @@ public surface in `docs/API_DESIGN.md`.
 
 Numbers predating 2026-07-31 were measured against a partly JPEG-sourced eval
 split, and on 2026-08-02 the file selection was found to admit training images
-as well. The effect is **not** uniform, so "they understate the model" is too
-simple: absolute gains are *understated* (quality tier +11.6 vs the +7.1 in
-the table above at q15; realtime +6.9 vs +5.0), while realtime-as-a-fraction-
-of-quality is *overstated* at low q — measured 59% at q15 against the 68-79%
-claimed. First clean-reference figures:
-`benchmarks/tier_ratio_clean_2026-08-02.tsv`. They cover turbo 4:2:0 at n=32,
-so they are not yet a drop-in replacement for the blended table. Full
-correction: `ROADMAP.md` §0.
+as well. The tier table and the SR table above have both been re-measured on
+clean references with pinned selection (2026-08-03) and are current. Anything
+else in this file dated earlier has **not** been re-measured — treat those
+figures as provisional and check `ROADMAP.md` §0 before quoting them.
+
+Two eval harness defects caused this and are now fixed at the source: file
+selection is pinned to `eval_split/imazen26_eval_files.tsv` by both eval
+binaries, and every row records `gt_src` so reference provenance can be audited
+after the fact. The shared helpers live in `zensr_bench`; any new eval binary
+must use them.

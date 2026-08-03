@@ -577,11 +577,72 @@ rules fit on the calibrate half):
 | + subcorpus (8 classes) | +1.4854 | 0.47 |
 | per-image oracle (unreachable) | +1.7049 | 0.58 |
 
+**These content-aware rows are ORACLE-LABEL CEILINGS, not achievable gains** —
+class comes from the ground-truth subcorpus directory. A real classifier
+misclassifies and lands lower; see the achievable-gain estimate below. The
+ceiling is still the right thing to measure first, because it bounds what any
+classifier could buy and says whether the work is worth starting.
+
 **A binary content split captures 44% of the entire remaining headroom**, and
 it restores *more* while doing so — it is not trading work for quality, it is
 making better decisions in both directions. Eight classes add +0.007 over two,
 so a binary classifier is enough; there is no case for fine-grained content
 typing.
+
+**zensr already has the classifier, and nothing calls it.**
+`crates/zensr-zenjpeg/src/chooser.rs:76` — `classify_rgb8(rgb, w, h) ->
+ChooserReport` with `ContentClass::{Photo, Graphics}` and `p_graphics: f32`,
+fitted on 1023 train images against 192 pinned never-fit eval images
+(`benchmarks/chooser_fit_2026-07-26.txt`), on center-512 crops of
+compressed-then-decoded JPEGs — i.e. under restore-time conditions. It has
+**zero call sites outside its own module**; the restore gate at `api.rs` still
+routes on quality and subsampling alone.
+
+**Achievable gain, and why the threshold must move.** Simulating the chooser as
+independent per-image draws at its *measured* precision/recall (false-positive
+rate derived as `FP = TP(1−P)/P` over this corpus's 24:40 class balance),
+against the +0.1812 ceiling:
+
+| threshold | P | R | mean ssim2 | share of ceiling gain |
+|---|---|---|---|---|
+| 0.85 (shipped) | 0.950 | 0.594 | +1.3667 | **39%** |
+| 0.80 | 0.913 | 0.656 | +1.3831 | 48% |
+| 0.75 | 0.901 | 0.760 | +1.4089 | **62%** |
+
+Recall is the binding constraint, and the shipped 0.85 leaves most of the gain
+on the floor — it was chosen precision-first for *model* routing, where a wrong
+pick wastes a pass, not for the *restore gate*, where the asymmetry is
+different (a missed graphics restore forgoes ~+3 ssim2; a wrongly-restored
+art-scan inflicts −1.28). Re-fit it for this loss. This is an estimate from
+measured operating points, not a measurement — confirm by running the real
+chooser over the pinned split and substituting its actual labels.
+
+Per-subcorpus graphics recall at t=0.80: documents 24/24, screen 21/24, maps
+12/24, art-scans 6/24. Maps and art-scans are the weak classes, and art-scans
+is exactly the one §1.13 shows being actively harmed.
+
+Cheaper alternative worth measuring first:
+`zenjpeg::detect::content::classify_from_luma_coefficients` runs on the JPEG's
+own DCT coefficients — which zensr already has, since S10 projection works
+against them — so it costs essentially nothing. If its zero-AC-block fraction
+separates the corpus adequately, no pixel pass is needed at all.
+
+Cost, if the pixel path is used: zenanalyze feature extraction is measured at
+0.82–2.55 ms at 256² and 5.59–8.21 ms at 1 MP
+(`zenanalyze/benchmarks/feature_cost_grid_2026-07-02.tsv`). The chooser runs on
+a fixed center-512 crop, so its cost is bracketed by those rows and is
+independent of input size — roughly 1.5–5% of a 1 MP realtime restore and well
+under 1% of the quality tier. 512² itself is not measured; measure it before
+putting it on the hot path.
+
+zenanalyze itself has **no content-type classifier API** — the composite
+likelihoods (`ScreenContentLikelihood`, `TextLikelihood`, `NaturalLikelihood`,
+`LineArtScore`, ids 27–29/45) were deleted and their ids reserved. Its value
+here is the underlying features, whose screen-vs-photo AUCs are recorded in
+`zenanalyze/docs/calibration-corpus-2026-04-27.md`: `patch_fraction` 0.880,
+`patch_fraction_fast` 0.852, `luma_histogram_entropy` 0.848,
+`edge_slope_stdev` 0.844 (**Tier 1**), `flat_color_block_ratio` 0.838 (**Tier
+1**). The current pin `a7d8224` already carries everything needed — no bump.
 
 Why this survives n=64 when the per-encoder refit (§1.1b) did not: the content
 effect is **~5 ssim2 of spread at every quality**, against 0.3–0.5 for the

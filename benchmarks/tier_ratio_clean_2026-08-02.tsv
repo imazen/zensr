@@ -23,3 +23,18 @@ q	quality_tier	realtime	realtime_pct	readme_claim_pct
 # SCOPE: turbo only, 4:2:0 only, n=32. The README figures were computed over a
 # different (blended) grid, so this is a first clean measurement, not a
 # drop-in replacement.
+#
+# SUPERSEDED 2026-08-03 by a larger, like-for-like measurement.
+# This file compared dejpeg11_teacher (a research teacher) against rt24g at
+# n=32. The README's quality-tier row is dejpeg7_graphics, a DIFFERENT model,
+# so these ratios never applied to the shipped table. Re-measured with the
+# actual shipped models at n=64, same pinned split, turbo 4:2:0, arm model_proj:
+#   q       quality(dejpeg7)  realtime(rt24g)  ratio
+#   15           +10.65            +6.88        65%
+#   35            +5.64            +3.36        60%
+#   55            +3.53            +2.02        57%
+#   75            +2.03            +1.15        57%
+#   90            +0.95            +0.32        34%
+# Raw: benchmarks/quality_tier_clean_2026-08-03.tsv (dejpeg7_graphics) and
+# benchmarks/clean_ladder_2026-08-03.pointer.md (rt24g).
+# The direction of both corrections above still holds; only the magnitudes move.

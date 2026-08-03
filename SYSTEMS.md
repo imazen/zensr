@@ -723,6 +723,14 @@ vs dejpeg4 baseline, paired std-grid ssim2 (photo rows / graphics rows):
 
 Model ladder (all golden-verified; std-grid mean ssim2 gain / full-pipeline speed @12T):
 
+> **Superseded 2026-08-03 — these gains were measured against a partly
+> JPEG-sourced eval split with unpinned file selection, and they understate the
+> models.** Kept as the dated record of what was measured on 07-27; do not quote
+> them. Clean-reference figures (pinned split, per-file median, turbo 4:2:0,
+> n=64) are in `README.md`: quality tier **+10.65/+5.64/+3.53/+2.03/+0.95**,
+> realtime `dejpeg_rt24g` **+6.88/+3.36/+2.02/+1.15/+0.32**. See `ROADMAP.md`
+> §0.1 and §0.1b for what was wrong and why.
+
 | tier | model | params | q15 / q35 / q55 / q75 / q90 | s/MP |
 |---|---|---|---|---|
 | quality (DEFAULT) | dejpeg7_graphics | 595k | +7.1*/+3.5*/+2.6*/+1.2*/+0.07* (dejpeg4 cols; dejpeg7 beats them per attribution & high grid) | 5.3 |
@@ -1110,6 +1118,11 @@ ship gate found a regression the old policy didn't cover.
 - rt24g (84KB, 0.16 s/MP, 200k steps): q15 +4.98 / q35 +2.80 / q55 +1.99 /
   q75 +0.83 ssim2 = 68-79% of the quality tier. 3x the shipped model's low-q
   gain at identical size and speed.
+  **Corrected 2026-08-03:** on clean references with pinned selection those
+  gains are **+6.88 / +3.36 / +2.02 / +1.15**, and the fraction of the quality
+  tier is **57-65%**, not 68-79%. The two corrections run in opposite
+  directions — contamination understated the absolute gains while overstating
+  the ratio — so neither figure above transfers.
 - SHIP GATE FINDING: rt24g is more aggressive than rt24d — more negative
   per-file rows above q55 (q75: 80 vs 56 of 192; worst -7.49 vs -3.95) and
   net-negative on the high grid (q85 +0.29, q90 -0.23, q93 -0.51).
