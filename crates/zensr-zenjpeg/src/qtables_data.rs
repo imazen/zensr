@@ -205,14 +205,17 @@ pub static PHOTOSHOP_LUMA_TABLES: [[u16; 64]; 18] = [
 /// and quality that produced it, so a match yields attribution rather than
 /// another opaque hash.
 ///
-/// Ten encoders were swept over quality 1..=100 on a fixed source
-/// (`corpus-builder/scripts/encoder_table_matrix.py`). Pillow, OpenCV,
-/// ImageMagick, libvips, sharp, libjpeg-turbo and Go's image/jpeg all emit
-/// tables the preset matrix already covers; only these two do not. On the
-/// survey corpus these explain 25% of what remained unidentified — almost all
-/// of it one table, ffmpeg-mjpeg at q19, which alone accounts for 385 files
-/// and had been the single largest unknown.
-pub static ENCODER_LUMA_TABLES: [(&str, u8, [u16; 64]); 127] = [
+/// Eleven encoders swept over quality 1..=100 on a fixed source
+/// (`corpus-builder/scripts/encoder_table_matrix.py`, 1,100 encodes, 287
+/// distinct tables). Pillow, OpenCV, ImageMagick, libvips, sharp,
+/// libjpeg-turbo, Go's image/jpeg and Java ImageIO almost entirely emit tables
+/// the preset matrix already covers; the exceptions are here:
+/// cjpegli 97, ffmpeg-mjpeg 30, java-imageio 1.
+///
+/// On the survey corpus these explain 25% of what the preset and Photoshop
+/// sets left unidentified — nearly all of it one entry, ffmpeg-mjpeg at q19,
+/// which alone accounts for 385 files and was the single largest unknown.
+pub static ENCODER_LUMA_TABLES: [(&str, u8, [u16; 64]); 128] = [
     (
         "cjpegli",
         1,
@@ -1386,6 +1389,16 @@ pub static ENCODER_LUMA_TABLES: [(&str, u8, [u16; 64]); 127] = [
             8, 4, 4, 5, 6, 6, 7, 8, 4, 4, 5, 6, 6, 7, 8, 9, 4, 5, 6, 6, 7, 8, 8, 9, 5, 5, 6, 6, 7,
             8, 9, 10, 5, 6, 6, 7, 8, 8, 10, 12, 6, 6, 7, 8, 8, 10, 12, 14, 6, 6, 7, 8, 9, 11, 14,
             17, 6, 7, 8, 9, 11, 14, 17, 20,
+        ],
+    ),
+    (
+        "java-imageio",
+        41,
+        [
+            20, 13, 12, 20, 29, 49, 62, 74, 15, 15, 17, 23, 32, 71, 73, 67, 17, 16, 20, 29, 49, 70,
+            84, 68, 17, 21, 27, 35, 62, 106, 98, 76, 22, 27, 45, 68, 83, 133, 126, 94, 29, 43, 67,
+            78, 99, 127, 138, 112, 60, 78, 95, 106, 126, 148, 146, 123, 88, 112, 116, 120, 137,
+            122, 126, 121,
         ],
     ),
 ];
