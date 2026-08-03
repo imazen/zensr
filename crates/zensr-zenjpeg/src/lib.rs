@@ -9,6 +9,7 @@
 //! (Cjpegli*/zenjpeg) never. The model runs on every image; the projection
 //! (S10) guarantees the output re-encodes to the file's own coefficients.
 
+pub mod api;
 #[cfg(feature = "chooser")]
 pub mod chooser;
 pub mod jpegli_params;
@@ -141,6 +142,28 @@ pub fn slack_abs_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
 /// of files harmed. 4:2:2 and 4:4:0 are untested and keep the 4:2:0 threshold,
 /// being chroma-subsampled and so closer to that case.
 pub fn policy_high_q_identity(probe: &zenjpeg::detect::JpegProbe) -> bool {
+    policy_high_q_identity_with_margin(probe, 0.0)
+}
+
+/// Luma-relative chroma geometry from the probe: `Some(true)` for 4:4:4,
+/// `Some(false)` for 4:2:0, `None` for 4:2:2, 4:4:0, grayscale and anything
+/// else. Separated out so the mapping is testable without model weights.
+pub(crate) fn chroma_full_of(probe: &zenjpeg::detect::JpegProbe) -> Option<bool> {
+    match format!("{:?}", probe.subsampling).as_str() {
+        "S444" => Some(true),
+        "S420" => Some(false),
+        _ => None,
+    }
+}
+
+/// As [`policy_high_q_identity`], but shifted `margin` points earlier.
+///
+/// The two scales run in opposite directions — IJG quality rises with fidelity
+/// while Butteraugli distance falls — so a positive margin lowers the quality
+/// threshold and raises the distance one. Getting that backwards would make a
+/// "conservative" caller restore MORE, which is why it is one function rather
+/// than two call sites.
+pub fn policy_high_q_identity_with_margin(probe: &zenjpeg::detect::JpegProbe, margin: f32) -> bool {
     // Debug-string match for the same reason as `policy_wants_auto`: the probe
     // enums are `#[non_exhaustive]` upstream and `zenjpeg::types` is not a
     // public path, so the name is the stable handle across the version range.
@@ -148,9 +171,11 @@ pub fn policy_high_q_identity(probe: &zenjpeg::detect::JpegProbe) -> bool {
     let scale = format!("{:?}", probe.quality.scale);
     match scale.as_str() {
         "IjgQuality" | "MozjpegQuality" => {
-            probe.quality.value >= if full_chroma { 88.0 } else { 94.5 }
+            probe.quality.value >= (if full_chroma { 88.0 } else { 94.5 }) - margin
         }
-        "ButteraugliDistance" => probe.quality.value <= if full_chroma { 1.3 } else { 0.6 },
+        "ButteraugliDistance" => {
+            probe.quality.value <= (if full_chroma { 1.3 } else { 0.6 }) + margin
+        }
         _ => false,
     }
 }
@@ -179,6 +204,11 @@ pub struct RestoreConfig {
     /// Skip the model on near-pristine input (probe q >= ~95 / d <= 0.6) —
     /// measured: the model loses to identity there (`policy_high_q_identity`).
     pub high_q_identity: bool,
+    /// Shifts the near-pristine gate earlier, in quality points (or, on the
+    /// Butteraugli scale, in distance). Exists so a conservative caller can
+    /// trade gain for fewer regressions: gating earlier is the only mechanism
+    /// measured to reduce per-file harm.
+    pub high_q_margin: f32,
     pub threads: usize,
     /// Tile size for the model runner; 0 = auto.
     pub tile: usize,
@@ -203,6 +233,10 @@ impl RestoreConfig {
         self.high_q_identity = on;
         self
     }
+    pub fn with_high_q_margin(mut self, margin: f32) -> Self {
+        self.high_q_margin = margin;
+        self
+    }
 }
 
 impl Default for RestoreConfig {
@@ -212,6 +246,7 @@ impl Default for RestoreConfig {
             projection: Projection::Auto,
             deblock_policy: true,
             high_q_identity: true,
+            high_q_margin: 0.0,
             threads: 1,
             tile: 0,
         }
@@ -225,6 +260,11 @@ pub struct RestoreReport {
     pub est_quality: f32,
     pub quality_scale: String,
     pub used_deblock_auto: bool,
+    /// Luma-relative chroma geometry: `Some(true)` for 4:4:4, `Some(false)`
+    /// for 4:2:0, `None` for anything else. Recorded because the near-pristine
+    /// threshold depends on it — 4:4:4 at q90 decodes as cleanly as 4:2:0 at
+    /// q94, so a quality-only policy is unsafe (see docs/API_DESIGN.md F9).
+    pub chroma_full: Option<bool>,
     /// True when the high-q identity gate skipped the model (output is the
     /// plain decode).
     pub skipped_model_high_q: bool,
@@ -263,6 +303,8 @@ pub enum RestoreError {
     Decode(String),
     UnsupportedPixels(&'static str),
     UnsupportedModel(&'static str),
+    /// The requested [`api::Budget`] tier has no weights loaded.
+    TierNotLoaded,
 }
 
 impl core::fmt::Display for RestoreError {
@@ -272,6 +314,9 @@ impl core::fmt::Display for RestoreError {
             RestoreError::Decode(e) => write!(f, "decode: {e}"),
             RestoreError::UnsupportedPixels(e) => write!(f, "unsupported pixels: {e}"),
             RestoreError::UnsupportedModel(e) => write!(f, "unsupported model: {e}"),
+            RestoreError::TierNotLoaded => {
+                write!(f, "no weights loaded for the requested budget tier")
+            }
         }
     }
 }
@@ -318,6 +363,10 @@ pub fn restore_jpeg(
     report.encoder_family = format!("{:?}", probe.encoder);
     report.est_quality = probe.quality.value;
     report.quality_scale = format!("{:?}", probe.quality.scale);
+    // Debug-string match for the reason documented on `policy_wants_auto`:
+    // the probe enums are non_exhaustive upstream and zenjpeg::types is not a
+    // public path.
+    report.chroma_full = chroma_full_of(&probe);
     let want_auto = cfg.deblock_policy && policy_wants_auto(&probe);
     report.used_deblock_auto = want_auto;
     let mode = if want_auto {
@@ -350,7 +399,7 @@ pub fn restore_jpeg(
     // 2b. high-q identity gate: near-pristine input — the model can only
     // do harm here (measured; see policy_high_q_identity). The decode is
     // already consistent, so projection is a no-op too: return it.
-    if cfg.high_q_identity && policy_high_q_identity(&probe) {
+    if cfg.high_q_identity && policy_high_q_identity_with_margin(&probe, cfg.high_q_margin) {
         report.skipped_model_high_q = true;
         return Ok(Restored {
             planes,

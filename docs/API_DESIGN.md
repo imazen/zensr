@@ -1,16 +1,29 @@
-# zensr restoration API — design proposal (2026-08-01, pre-0.1)
+# zensr restoration API — design (revised 2026-08-03 against measurement)
 
-Nothing has shipped. This document redesigns the public surface from the
-measured results rather than from the order we happened to discover them.
-Every design choice below cites the measurement that forces it.
-
-Current shape (zenjpeg PR #191, `restore::restore(data, &model, &opts)`) is an
-accretion: a bag of research constants (`high_q_threshold`, `slack_q`,
-`slack_abs`, `deblock_policy`) exposed to callers who have no way to reason
-about them, an objective (fidelity) hardcoded by omission, and a model chosen
-by name. All three are wrong.
-
----
+> **Revision note.** The 2026-08-01 draft is superseded where it conflicts with
+> what was measured on 2026-08-02/03. Three changes, each forced by data rather
+> than taste:
+>
+> 1. **`Intent::Appearance` is dropped.** The draft's own §4.1 said not to ship
+>    an enum variant we cannot justify with data, and the squintly study that
+>    would justify it has not run. It can be added later; it cannot be
+>    un-shipped.
+> 2. **`Intent::DoNoHarm` is renamed `Intent::Conservative`** and no longer
+>    promises what it cannot deliver. Measured: across the band where the
+>    median gain is still positive at 4:2:0, 30-45% of individual files are
+>    made worse by more than 0.1 ssim2. There is no configuration today that
+>    is never-worse, so a name that implies one is a lie in the type system.
+> 3. **`Budget::Adaptive` is dropped for 0.1.** It needs a damage estimator,
+>    and the draft assumed the probe's quality *was* one. It is not: on
+>    aggressively downscaled input a q83 file carries far more damage than a
+>    q83 native file, because downscaling packs content into exactly the
+>    frequencies the quantiser coarsens. A detail-density signal is a concrete
+>    candidate (`ROADMAP.md` 1.8) but it is not built, so the variant would be
+>    a promise with no implementation behind it.
+>
+> One thing is **added**: chroma subsampling is now a first-class part of the
+> report and of policy. It was absent from the draft entirely, and it turned
+> out to be the difference between restoring and destroying — see F9.
 
 ## 1. What the research actually established
 
@@ -24,6 +37,8 @@ by name. All three are wrong.
 | F5 | **Content class matters** (graphics vs photo routing measured; low-q graphics wants a different model). | Model selection is a policy decision the library makes, not a name the caller passes. |
 | F6 | **Cost varies 16× across tiers** (0.16 vs 2.7 s/MP) for 1.4–3.4× the gain. | Budget is a first-class caller parameter; the library picks the model to fit it. |
 | F7 | **Chaining before SR pays only when 4:2:0 or q≲50.** | If we ever expose SR, the chain decision is ours, not the caller's. |
+| F9 | **Chroma subsampling changes the whole decision.** The same nominal quality is a far less damaged image at 4:4:4 — measured, 4:4:4 at q90 decodes as cleanly as 4:2:0 at q94. Ungated, 4:4:4 lost up to 2.06 ssim2 with 91% of files harmed. | Subsampling is a routing input and belongs in the report. A quality-only policy is not safe. |
+| F10 | **The projection's value GROWS with quality** (+0.39 to +1.31 turbo 4:2:0, q90->q100), monotone, no crossover — the opposite shape to the model's own contribution. | `require_consistency` is not merely a safety switch; it is carrying the high-quality gain. |
 | F8 | **Report granularity hid a real defect for weeks** (cell means vs per-file; contaminated references). | Every decision the library makes must be reportable, and reports must be specific. |
 
 ---
