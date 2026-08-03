@@ -7,7 +7,8 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
     let f = std::io::BufReader::new(std::fs::File::open(&path).unwrap());
-    let (mut n, mut exact, mut tolm, mut ps, mut unk) = (0u64, 0u64, 0u64, 0u64, 0u64);
+    let (mut n, mut exact, mut tolm, mut ps, mut unk, mut encm) =
+        (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
     for (i, line) in f.lines().enumerate() {
         let line = line.unwrap();
         if i == 0 {
@@ -28,11 +29,12 @@ fn main() {
             zensr_zenjpeg::qtables::TableId::Preset { exact: true, .. } => exact += 1,
             zensr_zenjpeg::qtables::TableId::Preset { exact: false, .. } => tolm += 1,
             zensr_zenjpeg::qtables::TableId::Photoshop { .. } => ps += 1,
+            zensr_zenjpeg::qtables::TableId::Encoder { .. } => encm += 1,
             zensr_zenjpeg::qtables::TableId::Unrecognised => unk += 1,
             _ => unk += 1, // TableId is #[non_exhaustive]
         }
     }
-    let id = exact + tolm + ps;
+    let id = exact + tolm + ps + encm;
     println!("luma tables scanned: {n}");
     println!(
         "  preset exact      {exact:6} ({:.1}%)",

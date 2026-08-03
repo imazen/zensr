@@ -15,7 +15,9 @@
 mod data {
     pub use crate::qtables_data::*;
 }
-pub use data::{MOZJPEG_LUMA_BASES, MOZJPEG_PRESET_NAMES, PHOTOSHOP_LUMA_TABLES};
+pub use data::{
+    ENCODER_LUMA_TABLES, MOZJPEG_LUMA_BASES, MOZJPEG_PRESET_NAMES, PHOTOSHOP_LUMA_TABLES,
+};
 
 /// What a table was identified as.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,6 +34,9 @@ pub enum TableId {
     /// A Photoshop table (index into [`PHOTOSHOP_LUMA_TABLES`]). Photoshop
     /// does not use the IJG scale, so no quality is recoverable.
     Photoshop { index: u8 },
+    /// A table minted by running a specific encoder, carrying the encoder name
+    /// and the quality setting that produced it.
+    Encoder { name: &'static str, quality: u8 },
     /// No known table matched. Callers must treat this as "the quantiser is
     /// unknown" and choose conservatively — see `slack_for`.
     Unrecognised,
@@ -95,6 +100,14 @@ pub fn identify_luma(table: &[u16; 64], tolerance: u16) -> TableId {
     for (i, t) in PHOTOSHOP_LUMA_TABLES.iter().enumerate() {
         if t == table {
             return TableId::Photoshop { index: i as u8 };
+        }
+    }
+    for (name, quality, t) in ENCODER_LUMA_TABLES.iter() {
+        if t == table {
+            return TableId::Encoder {
+                name,
+                quality: *quality,
+            };
         }
     }
     if tolerance > 0 {
