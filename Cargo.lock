@@ -3816,6 +3816,7 @@ dependencies = [
  "enough",
  "fast-ssim2",
  "imgref",
+ "rayon",
  "rgb",
  "tract-onnx",
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=a7d8224)",
