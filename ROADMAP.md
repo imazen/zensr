@@ -58,6 +58,19 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 3. **Report granularity matters.** "Zero negative cells" was true at
    encoder×q *mean* granularity and false per-file. Always report per-file
    negative counts and worst case alongside means.
+   **2026-08-03, second instance — unpaired statistics invent and hide losses.**
+   The README's SR table reports `median(spanf) − median(lanczos)`, comparing
+   each image against the *distribution* of the other method instead of against
+   itself. That produced the published "textures −1.7, SR loses on stochastic
+   detail" — the paired median on the very same data is **+8.79 with SR
+   winning** — while reporting the model's one genuine loss, `renders`
+   (**paired −1.81, win 0.38**, and the only subcorpus where butteraugli agrees
+   it is worse), as a +5.93 win. A plausible mechanism ("SR can't invent
+   stochastic detail") kept it unchallenged for eleven days.
+   → **Always pair.** Median of per-file differences plus win fraction, never
+   the difference of per-method medians. Pairing is also what made the encoder
+   effect in §1.1b measurable at all. Full write-up:
+   `benchmarks/sr_pinned_2026-08-03.md`. README correction pending review.
 4. **Metric ceiling.** Differences below ~0.3 ssim2 are at the edge of what our
    metrics resolve. Anything smaller needs human judgment (§4) rather than a
    bigger eval grid.
