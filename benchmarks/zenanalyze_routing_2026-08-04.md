@@ -104,3 +104,49 @@ that confirms, not before.
 If it holds, the shape is: replace the binary content class in
 `Routing::Auto` with a per-cell linear model on `edge_slope_stdev`, keeping the
 coefficient classifier as the fallback when features cannot be computed.
+
+## Addendum — the split was at the wrong level
+
+Prompted by a second challenge: zenmetrics has a canonical split rule
+(`scripts/picker/origin_split.py`) whose header says *"Import this everywhere —
+do not re-implement the rule."* I had written my own hash-of-filename split.
+
+**Measured, that rule cannot apply here.** It keys on a *leading* numeric origin
+stem (`o_1004…`, `1003_general_…`); zensr's corpora have none. It returns an id
+for **2 of 64** pinned eval files and **0 of 913** XL files, against 390 of 390
+on the picker corpus. So a separate rule is genuinely needed — but I should have
+checked and said so, not silently invented one.
+
+**Its underlying principle did apply, and I had missed it.** The rule is
+origin-level so that *every* derivative of an origin shares a bucket. In the XL
+corpus **58% of files share an origin** — patents is 357 files from 31
+documents, up to 71 pages each; sci-figures 141 from 11. Two pages of one patent
+share a scanner, typography and paper, so a per-file split puts near-duplicates
+on both sides and "held out" stops meaning anything.
+
+A first attempt at grouping proved the rule's other lesson the hard way:
+stripping a trailing `-\d+` turned `pexels-photo-1029599` into `pexels-photo`
+and **merged 37 distinct CID22 images into one origin**. That is exactly why
+`origin_split.py` keys on a leading stem. The fix only groups on a trailing
+index when the path corroborates it — the last component minus its index must
+equal an earlier component.
+
+`origin_of()` in `tools/routing_headroom.py` now implements this, and the tool
+splits by origin:
+
+| corpus | files | origins | in multi-file groups | largest |
+|---|---|---|---|---|
+| clean64 | 164 | 144 | 40 | 2 |
+| **XL** | **913** | **419** | **554 (58%)** | **71** |
+
+**The `edge_slope_stdev` result survives the correction:**
+
+| router | per-FILE split | per-ORIGIN split (correct) |
+|---|---|---|
+| quality only | +1.2769 | +1.2599 |
+| binary zero-AC (shipped) | +1.4322 | +1.4001 |
+| **linear `edge_slope_stdev`** | +1.5010 (19/20) | **+1.4742 (20/20)** |
+
+Small movement, as expected: the 64-image corpus has only 3 multi-file origins.
+**It will matter enormously on XL**, where 58% of files share an origin — every
+XL number must use the origin split or it will be optimistic.

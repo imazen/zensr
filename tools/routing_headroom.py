@@ -25,6 +25,7 @@ decision-level test of whether content type predicts gain.
 Usage: routing_headroom.py <ladder.tsv> [more.tsv ...]
 """
 import collections
+import re
 import random
 import statistics
 import sys
@@ -180,7 +181,10 @@ def content(data):
     # so recall alone would forfeit a large share of the graphic-side gain.
     # Substitute real classifier output to get an achievable number.
     files = sorted({fn for _, fn, *_ in data})
-    calib = {f for f in files if hstem(f) % 2 == 0}
+    # Split by ORIGIN, not by file: see origin_of(). A per-file split lets two
+    # pages of one document straddle calibrate/validate, which is not held out
+    # in any useful sense.
+    calib = {f for f in files if hstem(origin_of(f)) % 2 == 0}
     pooled = collections.defaultdict(list)
     bysub = collections.defaultdict(list)
     bybin = collections.defaultdict(list)
@@ -225,6 +229,54 @@ def content(data):
             pts = " ".join(f"q{q:g}:{bybin[(g, ss, q)]:+6.2f}"
                            for q in qs if (g, ss, q) in bybin)
             print(f"  {label:<14}{ss}  {pts}")
+
+
+def origin_of(fname):
+    """The origin an image derives from — pages of one document, figures of one
+    paper, renditions of one photo.
+
+    Splits must be at ORIGIN level, not file level. Two pages of the same patent
+    share a scanner, typography and paper; putting one in calibrate and the
+    other in validate makes "held out" meaningless. In the XL corpus **58% of
+    files share an origin** — patents is 357 files from 31 documents, up to 71
+    pages each — so a per-file split there is badly optimistic.
+
+    zenmetrics `scripts/picker/origin_split.py` is the canonical rule for picker
+    work and explicitly says not to re-implement it. It cannot be used here:
+    it keys on a LEADING numeric stem (`o_1004…`, `1003_general_…`), and zensr's
+    corpora have none — measured, it returns an id for 2 of 64 pinned eval files
+    and 0 of 913 XL files. So this is a separate rule for a differently-named
+    corpus, not a re-implementation of that one.
+
+    It does borrow that rule's hard-won lesson. `origin_split.py` keys on the
+    leading stem precisely because a TRAILING number is unsafe, and a first
+    version of this function proved the point: stripping a trailing `-\\d+`
+    turned `pexels-photo-1029599` into `pexels-photo` and merged 37 distinct
+    CID22 images into one bogus origin.
+
+    So a trailing index only groups when it is *corroborated* by the path: the
+    last path component, minus its index, must equal an earlier component.
+    `pages__woods__US299894__US299894-000` groups (US299894 appears twice);
+    `CID22-512__training__pexels-photo-1029599` does not (`pexels-photo` is not
+    a path component), so it stays its own origin.
+    """
+    stem = fname.rsplit(".", 1)[0] if "." in fname else fname
+    for suf in ("__pristine",):
+        i = stem.find(suf)
+        if i > 0:
+            stem = stem[:i]
+    parts = stem.split("__")
+    if len(parts) >= 2:
+        base = re.sub(r"-\d+$", "", parts[-1])
+        if base != parts[-1] and base in parts[:-1]:
+            return "__".join(parts[:-1])
+    # Page suffixes that name themselves, e.g. `..._p01`, `..._page1`.
+    m = re.sub(r"_(p|page)\d+$", "", stem)
+    if m != stem:
+        return m
+    # Size renditions of one image.
+    m = re.sub(r"__\d+x\d+(__dpr\d+)?$", "", stem)
+    return m
 
 
 def hstem(s):
