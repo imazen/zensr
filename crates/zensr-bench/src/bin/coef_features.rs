@@ -32,17 +32,6 @@ use std::path::PathBuf;
 use std::process::Command;
 use zensr_bench::*;
 
-const SUBCORPORA: &[(&str, &str)] = &[
-    ("photos", "lilith"),
-    ("people", "unsplash-people"),
-    ("screen", "screen"),
-    ("documents", "office-documents"),
-    ("art-scans", "internet-archive-scans"),
-    ("maps", "national-park-service"),
-    ("renders", "unsplash-renders"),
-    ("textures", "unsplash-textures"),
-];
-
 fn tmpdir() -> PathBuf {
     let d = std::env::var("HOME")
         .map(PathBuf::from)
@@ -210,7 +199,7 @@ fn main() {
         .map(|s| s.trim().to_string())
         .collect();
 
-    let pinned = load_pinned(&pin_path());
+    let pinned = resolve_pinned(&root);
     let td = tmpdir();
     let ppm = td.join("cfeat.ppm");
     let jpg = td.join("cfeat.jpg");
@@ -222,8 +211,9 @@ fn main() {
         "sub\tfile\tencoder\tss\tq\tbytes\tbpp\tzero_ac_blocks\tzero_ac_coefs\thf_survival\tmean_abs_ac\tdc_spread\tac_count_spread\tgutted_block_frac\tgutted_clustering"
     );
 
-    for (name, dir) in SUBCORPORA {
-        let want = pinned.as_ref().and_then(|m| m.get(*dir));
+    for (name, dir) in &subcorpora_for(&root) {
+        let (name, dir) = (name.as_str(), dir.as_str());
+        let want = pinned.as_ref().and_then(|m| m.get(dir));
         let mut used = 0usize;
         for f in list_images(&root.join(dir)) {
             if used >= per_sub {

@@ -31,17 +31,6 @@ use std::process::Command;
 use std::time::Instant;
 use zensr_bench::*;
 
-const SUBCORPORA: &[(&str, &str)] = &[
-    ("photos", "lilith"),
-    ("people", "unsplash-people"),
-    ("screen", "screen"),
-    ("documents", "office-documents"),
-    ("art-scans", "internet-archive-scans"),
-    ("maps", "national-park-service"),
-    ("renders", "unsplash-renders"),
-    ("textures", "unsplash-textures"),
-];
-
 /// Synthetic content: flat regions, sharp edges, limited palette. Same split as
 /// `tools/routing_headroom.py::GRAPHIC_SUBS`; keep them in step.
 const GRAPHIC: &[&str] = &["documents", "maps", "screen"];
@@ -74,12 +63,7 @@ fn main() {
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
     let _threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
 
-    let pin_path = pin_path();
-    let pinned = load_pinned(&pin_path);
-    match &pinned {
-        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
-        None => eprintln!("WARNING: no pinned split at {pin_path} — results not comparable"),
-    }
+    let pinned = resolve_pinned(&root);
 
     let td = tmpdir();
     let ppm = td.join("cprobe.ppm");
@@ -95,10 +79,11 @@ fn main() {
         "sub\tfile\tq\ttruth\tp_graphics\tchooser_class\tzero_ac_frac\tcoef_class\tchooser_ms\tcoef_ms\tgt_src"
     );
 
-    for (name, dir) in SUBCORPORA {
+    for (name, dir) in &subcorpora_for(&root) {
+        let (name, dir) = (name.as_str(), dir.as_str());
         let files = list_images(&root.join(dir));
-        let want = pinned.as_ref().and_then(|m| m.get(*dir));
-        let truth = if GRAPHIC.contains(name) {
+        let want = pinned.as_ref().and_then(|m| m.get(dir));
+        let truth = if GRAPHIC.contains(&name) {
             "graphic"
         } else {
             "photo"

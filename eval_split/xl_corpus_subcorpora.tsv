@@ -1,0 +1,10 @@
+# XL eval corpus — PNG-only, none of it in any training set.
+# Built by tools/build_xl_corpus.sh; see that file for provenance.
+patents	patents
+sci-figures	sci-figures
+cid22	cid22
+clic2025	clic2025
+gb82	gb82
+gb82-sc	gb82-sc
+nasa	nasa
+noaa	noaa

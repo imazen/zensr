@@ -63,16 +63,7 @@ fn main() {
     // deeper into the training set — the same defect as the 2026-07-23
     // postmortem, but more likely to fire here because the size filter rejects
     // far more files than a decode failure does.
-    let pin_path = pin_path();
-    let pinned = load_pinned(&pin_path);
-    match &pinned {
-        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
-        None => eprintln!(
-            "WARNING: no pinned eval split at {pin_path} — falling back to sorted \
-             order, which can admit training images. Results are not comparable \
-             to pinned runs."
-        ),
-    }
+    let pinned = resolve_pinned(&root);
 
     for (name, dir) in SUBCORPORA {
         let files = list_images(&root.join(dir));

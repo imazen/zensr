@@ -176,18 +176,11 @@ fn main() {
     // every subcorpus to the frozen eval files. Without it, "first N sorted"
     // silently admits training images whenever the directory listing differs
     // from the one the split was frozen against.
-    let pin_path = pin_path();
-    let pinned = load_pinned(&pin_path);
-    match &pinned {
-        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", pin_path, m.len()),
-        None => eprintln!(
-            "WARNING: no pinned eval split at {pin_path} — falling back to sorted order, \
-             which can admit training images"
-        ),
-    }
-    for (sub, dir) in SUBCORPORA {
+    let pinned = resolve_pinned(&root);
+    for (sub, dir) in &subcorpora_for(&root) {
+        let (sub, dir) = (sub.as_str(), dir.as_str());
         let files = list_images(&root.join(dir));
-        let want = pinned.as_ref().and_then(|m| m.get(*dir));
+        let want = pinned.as_ref().and_then(|m| m.get(dir));
         let mut seen_pinned = std::collections::HashSet::new();
         let mut used = 0usize;
         for f in files {

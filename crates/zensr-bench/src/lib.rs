@@ -248,6 +248,44 @@ pub fn pin_path() -> String {
         .unwrap_or_else(|_| "eval_split/imazen26_eval_files.tsv".to_string())
 }
 
+/// Resolve the pinned split for a corpus, and say what was resolved.
+///
+/// A corpus none of which is in any training set needs no pin — the pin exists
+/// to keep training images out of an eval, and there are none to keep out. Such
+/// a corpus declares itself with a `NO_PIN_REQUIRED` file in its root whose
+/// contents explain why; the explanation is echoed so the claim is auditable
+/// rather than taken on trust.
+///
+/// Without that marker and without a pin list, this warns loudly: "first N
+/// sorted" silently admitting training images is the failure this whole
+/// mechanism exists to prevent, and a warning nobody reads is how it recurred
+/// twice.
+pub fn resolve_pinned(
+    root: &Path,
+) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
+    let marker = root.join("NO_PIN_REQUIRED");
+    if let Ok(why) = std::fs::read_to_string(&marker) {
+        let why = why
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .trim();
+        eprintln!("no pin needed for this corpus — {why}");
+        return None;
+    }
+    let path = pin_path();
+    let pinned = load_pinned(&path);
+    match &pinned {
+        Some(m) => eprintln!("pinned eval split: {} ({} dirs)", path, m.len()),
+        None => eprintln!(
+            "WARNING: no pinned eval split at {path} and no NO_PIN_REQUIRED marker in \
+             {} — falling back to sorted order, which can admit training images",
+            root.display()
+        ),
+    }
+    pinned
+}
+
 /// Provenance of a reference image: `"png"` if the ground truth is lossless,
 /// `"jpg"` if the reference is ITSELF a JPEG.
 ///
@@ -399,3 +437,38 @@ pub const SUBCORPORA: &[(&str, &str)] = &[
     ("renders", "unsplash-renders"),
     ("textures", "unsplash-textures"),
 ];
+
+/// The subcorpora to evaluate, for whichever corpus is being pointed at.
+///
+/// A corpus may ship its own list as `SUBCORPORA.tsv` in its root
+/// (`label<TAB>directory` per line, `#` comments ignored). Without one the
+/// imazen-26 layout above is assumed, which is what every eval before
+/// 2026-08-03 hardcoded.
+///
+/// This exists so a second corpus can be evaluated without editing and
+/// rebuilding five binaries — the alternative was to keep the layout of one
+/// corpus compiled into the tools, which is how the tools ended up only ever
+/// being pointed at that corpus.
+pub fn subcorpora_for(root: &Path) -> Vec<(String, String)> {
+    let manifest = root.join("SUBCORPORA.tsv");
+    if let Ok(text) = std::fs::read_to_string(&manifest) {
+        let mut v = Vec::new();
+        for line in text.lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let mut it = line.split('\t');
+            if let (Some(label), Some(dir)) = (it.next(), it.next()) {
+                v.push((label.trim().to_string(), dir.trim().to_string()));
+            }
+        }
+        if !v.is_empty() {
+            eprintln!("subcorpora: {} from {}", v.len(), manifest.display());
+            return v;
+        }
+    }
+    SUBCORPORA
+        .iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect()
+}

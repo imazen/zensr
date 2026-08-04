@@ -1,0 +1,6 @@
+none of this corpus appears in any training set, so there are no training images to exclude
+Training (tools/make_distill_data.py:26-28) reads only /mnt/v/imazen-26 and only
+these subcorpora: lilith, unsplash-people, screen, internet-archive-scans,
+national-park-service, unsplash-renders, unsplash-textures, office-documents.
+Every source here is outside that set — verified by grep over tools/*.py.
+Built by tools/build_xl_corpus.sh. PNG-only; no JPEG-sourced references.
