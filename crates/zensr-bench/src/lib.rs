@@ -324,11 +324,28 @@ pub struct Scored {
     pub butter: f64,
 }
 
+/// Score a pair on all three metrics.
+///
+/// `ZENSR_EVAL_NO_BUTTER=1` skips butteraugli and reports NaN for it. Measured
+/// per call at 512²: ssim2 19.75 ms, butteraugli 16.58 ms, psnr 0.00 ms — so
+/// butteraugli is **46% of the metric cost**, and every routing curve zensr
+/// ships is fitted on ssim2. A sweep whose only consumer is the routing work
+/// pays a large bill for a column it will not read.
+///
+/// Deliberately opt-*out*: butteraugli disagreeing with ssim2 is a real finding
+/// (§0.3, the `renders` case), so it stays on by default and is dropped only
+/// when a run's purpose is known. NaN rather than a plausible number, so a
+/// skipped column can never be mistaken for a measured one.
 pub fn score(hr: &Rgb8Img, out: &Rgb8Img) -> Scored {
+    let skip_butter = std::env::var("ZENSR_EVAL_NO_BUTTER").as_deref() == Ok("1");
     Scored {
         psnr: psnr_rgb8(hr, out),
         ssim2: ssim2(hr, out),
-        butter: butter_n3(hr, out),
+        butter: if skip_butter {
+            f64::NAN
+        } else {
+            butter_n3(hr, out)
+        },
     }
 }
 
