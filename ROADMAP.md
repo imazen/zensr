@@ -575,6 +575,51 @@ input quality alone under-describes damage on downscaled files).
 
 ---
 
+### 1.16 XL corpus sweep — IN FLIGHT since 2026-08-03, unblocks the feature work
+
+§1.12/§1.14 established that routing is limited by **corpus size, not feature
+choice**: nine coefficient features correlate 0.5–0.67 with per-image gain at
+fixed quality and none beats a single binary threshold, because a per-cell model
+is 40 parameters fitted on 64 images and the across-split spread (±0.3) swamps
+the effects (±0.05). This is the run that removes that constraint.
+
+**Corpus** `/mnt/v/imazen-26-clean-xl`, built by `tools/build_xl_corpus.sh`:
+913 PNG images, **14× the current eval**, every source verifiably absent from
+training (training reads only `/mnt/v/imazen-26` and only eight named
+subcorpora; none of these is one). patents 357, cid22 250, sci-figures 141,
+clic2025 62, noaa 44, gb82 25, nasa 24, gb82-sc 10. Declares `NO_PIN_REQUIRED`
+with its reason, since there are no training images to exclude.
+
+The graphic class gains most — patents alone is 15× the line-art the
+content-split curves are currently fit on, and those curves are what §1.12
+ships.
+
+**Grid** 29 q values: step 5 from 5..70, step 2 from 72..100. This fixes a
+standing violation of the sweep discipline — the old grid was *denser at high q
+than low q*, and low q is where the structural problems live.
+
+**Where it runs.** Measured, not estimated: 11.2 arm-rows/sec at 6 threads
+locally, and the full cross is ~318k arm-rows per encoder family.
+- **tower** (Docker, cpuset 0-23 of 32, `--cpu-shares=256`, 40 GB cap so Plex
+  keeps priority): turbo × {4:2:0, 4:4:4}. ~8 h. Zen1, roughly a third of
+  lianli's throughput — an initial two-encoder plan projected 17 h and was
+  rebalanced rather than commit a household box for a day.
+- **lianli** (niced, 18 of 24 threads): jpegli + zenjpeg, then mozjpeg queued
+  behind it. ~5 h + ~5 h.
+
+Nothing is installed on either box: a bundle of prebuilt binaries, libs, model
+and corpus is shipped and the container verifies each tool at start and fails
+loudly if one is missing. `~/tmp/collect_xl.sh` polls and pulls results back
+unattended.
+
+**What to do with it when it lands**
+1. Refit the content-split curves (`GRAPHIC*`/`PHOTO*`) at 913 images and 29 q.
+2. Re-run the §1.14 feature tests. `mean_abs_ac` and `ac_count_spread` both
+   correlate better than the shipped signal at q75+ and both failed only on
+   fitting noise — this is the run that says whether they were right.
+3. Re-check the §1.1b crossover identifiability, which needed 15 q points of
+   spread to call at n=64.
+
 ### 1.15 `renders` metric disagreement — CLOSED 2026-08-03, not a model defect
 
 Full record `benchmarks/renders_metric_disagreement_2026-08-03.md`; images at
