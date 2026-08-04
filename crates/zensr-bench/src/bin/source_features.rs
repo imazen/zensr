@@ -31,17 +31,6 @@ mod zenalyze_shim {
     pub use zenanalyze::feature::{AnalysisQuery, FeatureSet};
 }
 
-/// Longest edge the eval crops to. 512 by default, which matches every ladder
-/// measured so far. A corpus that is deliberately size-diverse — the picker
-/// renditions run 64..1024 — must raise it, or the crop flattens the size axis
-/// the corpus exists to provide.
-fn crop_cap() -> usize {
-    std::env::var("ZENSR_EVAL_CROP")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(512)
-}
-
 fn main() {
     let mut args = std::env::args().skip(1);
     let root = PathBuf::from(
