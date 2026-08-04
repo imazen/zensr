@@ -73,6 +73,36 @@ fn main() {
         let ms = t.elapsed().as_secs_f64() * 1000.0 / n as f64;
         println!("{label:<18} {ms:7.2} ms/call");
     }
+    // Feature extraction, on already-decoded pixels — which is what a router
+    // pays, since the restore path has decoded the image regardless.
+    for (label, set) in [
+        (
+            "zenanalyze SUPPORTED",
+            zenanalyze::feature::FeatureSet::SUPPORTED,
+        ),
+        (
+            "zenanalyze edge_slope_stdev only",
+            zenanalyze::feature::FeatureSet::SUPPORTED
+                .iter()
+                .filter(|f| f.name() == "edge_slope_stdev")
+                .fold(zenanalyze::feature::FeatureSet::new(), |a, f| a.with(f)),
+        ),
+    ] {
+        let t = Instant::now();
+        for (a, _) in &pairs {
+            let _ = zenanalyze::analyze_features_rgb8(
+                &a.px,
+                a.w as u32,
+                a.h as u32,
+                &zenanalyze::feature::AnalysisQuery::new(set),
+            );
+        }
+        println!(
+            "{label:<34} {:7.2} ms/call",
+            t.elapsed().as_secs_f64() * 1000.0 / n as f64
+        );
+    }
+
     let t = Instant::now();
     for (_, b) in &pairs {
         let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&b.px);
