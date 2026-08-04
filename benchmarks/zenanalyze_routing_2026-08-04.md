@@ -6,7 +6,16 @@ Why hand-roll nine coefficient features and re-measure everything?
 
 Two answers, and the second one is the useful one.
 
-## 1. The canonical datasets cannot be reused here — they are imazen-26
+## 1. The canonical datasets — CORRECTED 2026-08-04, they are 77% usable
+
+> **This section was wrong and is kept with its correction below.** I claimed
+> "no `origin_id` → imazen-26 path map exists locally to filter by". It does:
+> `clean-picker-corpus-2026-06-26/_provenance.tsv` carries `source_sha256` per
+> rendition, and following it resolves **all 414 origins**. Doing so reverses
+> the verdict — **319 origins (77%) are free of dejpeg training content, giving
+> 3,452 usable renditions**. See "Addendum 3". The original reasoning follows.
+
+### Original (superseded) reasoning
 
 `/mnt/v/output/canonical-picker-2026-06-27/zenjpeg_lossy/` is genuinely rich:
 1,484,010 rows (train/validate/test), 469 `feat_*` columns, `score_ssim2`,
@@ -197,3 +206,47 @@ split becomes the decisive protocol on XL, where 419 origins yield roughly
 **Both protocols now run on XL when it lands:** 20 random origin splits for
 robustness, and the canonical fixed split for a reproducible number comparable
 with other zen work.
+
+## Addendum 3 — the mapping exists, and it reverses §1
+
+I wrote that no origin→path map was available. `_provenance.tsv` in the corpus
+directory carries `source_sha256` for every rendition. Following it resolves all
+414 origins, and the verdict flips:
+
+| | origins | |
+|---|---|---|
+| **dejpeg-safe** | **319 (77%)** | usable |
+| exact training file | 81 (20%) | excluded |
+| near-duplicate of training | 14 (3%) | excluded |
+
+**3,452 of 4,497 renditions are leakage-free.**
+
+Resolving it needs three different comparisons, and two obvious approaches fail
+silently:
+
+- Only 96 of 414 origins resolve against `/mnt/v/imazen-26`. The other 318 live
+  in `/mnt/v/output/imazen-26-png` — a **larger, differently organised**
+  collection (2,639 files in numbered dirs like `9226-lilith-ai-products`, vs
+  1,068 in flat dirs like `lilith`).
+- Comparing **directory names** across the two roots is wrong and flattering: it
+  reads `2000-unsplash-people` as "not a trained subcorpus" when it is the same
+  content as `unsplash-people`, which is trained on. I made this mistake first
+  and it reported 325 safe for the wrong reason.
+- Comparing **filename stems** finds **zero** matches — the schemes are disjoint.
+- Comparing **bytes** also fails: imazen-26-png is re-encoded, so nothing there
+  is byte-identical to an imazen-26 file.
+
+So the 318 need a content fingerprint. A 16×16 luma thumbnail at mean
+|Δ| < 3/255 catches re-encodes and format conversions of the same scene, which
+is what leakage means — the model saw the picture, not the file. That finds 14
+near-duplicates the exact test missed.
+
+Audit: `tools/picker_leakage_audit.py`. Verified list:
+`eval_split/picker_safe_origins_2026-08-04.txt`.
+
+**Why this matters beyond the correction.** Those 3,452 renditions are
+**size-diverse** — `scale36x64` upward through full size. The XL corpus is not:
+every one of its 913 images is a 512 crop. The sweep discipline asks for 16-20
+log-spaced sizes for anything a model is fitted on, and the routing curves are
+fitted. This is the corpus's largest remaining gap and the picker renditions
+close it, with per-rendition `score_ssim2` already computed for the identity arm.
