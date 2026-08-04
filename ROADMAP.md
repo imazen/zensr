@@ -598,6 +598,23 @@ ships.
 standing violation of the sweep discipline — the old grid was *denser at high q
 than low q*, and low q is where the structural problems live.
 
+**Which run answers which question.** These are two different jobs and the
+encoder axis means something different in each:
+
+| run | question | encoder axis is |
+|---|---|---|
+| **turbo** (tower) | **classification** — does any cheap feature separate images *within* a quality cell? The §1.14 blocker. | irrelevant; one encoder is the clean design |
+| jpegli + zenjpeg (lianli) | curve quality — the distance curves shipped 2026-08-03 are fit on 64 images | the subject |
+| mozjpeg (lianli, queued) | curve *shape* — `G420`/`G444` are pooled over turbo+mozjpeg, and mozjpeg gains far less at equal q (+4.26 vs +6.68 at q15), so a turbo-only refit would over-predict every mozjpeg file. Also re-tests per-encoder curves, which §1.1b found **not identifiable at n=64** | the subject |
+
+A prior assumption here was wrong and is worth recording: pooling encoders looked
+like it should dilute the classification test, since the two have a measured gain
+difference (p=1.4e-17). It does not. Fitting per-encoder versus pooled scores
+**+1.3631 vs +1.3597** over 20 splits, and `mean_abs_ac` correlates 0.67/0.58 at
+q55 and 0.68/0.66 at q75 on turbo/mozjpeg separately. So encoder generalization
+for that feature is already established, and pooling costs nothing — mozjpeg
+earns its slot on curve shape, not on the feature test.
+
 **Where it runs.** Measured, not estimated: 11.2 arm-rows/sec at 6 threads
 locally, and the full cross is ~318k arm-rows per encoder family.
 - **tower** (Docker, cpuset 0-23 of 32, `--cpu-shares=256`, 40 GB cap so Plex
