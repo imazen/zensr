@@ -131,6 +131,17 @@ fn run_x1(m: &zensr_micro::adopted::AdoptedModel, lr: &Rgb8Img, threads: usize) 
     planar_to_rgb8(&sr, lr.w, lr.h)
 }
 
+/// Longest edge the eval crops to. 512 by default, which matches every ladder
+/// measured so far. A corpus that is deliberately size-diverse — the picker
+/// renditions run 64..1024 — must raise it, or the crop flattens the size axis
+/// the corpus exists to provide.
+fn crop_cap() -> usize {
+    std::env::var("ZENSR_EVAL_CROP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(512)
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let root = PathBuf::from(args.next().expect("corpus root"));
@@ -195,7 +206,7 @@ fn main() {
                 seen_pinned.insert(stem);
             }
             let Some(img) = decode_any(&f) else { continue };
-            let Some(hr) = center_crop(&img, 512) else {
+            let Some(hr) = center_crop(&img, crop_cap()) else {
                 continue;
             };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
