@@ -279,6 +279,50 @@ def origin_of(fname):
     return m
 
 
+# Canonical split digits, from zenmetrics scripts/picker/origin_split.py.
+TRAIN_DIGITS, VAL_DIGITS, TEST_DIGITS = frozenset("02468"), frozenset("135"), frozenset("79")
+
+
+def split_of(origin):
+    """Canonical bucket for an origin: 'train' | 'val' | 'test' | None.
+
+    Same mechanic as zenmetrics `origin_split.py` — the **trailing digit of the
+    leading integer** of the origin id — applied to the identifying component
+    rather than the whole name. That last part is necessary here and not a
+    deviation: the corpus flattens nested paths with `__`, so a corpus prefix
+    leads (`CID22-512__training__1001682`). Reading the first integer of the
+    whole string picks up the `22` in `CID22` and hands 274 of 383 XL origins
+    the same digit — measured 333/33/17 train/val/test. Reading the identifying
+    component gives 53/28/19 against the canonical 50/30/20.
+
+    Returns None for an origin with no digit anywhere (~11% here: `haeckel`
+    plates, some NPS maps). Those need a deterministic fallback rather than
+    silent exclusion; see `bucket_of`.
+    """
+    ident = origin.split("__")[-1]
+    m = re.search(r"\d+", ident)
+    if not m:
+        return None
+    d = m.group(0)[-1]
+    if d in TRAIN_DIGITS:
+        return "train"
+    return "val" if d in VAL_DIGITS else "test"
+
+
+def bucket_of(origin):
+    """`split_of` with a deterministic fallback for digitless origins.
+
+    The fallback hashes the origin into the same 5/3/2 proportions, so a
+    digitless origin lands in a stable bucket instead of being dropped. It is
+    only reached for origins the canonical rule cannot key.
+    """
+    s = split_of(origin)
+    if s is not None:
+        return s
+    h = hstem(origin) % 10
+    return "train" if h < 5 else ("val" if h < 8 else "test")
+
+
 def hstem(s):
     h = 0
     for ch in s:

@@ -150,3 +150,50 @@ splits by origin:
 Small movement, as expected: the 64-image corpus has only 3 multi-file origins.
 **It will matter enormously on XL**, where 58% of files share an origin — every
 XL number must use the origin split or it will be optimistic.
+
+## Addendum 2 — the canonical mechanic, and what it says at n=64
+
+Corrected again: the canonical rule's key is the **trailing digit of the leading
+integer** of the origin id. `split_of()`/`bucket_of()` in
+`tools/routing_headroom.py` now implement exactly that, applied to the
+*identifying component* of the origin.
+
+That last part is forced, not a deviation. The corpus flattens nested paths with
+`__`, so a corpus prefix leads — `CID22-512__training__1001682`. Taking the
+first integer of the whole string picks up the `22` in `CID22` and hands **274
+of 383 XL origins the same digit**, splitting 333/33/17. Reading the identifying
+component instead gives **53/28/19 against the canonical 50/30/20**, with a
+near-uniform digit histogram. Digitless origins (~11%: `haeckel` plates, some
+NPS maps) get a deterministic hash fallback in the same proportions rather than
+being dropped.
+
+Fitting on `train` only, with `test` untouched until the moment of reporting:
+
+| router | val | test |
+|---|---|---|
+| quality only | +1.1593 | +1.2834 |
+| binary zero-AC (shipped) | **+1.1196** | +1.3632 |
+| linear `edge_slope_stdev` | **+1.3426** | +1.3747 |
+| per-image oracle | — | +1.5553 |
+
+**This is less flattering than the 20-split result and the reason is sample
+size.** The canonical 50/30/20 on 61 origins leaves a **9-origin test set** —
+far too small to separate +1.3747 from +1.3632. It is one draw, which is exactly
+the failure mode that killed `mean_abs_ac`.
+
+Two things it does show:
+
+- `edge_slope_stdev` wins on both buckets, decisively on val (+1.3426 vs
+  +1.1196) and marginally on test.
+- **The shipped binary content class LOSES to quality-only on val** (+1.1196 vs
+  +1.1593). One draw, and it wins on test, so this is not a retraction — but it
+  is a caution against treating the shipped +0.148 as settled.
+
+At this corpus size the 20-random-origin-split result remains the better
+evidence, because it averages over draws instead of trusting one. The canonical
+split becomes the decisive protocol on XL, where 419 origins yield roughly
+209/125/84 — a test set large enough to mean something.
+
+**Both protocols now run on XL when it lands:** 20 random origin splits for
+robustness, and the canonical fixed split for a reproducible number comparable
+with other zen work.
