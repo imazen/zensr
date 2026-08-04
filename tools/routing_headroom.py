@@ -25,6 +25,7 @@ decision-level test of whether content type predicts gain.
 Usage: routing_headroom.py <ladder.tsv> [more.tsv ...]
 """
 import collections
+import os
 import re
 import random
 import statistics
@@ -181,10 +182,25 @@ def content(data):
     # so recall alone would forfeit a large share of the graphic-side gain.
     # Substitute real classifier output to get an achievable number.
     files = sorted({fn for _, fn, *_ in data})
-    # Split by ORIGIN, not by file: see origin_of(). A per-file split lets two
-    # pages of one document straddle calibrate/validate, which is not held out
-    # in any useful sense.
-    calib = {f for f in files if hstem(origin_of(f)) % 2 == 0}
+    # Two protocols, reported side by side, because at small corpus sizes they
+    # disagree and the disagreement is informative:
+    #
+    #   canonical  the workspace rule (bucket_of) — reproducible, comparable
+    #              with other zen work, and holds a test bucket back. One draw,
+    #              so it is only decisive once the test bucket is large.
+    #   50/50      an even origin split, used by the 20-draw robustness test
+    #              elsewhere in this file.
+    #
+    # Both split by ORIGIN, never by file: a per-file split lets two pages of one
+    # document straddle the boundary, which is not held out in any useful sense.
+    protocol = os.environ.get("ZENSR_SPLIT", "canonical")
+    if protocol == "canonical":
+        calib = {f for f in files if bucket_of(origin_of(f)) == "train"}
+        held = collections.Counter(bucket_of(origin_of(f)) for f in files)
+        note = f"canonical origin split {dict(held)}; fitted on train"
+    else:
+        calib = {f for f in files if hstem(origin_of(f)) % 2 == 0}
+        note = "even origin split (50/50)"
     pooled = collections.defaultdict(list)
     bysub = collections.defaultdict(list)
     bybin = collections.defaultdict(list)
