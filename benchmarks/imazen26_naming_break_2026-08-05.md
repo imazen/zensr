@@ -108,3 +108,73 @@ over a snapshot that does not carry them.
 3. Better: publish an explicit `origin_id → source_path` table alongside
    `imazen-26-png`. Every consumer currently re-derives this by hashing, and I
    got it wrong twice doing so.
+
+---
+
+# Root cause: there are two corpora named "imazen-26", and dejpeg is on the wrong side of a curation
+
+`imazen-26-png` **does** preserve stems. It preserves them from *its* source,
+which is not the corpus dejpeg trains on.
+
+| | path | dirs | files | naming |
+|---|---|---|---|---|
+| **acquisition** | `/mnt/v/imazen-26` | 17 flat (`lilith`, `screen`, …) | 1,068 | as downloaded — `20210605_072339.jpg` |
+| **curated** | `~/work/codec-corpus/imazen-26` | 28 numbered (`1400-lilith-nature`, …) | 2,563 | id-assigned — `1401_nature_dolphin-in-ocean_…_20210605-072339_4000x3000.jpg` |
+
+## The sequence
+
+1. **`/mnt/v/imazen-26` is the acquisition corpus** (mtime 2026-06-03). Organised
+   by source, files named as downloaded, with per-folder `PROVENANCE.md` mapping
+   every file to its source URL and a 2026-05-28 URL re-verification campaign
+   recorded at the top level. It is a provenance artifact, not a curated corpus.
+2. **It was curated into `~/work/codec-corpus/imazen-26`** — reorganised into 28
+   numbered categories, origin ids 1000–9999 assigned, files renamed
+   descriptively, and `CORPUS-MANIFEST.tsv` written with `number` (the origin id)
+   and `original_filename` (the pre-curation name).
+3. **`imazen-26-png` was converted from the curated corpus** (2026-06-10). Its
+   own reconvert report states v1 "inherited the source stem verbatim" — and it
+   did. Stem preservation against *its* source is not the problem.
+4. **Everything downstream rides the curated lineage**: the picker corpus, the
+   canonical picker datasets, ext720, and `origin_split.py`'s id scheme.
+5. **dejpeg's `ZENSR_ROOT` was never repointed.** `make_distill_data.py:26`
+   still defaults to `/mnt/v/imazen-26` — the pre-curation acquisition corpus.
+
+So the corpus did not lose its names. **dejpeg is on the far side of a curation
+that every other consumer migrated across**, and the "naming break" I measured is
+the seam between the two lineages.
+
+## Why the earlier per-subcorpus table looked the way it did
+
+The three subcorpora with 100% stem preservation (`office-documents`, `nasa`,
+`skitter`) are ones whose acquisition filenames were already descriptive and
+survived curation unchanged. The six with 0% are ones curation renamed —
+`internet-archive-scans` → `6600-ia-scans-manuscript-illustrations` with
+`haeckel_0007_cephalopods` → `6600_scans-illustrations_haeckel-cephalopods_plate0007`.
+`lilith` and `screen` are split across several numbered categories, so only the
+files whose names happened to carry through show up as matches.
+
+## The bridge table exists, and is partial
+
+`~/work/codec-corpus/imazen-26/CORPUS-MANIFEST.tsv` — 2,160 rows, columns
+`path, folder, category, number, descriptor, location, width, height, format,
+bytes, original_filename, source, license`. `number` is the origin id and
+`original_filename` is the acquisition name, which is exactly the
+`origin_id → source_path` table I recommended building. It already existed.
+
+It joins **489 of 1,068** acquisition files (46%). The remainder are files
+present in the acquisition corpus but not carried into curation — the membership
+genuinely differs (1,068 vs 2,563), so no table can join what was never mapped.
+
+## What this changes
+
+- **Not a converter bug.** Nothing to fix in `hdr-corpus-convert`.
+- **`ZENSR_ROOT` is the live question.** dejpeg trains and evaluates on a corpus
+  that is outside the id scheme everything else uses. Repointing it to the
+  curated corpus would make `origin_split.py` apply directly, make every dataset
+  joinable by name, and remove the need for fingerprint-based leakage tracing —
+  but it also **changes the training set** (2,563 files vs 1,068, different
+  membership), so it invalidates every model and every ladder measured to date.
+  That is a deliberate decision, not a config tidy-up.
+- **Until then, content fingerprinting remains correct** for cross-lineage
+  leakage checks, and `CORPUS-MANIFEST.tsv` should be the first join attempted
+  (46% for free) before falling back to it.
