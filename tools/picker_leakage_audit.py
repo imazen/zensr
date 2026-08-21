@@ -28,10 +28,15 @@ in both directions:
   `2000-unsplash-people` is "not a trained subcorpus" when it is the same
   content as `unsplash-people`, which is trained on. That mistake reports 325
   origins safe.
-- Comparing **filename stems** across the two roots finds **zero** matches — the
-  naming schemes are disjoint — so a stem join silently resolves nothing.
-- Comparing **bytes** misses them too: imazen-26-png is re-encoded, so no
-  imazen-26-png file is byte-identical to any imazen-26 file.
+- Comparing **filename stems** resolves only part of it: stem preservation
+  between the two roots is 42%, and six subcorpora preserve none at all
+  (`benchmarks/imazen26_naming_break_2026-08-05.md`). An earlier version of this
+  docstring said stems matched ZERO — that was a bug in my comparison, not the
+  data: these files carry a `.sdr.png` double extension and I split on the last
+  dot only.
+- Comparing **bytes** resolves 59%. An earlier version said none were
+  byte-identical; I never measured that and inferred it from "imazen-26-png is
+  re-encoded".
 
 So the only thing that works for those 318 is a content fingerprint. A 16×16
 luma thumbnail with mean |Δ| < 3/255 catches re-encodes and format conversions

@@ -232,9 +232,14 @@ silently:
   reads `2000-unsplash-people` as "not a trained subcorpus" when it is the same
   content as `unsplash-people`, which is trained on. I made this mistake first
   and it reported 325 safe for the wrong reason.
-- Comparing **filename stems** finds **zero** matches — the schemes are disjoint.
-- Comparing **bytes** also fails: imazen-26-png is re-encoded, so nothing there
-  is byte-identical to an imazen-26 file.
+- Comparing **filename stems** finds **449 matches**, not zero — my original
+  claim was a bug in my own comparison (a `.sdr.png` double extension left
+  `.sdr` glued to every imazen-26-png stem). Corrected in
+  `benchmarks/imazen26_naming_break_2026-08-05.md`.
+- Comparing **bytes** finds **625 identical files**, not none — I never measured
+  this and inferred it from "imazen-26-png is re-encoded". Corrected in
+  `benchmarks/imazen26_naming_break_2026-08-05.md`. The fingerprint is still
+  needed: it reaches 76% coverage against 59% for bytes.
 
 So the 318 need a content fingerprint. A 16×16 luma thumbnail at mean
 |Δ| < 3/255 catches re-encodes and format conversions of the same scene, which
