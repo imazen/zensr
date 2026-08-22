@@ -1,3 +1,8 @@
+# INVALID KEY SPACE — the directory names here are /mnt/v/imazen-26's flat
+# layout, not the canonical ~/work/codec-corpus/imazen-26 one (user directive
+# 2026-08-05). 54 of these 64 files ARE in the canonical corpus; 10 are not.
+# Re-derive against the canonical layout — see
+# benchmarks/imazen26_contamination_audit_2026-08-05.md.
 # PINNED imazen-26 eval files (dir\tfilename) — the files systems_eval ACTUALLY used
 # 2026-07-23. Training exclusion MUST use this list (union first-8-sorted).
 # Postmortem: runtime 'first 8 usable' slid past haberdoedas (101MP decode-skip)

@@ -23,6 +23,14 @@ import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dump_adopted import compact_forward, load_sd, prepare_span_sd, span_forward  # noqa: E402
 
+# INVALID DEFAULT — see benchmarks/imazen26_contamination_audit_2026-08-05.md.
+# The only valid imazen-26 is ~/work/codec-corpus/imazen-26 (user directive
+# 2026-08-05). /mnt/v/imazen-26 is the PRE-CURATION acquisition corpus: 1,068
+# files against the canonical 2,563, of which 250 (23%) are not in the
+# canonical corpus at all. Every model trained through this default is
+# provisional. Repointing changes the training set, so it is a deliberate
+# decision, not a config tidy-up — hence the default is left alone and
+# flagged rather than silently switched.
 ROOT = os.environ.get("ZENSR_ROOT", "/mnt/v/imazen-26")
 SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
         "national-park-service", "unsplash-renders", "unsplash-textures", "office-documents"]

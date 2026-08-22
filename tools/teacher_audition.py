@@ -24,6 +24,8 @@ import torch
 from spandrel import ModelLoader
 
 W = "/mnt/tower/output/zensr-training/adopted-weights"
+# INVALID ROOT — see benchmarks/imazen26_contamination_audit_2026-08-05.md.
+# Valid corpus is ~/work/codec-corpus/imazen-26.
 SRC = "/mnt/v/imazen-26"
 OUT = os.path.expanduser("~/tmp/zensr-audition")
 SUBS = [("people", "unsplash-people"), ("textures", "unsplash-textures"),

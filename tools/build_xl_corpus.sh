@@ -29,6 +29,12 @@ mkdir -p "$OUT"
 # label<TAB>source directory. Labels group by CONTENT CLASS where the source is
 # homogeneous, because the content-split curves are fit per class and the
 # grouping has to mean something.
+# INVALID ROOT WARNING: the nasa and noaa legs below come from
+# /mnt/v/imazen-26, the pre-curation corpus — 68 of this corpus's 913 files.
+# The only valid imazen-26 is ~/work/codec-corpus/imazen-26 (user directive
+# 2026-08-05, benchmarks/imazen26_contamination_audit_2026-08-05.md). Rebuild
+# those two from 5300-noaa-hurricane-documents and the nasa equivalent when the
+# corpus is re-derived.
 SOURCES=$(cat <<'EOF'
 patents	/mnt/v/collections/patent-corpus
 sci-figures	/mnt/v/collections/sci-figures-color
@@ -50,6 +56,7 @@ EOF
 total=0
 while IFS=$'\t' read -r label src; do
   [ -z "${label:-}" ] && continue
+  case "$label" in \#*) continue ;; esac   # tolerate comments in the list
   mkdir -p "$OUT/$label"
   n=0
   while IFS= read -r f; do
