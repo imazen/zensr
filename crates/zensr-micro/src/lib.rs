@@ -162,8 +162,10 @@ fn tensor_dims() -> [(usize, usize); 18] {
 /// model ship format (halves file size; f16 weights measured transparent).
 pub fn decode_all_f16(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(2)
-        .map(|c| f16_to_f32(u16::from_le_bytes([c[0], c[1]])))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| f16_to_f32(u16::from_le_bytes(*c)))
         .collect()
 }
 
@@ -178,16 +180,16 @@ pub fn decode_f16_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
         if off + wbytes > bytes.len() {
             return Err("f16 file truncated (weights)".into());
         }
-        for c in bytes[off..off + wbytes].chunks_exact(2) {
-            out.push(f16_to_f32(u16::from_le_bytes([c[0], c[1]])));
+        for c in bytes[off..off + wbytes].as_chunks::<2>().0 {
+            out.push(f16_to_f32(u16::from_le_bytes(*c)));
         }
         off += wbytes;
         let bbytes = bn * 4;
         if off + bbytes > bytes.len() {
             return Err("f16 file truncated (bias)".into());
         }
-        for c in bytes[off..off + bbytes].chunks_exact(4) {
-            out.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        for c in bytes[off..off + bbytes].as_chunks::<4>().0 {
+            out.push(f32::from_le_bytes(*c));
         }
         off += bbytes;
     }
@@ -217,8 +219,10 @@ pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
             return Err("int8 file truncated".into());
         }
         let scales: Vec<f32> = bytes[off..off + sbytes]
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect();
         off += sbytes;
         let per_oc = wn / cout;
@@ -226,8 +230,8 @@ pub fn decode_int8pc_weights(bytes: &[u8]) -> Result<Vec<f32>, String> {
             out.push((b as i8) as f32 * scales[i / per_oc]);
         }
         off += wn;
-        for c in bytes[off..off + bn * 4].chunks_exact(4) {
-            out.push(f32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        for c in bytes[off..off + bn * 4].as_chunks::<4>().0 {
+            out.push(f32::from_le_bytes(*c));
         }
         off += bn * 4;
     }

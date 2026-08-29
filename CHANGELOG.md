@@ -5,6 +5,22 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI is green again.** The `fmt + clippy` job had been failing since
+  2026-08-25 (three consecutive runs) on `clippy::chunks_exact_to_as_chunks` —
+  a lint that landed in a newer stable clippy than the code was written against.
+  Six sites in `zensr-micro` (`decode_all_f16`, the f16 and int8 weight
+  readers, `zensr-verify`, `zensr-adopted-verify`) and one in `zensr-zenjpeg`
+  (`api.rs`'s zero-AC block scan) now use `as_chunks::<N>().0`, which has
+  identical semantics — the remainder is dropped either way — and additionally
+  yields `&[u8; N]`, so `from_le_bytes(*c)` replaces the element-by-element
+  array rebuild and LLVM can prove the indexing safe. Behaviour unchanged;
+  16 + 29 tests pass as before.
+
+  (Not a drive-by: a red gate can't tell you whether the change you just pushed
+  passed. This was fixed at the root rather than pushed past.)
+
 ### Changed
 
 - **The `chooser` feature now speaks the `zenanalyze-api` contract only** — no

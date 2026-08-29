@@ -561,7 +561,9 @@ pub(crate) fn classify_content(jpeg: &[u8]) -> Option<Content> {
         return None;
     }
     let zero_ac = luma.coeffs[..nblocks * 64]
-        .chunks_exact(64)
+        .as_chunks::<64>()
+        .0
+        .iter()
         .filter(|b| b[1..].iter().all(|&c| c == 0))
         .count();
     Some(
