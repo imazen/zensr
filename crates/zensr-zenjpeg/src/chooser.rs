@@ -172,9 +172,14 @@ pub fn classify_with_provider(
 /// The bundled default provider: `zenanalyze::Analyzer` for the `zenanalyze`
 /// version this build pinned.
 ///
-/// **The only place zensr names a `zenanalyze` type** — the host role, offered
-/// for callers that don't want to supply a provider. Everything above works
-/// against `zenanalyze-api` alone.
+/// Offered for callers that don't want to supply a provider — zensr picking an
+/// analyzer version on their behalf. Everything above works against
+/// `zenanalyze-api` alone, which is what lets a host on a *different*
+/// `zenanalyze` version drive the same rule.
+///
+/// Depending on `zenanalyze` directly is explicitly permitted (see
+/// `docs/sole-contract.md` in imazen/zenanalyze); what matters is that no
+/// `zenanalyze` type appears in a public signature.
 #[cfg(feature = "chooser-bundled")]
 #[must_use]
 pub fn bundled_provider() -> impl FeatureProvider {

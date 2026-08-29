@@ -23,10 +23,15 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Changed
 
-- **The `chooser` feature now speaks the `zenanalyze-api` contract only** — no
-  `zenanalyze` dependency at all. Owner directive 2026-08-28: "zenanalyze-api
-  should be the sole contract and intermediary so different zenanalyze versions
-  can compile together" (`docs/sole-contract.md` in imazen/zenanalyze).
+- **The `chooser` feature now speaks the `zenanalyze-api` contract** — it takes
+  an `Offer` or a `&dyn FeatureProvider`, so a host on any `zenanalyze` version
+  can drive the rule, and `chooser` alone pulls in no `zenanalyze`. Owner
+  directive 2026-08-28: "zenanalyze-api should be the sole contract and
+  intermediary so different zenanalyze versions can compile together", corrected
+  the same day to "a direct dep is okay though, a reanalysis might be needed
+  anyway if the upstream provided features are insufficient" — so
+  `chooser-bundled`'s direct dep is permitted and normal
+  (`docs/sole-contract.md` in imazen/zenanalyze).
 
   `chooser::classify_rgb8` used to call `zenanalyze::analyze_features_rgb8`
   directly against a git-rev pin (`a7d8224`), which put a concrete zenanalyze
@@ -43,8 +48,8 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
   New feature `chooser-bundled = ["chooser", "dep:zenanalyze"]` supplies
   `zenanalyze::Analyzer` as a default provider and keeps `classify_rgb8` working
-  unchanged for callers that don't want to plumb one. It is the only place zensr
-  names `zenanalyze`.
+  unchanged for callers that don't want to plumb one. That is zensr picking an analyzer
+  version on the caller's behalf.
 
   Behaviour is preserved: the request is still `FeatureSet::SUPPORTED`
   (`Select::All`) rather than the 21 columns the rule reads, because narrowing it
