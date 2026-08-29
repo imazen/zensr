@@ -23,6 +23,21 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Changed
 
+- **`zenpixels` is now a two-minor range, not a caret pin.** Both requirement
+  lines — `zensr-bench` and `zensr-micro`'s optional `px` dep — move from
+  `"0.2.14"` to `">=0.2.14, <0.4.0"`. The floor stays at 0.2.14 (this graph's
+  own floor, below the published 0.2.16); only the ceiling moves.
+
+  Why: a caret requirement on a `0.x` crate caps at the *next* minor, so a
+  consumer on `0.2.x` and a consumer on `0.3.x` are semver-incompatible and
+  Cargo resolves **two copies**. Two copies means `PixelSlice` from one is not
+  `PixelSlice` from the other and types stop unifying across the crate
+  boundary. Widening every consumer in the workspace family to span the
+  published minor *and* the next keeps one copy in the graph through the next
+  `zenpixels` minor bump. Verified here: `cargo metadata` resolves one
+  `zenpixels` (0.2.14), one `zenpixels-convert` (0.2.14), one `zencodec`
+  (0.1.26), and `Cargo.lock` is byte-identical before and after the edit.
+
 - **The `chooser` feature now speaks the `zenanalyze-api` contract** — it takes
   an `Offer` or a `&dyn FeatureProvider`, so a host on any `zenanalyze` version
   can drive the rule, and `chooser` alone pulls in no `zenanalyze`. Owner

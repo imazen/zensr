@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 archmage = "0.9.28"
 magetypes = { version = "0.9.28", features = ["std"], default-features = false }
-zenpixels = { version = "0.2.14", optional = true }
+zenpixels = { version = ">=0.2.14, <0.4.0", optional = true }
 bytemuck = { version = "1.25.2", optional = true }
 
 [features]
