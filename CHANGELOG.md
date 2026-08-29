@@ -1,0 +1,62 @@
+# Changelog
+
+All notable changes to zensr are documented here. (Started 2026-08-28; earlier
+history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
+
+## [Unreleased]
+
+### Changed
+
+- **The `chooser` feature now speaks the `zenanalyze-api` contract only** — no
+  `zenanalyze` dependency at all. Owner directive 2026-08-28: "zenanalyze-api
+  should be the sole contract and intermediary so different zenanalyze versions
+  can compile together" (`docs/sole-contract.md` in imazen/zenanalyze).
+
+  `chooser::classify_rgb8` used to call `zenanalyze::analyze_features_rgb8`
+  directly against a git-rev pin (`a7d8224`), which put a concrete zenanalyze
+  version in zensr's library graph — so zensr could not link beside a codec that
+  pinned a different one. The rule now reads its 21 feature values out of a
+  `zenanalyze_api::Offer`, or extracts them through a `&dyn FeatureProvider` the
+  caller supplies.
+
+  New API (contract-only, `chooser`): `chooser_request()`,
+  `center_crop_rgb8()`, `classify_from_offer()`, `classify_from_owned_offer()`,
+  `classify_with_provider()`. The first two exist so an orchestrator can produce
+  an offer on the right geometry — the rule was calibrated on the center 512×512
+  crop and its features are not scale-invariant.
+
+  New feature `chooser-bundled = ["chooser", "dep:zenanalyze"]` supplies
+  `zenanalyze::Analyzer` as a default provider and keeps `classify_rgb8` working
+  unchanged for callers that don't want to plumb one. It is the only place zensr
+  names `zenanalyze`.
+
+  Behaviour is preserved: the request is still `FeatureSet::SUPPORTED`
+  (`Select::All`) rather than the 21 columns the rule reads, because narrowing it
+  changes which analysis tiers run and would need re-validation against the
+  pinned eval split. All 21 features carry golden version rows, so none is
+  dropped by the offer's version-row filter (verified against
+  `zenanalyze/benchmarks/feature_qualified_names.tsv`). `classify_rgb8` now
+  falls back to `Photo` at `p = 0` if extraction fails — the safe direction, per
+  the rule's deliberate precision bias.
+
+  **Known gap:** the rule is *fitted*, so it should pin each column's code
+  version (`Select::Features` over qualified `name@hex8`) and decline on a drift.
+  It can't yet — the 2026-07-26 fit did not record the feature versions it
+  trained against, and synthesising them from whatever the current build
+  produces would be a provenance claim with nothing behind it. This is no more
+  version-blind than the pre-contract code was; pinning lands with the next
+  re-fit, which should stamp
+  `zenanalyze::versioning::feature_qualified_names()` alongside the weights.
+
+- `zenanalyze` / `zenanalyze-api` are declared as crates.io versions resolved
+  through one workspace-root `[patch.crates-io]`, replacing per-manifest git-rev
+  pins. Cargo unifies by source, so a rev pin is its own source: two consumers on
+  different revs get two incompatible `Offer` types. A root patch rewrites every
+  edge at once — including `zenanalyze`'s own internal `{ version, path }` dep on
+  the contract, which a rev pin cannot reach. Drop the patch entries once
+  zenanalyze 0.2.x / zenanalyze-api 0.1.1 publish.
+
+- CI runs the chooser twice: `--features chooser` (the contract-only build must
+  compile everywhere) and `--features chooser-bundled` (where the behavioural
+  tests live). Running only the first would have been a green step that tested
+  nothing.

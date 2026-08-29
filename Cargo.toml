@@ -20,3 +20,15 @@ inherits = "release"
 opt-level = 3
 lto = "fat"
 codegen-units = 1
+
+# zenanalyze 0.2.x and the zenanalyze-api additions this graph needs
+# (FeatureProvider, Select::Names) are on `main` but not yet on crates.io. ONE
+# patch at the workspace root rewrites every registry edge — including
+# zenanalyze's own internal `{ version, path }` dep on the contract — so the
+# whole graph resolves a single zenanalyze and a single zenanalyze-api. Never
+# re-pin these as per-manifest git revs: Cargo unifies by source, so a rev pin is
+# its own source and consumers on different revs get incompatible `Offer` types.
+# Drop both entries once zenanalyze 0.2.x / zenanalyze-api 0.1.1 publish.
+[patch.crates-io]
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }

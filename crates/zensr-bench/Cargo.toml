@@ -6,12 +6,15 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 
 [dependencies]
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "a7d8224" }
+# Dev tooling (bench/probe binaries) may depend on a concrete zenanalyze — it is
+# not in the product graph. Registry version + the workspace-root patch, so it
+# still resolves the same source as everything else.
+zenanalyze = { version = "0.2.0", features = ["api"] }
 tract-onnx = "0.23.4"
 zensr-micro = { path = "../zensr-micro", features = ["internals"] }
 # `chooser` pulls zenanalyze in — needed by content_probe, which measures the
 # chooser against the coefficient-domain detector.
-zensr-zenjpeg = { path = "../zensr-zenjpeg", features = ["chooser"] }
+zensr-zenjpeg = { path = "../zensr-zenjpeg", features = ["chooser-bundled"] }
 zenpixels = "0.2.14"
 zenpng = "0.1.4"
 # zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),

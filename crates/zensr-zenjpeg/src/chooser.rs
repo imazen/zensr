@@ -18,8 +18,9 @@
 //! rule was calibrated on. Size-dependent and near-constant features were
 //! excluded from the fit.
 
-use zenanalyze::analyze_features_rgb8;
-use zenanalyze::feature::{AnalysisQuery, FeatureSet};
+use zenanalyze_api::{
+    FeatureProvider, Offer, OwnedFeatureResult, OwnedOffer, ProviderError, Request, Select,
+};
 
 /// Which specialist family a decoded image should be restored with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,9 +72,25 @@ const CHOOSER_BIAS: f32 = 2.6208;
 /// misrouting a photo through the graphics model is known.
 pub const CHOOSER_THRESHOLD: f32 = 0.85;
 
-/// Classify a decoded RGB8 image. Analyzes the center 512x512 crop (whole
-/// image when smaller) to match the calibration geometry.
-pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
+/// The rule's ask: **everything the provider can produce**.
+///
+/// The fit ran against `FeatureSet::SUPPORTED`, so that is what this requests —
+/// narrowing it to the 21 columns the rule actually reads would be cheaper, but
+/// it changes which analysis tiers run and so must be re-validated against the
+/// pinned eval split before it ships, not assumed.
+///
+/// An orchestrator unionizing several codecs' requests can pass this straight
+/// to [`zenanalyze_api::Catalog::union`].
+#[must_use]
+pub fn chooser_request() -> Request<'static> {
+    Request::new(Select::All)
+}
+
+/// The center 512x512 crop (whole image when smaller) — the geometry the rule
+/// was calibrated on, and the geometry any [`Offer`] fed to
+/// [`classify_from_offer`] must have been produced from.
+#[must_use]
+pub fn center_crop_rgb8(rgb: &[u8], w: usize, h: usize) -> (Vec<u8>, u32, u32) {
     assert_eq!(rgb.len(), 3 * w * h);
     let (cw, ch) = (w.min(512), h.min(512));
     let (x0, y0) = ((w - cw) / 2, (h - ch) / 2);
@@ -82,20 +99,28 @@ pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
         let row = &rgb[((y0 + y) * w + x0) * 3..][..cw * 3];
         crop.extend_from_slice(row);
     }
-    let res = analyze_features_rgb8(
-        &crop,
-        cw as u32,
-        ch as u32,
-        &AnalysisQuery::new(FeatureSet::SUPPORTED),
-    );
+    (crop, cw as u32, ch as u32)
+}
+
+/// Evaluate the logistic rule over anything that looks a feature up by bare name.
+///
+/// A feature the source doesn't carry contributes `z = 0` (its training median),
+/// i.e. it drops out of the sum — the pre-contract behaviour, kept exactly.
+///
+/// **Known gap:** the lookup is by BARE name, so a feature whose *definition*
+/// drifted upstream is used as if it hadn't. A fitted rule should pin each
+/// column's code version (`Select::Features` over qualified `name@hex8`
+/// identities) so a drift declines instead. That isn't possible yet: the
+/// 2026-07-26 fit did not record the feature versions it trained against, and
+/// inventing them from whatever this build happens to produce would be a
+/// provenance claim with nothing behind it. Pinning lands with the next re-fit,
+/// which should stamp `zenanalyze::versioning::feature_qualified_names()`
+/// alongside the weights. Until then this is exactly as version-blind as the
+/// pre-contract code was — no worse, and now at least written down.
+fn report_from_lookup(get: impl Fn(&str) -> Option<f32>) -> ChooserReport {
     let mut s = CHOOSER_BIAS;
     for &(name, med, iqr, wgt) in CHOOSER_FEATURES {
-        let v = FeatureSet::SUPPORTED
-            .iter()
-            .find(|f| f.name() == name)
-            .and_then(|f| res.get(f))
-            .map(|v| v.to_f32())
-            .unwrap_or(med); // absent feature contributes z=0 (neutral)
+        let v = get(name).unwrap_or(med); // absent feature contributes z=0 (neutral)
         let z = ((v - med) / iqr).clamp(-8.0, 8.0);
         s += wgt * z;
     }
@@ -110,7 +135,69 @@ pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
     }
 }
 
-#[cfg(test)]
+/// Classify from a shared [`Offer`] — the cross-codec reuse path, costing no
+/// pixels of its own.
+///
+/// The offer MUST have been produced from [`center_crop_rgb8`] of the image;
+/// the rule was calibrated on that geometry and the feature values are not
+/// scale-invariant.
+#[must_use]
+pub fn classify_from_offer(offer: &Offer<'_>) -> ChooserReport {
+    report_from_lookup(|name| offer.get(name).map(|f| f.float()))
+}
+
+/// [`classify_from_offer`] for the owned twin (a deserialized offer).
+#[must_use]
+pub fn classify_from_owned_offer(offer: &OwnedOffer) -> ChooserReport {
+    report_from_lookup(|name| offer.get(name).map(OwnedFeatureResult::float))
+}
+
+/// Classify a decoded RGB8 image by extracting through `provider` — the own-pass
+/// path, naming no `zenanalyze` type. Crops to the calibration geometry first.
+///
+/// The host chooses the analyzer version by choosing the provider;
+/// `zenanalyze::Analyzer` (behind zenanalyze's `api` feature) is the usual one,
+/// and the `chooser-bundled` feature wires it up via [`classify_rgb8`].
+pub fn classify_with_provider(
+    provider: &dyn FeatureProvider,
+    rgb: &[u8],
+    w: usize,
+    h: usize,
+) -> Result<ChooserReport, ProviderError> {
+    let (crop, cw, ch) = center_crop_rgb8(rgb, w, h);
+    let offer = provider.extract_rgb8(&crop, cw, ch, &chooser_request())?;
+    Ok(classify_from_owned_offer(&offer))
+}
+
+/// The bundled default provider: `zenanalyze::Analyzer` for the `zenanalyze`
+/// version this build pinned.
+///
+/// **The only place zensr names a `zenanalyze` type** — the host role, offered
+/// for callers that don't want to supply a provider. Everything above works
+/// against `zenanalyze-api` alone.
+#[cfg(feature = "chooser-bundled")]
+#[must_use]
+pub fn bundled_provider() -> impl FeatureProvider {
+    zenanalyze::Analyzer::new()
+}
+
+/// Classify a decoded RGB8 image with the [`bundled_provider`]. Analyzes the
+/// center 512x512 crop (whole image when smaller) to match the calibration
+/// geometry.
+///
+/// Falls back to [`ContentClass::Photo`] at `p = 0` if extraction fails —
+/// Photo is the safe direction (misrouting a photo into the aggressive graphics
+/// model is the harmful one), matching the rule's precision bias.
+#[cfg(feature = "chooser-bundled")]
+#[must_use]
+pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
+    classify_with_provider(&bundled_provider(), rgb, w, h).unwrap_or(ChooserReport {
+        class: ContentClass::Photo,
+        p_graphics: 0.0,
+    })
+}
+
+#[cfg(all(test, feature = "chooser-bundled"))]
 mod tests {
     use super::*;
 

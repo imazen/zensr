@@ -6,7 +6,17 @@ description = "zenjpeg integration for zensr: probe-driven decode policy, restor
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 
 [dependencies]
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "a7d8224", optional = true }
+# The version-unifying feature contract — the SOLE zenanalyze-family dependency
+# of this crate's chooser logic. See `docs/sole-contract.md` in imazen/zenanalyze.
+#
+# A crates.io VERSION, never a git rev: Cargo unifies by source, so a rev pin is
+# its own source and two consumers on different revs get two incompatible `Offer`
+# types. Unreleased changes come in through the single workspace-root
+# [patch.crates-io].
+zenanalyze-api = { version = "0.1.0", optional = true }
+# zenanalyze itself is only for `chooser-bundled` — the "host picks the version"
+# role, supplying `zenanalyze::Analyzer` as a default `FeatureProvider`.
+zenanalyze = { version = "0.2.0", optional = true, features = ["api"] }
 # zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
 # so this pins the public repo. Swap to a version req when 0.9.0 ships.
 # Local sibling tree wins via the gitignored .cargo override: just cargo-local
@@ -19,4 +29,11 @@ rgb = "0.8.52"
 bytemuck = "1.25.2"
 
 [features]
-chooser = ["dep:zenanalyze"]
+# Content-class chooser through the `zenanalyze-api` contract: reads feature
+# values out of an `Offer`, or extracts via a `&dyn FeatureProvider` the caller
+# supplies. No `zenanalyze` dependency, so it builds anywhere.
+chooser = ["dep:zenanalyze-api"]
+# `chooser` plus a bundled default provider (`zenanalyze::Analyzer`), which keeps
+# the zero-argument `classify_rgb8` entry working with no caller plumbing. This
+# is the only place zensr names `zenanalyze`.
+chooser-bundled = ["chooser", "dep:zenanalyze"]
