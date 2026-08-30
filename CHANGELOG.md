@@ -5,6 +5,41 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ## [Unreleased]
 
+### Changed
+
+- **The chooser takes an `Offer`; the `&dyn FeatureProvider` path is gone.**
+  `zenanalyze-api` cut `FeatureProvider` / `ProviderError` / `OwnedCatalog` before
+  its 0.1.1 shipped — the contract is data, not behaviour, and the model is push
+  (the host hands over an offer, the codec answers yes/no, and scans itself on
+  "no"). Accordingly:
+  - `classify_with_provider(&dyn FeatureProvider, …) -> Result<_, ProviderError>`
+    → removed. Use `classify_from_offer` / `classify_from_owned_offer` when a host
+    already ran a pass over `center_crop_rgb8`, or the new
+    `classify_rgb8_scanning(rgb, w, h) -> Result<ChooserReport, AnalyzeError>`.
+  - `bundled_provider()` → removed.
+  - `classify_rgb8` keeps its signature and now scans via
+    `zenanalyze::offer_for_request`.
+
+  `zensr-zenjpeg` is not published, so nothing downstream breaks and no version
+  bump is owed.
+
+- **`chooser-bundled` removed; `chooser` now pulls `zenanalyze` too.** The split
+  meant CI's first chooser step (`--features chooser`) was a green step that
+  tested nothing — every behavioural test was gated behind the second flag — and
+  the configuration it protected, "chooser without zenanalyze", was one nobody
+  shipped. Now one flag, one configuration, one gate that both compiles the
+  boundary and runs the rule's tests.
+
+  The rule that actually matters is unchanged: no `zenanalyze` type appears in a
+  public signature, so a host on a different `zenanalyze` version can still drive
+  `classify_from_offer` with its own pass.
+
+### Fixed
+
+- `classify_rgb8_scanning` returns the analysis error instead of swallowing it.
+  `classify_rgb8` keeps the infallible `Photo`-on-failure fallback, which is the
+  precision-biased safe direction the rule was fit for.
+
 ### Fixed
 
 - **CI is green again.** The `fmt + clippy` job had been failing since

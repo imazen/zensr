@@ -58,14 +58,18 @@ jobs:
       - name: Test (px)
         run: cargo test -p zensr-micro --features px,internals
 
-      # `chooser` is the contract-only build (zenanalyze-api, no zenanalyze), so
-      # it must COMPILE everywhere — but the chooser's behavioural tests need a
-      # provider, so they live under `chooser-bundled`. Running only the first
-      # would be a green step that tests nothing.
-      - name: Test (chooser — zenanalyze-api contract only)
+      # One flag, one configuration. `chooser` pulls both zenanalyze-api (the
+      # boundary types every public chooser signature names) and zenanalyze (what
+      # `classify_rgb8` scans with when no offer was handed in), so this single
+      # step compiles the code AND runs the behavioural tests.
+      #
+      # This used to be two steps, `chooser` and `chooser-bundled`. The split was
+      # removed 2026-08-30: the first was a green step that tested nothing (the
+      # behavioural tests were all gated behind the second flag), and the
+      # configuration it protected — "chooser without zenanalyze" — was one
+      # nobody shipped.
+      - name: Test (chooser — contract boundary + behavioural rule)
         run: cargo test -p zensr-zenjpeg --features chooser
-      - name: Test (chooser-bundled — with the zenanalyze provider)
-        run: cargo test -p zensr-zenjpeg --features chooser-bundled
 
   # 32-bit is a primary target: it catches pointer-width assumptions in the
   # kernels and keeps the wasm story honest.

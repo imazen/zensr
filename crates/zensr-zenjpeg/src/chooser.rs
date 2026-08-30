@@ -18,9 +18,7 @@
 //! rule was calibrated on. Size-dependent and near-constant features were
 //! excluded from the fit.
 
-use zenanalyze_api::{
-    FeatureProvider, Offer, OwnedFeatureResult, OwnedOffer, ProviderError, Request, Select,
-};
+use zenanalyze_api::{Offer, OwnedFeatureResult, OwnedOffer, Request, Select};
 
 /// Which specialist family a decoded image should be restored with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,57 +150,44 @@ pub fn classify_from_owned_offer(offer: &OwnedOffer) -> ChooserReport {
     report_from_lookup(|name| offer.get(name).map(OwnedFeatureResult::float))
 }
 
-/// Classify a decoded RGB8 image by extracting through `provider` — the own-pass
-/// path, naming no `zenanalyze` type. Crops to the calibration geometry first.
+/// Classify a decoded RGB8 image, running one analysis pass. Crops to the
+/// calibration geometry first.
 ///
-/// The host chooses the analyzer version by choosing the provider;
-/// `zenanalyze::Analyzer` (behind zenanalyze's `api` feature) is the usual one,
-/// and the `chooser-bundled` feature wires it up via [`classify_rgb8`].
-pub fn classify_with_provider(
-    provider: &dyn FeatureProvider,
+/// **Prefer [`classify_from_offer`] when a host already ran a pass** — this entry
+/// point runs its own, and the host already paid for that one. A caller on a
+/// *different* `zenanalyze` version scans itself over [`center_crop_rgb8`] and
+/// hands the result to [`classify_from_offer`], which names no `zenanalyze` type.
+///
+/// # Errors
+///
+/// Propagates whatever the analysis pass reports — a malformed buffer, or a
+/// feature this build cannot produce.
+pub fn classify_rgb8_scanning(
     rgb: &[u8],
     w: usize,
     h: usize,
-) -> Result<ChooserReport, ProviderError> {
+) -> Result<ChooserReport, zenanalyze::AnalyzeError> {
     let (crop, cw, ch) = center_crop_rgb8(rgb, w, h);
-    let offer = provider.extract_rgb8(&crop, cw, ch, &chooser_request())?;
+    let offer = zenanalyze::offer_for_request(&crop, cw, ch, &chooser_request())?;
     Ok(classify_from_owned_offer(&offer))
 }
 
-/// The bundled default provider: `zenanalyze::Analyzer` for the `zenanalyze`
-/// version this build pinned.
+/// Classify a decoded RGB8 image, analyzing the center 512x512 crop (whole image
+/// when smaller) to match the calibration geometry.
 ///
-/// Offered for callers that don't want to supply a provider — zensr picking an
-/// analyzer version on their behalf. Everything above works against
-/// `zenanalyze-api` alone, which is what lets a host on a *different*
-/// `zenanalyze` version drive the same rule.
-///
-/// Depending on `zenanalyze` directly is explicitly permitted (see
-/// `docs/sole-contract.md` in imazen/zenanalyze); what matters is that no
-/// `zenanalyze` type appears in a public signature.
-#[cfg(feature = "chooser-bundled")]
-#[must_use]
-pub fn bundled_provider() -> impl FeatureProvider {
-    zenanalyze::Analyzer::new()
-}
-
-/// Classify a decoded RGB8 image with the [`bundled_provider`]. Analyzes the
-/// center 512x512 crop (whole image when smaller) to match the calibration
-/// geometry.
-///
-/// Falls back to [`ContentClass::Photo`] at `p = 0` if extraction fails —
-/// Photo is the safe direction (misrouting a photo into the aggressive graphics
-/// model is the harmful one), matching the rule's precision bias.
-#[cfg(feature = "chooser-bundled")]
+/// Falls back to [`ContentClass::Photo`] at `p = 0` if the scan fails — Photo is
+/// the safe direction (misrouting a photo into the aggressive graphics model is
+/// the harmful one), matching the rule's precision bias. Use
+/// [`classify_rgb8_scanning`] when you want the error instead.
 #[must_use]
 pub fn classify_rgb8(rgb: &[u8], w: usize, h: usize) -> ChooserReport {
-    classify_with_provider(&bundled_provider(), rgb, w, h).unwrap_or(ChooserReport {
+    classify_rgb8_scanning(rgb, w, h).unwrap_or(ChooserReport {
         class: ContentClass::Photo,
         p_graphics: 0.0,
     })
 }
 
-#[cfg(all(test, feature = "chooser-bundled"))]
+#[cfg(all(test, feature = "chooser"))]
 mod tests {
     use super::*;
 

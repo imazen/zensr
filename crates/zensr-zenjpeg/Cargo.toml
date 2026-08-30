@@ -7,20 +7,24 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 
 [dependencies]
 # The version-unifying feature contract, and this crate's INTERCHANGE BOUNDARY:
-# the chooser takes an `Offer` / `&dyn FeatureProvider`, so a host on any
-# `zenanalyze` version can drive it. See `docs/sole-contract.md` in
-# imazen/zenanalyze.
+# the chooser takes an `Offer`, so a host on any `zenanalyze` version can drive
+# it. See `docs/sole-contract.md` in imazen/zenanalyze.
 #
 # A crates.io VERSION, never a git rev: Cargo unifies by source, so a rev pin is
 # its own source and two consumers on different revs get two incompatible `Offer`
 # types. Unreleased changes come in through the single workspace-root
 # [patch.crates-io].
 zenanalyze-api = { version = "0.1.0", optional = true }
-# zenanalyze backs `chooser-bundled`, supplying `zenanalyze::Analyzer` as a
-# default `FeatureProvider` so callers don't have to plumb one. A direct dep like
-# this is explicitly PERMITTED — a codec that needs features the host didn't
-# provide should re-analyse — and is optional here only because the chooser
-# genuinely doesn't need it when an offer is supplied.
+# zenanalyze rides `chooser` unconditionally: it is what `classify_rgb8` scans
+# with when no offer was handed in. A direct dep like this is explicitly
+# PERMITTED — a codec that needs features the host didn't provide should
+# re-analyse. The public boundary stays zenanalyze-api-only, which is the rule
+# that actually matters.
+#
+# It used to be optional behind a second `chooser-bundled` feature; that flag was
+# removed 2026-08-30 because it bought "chooser without zenanalyze", a
+# configuration nobody built, and split the test suite so that only the smaller
+# half ran by default.
 zenanalyze = { version = "0.2.0", optional = true, features = ["api"] }
 # zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
 # so this pins the public repo. Swap to a version req when 0.9.0 ships.
@@ -35,10 +39,7 @@ bytemuck = "1.25.2"
 
 [features]
 # Content-class chooser through the `zenanalyze-api` contract: reads feature
-# values out of an `Offer`, or extracts via a `&dyn FeatureProvider` the caller
-# supplies. No `zenanalyze` dependency, so it builds anywhere.
-chooser = ["dep:zenanalyze-api"]
-# `chooser` plus a bundled default provider (`zenanalyze::Analyzer`), which keeps
-# the zero-argument `classify_rgb8` entry working with no caller plumbing —
-# zensr picking an analyzer version on the caller's behalf.
-chooser-bundled = ["chooser", "dep:zenanalyze"]
+# values out of an `Offer` the caller hands in, and scans for itself with the
+# bundled `zenanalyze` when there is no offer (`classify_rgb8`). One flag, so
+# there is exactly one configuration to build and test.
+chooser = ["dep:zenanalyze-api", "dep:zenanalyze"]
