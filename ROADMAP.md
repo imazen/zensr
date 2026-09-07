@@ -10,6 +10,15 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 
 ## 0. Standing corrections that gate everything
 
+0. **CORPUS INVALID — everything below is provisional (2026-08-05, user-caught).**
+   zensr trained and evaluated against `/mnt/v/imazen-26`, the pre-curation
+   acquisition corpus. The only valid imazen-26 is `~/work/codec-corpus/imazen-26`.
+   The invalid root has since been **deleted** and its derived corpora emptied, so
+   this is now forced, not optional.
+   → **Work plan: `docs/CORPUS-REPOINT-HANDOFF.md`.** Evidence:
+   `benchmarks/imazen26_contamination_audit_2026-08-05.md`. Do not fit, ship or
+   quote a constant until the repoint lands.
+
 1. **Eval reference contamination (found 2026-07-31, user-caught).** 39% of the
    pinned eval split has JPEG ground truth (all `unsplash-*` dirs + 23 files in
    `lilith/`). Absolute gains were understated: rt24g scores +3.82 at q35 on

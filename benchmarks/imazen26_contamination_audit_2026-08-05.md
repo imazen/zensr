@@ -1,5 +1,11 @@
 # imazen-26 contamination audit — 2026-08-05
 
+> **Disk state moved after this audit.** Re-measured 2026-09-07: `/mnt/v/imazen-26`
+> is deleted, `imazen-26-clean` and `-clean-xl` are empty shells, and the stray
+> `imazen-26 - Copy*` dirs are gone (fix-order step 5, done). The old numbers can
+> no longer be reproduced. Current state and the work plan:
+> `docs/CORPUS-REPOINT-HANDOFF.md`.
+
 **Rule (user directive, 2026-08-05): `~/work/codec-corpus/imazen-26` is the only
 valid imazen-26. Anything based on another root is invalid.**
 
