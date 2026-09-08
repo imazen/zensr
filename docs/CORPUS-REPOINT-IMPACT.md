@@ -62,12 +62,25 @@ is not obviously the model that was intended — and nobody chose it. It is what
 falls out of "train on the whole canonical corpus", which is the only defensible
 default once the old eight-subcorpus list is gone.
 
-**Recommendation before Step 3 (retrain): cap per-folder contribution.** A cap
-around 15% of pairs would take ai-products from 33% to 15% and leave every other
-class untouched, at a cost of ~18% of the pool. That is a deliberate, recordable
-choice; 35% by accident is not. The cap belongs in `make_distill_data.py` as an
-explicit knob, and the ladder should be reported per content label either way —
-an aggregate number over this mixture mostly measures AI-product renders.
+**Recommendation before Step 3 (retrain): cap per-folder contribution.** The knob
+now exists — `ZENSR_FOLDER_CAP` in `make_distill_data.py` — and is **off by
+default**, because changing the training mixture is a decision and the first
+ladder on the new corpus should measure the uncapped mixture so a cap has
+something to be compared against. Measured:
+
+| cap | pool | top three folders |
+|---|---|---|
+| none | 1,151 | ai-products 33%, web-screenshots 22%, nature 7% |
+| 0.20 | 867 | web-screenshots 20%, ai-products 20%, nature 9% |
+| 0.15 | 743 | web-screenshots 15%, ai-products 15%, nature 11% |
+
+The cap is on each folder's share of the **final** pool, which needs a fixed
+point: trimming the biggest folder shrinks the pool and raises everyone else's
+share. Capping against the pre-trim total is the obvious shortcut and does not
+hold — at 15% it leaves web-screenshots at 20% of what remains.
+
+Either way the ladder should be reported per content label: an aggregate over
+this mixture mostly measures AI-product renders.
 
 ## 3. The split is no longer ours
 

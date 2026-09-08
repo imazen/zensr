@@ -94,6 +94,63 @@ def list_train_files(sub):
     return files
 
 
+# ZENSR_FOLDER_CAP=<fraction>: no single canonical folder may contribute more
+# than this share of training files. Unset = no cap.
+#
+# Why it exists: the canonical corpus is not balanced for this task.
+# `9226-lilith-ai-products` alone is 33% of the training crops and the corpus is
+# ~68% synthetic/graphic against ~18% photographic — while zensr restores web
+# JPEGs, which are mostly photographs. Nobody chose that mixture; it falls out of
+# "train on the whole corpus", which is the only defensible default once the old
+# eight-subcorpus list is gone. A cap makes the choice explicit and recordable.
+# 0.15 takes ai-products from 33% to 15% and leaves every other folder untouched,
+# at a cost of ~18% of the pool.
+#
+# NOT applied by default: changing the training mixture is a decision, and the
+# first ladder on the new corpus should measure the uncapped mixture so the cap
+# has something to be compared against.
+FOLDER_CAP = float(os.environ.get("ZENSR_FOLDER_CAP", "0") or 0)
+
+
+def cap_folders(per_folder, rng):
+    """Flatten `{folder: [file]}` into one pool, optionally capping each folder's
+    share at FOLDER_CAP.
+
+    The cap is on each folder's share of the FINAL pool, which needs a fixed
+    point: trimming the biggest folder shrinks the pool, which raises everyone
+    else's share, which can push the next folder over. Capping against the
+    original total instead is the obvious shortcut and it does not hold — at 15%
+    it leaves `8100-lilith-web-screenshots` at 20% of what remains.
+
+    Sampling within an over-cap folder is random under the run seed rather than a
+    prefix, so the cap does not silently select by filename.
+    """
+    sizes = {k: len(v) for k, v in per_folder.items()}
+    if 0 < FOLDER_CAP < 1:
+        for _ in range(100):
+            total = sum(sizes.values())
+            over = {k: n for k, n in sizes.items() if n > FOLDER_CAP * total}
+            if not over:
+                break
+            # Trim the single worst offender per round; trimming all at once
+            # overshoots, because each trim lowers the bar for the others.
+            worst = max(over, key=lambda k: sizes[k])
+            # n / (total - sizes[worst] + n) <= cap  ->  solve for n
+            rest = total - sizes[worst]
+            sizes[worst] = max(1, int(FOLDER_CAP * rest / (1 - FOLDER_CAP)))
+    pool = []
+    for folder in sorted(per_folder):
+        fs = sorted(per_folder[folder])
+        kept = fs if sizes[folder] >= len(fs) else sorted(rng.sample(fs, sizes[folder]))
+        note = f"  (capped from {len(fs)})" if len(kept) != len(fs) else ""
+        print(f"{folder}: {len(kept)} train files{note}")
+        pool += kept
+    if 0 < FOLDER_CAP < 1:
+        n = sum(len(v) for v in per_folder.values())
+        print(f"folder cap {FOLDER_CAP:.0%}: pool {n} -> {len(pool)}")
+    return pool
+
+
 def ref_provenance(files):
     """Count references by kind. A JPEG ground truth is itself compressed, so a
     pair built from one measures artifact REPRODUCTION as fidelity; the ladder
@@ -126,11 +183,12 @@ def main():
         fwd = lambda t: span_forward(sd, t, 2)
     sd = {k: v.to(dev) for k, v in sd.items()}
 
-    pool = []
+    per_folder = {}
     for s in SUBS:
         fs = list_train_files(s)
-        pool += fs
-        print(f"{s}: {len(fs)} train files")
+        if fs:
+            per_folder[s] = fs
+    pool = cap_folders(per_folder, rng)
     prov = ref_provenance(pool)
     print(f"reference provenance: {prov}")
     if not pool:
