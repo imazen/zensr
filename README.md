@@ -25,6 +25,17 @@ calibrated slack + absolute sample-quantization slack) → optional ×2 SR.
 | realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | **+6.88/+3.36/+2.02/+1.15/+0.32** = 57–65% of quality tier | **0.16** |
 | low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 *(not yet re-measured on clean references)* | 5.3 |
 
+> **These numbers are provisional and not currently reproducible (2026-09-08).**
+> They were measured against `/mnt/v/imazen-26-clean` and a pinned eval split that
+> were both derived from the wrong imazen-26 corpus; that root has since been
+> deleted and the split superseded by the canonical one
+> (`docs/CORPUS-REPOINT-IMPACT.md`). Under the canonical split those 64 files are
+> now spread across train/validate/test. Separately, the quality-tier default
+> `dejpeg7_graphics` inherits from a fine-tune chain that trained on 20 corrupted
+> ground-truth pairs — `docs/MODEL-PROVENANCE-AUDIT.md`. The committed realtime
+> weights (`dejpeg_rt24g`) are outside that lineage. Re-measurement is queued
+> before any of this is quoted again.
+
 Both tier rows: clean PNG references (`/mnt/v/imazen-26-clean`), pinned eval
 split, libjpeg-turbo 4:2:0, **per-file median** gain over the plain decode,
 n=64/cell, shipped pipeline output (post-projection). Rows:

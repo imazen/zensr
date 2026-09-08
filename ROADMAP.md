@@ -19,6 +19,12 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    train/validate/test split and the variant registry, versioned as one unit, and
    its image bytes come from public R2. Neither `/mnt/v/imazen*` (invalid) nor
    `~/work/codec-corpus/imazen-26` (the pre-2026-08-23 location, stale) is it.
+   **The existing checkpoints inherit this**: 47 models, 4 with a recorded git
+   commit, 3 with dataset provenance; the README quality-tier default
+   (`dejpeg7_graphics`) is in a fine-tune chain that trained on 20 corrupted
+   ground-truth pairs. Audit: **`docs/MODEL-PROVENANCE-AUDIT.md`**. Re-score the
+   existing models on the new held-out split BEFORE retraining — that is the
+   first trustworthy measurement any of them will have had.
    → **Step 1 of `docs/CORPUS-REPOINT-HANDOFF.md` is DONE**; what changed and what
    it costs: **`docs/CORPUS-REPOINT-IMPACT.md`**. Steps 2-4 (rebuild the derived
    corpora, retrain, re-run the audits) remain open. **Every constant in
