@@ -183,10 +183,11 @@ fn main() {
     let mut tsv = String::from(
         "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
-    // ZENSR_EVAL_PIN=<tsv> (default eval_split/imazen26_eval_files.tsv) restricts
-    // every subcorpus to the frozen eval files. Without it, "first N sorted"
-    // silently admits training images whenever the directory listing differs
-    // from the one the split was frozen against.
+    // Restricts every subcorpus to the held-out files — validate + test of
+    // eval_split/imazen26_effective_split.tsv (`just split`). ZENSR_EVAL_PIN
+    // overrides with a two-column dir<TAB>filename list for a one-off. Without
+    // either, "first N sorted" silently admits training images whenever the
+    // directory listing differs from the one the split was frozen against.
     let pinned = resolve_pinned(&root);
     for (sub, dir) in &subcorpora_for(&root) {
         let (sub, dir) = (sub.as_str(), dir.as_str());

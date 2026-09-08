@@ -312,9 +312,13 @@ repeat.
 
 ## 8. What does NOT need redoing
 
-- **The picker-corpus leakage work.** `eval_split/picker_safe_origins_2026-08-04.txt`
-  (319 safe origins → 3,452 renditions) is keyed to a corpus that never touched
-  the invalid root. Only its *reference* training set needs re-checking (step 4).
+- ~~**The picker-corpus leakage work.**~~ **WRONG — re-run 2026-09-08 and the
+  verdict roughly halved: 171 safe origins → 1,865 renditions, against the 319 →
+  3,452 claimed here.** The corpus never touched the invalid root, but the verdict
+  is about its overlap with the TRAINING SET, which is precisely what the repoint
+  changed. `eval_split/picker_safe_origins_2026-08-04.txt` is superseded by
+  `..._2026-09-08.txt`. This is the "only its reference training set needs
+  re-checking" caveat below turning out to be the whole point.
   These renditions are **size-diverse** (`scale36x64` upward), which is the XL
   corpus's largest gap — every XL image is a 512 crop, and the sweep discipline
   wants 16–20 log-spaced sizes for anything a model is fitted on.

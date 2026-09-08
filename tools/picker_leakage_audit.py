@@ -62,15 +62,29 @@ from PIL import Image  # noqa: E402
 
 Image.MAX_IMAGE_PIXELS = None
 
-PICKER = "/mnt/v/output/clean-picker-corpus-2026-06-26"
-ROOTS = [REPO]  # the canonical repo IS the corpus; no /mnt/v mirror is valid
-# Repointed 2026-09-07: the training set is now the TRAIN BUCKET of the canonical
-# corpus, not eight flat subcorpora of the deleted /mnt/v/imazen-26 root. Both
-# halves changed — the images and the exclusion rule — so a verdict from before
-# this date answers a question about a corpus that no longer exists.
+# Repointed 2026-09-08: the training set is now the TRAIN BUCKET of the canonical
+# corpus REPO (github.com/imazen/imazen-26), not eight flat subcorpora of the
+# deleted /mnt/v/imazen-26 root. Both halves changed — the images and the
+# exclusion rule — so a verdict from before this date answers a question about a
+# corpus that no longer exists.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
 from imazen26_canonical import REPO  # noqa: E402
+
+PICKER = "/mnt/v/output/clean-picker-corpus-2026-06-26"
+# Hash-resolution sources for the picker corpus's `source_sha256` column. These
+# are a LOOKUP TABLE — "which canonical image is this sha?" — not corpus roots:
+# nothing is trained or evaluated from them, and membership is still decided by
+# the split. The distinction matters because the second entry is a /mnt/v path.
+#
+# The picker corpus was built partly from the PNG-v3 render layer, which the
+# canonical repo publishes as R2 URLs (`png_v3_sdr_url`, 2,639 objects) rather
+# than as local bytes. Without a local copy of that layer, 105 of the 414 origins
+# (25%) resolve to nothing and get counted unsafe — measured, and it is a
+# measurement artifact rather than a leak. `/mnt/v/output/imazen-26-png-v3` is a
+# mirror of that canonical layer; it is used only to turn a sha into an identity.
+PNG_V3_MIRROR = "/mnt/v/output/imazen-26-png-v3"
+ROOTS = [REPO, PNG_V3_MIRROR]
 # Mean per-pixel luma difference on a 16x16 thumbnail, below which two images are
 # the same scene. Loose enough for a re-encode or a format conversion, tight
 # enough that distinct photos do not collide.

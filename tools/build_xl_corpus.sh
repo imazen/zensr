@@ -19,8 +19,8 @@
 # — assuming is what made this comment wrong the first time.
 #
 #   noaa  — rebuilt from the canonical 5300-noaa-hurricane-documents, restricted
-#           to val+test via eval_split/imazen26_eval_files.tsv. Unfiltered it
-#           would put 22 training documents into an eval corpus.
+#           to val+test via eval_split/imazen26_effective_split.tsv. Unfiltered
+#           it would put 22 training documents into an eval corpus.
 #   patents — filtered. MEASURED 2026-09-07: the canonical corpus's 113 patent
 #           scans were drawn from this very corpus, and three of its documents
 #           (US5046022, US77494, US3807657 = 39 of 357 pages) are now training

@@ -3,7 +3,9 @@
 24,137 rows, 1.9 MB, produced by `crates/zensr-bench/src/bin/picker_gain.rs`
 against `/mnt/v/output/clean-picker-corpus-2026-06-26` (the size-diverse picker
 corpus, whose 319 leakage-safe origins are pinned in
-`eval_split/picker_safe_origins_2026-08-04.txt`).
+`eval_split/picker_safe_origins_2026-08-04.txt` — **now superseded by
+`..._2026-09-08.txt`: re-measured against the repointed training set, 171 safe
+origins and 1,865 renditions, not 319 and 3,452**).
 
 **Still unanalysed.** It was left in `~/tmp`, which is not durable — this move is
 the fix, not the analysis. `docs/CORPUS-REPOINT-HANDOFF.md` §8 lists it as work

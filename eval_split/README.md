@@ -27,7 +27,8 @@ viewports). 210 files move; the bucket proportions do not.
 
 | file | what |
 |---|---|
-| `picker_safe_origins_2026-08-04.txt` | 319 leakage-free origins of the clean-picker corpus, which never touched the invalid root |
+| `picker_safe_origins_2026-09-08.txt` | **current** — 171 leakage-free origins of the clean-picker corpus (1,865 of its 4,497 renditions) |
+| `picker_safe_origins_2026-08-04.txt` | **SUPERSEDED, do not use** — 319 origins, measured against the invalid training set. The corpus was always fine; the verdict was about its overlap with training, and the repoint changed that. |
 | `xl_corpus_subcorpora.tsv` | label→directory map for the XL eval corpus |
 | `xl_nasa_leg_dropped_2026-09-07.txt` | the 24 filenames of the XL `nasa` leg, dropped in the repoint — kept so it can be re-acquired deliberately |
 

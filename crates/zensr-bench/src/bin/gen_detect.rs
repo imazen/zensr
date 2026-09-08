@@ -48,8 +48,9 @@
 //!       ZENSR_GD_DEBUG_HIST=<jpg>  dump per-band luma histograms and exit
 //!       ZENSR_GD_DEBUG_FEAT=<jpg>  dump the feature row for one file and exit
 //!
-//! Eval split = the pinned eval_split/imazen26_eval_files.tsv files (never
-//! train/tune on those); train = stride-sampled from the remaining files.
+//! Eval split = validate + test of eval_split/imazen26_effective_split.tsv
+//! (`just split`; never train/tune on those); train = stride-sampled from the
+//! remaining files.
 
 use std::collections::{HashSet, VecDeque};
 use std::io::Write as _;

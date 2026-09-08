@@ -234,11 +234,42 @@ to relax.
 corpus. Keep the hypothesis, discard the number, re-measure.
 
 **Survives.** The zenjpeg integration (probe policy, deblock rule, S10 projection,
-slack calibration — calibrated on coefficient statistics, not corpus content), the
-runtime and its SIMD kernels, and the picker-corpus leakage work, whose corpus
-never touched the invalid root. Its 24,137 unanalysed `picker_gain` cells are now
-at `/mnt/v/zensr/picker-gain/2026-08-04/` behind a pointer file, off the
+slack calibration — calibrated on coefficient statistics, not corpus content), and
+the runtime and its SIMD kernels. The 24,137 unanalysed `picker_gain` cells are
+now at `/mnt/v/zensr/picker-gain/2026-08-04/` behind a pointer file, off the
 non-durable scratch they were sitting in.
+
+**Did NOT survive, contrary to the handoff.** §8 lists the picker-corpus leakage
+verdict as work that does not need redoing, on the grounds that the picker corpus
+itself never touched the invalid root. True of the corpus — but the verdict is
+about its overlap with the *training set*, and that is exactly what changed.
+Re-run against the new training set:
+
+| | 2026-08-04 (invalid training set) | 2026-09-08 |
+|---|---|---|
+| safe origins | 319 of 414 (77%) | **171 of 414 (41%)** |
+| exact training file | 81 | 91 |
+| near-duplicate of training | 14 | **117** |
+| unresolved | — | 35 (8%) |
+| **usable renditions** | **3,452 of 4,497** | **1,865 of 4,497** |
+
+The collapse is not a new leak; it is the old verdict having been measured against
+a training set one-eighth the size in content classes. Training now spans all 21
+canonical folders, so far more of a corpus built from imazen-26 overlaps it. The
+new list is `eval_split/picker_safe_origins_2026-09-08.txt`; the 2026-08-04 one is
+superseded and must not be used.
+
+Those 1,865 renditions are still the corpus's most valuable property, because they
+are **size-diverse** (`scale36x64` upward) and the XL corpus is not — every XL
+image is a 512 crop, while the sweep discipline asks for 16-20 log-spaced sizes
+for anything a model is fitted on.
+
+One methodology note: resolving the picker corpus's `source_sha256` needs the
+PNG-v3 render layer, which the corpus repo publishes as R2 URLs rather than local
+bytes. Without a local copy 105 origins (25%) resolve to nothing and are counted
+unsafe — a measurement artifact, not a leak. The audit uses
+`/mnt/v/output/imazen-26-png-v3` purely as a sha→identity lookup; it is not a
+corpus root, and membership is still decided by the split.
 
 ## 8. Reference-provenance is now recorded, and it is a problem worth naming
 
