@@ -233,36 +233,77 @@ work is discarded halo. 256px would cut that to 16%.
 `examples/conv_probe` takes size and channel-count arguments and `kernel_tiers`
 now sweeps 64/128/512, so both regimes stay visible.
 
+## 5. Deleting the scalar border — the biggest single kernel win
+
+The profile block I had labelled "addressing" (25%) was mostly the **scalar edge
+loop**: `vmovshdup` paired with `add $0x18,%r11` (0x18 = the 24-byte taps
+stride), repeated ~16 times at 1-1.5% each. Priced by building a deliberately
+wrong variant that skips edges entirely:
+
+| size | with edges | without | border cost |
+|---|---|---|---|
+| **128px** | 93.1 | 122.3 | **31%** |
+| 512px | 107.2 | 114.8 | 7% |
+
+31% at the tile size production runs. Zero-padding one column each side lets the
+vector tile loop cover every output column, so the scalar path is deleted rather
+than optimised.
+
+**Padding the whole plane is the obvious version and it is wrong**: +31% at
+128px but **−23% at 512px**, because the buffer is `cin*h*(wd+2)` floats (33 MB
+there) and a fresh allocation that size costs more in page faults and zeroing
+than the border ever cost. The shipped version keeps a **rolling three-row
+window** (50 KB at the production tile), copies each input row exactly once, and
+reuses it for the three output rows that need it.
+
+| size | AVX-512 | AVX2 |
+|---|---|---|
+| 128px | 95.2 → **128.2** (+35%) | 68.8 → **86.0** (+25%) |
+| 512px | 107.9 → 122.0 (+13%) | 74.6 → 75.7 (+1.5%) |
+| 1024px | 97.1 → 118.6 (+22%) | |
+
+## 6. What unsafe bought: nothing, so far
+
+`zensr-micro` gained an `unsafe-experiments` feature — off by default so shipping
+keeps `forbid(unsafe_code)`, relaxed to `deny()` under the feature so each site
+needs its own `#[allow(unsafe_code)]` and stays greppable. **Temporary, marked
+for removal.**
+
+First experiment: replace the per-tap `try_into().unwrap()` range check with a
+provable pointer cast. Result **within noise** — 94.05 vs 94.25 median. LLVM was
+already eliding the check; the safe fixed-size-array pattern produces identical
+codegen. Every win recorded in this document came from safe code.
+
+### Where the kernel stands now
+
+Profile at 128px after the border removal:
+
+| | share |
+|---|---|
+| **FMA (productive)** | **72.0%** |
+| vector load/store | 14.8% |
+| integer/addressing | 9.9% |
+| branch/compare | 2.3% |
+| **scalar float** | **0.0%** |
+
+**24.0 FLOP/cycle against Zen 4's 32 — 75% of AVX-512 FMA peak**, up from 16.2
+(51%) at the start of the session. IPC fell 3.96 → 1.98 across the whole
+sequence, which is the expected shape: the cheap integer and branch work is gone
+and what remains is arithmetic with real latency.
+
+Cumulative on this kernel, AVX-512 at 128px: **84.3 → 126 GFLOP/s, +49%.**
+
 ### What is left
 
-At 89.4 GFLOP/s the kernel is at ~57% of single-core AVX-512 FMA peak. Accumulator widening is done (above). At ~93.5 GFLOP/s the kernel sits at
-**~55% of Zen 4's 32 FLOP/cycle** AVX-512 peak, up from 51%. Instructions per
-iteration halved across the two changes (73.6M → 35.6M) and FMAs went from 12.8%
-to 26.5% of retired instructions; IPC fell 3.96 → 2.07, which is the expected
-shape when cheap integer work is removed and what remains carries real latency.
+Loads (14.8%) are the largest remaining non-FMA block. Two of the three taps are
+4-byte-misaligned by construction, so a 64-byte load crosses a cache line on
+every one; synthesising the shifted vectors with `valignd` from one aligned load
+would trade two misaligned loads for two permutes. That needs a cross-vector
+element-shift op, which magetypes does not have — so it is a **new public API on
+a published crate**, i.e. a PR against archmage rather than a local change. At
+75% of peak the headroom left is ~33%, and this is the only identified route to
+it.
 
-The next bottleneck is **loads**, not arithmetic: the hottest single instruction
-is now `vmovups (%rdx,%rdi,4),%zmm16` at 8.3%. Two of the three taps (x−1 and
-x+1) are 4-byte-misaligned by construction, so a 64-byte load crosses a cache
-line on every one. The standard fix is to load aligned and synthesise the
-shifted vectors with `valignd`/shuffles, trading two misaligned loads for two
-permutes — untested here.
-
-## 3. archmage 0.9.29 is a correctness upgrade, not a speed one
-
-0.9.29 adds `silu_midp()`/`sigmoid_midp()` and restores the fast `recip()`
-lowerings. zensr's SiLU already computes `one / ((-v).exp_midp() + one)` —
-exact division — and 0.9.29's `silu_midp` "keeps exact division internally so
-saturated lanes stay exactly 0/1". Same arithmetic. Taking it replaces a
-hand-rolled kernel with one differentially tested on every backend, and
-obsoletes the `recip(inf) = NaN` workaround note, but no speed claim should be
-attached to it without measuring.
-
-## Reproduce
-
-```
-cargo bench -p zensr-micro --features internals --bench kernel_tiers
-cargo build --release -p zensr-bench --bin prod_bench
-ZENSR_PB_MODEL=dejpeg_rt24g ./target/release/prod_bench 3
-ZENSR_WINOGRAD=1 ZENSR_PB_MODEL=dejpeg_rt24g ./target/release/prod_bench 3
-```
+Everything else measured here is done: bounds checks hoisted, accumulators
+widened to 8 chains, loop order fixed, channels blocked for the TLB, scalar
+border deleted, tile size adapted to thread count.
