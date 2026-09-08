@@ -436,12 +436,20 @@ impl AdoptedModel {
         // whole sweep on both models), so this changes speed only.
         // benchmarks/realtime_kernels_x86_2026-09-08.md
         let tile = if tile == 0 {
-            match threads.max(1) {
+            let base = match threads.max(1) {
                 1..=2 => 512,
                 3..=4 => 384,
                 5..=8 => 256,
                 _ => 128,
-            }
+            };
+            // Round UP so that the CONVOLVED width, tile + 2*halo, is a multiple
+            // of the widest vector (16 f32). Otherwise the row kernel needs an
+            // overlapping tail tile that recomputes (16 - width%16) columns on
+            // every row. At the production shape that is tile 128 + 2*10 = 148,
+            // a 4-column tail, and rounding to 140 (width 160) measured -3.5%.
+            // Rounding up rather than down also shrinks the discarded halo
+            // fraction, so it wins on both counts.
+            base + (16 - (base + 2 * halo) % 16) % 16
         } else {
             tile
         };

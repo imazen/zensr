@@ -30,8 +30,14 @@ fn main() {
         .collect();
 
     println!("model {model} halo {halo}, {side}px, {threads} threads, {reps} reps");
-    println!("{:>6} {:>10} {:>9} {:>8}", "tile", "median ms", "halo cost", "checksum");
-    for &tile in &[64usize, 128, 192, 256, 384, 512] {
+    println!(
+        "{:>6} {:>10} {:>9} {:>6} {:>8}",
+        "tile", "median ms", "halo cost", "tail", "checksum"
+    );
+    // Aligned candidates alongside the round numbers: when tile + 2*halo is a
+    // multiple of the vector width the kernel needs no overlapping tail tile,
+    // which otherwise recomputes (W - width%W) columns per row.
+    for &tile in &[76usize, 108, 140, 172, 268, 396, 524] {
         if tile > side {
             continue;
         }
@@ -45,10 +51,12 @@ fn main() {
         }
         ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let overhead = ((tile + 2 * halo) as f64 / tile as f64).powi(2);
+        let tail = (tile + 2 * halo) % 16;
         println!(
-            "{tile:>6} {:>10.1} {:>8.3}x {:>8.3}",
+            "{tile:>6} {:>10.1} {:>8.3}x {:>6} {:>8.3}",
             ts[ts.len() / 2],
             overhead,
+            if tail == 0 { "-".to_string() } else { format!("{tail}") },
             sum
         );
     }
