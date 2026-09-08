@@ -67,12 +67,29 @@ macro_rules! define_kernels {
 
                 let mut x = 1usize;
                 while x + W < wd {
-                    let mut acc = [
-                        V::<T>::splat(token, bias[oc0]),
-                        V::<T>::splat(token, bias[oc0 + 1]),
-                        V::<T>::splat(token, bias[oc0 + 2]),
-                        V::<T>::splat(token, bias[oc0 + 3]),
-                    ];
+                    // EIGHT independent accumulator chains instead of four:
+                    // (l,m) share one per output, r gets its own, so the longest
+                    // dependency run per tap iteration is 2 rather than 3.
+                    //
+                    // Twelve chains (one per tap) is faster still on AVX-512
+                    // (+4.2%) but REGRESSES AVX2 by 12%: 12 accumulators + 3
+                    // loads + a broadcast temp exceed the 16 ymm registers, and
+                    // AVX2 has no embedded broadcast to fold the weight operand.
+                    // Eight fits both. We ship one binary and the CPU picks the
+                    // tier, so a win that costs older CPUs is not a win.
+                    // The old shape gave each acc[ob] three
+                    // back-to-back dependent FMAs, so the per-instruction
+                    // profile piled up on the third of every chain: hiding a
+                    // ~4-cycle FMA at 2/cycle issue needs ~8 chains, and four
+                    // capped the kernel near half of FMA peak. Each chain now
+                    // takes exactly one FMA per tap iteration.
+                    //
+                    // This REORDERS FP addition (per-tap partial sums, combined
+                    // at the end) — deliberate, user-authorised. It stays
+                    // bit-identical ACROSS TIERS because the per-pixel sequence
+                    // does not depend on the vector width; only lane count does.
+                    let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
+                    let mut acc_r = [V::<T>::splat(token, 0.0); 4];
                     for &(irow, w12) in taps {
                         // One checked window per tap instead of three: l/m/r are
                         // constant sub-ranges of a fixed-size array, which LLVM
@@ -83,10 +100,14 @@ macro_rules! define_kernels {
                         let m = V::<T>::from_slice(token, &win[1..]);
                         let r = V::<T>::from_slice(token, &win[2..]);
                         for ob in 0..4 {
-                            acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
-                            acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
-                            acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
+                            acc_lm[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
+                            acc_lm[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                            acc_r[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
                         }
+                    }
+                    let mut acc = [V::<T>::splat(token, 0.0); 4];
+                    for ob in 0..4 {
+                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat(token, bias[oc0 + ob]);
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
@@ -101,12 +122,29 @@ macro_rules! define_kernels {
                 // tile ending at wd-1 (stores are idempotent overwrites).
                 if x < wd - 1 && wd >= W + 2 {
                     let xl = wd - 1 - W;
-                    let mut acc = [
-                        V::<T>::splat(token, bias[oc0]),
-                        V::<T>::splat(token, bias[oc0 + 1]),
-                        V::<T>::splat(token, bias[oc0 + 2]),
-                        V::<T>::splat(token, bias[oc0 + 3]),
-                    ];
+                    // EIGHT independent accumulator chains instead of four:
+                    // (l,m) share one per output, r gets its own, so the longest
+                    // dependency run per tap iteration is 2 rather than 3.
+                    //
+                    // Twelve chains (one per tap) is faster still on AVX-512
+                    // (+4.2%) but REGRESSES AVX2 by 12%: 12 accumulators + 3
+                    // loads + a broadcast temp exceed the 16 ymm registers, and
+                    // AVX2 has no embedded broadcast to fold the weight operand.
+                    // Eight fits both. We ship one binary and the CPU picks the
+                    // tier, so a win that costs older CPUs is not a win.
+                    // The old shape gave each acc[ob] three
+                    // back-to-back dependent FMAs, so the per-instruction
+                    // profile piled up on the third of every chain: hiding a
+                    // ~4-cycle FMA at 2/cycle issue needs ~8 chains, and four
+                    // capped the kernel near half of FMA peak. Each chain now
+                    // takes exactly one FMA per tap iteration.
+                    //
+                    // This REORDERS FP addition (per-tap partial sums, combined
+                    // at the end) — deliberate, user-authorised. It stays
+                    // bit-identical ACROSS TIERS because the per-pixel sequence
+                    // does not depend on the vector width; only lane count does.
+                    let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
+                    let mut acc_r = [V::<T>::splat(token, 0.0); 4];
                     for &(irow, w12) in taps {
                         // One checked window per tap instead of three: l/m/r are
                         // constant sub-ranges of a fixed-size array, which LLVM
@@ -117,10 +155,14 @@ macro_rules! define_kernels {
                         let m = V::<T>::from_slice(token, &win[1..]);
                         let r = V::<T>::from_slice(token, &win[2..]);
                         for ob in 0..4 {
-                            acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
-                            acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
-                            acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
+                            acc_lm[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
+                            acc_lm[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                            acc_r[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
                         }
+                    }
+                    let mut acc = [V::<T>::splat(token, 0.0); 4];
+                    for ob in 0..4 {
+                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat(token, bias[oc0 + ob]);
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out

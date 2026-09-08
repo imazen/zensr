@@ -112,16 +112,55 @@ with golden deltas unchanged (5.364e-7 / 1.192e-7 / 2.027e-6). This kernel ships
 in a binary; a reordering would have silently changed users' pixels and
 invalidated every cached derivative.
 
+### Accumulator widening: 8 chains, and why not 12
+
+Authorised to reorder FP addition, so the four-accumulator dependency chain was
+widened. **The chain count is a cross-tier decision, not a throughput knob.**
+
+Measured paired and interleaved, per tier:
+
+| chains | AVX-512 (v4x) | AVX2 (v3) |
+|---|---|---|
+| 4 (original) | ~88.7 | ~63.4 |
+| **8** (shipped) | **~93.5** (+5.4%) | **~66.2** (+4.4%) |
+| 12 (one per tap) | ~94.2 (+6.2%) | **~55.3 (−12%)** |
+
+Twelve chains — one per tap — is fastest on AVX-512 and a **12% regression on
+AVX2**: 12 accumulators plus 3 loads plus a broadcast temp exceed the 16 ymm
+registers, and AVX2 has no embedded broadcast to fold the weight operand the way
+AVX-512's `{1to16}` does. Eight chains ((l,m) share one per output, r gets its
+own, longest run 2 instead of 3) fits both register files and captures nearly all
+of the AVX-512 gain.
+
+We ship one binary and the **user's CPU picks the tier**, so a change that helps
+the newest hardware and penalises everything older is not an optimization. This
+is the concrete case the per-tier gates in `docs/SHIPPING-METHODOLOGY.md` exist
+to catch, and it would have been invisible measuring only the fastest tier —
+which, before the label fix above, is exactly what this bench appeared to do.
+
+Cumulative on AVX-512, from the kernel as it stood before this session:
+**84.3 → ~93.5 GFLOP/s, +10.9%.**
+
+No golden regeneration was needed. The reorder moves `golden 17x18` from
+2.027e-6 to 1.907e-6 against a 1e-3 gate, all 16 tests pass, and `zensr-verify`
+PASSes — the goldens are tolerance-based, not bit-exact. Cross-tier determinism
+is preserved because the per-pixel accumulation sequence does not depend on the
+vector width; only the lane count does.
+
 ### What is left
 
-At 89.4 GFLOP/s the kernel is at ~57% of single-core AVX-512 FMA peak. The
-kernel carries **only 4 accumulators** (zmm5–zmm8) with three serially-dependent
-FMAs each, and the per-instruction samples pile up exactly on the third FMA of
-each chain and at chain switches — classic latency exposure, since hiding a
-4-cycle FMA at 2/cycle issue needs ~8 independent chains. Widening it is the
-next real win, but it **reorders FP addition**, so it needs a deliberate golden
-regeneration rather than a quiet refactor. Addressing is now the largest
-non-vector cost (27%).
+At 89.4 GFLOP/s the kernel is at ~57% of single-core AVX-512 FMA peak. Accumulator widening is done (above). At ~93.5 GFLOP/s the kernel sits at
+**~55% of Zen 4's 32 FLOP/cycle** AVX-512 peak, up from 51%. Instructions per
+iteration halved across the two changes (73.6M → 35.6M) and FMAs went from 12.8%
+to 26.5% of retired instructions; IPC fell 3.96 → 2.07, which is the expected
+shape when cheap integer work is removed and what remains carries real latency.
+
+The next bottleneck is **loads**, not arithmetic: the hottest single instruction
+is now `vmovups (%rdx,%rdi,4),%zmm16` at 8.3%. Two of the three taps (x−1 and
+x+1) are 4-byte-misaligned by construction, so a 64-byte load crosses a cache
+line on every one. The standard fix is to load aligned and synthesise the
+shifted vectors with `valignd`/shuffles, trading two misaligned loads for two
+permutes — untested here.
 
 ## 3. archmage 0.9.29 is a correctness upgrade, not a speed one
 
