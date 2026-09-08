@@ -192,9 +192,41 @@ idle. Every cost model here assumes parallel speedup `min(n_tiles, threads)`;
 at 28 threads this kernel does not deliver that, so the halo cost wins and the
 models all pick too small.
 
-That second term is not derivable from the inputs `upscale_tiled` has — it is a
-property of the machine, not of the image, the model, or the thread count. Three
-ways forward, none of them a constant to tune: measure the scaling curve once at
-runtime and cache it; cap the starvation target by a measured saturation point;
-or leave it to the caller, who can already pass an explicit `cfg.tile`. Fitting
-another closed-form rule to these 48 cells is not one of them.
+### A runtime scaling probe was tried, and it does not work
+
+The obvious answer is to measure it: probe the box's parallel scaling once per
+process and plan the tiling for what it delivers. Implemented
+(`zensr-micro/src/scaling.rs`), and A/B'd against the uncapped rule — same
+binary both arms, `ZENSR_THREAD_SATURATION` pinning the cap so the only thing
+that changed was the number planned for, 3 paired reps, probe amortised out of
+the timing. Raw: `thread_saturation_ab_2026-09-08.tsv`.
+
+This box probes at **13** (of 32 hardware threads, 39 ms).
+
+| cell | uncapped | capped at 13 | |
+|---|---|---|---|
+| realtime 384px 28T | 24.3 ms | 20.3 ms | **+15.1%** |
+| realtime 768px 28T | 53.5 ms | 51.8 ms | +2.8% |
+| realtime 512px 28T | 25.9 ms | 31.5 ms | **−29.6%** |
+| realtime 384px 12T | 17.5 ms | 22.4 ms | **−28.0%** |
+| realtime 192px 28T | 6.4 ms | 8.9 ms | **−39.1%** |
+| quality 384px 28T | 239.3 ms | 334.2 ms | **−39.7%** |
+
+**Net median −2.6%. Only the cell it was designed for improves.** Not shipped.
+
+The reason is that saturation is not a property of the machine alone — it moves
+with the per-tile working set. The probe saturates at 13 on a 96px, 24-channel
+workload, but at 512px the tiled run productively uses far more than 13 threads
+(the measured optimum there is 49 tiles), so capping to 13 throws away real
+parallelism. A probe shaped like the real tile would have to be size- and
+model-dependent: a probe per call, not per process.
+
+A first attempt at this A/B also measured the probe's own 39 ms instead of the
+tiling — `tile_probe` with `reps=1` puts the once-per-process probe inside the
+first timed call, and a 128px job that takes 3.7 ms read 43.9 ms. Amortise the
+probe out, or measure nothing but it.
+
+So the residual stands. What remains untried: a size-aware probe (expensive), or
+leaving it to the caller, who can already pass an explicit `cfg.tile`. Fitting
+another closed-form rule to these 48 cells is not on the list — four families
+have been tried and each regressed cells the others fixed.

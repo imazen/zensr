@@ -49,6 +49,7 @@ HIGH-Q GATE", `ROADMAP.md` 1.1.
 | `tile_ladder_ab_2026-09-08.tsv` | the paired rule comparison, both tiles measured inside ONE binary |
 | `tile_ladder_e2e_2026-09-08.log` | the same change through the full pipeline — +37..+42% at 256px/12T, flat everywhere the tiling does not change |
 | `tile_dense_sweep_summary_2026-09-08.tsv` | per-cell default vs optimum, 48 cells — what the count rule still leaves on the table (raw sweep: `tile_dense_sweep_2026-09-08.pointer.md`) |
+| `thread_saturation_ab_2026-09-08.tsv` | the runtime scaling probe, FALSIFIED as a tiling input — net median −2.6%, only its design cell improves |
 
 ## Tools
 

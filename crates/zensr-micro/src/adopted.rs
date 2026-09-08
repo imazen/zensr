@@ -464,6 +464,10 @@ impl AdoptedModel {
         // regressed at least one cell, so the count rule is left alone. See the
         // benchmark note for the rules tried and rejected.
         let tile = if tile == 0 {
+            // Plan for the REQUESTED threads. Planning for a measured
+            // machine-wide saturation instead was tried and FALSIFIED — see
+            // crate::scaling, which keeps the probe as a diagnostic and the
+            // numbers that rejected it.
             let t = threads.max(1);
             let base = match t {
                 1..=2 => 512,

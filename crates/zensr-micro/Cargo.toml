@@ -44,6 +44,12 @@ required-features = ["internals"]
 name = "tap_load_probe"
 required-features = ["internals", "unsafe-experiments"]
 
+# Prints the measured thread saturation the tiler plans for. No features: it
+# calls only the public surface, and it is the thing to run first when a tile
+# choice on an unfamiliar box looks wrong.
+[[example]]
+name = "sat_probe"
+
 [dev-dependencies]
 # First ARM tier measurement for this crate (2026-08-01). `testable_dispatch`
 # lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON

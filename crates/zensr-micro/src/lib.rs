@@ -75,6 +75,11 @@ pub use simd::spanf_x4_simd;
 #[cfg(feature = "internals")]
 pub use tiled::{spanf_x4_tiled, HALO};
 
+/// How many threads this machine actually delivers on the conv kernel — the
+/// term every closed-form tile rule was missing. See the module docs.
+pub mod scaling;
+pub use scaling::{effective_threads, thread_saturation};
+
 #[doc(hidden)] // SPANF research surface — NOT part of the contract
 pub const FC: usize = 32; // feature channels
 #[doc(hidden)] // SPANF research surface — NOT part of the contract
