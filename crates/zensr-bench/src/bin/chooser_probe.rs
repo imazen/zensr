@@ -6,15 +6,18 @@
 //! range, not from pristine originals. Labels come from the subcorpus:
 //! graphics = screen/documents/art-scans/maps, photo = the rest.
 //!
-//! split column: files in eval_split/imazen26_eval_files.tsv (or the
-//! first-8-sorted convention) = "eval" (chooser VALIDATION set — never fit
-//! thresholds on it); the rest = "train".
+//! split column: the canonical corpus split (validate ∪ test) = "eval" (chooser
+//! VALIDATION set — never fit thresholds on it); train bucket = "train". Read
+//! from the corpus repo via `zensr_bench::resolve_pinned`, not from a list kept
+//! here — this binary previously carried its own loader for a repo-relative pin
+//! file, and when that file went away it fell back to "first 8 sorted" with a
+//! warning, which is the exact mechanism that leaked training images into an
+//! eval twice.
 //!
 //! TSV: sub label split file q feat_<name>...
 //!
 //! Usage: chooser_probe <imazen26-root> <out-tsv> [per-sub=100] [qs=35,75,92]
 
-use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
@@ -22,28 +25,14 @@ use zenanalyze::analyze_features_rgb8;
 use zenanalyze::feature::{AnalysisQuery, FeatureSet};
 use zensr_bench::*;
 
-const GRAPHICS: &[&str] = &["screen", "documents", "art-scans", "maps"];
-
-fn eval_pinned(root: &PathBuf) -> HashSet<(String, String)> {
-    // repo-relative pin file, same convention as tools/make_distill_data.py
-    let mut out = HashSet::new();
-    let pin = PathBuf::from("eval_split/imazen26_eval_files.tsv");
-    if let Ok(s) = std::fs::read_to_string(&pin) {
-        for line in s.lines() {
-            let c: Vec<&str> = line.split('\t').collect();
-            if c.len() == 2 && !c[0].starts_with('#') {
-                out.insert((c[0].to_string(), c[1].to_string()));
-            }
-        }
-    } else {
-        eprintln!(
-            "WARN: no {} (root {}), using first-8 only",
-            pin.display(),
-            root.display()
-        );
-    }
-    out
-}
+// Oracle content labels. `documents` and `maps` keep their meaning under the
+// canonical layout; `patents`, `plots` and `clipart` are new classes that are
+// unambiguously graphic. `illustrations` and `ai-products` are deliberately NOT
+// here — see AMBIGUOUS_SUBS in tools/routing_headroom.py; they are a measurement
+// to make, not a name to read.
+const GRAPHICS: &[&str] = &[
+    "screen", "documents", "art-scans", "maps", "patents", "plots", "clipart",
+];
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -56,7 +45,13 @@ fn main() {
         .split(',')
         .map(|s| s.parse().unwrap())
         .collect();
-    let pinned = eval_pinned(&root);
+    // The canonical held-out set, keyed content_class -> {stem}. Panics rather
+    // than degrading to sorted order: a chooser threshold fitted on its own
+    // validation set is worse than no chooser.
+    let pinned = resolve_pinned(&root).expect(
+        "no eval split: clone github.com/imazen/imazen-26 (or set IMAZEN26_REPO), \
+         or point ZENSR_EVAL_PIN at a two-column dir<TAB>filename list",
+    );
     let td = PathBuf::from(std::env::var("HOME").unwrap())
         .join("tmp")
         .join(format!("zensr-chooser-{}", std::process::id()));
@@ -78,7 +73,7 @@ fn main() {
         };
         let files = list_images(&root.join(dir));
         let mut used = 0usize;
-        for (fi, f) in files.iter().enumerate() {
+        for f in files.iter() {
             if used >= per_sub {
                 break;
             }
@@ -88,8 +83,14 @@ fn main() {
             };
             used += 1;
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
-            // eval = pinned union first-8-sorted (the frozen model-eval files)
-            let split = if fi < 8 || pinned.contains(&(sub.to_string(), fname.clone())) {
+            // eval = the canonical validate+test buckets. No first-N rule: it
+            // slid past decode-skipped files and admitted training images.
+            // Keyed on `dir` (the folder), NOT `sub` (the content label):
+            // canonical_holdout keys by content_class, which is the folder name.
+            // "photos" spans six folders, so keying on the label finds nothing.
+            let split = if pinned
+                .get(*dir)
+                .is_some_and(|s| s.contains(&pinned_stem(&fname))) {
                 "eval"
             } else {
                 "train"

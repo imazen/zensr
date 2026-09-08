@@ -880,19 +880,18 @@ fn main() {
         .collect();
     let keep = std::env::var("ZENSR_GD_KEEP").as_deref() == Ok("1");
 
-    // pinned eval files
+    // Held-out files, from the corpus repo's canonical split (validate + test).
     let mut evset: HashSet<(String, String)> = HashSet::new();
-    for line in std::fs::read_to_string("eval_split/imazen26_eval_files.tsv")
-        .expect("run from zensr repo root (needs eval_split/imazen26_eval_files.tsv)")
-        .lines()
     {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let mut it = line.split('\t');
-        if let (Some(d), Some(fname)) = (it.next(), it.next()) {
-            evset.insert((d.to_string(), fname.to_string()));
+        let holdout = zensr_bench::canonical_holdout().expect(
+            "canonical imazen-26 not found — clone github.com/imazen/imazen-26 or set \
+             IMAZEN26_REPO. gen_detect must know the held-out set; guessing it from \
+             sorted order is how training images reached an eval twice.",
+        );
+        for (class, stems) in &holdout {
+            for stem in stems {
+                evset.insert((class.clone(), stem.clone()));
+            }
         }
     }
 
@@ -902,8 +901,12 @@ fn main() {
         let mut ev: Vec<PathBuf> = Vec::new();
         let mut tr: Vec<PathBuf> = Vec::new();
         for p in files {
+            // Compare STEMS: canonical_holdout stores pinned_stem(), and the
+            // corpus filename carries an extension the manifest row also has but
+            // derived copies may not. Comparing raw filenames here would match
+            // nothing and silently mark every held-out file as training data.
             let fname = p.file_name().unwrap().to_string_lossy().to_string();
-            if evset.contains(&(dir.to_string(), fname)) {
+            if evset.contains(&(dir.to_string(), zensr_bench::pinned_stem(&fname))) {
                 ev.push(p);
             } else {
                 tr.push(p);

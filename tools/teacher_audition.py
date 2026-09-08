@@ -25,13 +25,13 @@ from spandrel import ModelLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
-from imazen26_canonical import CANONICAL_ROOT, canonical_for  # noqa: E402
+from imazen26_canonical import REPO, canonical_for  # noqa: E402
 
 SPLIT = split_map()
 
 W = "/mnt/tower/output/zensr-training/adopted-weights"
 # Repointed 2026-09-07 to the canonical corpus (docs/CORPUS-REPOINT-HANDOFF.md).
-SRC = CANONICAL_ROOT
+SRC = REPO
 # The four content classes this audition is about. `photos` spans four canonical
 # folders because the old flat `lilith` did — see tools/imazen26_canonical.py.
 SUBS = [("people", ["2000-unsplash-people"]),

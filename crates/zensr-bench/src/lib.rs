@@ -248,6 +248,62 @@ pub fn pin_path() -> String {
         .unwrap_or_else(|_| "eval_split/imazen26_eval_files.tsv".to_string())
 }
 
+/// The canonical imazen-26 corpus checkout (github.com/imazen/imazen-26).
+///
+/// The repository IS the corpus: it carries the manifests, the canonical
+/// train/validate/test split and the variant registry, and versions them as one
+/// unit. Image bytes are synced into its (gitignored) class folders from R2.
+/// Override with `IMAZEN26_REPO`.
+pub fn imazen26_repo() -> PathBuf {
+    if let Ok(p) = std::env::var("IMAZEN26_REPO") {
+        return PathBuf::from(p);
+    }
+    match std::env::var("HOME") {
+        Ok(h) => PathBuf::from(h).join("work").join("imazen-26"),
+        Err(_) => PathBuf::from("imazen-26"),
+    }
+}
+
+/// The held-out half of the canonical split — `validate` ∪ `test` — as
+/// `content_class -> {file stem}`.
+///
+/// Read straight from the corpus repo's `manifests/{validate,test}.tsv` rather
+/// than from a copy vendored into zensr. zensr held its own eval list twice (a
+/// hand-maintained 64-file pin, then a re-derived split) and both drifted from
+/// the corpus. The split belongs to the corpus; this just reads it.
+///
+/// Columns are `id, split, content_class, path, ...`; the map keys on
+/// `content_class` and the basename of `path`, which is what every eval binary
+/// here already matches against.
+pub fn canonical_holdout() -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>>
+{
+    let repo = imazen26_repo();
+    let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        Default::default();
+    for bucket in ["validate", "test"] {
+        let p = repo.join("manifests").join(format!("{bucket}.tsv"));
+        let text = std::fs::read_to_string(&p).ok()?;
+        for (i, line) in text.lines().enumerate() {
+            if i == 0 || line.trim().is_empty() {
+                continue; // header
+            }
+            let c: Vec<&str> = line.split('\t').collect();
+            if c.len() < 4 {
+                continue;
+            }
+            let stem = c[3].rsplit('/').next().unwrap_or(c[3]);
+            m.entry(c[2].to_string())
+                .or_default()
+                .insert(pinned_stem(stem));
+        }
+    }
+    if m.is_empty() {
+        None
+    } else {
+        Some(m)
+    }
+}
+
 /// Resolve the pinned split for a corpus, and say what was resolved.
 ///
 /// A corpus none of which is in any training set needs no pin — the pin exists
@@ -273,13 +329,28 @@ pub fn resolve_pinned(
         eprintln!("no pin needed for this corpus — {why}");
         return None;
     }
+    // The corpus repo's own split first — it is the source of truth, and a
+    // vendored copy is exactly what drifted last time.
+    if std::env::var("ZENSR_EVAL_PIN").is_err() {
+        if let Some(m) = canonical_holdout() {
+            eprintln!(
+                "eval split: canonical validate+test from {} ({} classes)",
+                imazen26_repo().join("manifests").display(),
+                m.len()
+            );
+            return Some(m);
+        }
+    }
     let path = pin_path();
     let pinned = load_pinned(&path);
     match &pinned {
         Some(m) => eprintln!("pinned eval split: {} ({} dirs)", path, m.len()),
         None => eprintln!(
-            "WARNING: no pinned eval split at {path} and no NO_PIN_REQUIRED marker in \
-             {} — falling back to sorted order, which can admit training images",
+            "WARNING: no eval split — the canonical corpus was not found at {} and \
+             there is no pin at {path} or NO_PIN_REQUIRED marker in {}. Falling back \
+             to sorted order, which can admit training images. Clone \
+             github.com/imazen/imazen-26 or set IMAZEN26_REPO.",
+            imazen26_repo().display(),
             root.display()
         ),
     }
@@ -445,11 +516,11 @@ pub fn run_guarded(
 
 /// imazen-26 eval subcorpora: (label, directory).
 ///
-/// The CANONICAL corpus layout (`~/work/codec-corpus/imazen-26`), repointed
-/// 2026-09-07. The previous list named the flat directories of
-/// `/mnt/v/imazen-26`, which has been deleted — pointed at the canonical corpus
-/// it resolved every entry to a missing directory and evaluated zero images
-/// without saying so. See `docs/CORPUS-REPOINT-HANDOFF.md`.
+/// The CANONICAL corpus layout (github.com/imazen/imazen-26, see
+/// `imazen26_repo()`), repointed 2026-09-07/08. The previous list named the flat
+/// directories of `/mnt/v/imazen-26`, which has been deleted — pointed at the
+/// canonical corpus it resolved every entry to a missing directory and evaluated
+/// zero images without saying so. See `docs/CORPUS-REPOINT-IMPACT.md`.
 ///
 /// Several labels intentionally span more than one directory, because the
 /// content-split curves are fit per LABEL and the canonical corpus splits some
@@ -519,9 +590,9 @@ pub fn subcorpora_for(root: &Path) -> Vec<(String, String)> {
     assert!(
         !present.is_empty(),
         "no subcorpora found under {}: it has no SUBCORPORA.tsv and none of the \
-         canonical imazen-26 directories. Point ZENSR_CORPUS at the canonical \
-         corpus (~/work/codec-corpus/imazen-26) or give the corpus a \
-         SUBCORPORA.tsv.",
+         canonical imazen-26 directories. Point it at the canonical corpus \
+         (github.com/imazen/imazen-26, by default ~/work/imazen-26; override with \
+         IMAZEN26_REPO) or give the corpus a SUBCORPORA.tsv.",
         root.display()
     );
     if present.len() < SUBCORPORA.len() {

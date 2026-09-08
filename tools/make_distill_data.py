@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """Generate distillation pairs for the realtime-2x student (S-E pilot).
 
-Input crops: HR from the **canonical** imazen-26
-(`~/work/codec-corpus/imazen-26`), restricted to the TRAIN bucket of the
-origin-level split, downscaled 2x (area) then JPEG-degraded via cv2
-(libjpeg-turbo lineage) at q in [40,90], 4:2:0.
+Input crops: HR from the **canonical** imazen-26 corpus repo
+(github.com/imazen/imazen-26, checked out at `~/work/imazen-26`), restricted to
+the TRAIN bucket of its canonical split, downscaled 2x (area) then JPEG-degraded
+via cv2 (libjpeg-turbo lineage) at q in [40,90], 4:2:0.
 Target: 2xNomosUni_span_multijpg (teacher) output on the degraded LR, computed
 on GPU with the same functional forward as dump_adopted.py (merged Conv3XC).
 
 Output shards: ~/tmp/zensr-distill/{lr_u8.npy, teacher_f16.npy, meta.json}
 (lr 96x96 u8 HWC, teacher 192x192 f16 CHW). Val split = last 512 pairs.
 
-**Repointed 2026-09-07** from `/mnt/v/imazen-26` (the pre-curation acquisition
-corpus, since deleted) to the canonical one, per the user directive of
-2026-08-05 and `docs/CORPUS-REPOINT-HANDOFF.md`. Two things changed together:
+**Repointed 2026-09-07/08** from `/mnt/v/imazen-26` (the pre-curation
+acquisition corpus, since deleted) to the canonical corpus REPOSITORY, per the
+user directive and `docs/CORPUS-REPOINT-HANDOFF.md`. Note the destination is the
+repo, not `~/work/codec-corpus/imazen-26` — that is the pre-2026-08-23 location
+and is stale. Two things changed together:
 
 * the root and the subcorpus names (`tools/imazen26_canonical.py` holds the
   mapping — it is not 1:1, and one old subcorpus has no canonical equivalent);
 * **eval exclusion is now by split bucket, not by "first 8 sorted ∪ a pinned
-  list"**. That old scheme leaked twice; the canonical corpus has ids, so
-  `tools/corpus_split.py` does it properly and there is no first-N rule left to
-  slide past a decode-skipped file.
+  list"**. That old scheme leaked twice. The split is not ours to invent: it is
+  the repo's `manifests/split_map.tsv`, read by `tools/corpus_split.py`, which
+  adds only the near-duplicate same-bucketing the repo itself prescribes.
 
 Anything trained before this date was fitted through the wrong corpus and is
 provisional.
@@ -38,9 +40,9 @@ import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
 from dump_adopted import compact_forward, load_sd, prepare_span_sd, span_forward  # noqa: E402
-from imazen26_canonical import CANONICAL_ROOT, all_folders, canonical_for  # noqa: E402
+from imazen26_canonical import REPO, all_folders, canonical_for  # noqa: E402
 
-ROOT = os.environ.get("ZENSR_ROOT", CANONICAL_ROOT)
+ROOT = os.environ.get("ZENSR_ROOT", REPO)
 # Default: every canonical folder. The old default named eight flat subcorpora
 # that no longer exist; restricting the new corpus to their equivalents would
 # preserve a limitation that only ever existed because the root was wrong, and

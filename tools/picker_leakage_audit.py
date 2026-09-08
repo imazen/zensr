@@ -63,14 +63,14 @@ from PIL import Image  # noqa: E402
 Image.MAX_IMAGE_PIXELS = None
 
 PICKER = "/mnt/v/output/clean-picker-corpus-2026-06-26"
-ROOTS = [CANONICAL_ROOT, "/mnt/v/output/imazen-26-png-v3"]
+ROOTS = [REPO]  # the canonical repo IS the corpus; no /mnt/v mirror is valid
 # Repointed 2026-09-07: the training set is now the TRAIN BUCKET of the canonical
 # corpus, not eight flat subcorpora of the deleted /mnt/v/imazen-26 root. Both
 # halves changed — the images and the exclusion rule — so a verdict from before
 # this date answers a question about a corpus that no longer exists.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
-from imazen26_canonical import CANONICAL_ROOT  # noqa: E402
+from imazen26_canonical import REPO  # noqa: E402
 # Mean per-pixel luma difference on a 16x16 thumbnail, below which two images are
 # the same scene. Loose enough for a re-encode or a format conversion, tight
 # enough that distinct photos do not collide.
@@ -97,7 +97,7 @@ def image_files(root):
 
 def training_set():
     """Canonical-corpus files in the TRAIN bucket — see leakage_audit.py."""
-    return {os.path.join(CANONICAL_ROOT, p)
+    return {os.path.join(REPO, p)
             for p, b in split_map().items() if b == "train"}
 
 

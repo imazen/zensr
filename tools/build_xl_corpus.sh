@@ -52,15 +52,21 @@
 # (claudehints/topics/benchmarking.md).
 set -euo pipefail
 
-OUT="${1:-/mnt/v/imazen-26-clean-xl}"
+# NOT under /mnt/v/imazen* — every path matching that glob is an invalid or
+# stale imazen-26 (user directive 2026-09-07), and an eval corpus living there
+# invites the next session to mistake it for one.
+OUT="${1:-/mnt/v/zensr/xl-eval-corpus}"
 mkdir -p "$OUT"
 
 # label<TAB>source directory. Labels group by CONTENT CLASS where the source is
 # homogeneous, because the content-split curves are fit per class and the
 # grouping has to mean something.
-CANON="${ZENSR_CANONICAL:-$HOME/work/codec-corpus/imazen-26}"
+# The canonical corpus REPOSITORY (github.com/imazen/imazen-26). Not
+# ~/work/codec-corpus/imazen-26, which is the pre-2026-08-23 location.
+CANON="${IMAZEN26_REPO:-$HOME/work/imazen-26}"
 MANIFEST="$CANON/CORPUS-MANIFEST.tsv"
-[ -f "$MANIFEST" ] || { echo "no manifest at $MANIFEST" >&2; exit 1; }
+HOLDOUT_TSVS="$CANON/manifests/validate.tsv $CANON/manifests/test.tsv"
+[ -f "$MANIFEST" ] || { echo "canonical imazen-26 not at $CANON — clone github.com/imazen/imazen-26 or set IMAZEN26_REPO" >&2; exit 1; }
 SOURCES=$(cat <<EOF
 patents	/mnt/v/collections/patent-corpus
 sci-figures	/mnt/v/collections/sci-figures-color
@@ -113,28 +119,24 @@ while IFS=$'\t' read -r label src; do
   fi
 done <<< "$SOURCES"
 
-# noaa, held-out only. Symlinked one file at a time from the pin rather than by
-# a find over the folder, so the filter cannot be silently bypassed by a later
-# edit that "simplifies" it back into the SOURCES table.
-PIN="${ZENSR_EVAL_PIN:-eval_split/imazen26_eval_files.tsv}"
-if [ -f "$PIN" ]; then
-  mkdir -p "$OUT/noaa"
-  n=0
-  while IFS=$'\t' read -r folder fname; do
-    case "$folder" in 5300-noaa-hurricane-documents) ;; *) continue ;; esac
-    src="$CANON/$folder/$fname"
-    [ -f "$src" ] || continue
-    ln -sf "$src" "$OUT/noaa/${fname//\//__}"
-    n=$((n+1))
-  done < <(grep -v '^#' "$PIN")
-  if [ "$n" -gt 0 ]; then
-    printf '%s\t%s\n' noaa noaa >> "$OUT/SUBCORPORA.tsv"
-    printf '%-14s %5d  (held-out only, of 44)\n' noaa "$n"
-    total=$((total+n))
-  fi
-else
-  echo "WARNING: no pin at $PIN — noaa leg SKIPPED rather than risk including" >&2
-  echo "         training documents in an eval corpus." >&2
+# noaa, held-out only, straight from the corpus repo's canonical split
+# (validate + test). Symlinked one file at a time rather than by a find over the
+# folder, so the filter cannot be silently bypassed by a later edit that
+# "simplifies" it back into the SOURCES table.
+mkdir -p "$OUT/noaa"
+n=0
+while IFS=$'\t' read -r path; do
+  case "$path" in 5300-noaa-hurricane-documents/*) ;; *) continue ;; esac
+  src="$CANON/$path"
+  [ -f "$src" ] || continue
+  flat="${path#5300-noaa-hurricane-documents/}"
+  ln -sf "$src" "$OUT/noaa/${flat//\//__}"
+  n=$((n+1))
+done < <(awk -F'\t' 'FNR>1 {print $4}' $HOLDOUT_TSVS)
+if [ "$n" -gt 0 ]; then
+  printf '%s\t%s\n' noaa noaa >> "$OUT/SUBCORPORA.tsv"
+  printf '%-14s %5d  (held-out only, of 44)\n' noaa "$n"
+  total=$((total+n))
 fi
 
 # The marker zensr-bench's resolve_pinned() looks for. Written HERE, by the
@@ -145,11 +147,11 @@ fi
 cat > "$OUT/NO_PIN_REQUIRED" <<EOF
 this corpus is filtered at BUILD time, so it contains no training images to exclude
 Built $(date -u +%Y-%m-%dT%H:%M:%SZ) by tools/build_xl_corpus.sh.
-Training is the TRAIN bucket of the canonical corpus (~/work/codec-corpus/imazen-26);
-see eval_split/imazen26_split.tsv. Two legs here overlap it and are filtered:
+Training is the TRAIN bucket of the canonical corpus repo (github.com/imazen/imazen-26),
+manifests/train.tsv. Two legs here overlap it and are filtered:
   patents — documents present in CORPUS-MANIFEST.tsv are dropped whole
             (US5046022, US77494, US3807657 = 39 of 357 pages).
-  noaa    — held-out buckets only, via eval_split/imazen26_eval_files.tsv.
+  noaa    — held-out buckets only, via the repo's manifests/{validate,test}.tsv.
 The other legs (sci-figures, cid22, clic2025, gb82, gb82-sc) were audited clean by
 tools/leakage_audit.py on 2026-09-07: 0 flagged files. Re-run it after any retrain,
 because the training set is what changes, not this corpus.

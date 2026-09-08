@@ -64,7 +64,7 @@ Image.MAX_IMAGE_PIXELS = None
 # this date answers a question about a corpus that no longer exists.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
-from imazen26_canonical import CANONICAL_ROOT  # noqa: E402
+from imazen26_canonical import REPO  # noqa: E402
 
 
 def thumb(p):
@@ -97,7 +97,7 @@ def training_files():
     list", which was a hand-maintained approximation of a split. The canonical
     corpus has ids, so this is now the split itself.
     """
-    return {os.path.join(CANONICAL_ROOT, p)
+    return {os.path.join(REPO, p)
             for p, b in split_map().items() if b == "train"}
 
 

@@ -1,6 +1,23 @@
 # Handoff: repointing zensr onto the valid imazen-26
 
-**Status: open. Nothing in this repo's measured record is trustworthy until it is done.**
+> **Step 1 DONE 2026-09-08, and this document's destination was wrong.** It names
+> `~/work/codec-corpus/imazen-26` as the valid corpus throughout. That is the
+> **pre-2026-08-23 location**: the corpus moved out of `imazen/codec-corpus` into
+> its own repository, **`github.com/imazen/imazen-26`**, which is where the
+> manifests, the canonical split, the variant registry and the generation tooling
+> now live and version together. User directive 2026-09-07: *"nothing in
+> /mnt/v/imazen* is valid"* — and the codec-corpus subdirectory is stale, not
+> canonical. Read every "`~/work/codec-corpus/imazen-26`" below as
+> "`github.com/imazen/imazen-26`, checked out at `~/work/imazen-26`".
+>
+> Consequences for §6 in particular: the split is **not** something to derive.
+> The repo publishes it (`manifests/split_map.tsv`, 1,084/658/418). §6's
+> hand-rolled grouping — and my own re-derivation of it — are superseded by
+> `tools/corpus_split.py`, which reads the canonical buckets and adds only the
+> near-duplicate same-bucketing the corpus repo itself prescribes.
+> What actually changed: `docs/CORPUS-REPOINT-IMPACT.md`.
+
+**Status: Step 1 complete; Steps 2-4 open. Nothing in this repo's measured record is trustworthy until they are done.**
 Written 2026-09-07. Supersedes nothing; read alongside
 `benchmarks/imazen26_contamination_audit_2026-08-05.md`, which has the per-file
 evidence this summarises.

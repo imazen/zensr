@@ -3,8 +3,15 @@
 > **Disk state moved after this audit.** Re-measured 2026-09-07: `/mnt/v/imazen-26`
 > is deleted, `imazen-26-clean` and `-clean-xl` are empty shells, and the stray
 > `imazen-26 - Copy*` dirs are gone (fix-order step 5, done). The old numbers can
-> no longer be reproduced. Current state and the work plan:
-> `docs/CORPUS-REPOINT-HANDOFF.md`.
+> no longer be reproduced.
+>
+> **The corpus also moved, which this audit predates.** It left
+> `imazen/codec-corpus` on 2026-08-23 for its own repository,
+> **`github.com/imazen/imazen-26`**. The table below marks
+> `~/work/codec-corpus/imazen-26` VALID; as of 2026-08-23 that is the *stale*
+> location, and per the user directive of 2026-09-07 nothing under
+> `/mnt/v/imazen*` is valid either. The repoint landed on the repo:
+> `docs/CORPUS-REPOINT-IMPACT.md`.
 
 **Rule (user directive, 2026-08-05): `~/work/codec-corpus/imazen-26` is the only
 valid imazen-26. Anything based on another root is invalid.**

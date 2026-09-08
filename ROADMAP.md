@@ -10,14 +10,20 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
 
 ## 0. Standing corrections that gate everything
 
-0. **CORPUS INVALID — everything below is provisional (2026-08-05, user-caught).**
-   zensr trained and evaluated against `/mnt/v/imazen-26`, the pre-curation
-   acquisition corpus. The only valid imazen-26 is `~/work/codec-corpus/imazen-26`.
-   The invalid root has since been **deleted** and its derived corpora emptied, so
-   this is now forced, not optional.
-   → **Work plan: `docs/CORPUS-REPOINT-HANDOFF.md`.** Evidence:
-   `benchmarks/imazen26_contamination_audit_2026-08-05.md`. Do not fit, ship or
-   quote a constant until the repoint lands.
+0. **CORPUS INVALID — everything below is provisional (2026-08-05, user-caught;
+   repointed 2026-09-08).** zensr trained and evaluated against
+   `/mnt/v/imazen-26`, the pre-curation acquisition corpus, since **deleted**.
+   The canonical imazen-26 is the corpus **repository**,
+   **`github.com/imazen/imazen-26`** (checked out at `~/work/imazen-26`; override
+   with `IMAZEN26_REPO`) — it carries the manifests, the canonical
+   train/validate/test split and the variant registry, versioned as one unit, and
+   its image bytes come from public R2. Neither `/mnt/v/imazen*` (invalid) nor
+   `~/work/codec-corpus/imazen-26` (the pre-2026-08-23 location, stale) is it.
+   → **Step 1 of `docs/CORPUS-REPOINT-HANDOFF.md` is DONE**; what changed and what
+   it costs: **`docs/CORPUS-REPOINT-IMPACT.md`**. Steps 2-4 (rebuild the derived
+   corpora, retrain, re-run the audits) remain open. **Every constant in
+   `crates/zensr-zenjpeg/src/api.rs` is still provisional — do not fit, ship or
+   quote one until the retrain lands.**
 
 1. **Eval reference contamination (found 2026-07-31, user-caught).** 39% of the
    pinned eval split has JPEG ground truth (all `unsplash-*` dirs + 23 files in
