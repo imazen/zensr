@@ -444,15 +444,39 @@ pub fn run_guarded(
 }
 
 /// imazen-26 eval subcorpora: (label, directory).
+///
+/// The CANONICAL corpus layout (`~/work/codec-corpus/imazen-26`), repointed
+/// 2026-09-07. The previous list named the flat directories of
+/// `/mnt/v/imazen-26`, which has been deleted — pointed at the canonical corpus
+/// it resolved every entry to a missing directory and evaluated zero images
+/// without saying so. See `docs/CORPUS-REPOINT-HANDOFF.md`.
+///
+/// Several labels intentionally span more than one directory, because the
+/// content-split curves are fit per LABEL and the canonical corpus splits some
+/// classes finer than the curves need (`photos` is six directories).
+/// `office-documents` has no entry: it did not survive curation.
 pub const SUBCORPORA: &[(&str, &str)] = &[
-    ("photos", "lilith"),
-    ("people", "unsplash-people"),
-    ("screen", "screen"),
-    ("documents", "office-documents"),
-    ("art-scans", "internet-archive-scans"),
-    ("maps", "national-park-service"),
-    ("renders", "unsplash-renders"),
-    ("textures", "unsplash-textures"),
+    ("photos", "1000-lilith-photos-general"),
+    ("photos", "1200-lilith-interiors"),
+    ("photos", "1400-lilith-nature"),
+    ("photos", "1600-lilith-food"),
+    ("photos", "3000-art-institute-of-chicago-photos"),
+    ("photos", "3300-met-museum-photos"),
+    ("people", "2000-unsplash-people"),
+    ("renders", "2200-unsplash-renders"),
+    ("textures", "2400-unsplash-textures"),
+    ("maps", "5000-national-park-service-brochures"),
+    ("documents", "5200-epa-climate-impact-2021-report"),
+    ("documents", "5300-noaa-hurricane-documents"),
+    ("documents", "6800-ia-scans-manuscript-text"),
+    ("art-scans", "6600-ia-scans-manuscript-illustrations"),
+    ("patents", "6000-lilith-scans-public-patents"),
+    ("plots", "7000-lilith-plots"),
+    ("screen", "8000-lilith-mobile-screenshots"),
+    ("screen", "8100-lilith-web-screenshots"),
+    ("clipart", "9000-lilith-ai-clipart"),
+    ("illustrations", "9094-lilith-ai-illustrations"),
+    ("ai-products", "9226-lilith-ai-products"),
 ];
 
 /// The subcorpora to evaluate, for whichever corpus is being pointed at.
@@ -484,8 +508,29 @@ pub fn subcorpora_for(root: &Path) -> Vec<(String, String)> {
             return v;
         }
     }
-    SUBCORPORA
+    // Keep only entries that exist under this root, and refuse to return an
+    // empty list. Falling back to a hardcoded layout that does not match the
+    // corpus is precisely how an eval scores zero images and reports success.
+    let present: Vec<(String, String)> = SUBCORPORA
         .iter()
+        .filter(|(_, d)| root.join(d).is_dir())
         .map(|(a, b)| (a.to_string(), b.to_string()))
-        .collect()
+        .collect();
+    assert!(
+        !present.is_empty(),
+        "no subcorpora found under {}: it has no SUBCORPORA.tsv and none of the \
+         canonical imazen-26 directories. Point ZENSR_CORPUS at the canonical \
+         corpus (~/work/codec-corpus/imazen-26) or give the corpus a \
+         SUBCORPORA.tsv.",
+        root.display()
+    );
+    if present.len() < SUBCORPORA.len() {
+        eprintln!(
+            "subcorpora: {} of {} canonical directories present under {}",
+            present.len(),
+            SUBCORPORA.len(),
+            root.display()
+        );
+    }
+    present
 }

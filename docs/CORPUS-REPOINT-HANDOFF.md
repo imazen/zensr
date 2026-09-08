@@ -221,16 +221,24 @@ hurricane report, and pages of one document share a scanner, typography and pape
 Splitting on the per-file id puts near-duplicates on both sides of the split and
 "held out" stops meaning anything. Group first, then split on the group's minimum id.
 `CORPUS-MANIFEST.tsv` gives you the grouping directly — `(folder, descriptor)`.
-Measured: 2,160 files → **1,884 origins**, 104 of them multi-file, 380 files
-(18%) in a multi-file group, largest group 7.
+Measured: 2,160 files → **1,911 origins**, 103 of them multi-file, 352 files
+(16%) in a multi-file group, largest group 7.
 
 Applying the canonical digit rule to each group's minimum id:
 
 | bucket | files | share | canonical target |
 |---|---|---|---|
-| train | 1,097 | 51% | 50% |
-| val | 648 | 30% | 30% |
-| test | 415 | 19% | 20% |
+| train | 1,083 | 50% | 50% |
+| val | 657 | 30% | 30% |
+| test | 420 | 19% | 20% |
+
+**Corrected 2026-09-07.** This table previously read 1,884 origins / 104 multi /
+380 files / 1,097-648-415. Those are the numbers the **naive** key produces —
+they were measured before Trap 2 below was applied, and reproduce digit-for-digit
+if you group on a bare `(folder, descriptor)`. The tell was left in the old table
+itself: it said "largest group 7" while the naive key's largest group is 28,
+because finding that 28-file group is *how* the trap was found. Implemented in
+`tools/origin_split.py`.
 
 That is the canonical split, on the canonical rule, with no hash fallback and no
 invented mechanic. It is the single biggest methodological improvement available
@@ -242,6 +250,12 @@ on `(folder, descriptor)` merges 28 unrelated photographs into one origin and
 dumps them all in one bucket. Fall back to the filename stem when `descriptor` is
 empty. This is the same class of bug that once merged 37 distinct CID22 images by
 stripping a trailing `-\d+` from `pexels-photo-1029599`.
+
+Measured cost of getting it wrong: the merged origin's minimum id is 2000, digit
+0, so **all 28 people photographs land in train and neither val nor test contains
+a single one**. For a restoration model that is not a rounding error — faces and
+skin are the most perceptually punishing content it handles, and the split would
+have had no way to measure them. Fixed: 14 train / 9 val / 5 test.
 
 ## 7. Traps that have already cost time here
 

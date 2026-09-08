@@ -63,13 +63,14 @@ from PIL import Image  # noqa: E402
 Image.MAX_IMAGE_PIXELS = None
 
 PICKER = "/mnt/v/output/clean-picker-corpus-2026-06-26"
-ROOTS = ["/mnt/v/imazen-26", "/mnt/v/output/imazen-26-png"]
-IMAZEN = "/mnt/v/imazen-26"
-PIN = "eval_split/imazen26_eval_files.tsv"
-# The subcorpora dejpeg trains on (tools/make_distill_data.py:27).
-SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
-        "national-park-service", "unsplash-renders", "unsplash-textures",
-        "office-documents"]
+ROOTS = [CANONICAL_ROOT, "/mnt/v/output/imazen-26-png-v3"]
+# Repointed 2026-09-07: the training set is now the TRAIN BUCKET of the canonical
+# corpus, not eight flat subcorpora of the deleted /mnt/v/imazen-26 root. Both
+# halves changed — the images and the exclusion rule — so a verdict from before
+# this date answers a question about a corpus that no longer exists.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from corpus_split import split_map  # noqa: E402
+from imazen26_canonical import CANONICAL_ROOT  # noqa: E402
 # Mean per-pixel luma difference on a 16x16 thumbnail, below which two images are
 # the same scene. Loose enough for a re-encode or a format conversion, tight
 # enough that distinct photos do not collide.
@@ -95,20 +96,9 @@ def image_files(root):
 
 
 def training_set():
-    pin = collections.defaultdict(set)
-    for line in open(PIN):
-        if line.startswith("#") or "\t" not in line:
-            continue
-        d, f = line.rstrip("\n").split("\t")[:2]
-        pin[d].add(f.rsplit(".", 1)[0])
-    out = set()
-    for sub in SUBS:
-        fs = sorted(image_files(os.path.join(IMAZEN, sub)))
-        # Training excludes the pinned eval files AND the first 8 sorted.
-        for f in fs[8:]:
-            if os.path.basename(f).rsplit(".", 1)[0] not in pin[sub]:
-                out.add(f)
-    return out
+    """Canonical-corpus files in the TRAIN bucket — see leakage_audit.py."""
+    return {os.path.join(CANONICAL_ROOT, p)
+            for p, b in split_map().items() if b == "train"}
 
 
 def main():

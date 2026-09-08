@@ -971,13 +971,17 @@ fn main() {
             let wtr = &wtr;
             let done = &done;
             let encoders = &encoders;
+            let root = &root;
             let td = scratch.join(format!("t{tid}"));
             s.spawn(move || {
                 std::fs::create_dir_all(&td).unwrap();
                 loop {
                     let task = { tasks.lock().unwrap().pop_front() };
                     let Some(task) = task else { break };
-                    let src_rel = task.path.strip_prefix("/mnt/v/imazen-26").unwrap_or(&task.path);
+                    // Display path relative to whichever corpus root was used,
+                    // rather than a hardcoded one (was "/mnt/v/imazen-26",
+                    // deleted 2026-09; the strip silently no-opped).
+                    let src_rel = task.path.strip_prefix(&root).unwrap_or(&task.path);
                     let src_str = src_rel.to_string_lossy().to_string();
                     let srcfmt = task
                         .path

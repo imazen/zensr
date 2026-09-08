@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
 """Generate distillation pairs for the realtime-2x student (S-E pilot).
 
-Input crops: HR from imazen-26 (SKIPPING each dir's first 8 sorted files —
-those are the frozen eval split), downscaled 2x (area) then JPEG-degraded via
-cv2 (libjpeg-turbo lineage) at q in [40,90], 4:2:0.
+Input crops: HR from the **canonical** imazen-26
+(`~/work/codec-corpus/imazen-26`), restricted to the TRAIN bucket of the
+origin-level split, downscaled 2x (area) then JPEG-degraded via cv2
+(libjpeg-turbo lineage) at q in [40,90], 4:2:0.
 Target: 2xNomosUni_span_multijpg (teacher) output on the degraded LR, computed
 on GPU with the same functional forward as dump_adopted.py (merged Conv3XC).
 
 Output shards: ~/tmp/zensr-distill/{lr_u8.npy, teacher_f16.npy, meta.json}
 (lr 96x96 u8 HWC, teacher 192x192 f16 CHW). Val split = last 512 pairs.
+
+**Repointed 2026-09-07** from `/mnt/v/imazen-26` (the pre-curation acquisition
+corpus, since deleted) to the canonical one, per the user directive of
+2026-08-05 and `docs/CORPUS-REPOINT-HANDOFF.md`. Two things changed together:
+
+* the root and the subcorpus names (`tools/imazen26_canonical.py` holds the
+  mapping — it is not 1:1, and one old subcorpus has no canonical equivalent);
+* **eval exclusion is now by split bucket, not by "first 8 sorted ∪ a pinned
+  list"**. That old scheme leaked twice; the canonical corpus has ids, so
+  `tools/corpus_split.py` does it properly and there is no first-N rule left to
+  slide past a decode-skipped file.
+
+Anything trained before this date was fitted through the wrong corpus and is
+provisional.
 """
 import json
 import os
@@ -21,62 +36,73 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from corpus_split import split_map  # noqa: E402
 from dump_adopted import compact_forward, load_sd, prepare_span_sd, span_forward  # noqa: E402
+from imazen26_canonical import CANONICAL_ROOT, all_folders, canonical_for  # noqa: E402
 
-# INVALID DEFAULT — see benchmarks/imazen26_contamination_audit_2026-08-05.md.
-# The only valid imazen-26 is ~/work/codec-corpus/imazen-26 (user directive
-# 2026-08-05). /mnt/v/imazen-26 is the PRE-CURATION acquisition corpus: 1,068
-# files against the canonical 2,563, of which 250 (23%) are not in the
-# canonical corpus at all. Every model trained through this default is
-# provisional. Repointing changes the training set, so it is a deliberate
-# decision, not a config tidy-up — hence the default is left alone and
-# flagged rather than silently switched.
-ROOT = os.environ.get("ZENSR_ROOT", "/mnt/v/imazen-26")
-SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
-        "national-park-service", "unsplash-renders", "unsplash-textures", "office-documents"]
-# ZENSR_SUBS=screen,office-documents,... restricts sources (class-specialist
-# datasets, e.g. the graphics model). Exclusion discipline is unchanged.
+ROOT = os.environ.get("ZENSR_ROOT", CANONICAL_ROOT)
+# Default: every canonical folder. The old default named eight flat subcorpora
+# that no longer exist; restricting the new corpus to their equivalents would
+# preserve a limitation that only ever existed because the root was wrong, and
+# would throw away ~1,257 images of content the model has never seen (AI
+# products and clipart, plots, patent scans, museum photography).
+SUBS = all_folders()
+# ZENSR_SUBS restricts sources (class-specialist datasets, e.g. the graphics
+# model). Accepts canonical folder names AND the old flat names, which are
+# translated through the mapping — an old name with no canonical home raises
+# rather than silently contributing zero files.
 if os.environ.get("ZENSR_SUBS"):
-    SUBS = [s.strip() for s in os.environ["ZENSR_SUBS"].split(",") if s.strip()]
+    want = []
+    for s in os.environ["ZENSR_SUBS"].split(","):
+        s = s.strip()
+        if not s:
+            continue
+        want += [s] if s in SUBS else canonical_for(s)
+    SUBS = want
 OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-distill"))
 N_PAIRS = 14000
 CROP = 192  # HR crop; LR = 96
 SEED = 20260723
 
-EVAL_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                        "eval_split", "imazen26_eval_files.tsv")
-
-
-def eval_pinned(sub):
-    out = set()
-    if os.path.exists(EVAL_PIN):
-        for line in open(EVAL_PIN):
-            c = line.rstrip("\n").split("\t")
-            if len(c) == 2 and c[0] == sub and not c[0].startswith("#"):
-                out.add(c[1])
-    return out
+SPLIT = split_map()
 
 
 def list_train_files(sub):
-    d = os.path.join(ROOT, sub)
-    files = []
-    for base, _, names in os.walk(d):
-        for n in sorted(names):
-            if n.lower().endswith((".png", ".jpg", ".jpeg")):
-                files.append(os.path.join(base, n))
-    files.sort()
-    # Frozen eval = first-8-sorted UNION the pinned actually-evaluated list.
-    # Runtime "first 8 usable" slides past decode-skipped files (teresa leak,
-    # 2026-07-24 postmortem) — the pinned file is authoritative.
-    pinned = eval_pinned(sub)
-    files = [f for f in files[8:] if os.path.basename(f) not in pinned]
+    """Canonical-corpus files in folder `sub` whose split bucket is train.
+
+    No first-N rule and no pinned list: the bucket IS the exclusion. Val and
+    test are held out by construction, and every derivative of an origin
+    inherits the origin's bucket, so nothing crosses the split.
+    """
+    files = sorted(os.path.join(ROOT, p) for p, b in SPLIT.items()
+                   if b == "train" and p.split("/", 1)[0] == sub)
     # ZENSR_CLEAN_GT=1: drop JPEG-sourced references. They are themselves
     # compressed, so training on them teaches the model to REPRODUCE jpeg
-    # artifacts (the training-side twin of the 2026-07-31 eval contamination;
-    # 8% of training files vs 39% of eval files).
+    # artifacts (the training-side twin of the 2026-07-31 eval contamination).
+    #
+    # WARNING on the canonical corpus: this is no longer a light filter. 20% of
+    # the corpus is JPEG and 4% HEIC, concentrated in exactly the photographic
+    # folders — 2000-unsplash-people is 28/28 JPEG, 1600-lilith-food 39/41.
+    # Enabling this drops nearly all photographic content and leaves a corpus of
+    # screenshots, plots, AI renders and scans, which would quietly turn the
+    # "photo" leg of the content-split curves into a fiction. The real fix is the
+    # downscale-to-pristine treatment (handoff §5 step 2), not this flag.
     if os.environ.get("ZENSR_CLEAN_GT") == "1":
         files = [f for f in files if f.lower().endswith(".png")]
     return files
+
+
+def ref_provenance(files):
+    """Count references by kind. A JPEG ground truth is itself compressed, so a
+    pair built from one measures artifact REPRODUCTION as fidelity; the ladder
+    has to be reported split by this."""
+    out = {"png": 0, "jpg": 0, "heic": 0, "other": 0}
+    for f in files:
+        e = f.rsplit(".", 1)[-1].lower()
+        out["jpg" if e in ("jpg", "jpeg") else
+            "heic" if e in ("heic", "heif") else
+            "png" if e == "png" else "other"] += 1
+    return out
 
 
 def main():
@@ -103,6 +129,10 @@ def main():
         fs = list_train_files(s)
         pool += fs
         print(f"{s}: {len(fs)} train files")
+    prov = ref_provenance(pool)
+    print(f"reference provenance: {prov}")
+    if not pool:
+        sys.exit("no training files — check ZENSR_ROOT / ZENSR_SUBS")
     rng.shuffle(pool)
     # image-level val: last 512 pairs come ONLY from val-reserved files
     n_val_files = max(16, len(pool) // 20)
@@ -153,7 +183,15 @@ def main():
     np.save(os.path.join(OUT, "teacher_f16.npy"), tg_all)
     json.dump({"n": N_PAIRS, "val_tail": 512, "teacher": "2xNomosUni_span_multijpg",
                "degrade": "area-down2x + cv2 jpeg q40-90", "seed": SEED,
-               "eval_split_excluded": "first-8-sorted UNION pinned eval_split/imazen26_eval_files.tsv", "val_split": "image-level (last 5% of shuffled files)"},
+               "corpus": ROOT,
+               "corpus_folders": SUBS,
+               "eval_split_excluded": "origin-level split, bucket != train "
+                                      "(eval_split/imazen26_split.tsv)",
+               "clean_gt_filter": os.environ.get("ZENSR_CLEAN_GT") == "1",
+               # Per handoff §5: record what KIND of reference each pair came
+               # from, because the 2026-07 defect happened for want of this column.
+               "ref_provenance": ref_provenance(train_pool + val_pool),
+               "val_split": "image-level (last 5% of shuffled files)"},
               open(os.path.join(OUT, "meta.json"), "w"), indent=1)
     print("DONE", lr_all.nbytes / 1e9, "GB +", tg_all.nbytes / 1e9, "GB")
 

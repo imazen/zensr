@@ -24,6 +24,22 @@ thumbnail normalises scale away, which is exactly what is wanted here.
 Reports per-origin as well as per-file, since a split has to be origin-level —
 one page of a document leaking implicates every other page of it.
 
+**The fingerprint over-flags document scans — confirm a hit before acting on it.**
+Measured 2026-09-07 against the patent corpus: 29 pages flagged across six patent
+documents, but only THREE of those documents are actually in the training corpus.
+The three true ones matched at distance **0.00** and their filenames agreed
+(`US5046022-002.png` against `6002_scans-patents_lynn-conway-us5046022-...`); the
+three false ones matched at 2.4-2.7 against pages of an *unrelated* patent, and
+two of them had fingerprint stdev around 6.5 — near-blank text pages, which at
+16x16 all look alike. 42 of 1,034 training fingerprints are near-blank like that,
+so the collision surface is real. Acting on the fingerprint alone would have
+discarded 87 clean pages.
+
+So: the fingerprint is a **candidate generator**, not a verdict. Where the corpus
+carries identity (a patent number, a manifest id, a source hash), confirm against
+it. `--near` trades the two error directions and neither is free; a low threshold
+misses re-encodes, a high one eats blank pages.
+
 Usage:
   leakage_audit.py --files <list.txt> [--near 3.0] [--write-safe out.txt]
   leakage_audit.py --glob '/path/**/*.png'
@@ -42,12 +58,13 @@ from PIL import Image  # noqa: E402
 
 Image.MAX_IMAGE_PIXELS = None
 
-IMAZEN = "/mnt/v/imazen-26"
-PIN = "eval_split/imazen26_eval_files.tsv"
-# The subcorpora dejpeg trains on (tools/make_distill_data.py:27).
-SUBS = ["lilith", "unsplash-people", "screen", "internet-archive-scans",
-        "national-park-service", "unsplash-renders", "unsplash-textures",
-        "office-documents"]
+# Repointed 2026-09-07: the training set is now the TRAIN BUCKET of the canonical
+# corpus, not eight flat subcorpora of the deleted /mnt/v/imazen-26 root. Both
+# halves changed — the images and the exclusion rule — so a verdict from before
+# this date answers a question about a corpus that no longer exists.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from corpus_split import split_map  # noqa: E402
+from imazen26_canonical import CANONICAL_ROOT  # noqa: E402
 
 
 def thumb(p):
@@ -74,21 +91,14 @@ def image_files(root):
 
 
 def training_files():
-    """imazen-26 minus (pinned eval ∪ first-8-sorted), per subcorpus."""
-    pin = collections.defaultdict(set)
-    if os.path.exists(PIN):
-        for line in open(PIN):
-            if line.startswith("#") or "\t" not in line:
-                continue
-            d, f = line.rstrip("\n").split("\t")[:2]
-            pin[d].add(f.rsplit(".", 1)[0])
-    out = set()
-    for sub in SUBS:
-        fs = sorted(image_files(os.path.join(IMAZEN, sub)))
-        for f in fs[8:]:
-            if os.path.basename(f).rsplit(".", 1)[0] not in pin[sub]:
-                out.add(f)
-    return out
+    """Canonical-corpus files in the TRAIN bucket — what the model actually sees.
+
+    The old definition was "everything except the first 8 sorted and a pinned
+    list", which was a hand-maintained approximation of a split. The canonical
+    corpus has ids, so this is now the split itself.
+    """
+    return {os.path.join(CANONICAL_ROOT, p)
+            for p, b in split_map().items() if b == "train"}
 
 
 def origin_of(path):

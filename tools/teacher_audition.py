@@ -6,7 +6,7 @@ A2c teacher) on people/textures/art-scans at web-JPEG degradations, at the
 x2-target protocol we would actually distill with?
 
 Protocol (matches systems_eval x2 track in spirit; self-contained kernels):
-  HR = center-crop 512 of each frozen-eval file (first 8 sorted per subdir)
+  HR = center-crop 512 of each held-out file (test bucket, 8 per folder)
   LR = INTER_AREA down to 256, degraded clean/q75/q50/q35 via SYSTEM cjpeg
   x4 teachers: out = AREA-down(model(LR) [1024]) -> 512
   x2 teachers: out = model(LR) -> 512
@@ -23,13 +23,23 @@ import numpy as np
 import torch
 from spandrel import ModelLoader
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from corpus_split import split_map  # noqa: E402
+from imazen26_canonical import CANONICAL_ROOT, canonical_for  # noqa: E402
+
+SPLIT = split_map()
+
 W = "/mnt/tower/output/zensr-training/adopted-weights"
-# INVALID ROOT — see benchmarks/imazen26_contamination_audit_2026-08-05.md.
-# Valid corpus is ~/work/codec-corpus/imazen-26.
-SRC = "/mnt/v/imazen-26"
-OUT = os.path.expanduser("~/tmp/zensr-audition")
-SUBS = [("people", "unsplash-people"), ("textures", "unsplash-textures"),
-        ("art-scans", "internet-archive-scans"), ("photos", "lilith")]
+# Repointed 2026-09-07 to the canonical corpus (docs/CORPUS-REPOINT-HANDOFF.md).
+SRC = CANONICAL_ROOT
+# The four content classes this audition is about. `photos` spans four canonical
+# folders because the old flat `lilith` did — see tools/imazen26_canonical.py.
+SUBS = [("people", ["2000-unsplash-people"]),
+        ("textures", ["2400-unsplash-textures"]),
+        ("art-scans", ["6600-ia-scans-manuscript-illustrations",
+                       "6800-ia-scans-manuscript-text"]),
+        ("photos", canonical_for("lilith"))]
+N_PER_CLASS = 8
 TEACHERS = [
     # (name, file, scale)
     ("realesrnet_x4", "RealESRNet_x4plus.pth", 4),
@@ -41,15 +51,16 @@ TEACHERS = [
 DEGS = [("clean", 0), ("q75", 75), ("q50", 50), ("q35", 35)]
 
 
-def eval_files(d):
-    # recursive, sorted by relative path — matches zensr-bench list_images +
-    # the frozen first-8 eval split (lilith / art-scans use subdirectories)
-    fs = []
-    for root, _, files in os.walk(d):
-        for f in files:
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                fs.append(os.path.relpath(os.path.join(root, f), d))
-    return sorted(fs)[:8]
+def eval_files(folders):
+    """Held-out files for a content class: the TEST bucket of the origin split,
+    first N_PER_CLASS by path.
+
+    Was "first 8 sorted per subdir", which is not a split — it admitted training
+    images whenever a file ahead of it failed to decode. The bucket cannot slide.
+    """
+    fs = [p for p, b in SPLIT.items()
+          if b == "test" and p.split("/", 1)[0] in set(folders)]
+    return sorted(fs)[:N_PER_CLASS]
 
 
 def cjpeg_roundtrip(img_bgr, q):
@@ -76,15 +87,17 @@ def main():
         os.makedirs(os.path.join(OUT, name), exist_ok=True)
         print(f"loaded {name} ({m.architecture.name}, x{m.scale})", flush=True)
 
-    for sub, d in SUBS:
-        for fn in eval_files(os.path.join(SRC, d)):
-            img = cv2.imread(os.path.join(SRC, d, fn), cv2.IMREAD_COLOR)
+    for sub, folders in SUBS:
+        for fn in eval_files(folders):
+            img = cv2.imread(os.path.join(SRC, fn), cv2.IMREAD_COLOR)
             if img is None or img.shape[0] < 512 or img.shape[1] < 512:
                 continue
             y0 = (img.shape[0] - 512) // 2
             x0 = (img.shape[1] - 512) // 2
             hr = img[y0:y0 + 512, x0:x0 + 512]
             stem = f"{sub}__{os.path.splitext(fn)[0].replace(os.sep, '-')}"
+            # Reference kind travels with the crop: a JPEG-sourced HR is itself
+            # compressed, and the scores have to be read split by that.
             cv2.imwrite(os.path.join(OUT, "gt", f"{stem}.png"), hr)
             lr0 = cv2.resize(hr, (256, 256), interpolation=cv2.INTER_AREA)
             for deg, q in DEGS:
