@@ -205,13 +205,33 @@ TLB cost is nil.
 At 1024px: **AVX-512 +237%, AVX2 +169%.** Throughput is now flat across sizes
 instead of collapsing.
 
-### The lesson about the bench, restated
+### The bench was measuring the right size after all — correction
 
-The kernel bench measures one size, and it is the size where none of this is
-visible: at 128px both fixes together are worth ~0%. A bench that cannot see a
-237% improvement will approve the wrong kernel, and the size-sweep discipline in
-`~/work/zen/CLAUDE.md` exists precisely for this. `examples/conv_probe` now takes
-size and channel-count arguments; `kernel_tiers` should follow.
+I first wrote that the 128px bench "was hiding" this and would "approve the wrong
+kernel". **That overstated it, and the correction matters more than the original
+claim.** `restore_jpeg` runs the model through `upscale_tiled`, whose default
+`tile` is **128** — so production convolves 128×128 tiles (plus halo), never a
+whole 1024px plane. 128px is the *representative* size, not the wrong one.
+
+So the honest accounting of these two cache fixes:
+
+- On a **whole plane** (the shape `conv_probe` measures, and what a caller using
+  the untiled path gets) they are worth up to **+237%**.
+- On the **tiled production path** they are worth ≈0%, because 128px tiles never
+  reach the TLB cliff.
+- The measured end-to-end gain — `restore` at 1024px/12T, **202.2 → 168.3 ms,
+  −16.8%** — comes from the *compute-bound* work instead: bounds-check hoisting
+  (+6%) and 8 accumulator chains (+5.4%), which together are +12.3% at 128px.
+
+The size sweep is still worth having, for two reasons that survive the
+correction. It documents a real cliff that anyone raising the tile size or using
+the untiled path would fall into; and removing that cliff is what makes a larger
+tile *viable*, which is the actual production lever — at tile=128 with halo=10
+each tile computes (128+20)²/128² = **1.34× the pixels it keeps**, so 34% of the
+work is discarded halo. 256px would cut that to 16%.
+
+`examples/conv_probe` takes size and channel-count arguments and `kernel_tiers`
+now sweeps 64/128/512, so both regimes stay visible.
 
 ### What is left
 

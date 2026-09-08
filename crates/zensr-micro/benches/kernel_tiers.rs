@@ -113,32 +113,46 @@ fn bench_kernels(suite: &mut Suite) {
         }
     });
 
-    // conv3x3 — the dominant cost of the network: 32 in / 32 out channels on a
-    // 128x128 plane, the shape the adopted graph actually runs.
+    // conv3x3 — the dominant cost of the network, SWEPT OVER PLANE SIZE.
+    //
+    // One size is not enough and 128px is the worst possible choice. The kernel
+    // is compute-bound while the working set fits cache, and TLB-bound above it:
+    // in the planar layout a tile touches cin*3 rows that are `cs` floats apart,
+    // so at 1024px they occupy 96 pages against a 64-entry L1 dTLB. Measured
+    // 2026-09-08, the loop-order + channel-blocking fixes were worth **+237% at
+    // 1024px and ~0% at 128px** — this bench, at 128px only, called them noise.
+    // See benchmarks/realtime_kernels_x86_2026-09-08.md.
+    //
+    // 64 / 128 / 512 spans tiny, cache-resident and TLB-pressured. 1024px is
+    // more representative still but costs 256 MB of buffers per arm.
     const CIN: usize = 32;
     const COUT: usize = 32;
-    const H: usize = 128;
-    const WD: usize = 128;
-    let inp: &'static [f32] = Box::leak(ramp(CIN * H * WD, 7).into_boxed_slice());
-    let wts: &'static [f32] = Box::leak(ramp(COUT * CIN * 9, 11).into_boxed_slice());
-    let bias: &'static [f32] = Box::leak(ramp(COUT, 13).into_boxed_slice());
-    suite.compare("conv3x3_dispatch/32x32x128x128", move |g| {
-        g.throughput(Throughput::Elements((COUT * H * WD) as u64));
-        for (arm, simd) in [(tier, true), ("scalar", false)] {
-            g.bench(arm, move |b| {
-                b.with_input(move || {
-                    set_simd(simd);
-                    vec![0f32; COUT * H * WD]
-                })
-                .run(move |mut out| {
-                    zensr_micro::simd::conv3x3_dispatch(inp, CIN, wts, bias, &mut out, COUT, H, WD);
-                    out
-                })
-            });
-        }
-    });
-
-    set_simd(true);
+    for &side in &[64usize, 128, 512] {
+        let (h, wd) = (side, side);
+        let inp: &'static [f32] = Box::leak(ramp(CIN * h * wd, 7).into_boxed_slice());
+        let wts: &'static [f32] = Box::leak(ramp(COUT * CIN * 9, 11).into_boxed_slice());
+        let bias: &'static [f32] = Box::leak(ramp(COUT, 13).into_boxed_slice());
+        let name: &'static str = Box::leak(
+            format!("conv3x3_dispatch/{CIN}x{COUT}x{side}x{side}").into_boxed_str(),
+        );
+        suite.compare(name, move |g| {
+            g.throughput(Throughput::Elements((COUT * h * wd) as u64));
+            for (arm, simd) in [(tier, true), ("scalar", false)] {
+                g.bench(arm, move |b| {
+                    b.with_input(move || {
+                        set_simd(simd);
+                        vec![0f32; COUT * h * wd]
+                    })
+                    .run(move |mut out| {
+                        zensr_micro::simd::conv3x3_dispatch(
+                            inp, CIN, wts, bias, &mut out, COUT, h, wd,
+                        );
+                        out
+                    })
+                });
+            }
+        });
+    }
 }
 
 zenbench::main!(bench_kernels);
