@@ -37,7 +37,8 @@ macro_rules! define_kernels {
             ) {
                 const W: usize = $w;
                 // `inp` is the plane ZERO-PADDED by one column each side (row
-                // width pwd = wd + 2, plane stride pcs). Padding is what lets the
+                // width pwd = wd + 18: a zero column each side plus a cache line
+                // of trailing slack, plane stride pcs). Padding is what lets the
                 // vector tile loop cover EVERY output column, so the scalar edge
                 // path disappears — it cost 31% of this kernel at 128px, the tile
                 // size production runs (7% at 512px; it scales with
@@ -52,14 +53,14 @@ macro_rules! define_kernels {
                 assert!(cin * 3 <= 192, "conv3x3: cin {cin} exceeds rowtab capacity");
                 let q = oc0 / 4;
                 let qbase = q * cin * 36; // cin * 3ky * 12
-                // (row, weights) pairs for this output row, built ONCE and then
-                // walked by iterator. Indexing `rowtab[ic*3+ky]` and re-slicing
-                // `wts[o..o+12]` inside the tile loop cost a bounds check each,
-                // per (ic,ky), per tile — and the profile put 28% of this
-                // kernel's samples in branch/compare. Pairing them here turns
-                // both into pointer bumps. Order of iteration, and therefore of
-                // FP accumulation, is identical to the previous nesting, so the
-                // output is bit-identical (goldens unchanged).
+                                          // (row, weights) pairs for this output row, built ONCE and then
+                                          // walked by iterator. Indexing `rowtab[ic*3+ky]` and re-slicing
+                                          // `wts[o..o+12]` inside the tile loop cost a bounds check each,
+                                          // per (ic,ky), per tile — and the profile put 28% of this
+                                          // kernel's samples in branch/compare. Pairing them here turns
+                                          // both into pointer bumps. Order of iteration, and therefore of
+                                          // FP accumulation, is identical to the previous nesting, so the
+                                          // output is bit-identical (goldens unchanged).
                 const ZERO12: [f32; 12] = [0.0; 12];
                 let mut taps: [(&[f32], &[f32; 12]); 192] = [(&[], &ZERO12); 192];
                 let mut ntap = 0usize;
@@ -92,75 +93,87 @@ macro_rules! define_kernels {
                     let taps = &taps[ic0 * nky..ic1 * nky];
                     let first = ic0 == 0;
                     let mut x = 0usize;
-                while x + W <= wd {
-                    // EIGHT independent accumulator chains instead of four:
-                    // (l,m) share one per output, r gets its own, so the longest
-                    // dependency run per tap iteration is 2 rather than 3.
-                    //
-                    // Twelve chains (one per tap) is faster still on AVX-512
-                    // (+4.2%) but REGRESSES AVX2 by 12%: 12 accumulators + 3
-                    // loads + a broadcast temp exceed the 16 ymm registers, and
-                    // AVX2 has no embedded broadcast to fold the weight operand.
-                    // Eight fits both. We ship one binary and the CPU picks the
-                    // tier, so a win that costs older CPUs is not a win.
-                    // The old shape gave each acc[ob] three
-                    // back-to-back dependent FMAs, so the per-instruction
-                    // profile piled up on the third of every chain: hiding a
-                    // ~4-cycle FMA at 2/cycle issue needs ~8 chains, and four
-                    // capped the kernel near half of FMA peak. Each chain now
-                    // takes exactly one FMA per tap iteration.
-                    //
-                    // This REORDERS FP addition (per-tap partial sums, combined
-                    // at the end) — deliberate, user-authorised. It stays
-                    // bit-identical ACROSS TIERS because the per-pixel sequence
-                    // does not depend on the vector width; only lane count does.
-                    let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
-                    let mut acc_r = [V::<T>::splat(token, 0.0); 4];
-                    for &(irow, w12) in taps {
-                        // One checked window per tap instead of three: l/m/r are
-                        // constant sub-ranges of a fixed-size array, which LLVM
-                        // proves in-bounds and lowers to plain loads.
-                        let win: &[f32; $w + 2] =
-                            (&irow[x..x + W + 2]).try_into().unwrap();
-                        let l = V::<T>::from_slice(token, &win[0..]);
-                        let m = V::<T>::from_slice(token, &win[1..]);
-                        let r = V::<T>::from_slice(token, &win[2..]);
+                    while x + W <= wd {
+                        // EIGHT independent accumulator chains instead of four:
+                        // (l,m) share one per output, r gets its own, so the longest
+                        // dependency run per tap iteration is 2 rather than 3.
+                        //
+                        // Twelve chains (one per tap) is faster still on AVX-512
+                        // (+4.2%) but REGRESSES AVX2 by 12%: 12 accumulators + 3
+                        // loads + a broadcast temp exceed the 16 ymm registers, and
+                        // AVX2 has no embedded broadcast to fold the weight operand.
+                        // Eight fits both. We ship one binary and the CPU picks the
+                        // tier, so a win that costs older CPUs is not a win.
+                        // The old shape gave each acc[ob] three
+                        // back-to-back dependent FMAs, so the per-instruction
+                        // profile piled up on the third of every chain: hiding a
+                        // ~4-cycle FMA at 2/cycle issue needs ~8 chains, and four
+                        // capped the kernel near half of FMA peak. Each chain now
+                        // takes exactly one FMA per tap iteration.
+                        //
+                        // This REORDERS FP addition (per-tap partial sums, combined
+                        // at the end) — deliberate, user-authorised. It stays
+                        // bit-identical ACROSS TIERS because the per-pixel sequence
+                        // does not depend on the vector width; only lane count does.
+                        let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
+                        let mut acc_r = [V::<T>::splat(token, 0.0); 4];
+                        for &(irow, w12) in taps {
+                            // TWO loads, not three. l/m/r are lanes 0/1/2 of the
+                            // same 2W-lane window, so the middle and right taps come
+                            // from a funnel shift over the pair rather than their own
+                            // loads. `pwd` carries W-2 trailing zero floats precisely
+                            // so the second load stays in bounds at the last tile;
+                            // its upper lanes are discarded by the shift.
+                            //
+                            // MEASURED in isolation on a 7950X at 96 taps and 8
+                            // chains (examples/tap_load_probe): 125.1 GFLOP/s for
+                            // three unaligned loads against 141.9 for two unaligned
+                            // loads plus two shifts. Alignment is irrelevant — the
+                            // win is the load COUNT.
+                            let win: &[f32; $w * 2] = (&irow[x..x + W * 2]).try_into().unwrap();
+                            let l = V::<T>::from_slice(token, &win[0..]);
+                            let hi = V::<T>::from_slice(token, &win[W..]);
+                            let m = l.concat_shift::<1>(hi);
+                            let r = l.concat_shift::<2>(hi);
+                            for ob in 0..4 {
+                                acc_lm[ob] =
+                                    l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
+                                acc_lm[ob] =
+                                    m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                                acc_r[ob] =
+                                    r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
+                            }
+                        }
+                        let mut acc = [V::<T>::splat(token, 0.0); 4];
                         for ob in 0..4 {
-                            acc_lm[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
-                            acc_lm[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
-                            acc_r[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
+                            // Bias belongs to the whole sum, so it is added once, on
+                            // the first channel block only.
+                            acc[ob] = acc_lm[ob] + acc_r[ob];
+                            if first {
+                                acc[ob] += V::<T>::splat(token, bias[oc0 + ob]);
+                            }
                         }
-                    }
-                    let mut acc = [V::<T>::splat(token, 0.0); 4];
-                    for ob in 0..4 {
-                        // Bias belongs to the whole sum, so it is added once, on
-                        // the first channel block only.
-                        acc[ob] = acc_lm[ob] + acc_r[ob];
-                        if first {
-                            acc[ob] += V::<T>::splat(token, bias[oc0 + ob]);
+                        for ob in 0..4 {
+                            let dst: &mut [f32; W] = (&mut out
+                                [(oc0 + ob) * cs + oy * wd + x..(oc0 + ob) * cs + oy * wd + x + W])
+                                .try_into()
+                                .unwrap();
+                            if !first {
+                                acc[ob] += V::<T>::load(token, dst);
+                            }
+                            acc[ob].store(dst);
                         }
+                        x += W;
                     }
-                    for ob in 0..4 {
-                        let dst: &mut [f32; W] = (&mut out
-                            [(oc0 + ob) * cs + oy * wd + x..(oc0 + ob) * cs + oy * wd + x + W])
-                            .try_into()
-                            .unwrap();
-                        if !first {
-                            acc[ob] += V::<T>::load(token, dst);
-                        }
-                        acc[ob].store(dst);
-                    }
-                    x += W;
-                }
                 } // end channel block
-                // Overlapped final tile: cover up to wd-2 by re-running one
-                // tile ending at wd-1. It OVERLAPS positions the main loop
-                // already wrote, so it must OVERWRITE with the complete sum —
-                // it therefore runs once, outside the channel-block loop, over
-                // the full tap set. Accumulating it per block double-counts
-                // every block after the first on the overlapped columns (caught
-                // by arbitrary_dims_simd_vs_scalar at 8x19). One tile per row,
-                // so touching all cin*3 pages here costs nothing measurable.
+                  // Overlapped final tile: cover up to wd-2 by re-running one
+                  // tile ending at wd-1. It OVERLAPS positions the main loop
+                  // already wrote, so it must OVERWRITE with the complete sum —
+                  // it therefore runs once, outside the channel-block loop, over
+                  // the full tap set. Accumulating it per block double-counts
+                  // every block after the first on the overlapped columns (caught
+                  // by arbitrary_dims_simd_vs_scalar at 8x19). One tile per row,
+                  // so touching all cin*3 pages here costs nothing measurable.
                 if wd % W != 0 && wd >= W {
                     let xl = wd - W;
                     // EIGHT independent accumulator chains instead of four:
@@ -187,17 +200,27 @@ macro_rules! define_kernels {
                     let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
                     let mut acc_r = [V::<T>::splat(token, 0.0); 4];
                     for &(irow, w12) in taps {
-                        // One checked window per tap instead of three: l/m/r are
-                        // constant sub-ranges of a fixed-size array, which LLVM
-                        // proves in-bounds and lowers to plain loads.
-                        let win: &[f32; $w + 2] =
-                            (&irow[xl..xl + W + 2]).try_into().unwrap();
+                        // TWO loads, not three. l/m/r are lanes 0/1/2 of the
+                        // same 2W-lane window, so the middle and right taps come
+                        // from a funnel shift over the pair rather than their own
+                        // loads. `pwd` carries W-2 trailing zero floats precisely
+                        // so the second load stays in bounds at the last tile;
+                        // its upper lanes are discarded by the shift.
+                        //
+                        // MEASURED in isolation on a 7950X at 96 taps and 8
+                        // chains (examples/tap_load_probe): 125.1 GFLOP/s for
+                        // three unaligned loads against 141.9 for two unaligned
+                        // loads plus two shifts. Alignment is irrelevant — the
+                        // win is the load COUNT.
+                        let win: &[f32; $w * 2] = (&irow[xl..xl + W * 2]).try_into().unwrap();
                         let l = V::<T>::from_slice(token, &win[0..]);
-                        let m = V::<T>::from_slice(token, &win[1..]);
-                        let r = V::<T>::from_slice(token, &win[2..]);
+                        let hi = V::<T>::from_slice(token, &win[W..]);
+                        let m = l.concat_shift::<1>(hi);
+                        let r = l.concat_shift::<2>(hi);
                         for ob in 0..4 {
                             acc_lm[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
-                            acc_lm[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                            acc_lm[ob] =
+                                m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
                             acc_r[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
                         }
                     }
@@ -479,11 +502,31 @@ macro_rules! define_kernels {
                 // cin*3 padded rows (197 KB at 512px, 50 KB at the production
                 // tile), copies each input row exactly once, and reuses it for
                 // the three output rows that need it.
-                let pwd = wd + 2;
+                // wd + 2 for the zero column each side, plus ONE CACHE LINE
+                // (16 floats) of trailing slack. The slack has two jobs.
+                //
+                // 1. The conv's SECOND W-lane load (at x + W, feeding the funnel
+                //    shift that synthesises the middle and right taps) runs off
+                //    the end of the row at the last tile. It needs W - 2 floats,
+                //    so 16 covers both vector widths. Those floats are written
+                //    once as zero and never read for their value — the shift
+                //    discards every lane above the first two.
+                //
+                // 2. It moves the row stride by exactly one cache line, and that
+                //    is worth more than the load change at large sizes. MEASURED
+                //    (7 paired reps, interleaved, benchmarks/conv3x3_tap_load_2026-09-08.md):
+                //    against +W slack, +16 is v4x 512px +4.5% vs +0.8% and v3
+                //    512px +20.3% vs +16.2%. wd = 512 floats is exactly half a
+                //    4 KiB page, so a wd + 2 stride puts rows 0 and 2 of every
+                //    tap group in the SAME L1 set; one line of skew separates
+                //    them. That mechanism is a hypothesis — the numbers are not.
+                let pwd = wd + 18;
                 let pcs = 3 * pwd; // per channel: 3 row slots
                 let mut pin = vec![0.0f32; cin * pcs];
                 // `slot(y)` is where input row y lives. The zero columns at
-                // index 0 and pwd-1 are written once and never touched again.
+                // index 0 and wd+1..pwd are written once and never touched
+                // again — the trailing ones exist so the tile loop's second load
+                // has real memory to read past the last column.
                 let fill = |pin: &mut [f32], y: usize| {
                     for ic in 0..cin {
                         let d = ic * pcs + (y % 3) * pwd + 1;

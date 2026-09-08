@@ -132,9 +132,8 @@ fn bench_kernels(suite: &mut Suite) {
         let inp: &'static [f32] = Box::leak(ramp(CIN * h * wd, 7).into_boxed_slice());
         let wts: &'static [f32] = Box::leak(ramp(COUT * CIN * 9, 11).into_boxed_slice());
         let bias: &'static [f32] = Box::leak(ramp(COUT, 13).into_boxed_slice());
-        let name: &'static str = Box::leak(
-            format!("conv3x3_dispatch/{CIN}x{COUT}x{side}x{side}").into_boxed_str(),
-        );
+        let name: &'static str =
+            Box::leak(format!("conv3x3_dispatch/{CIN}x{COUT}x{side}x{side}").into_boxed_str());
         suite.compare(name, move |g| {
             g.throughput(Throughput::Elements((COUT * h * wd) as u64));
             for (arm, simd) in [(tier, true), ("scalar", false)] {

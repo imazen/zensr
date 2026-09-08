@@ -35,6 +35,15 @@ per subcorpus, n=64/cell, gate disabled unless stated. Raw:
 Conclusion and full context: `SYSTEMS.md` "CHROMA SUBSAMPLING BREAKS THE
 HIGH-Q GATE", `ROADMAP.md` 1.1.
 
+## Realtime kernels (x86)
+
+| file | what it answers |
+|---|---|
+| `realtime_kernels_x86_2026-09-08.md` | the whole conv3x3 optimisation pass: what each change bought and what the profile said |
+| `conv3x3_tap_load_2026-09-08.md` | two loads + funnel shift, and the cache-line row skew that has to come with it — and why the isolated probe named the wrong tier |
+| `conv3x3_tap_load_2026-09-08.tsv` | the shipping A/B, 10 paired reps x 2 tiers x 3 sizes |
+| `conv3x3_tap_load_arms_2026-09-08.tsv` | the three-arm run that separated the load-count change from the stride change |
+
 ## Tools
 
 - `tools/gate_crossover.py` — per-file deltas, crossover, and `--absolute` for

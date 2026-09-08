@@ -326,39 +326,46 @@ wd + 2 + W` rather than `wd + 2`:
 | three loads (pad+W) | 117.8 — the extra padding costs nothing |
 | **two loads + concat_shift (pad+W)** | **131.2, +11%, 3/3 wins** |
 
-### Status: implemented in archmage, not landable in zensr yet
+### Status: LANDED. The probe named the wrong tier.
 
-`magetypes::simd::concat_shift` is a hand-written extension (no generator
-change): a `ConcatShift` trait with a portable store/window/reload body, plus a
-native `_mm512_alignr_epi32` impl for `f32x16<X64V4xToken>`. Differential tests
-pin the native path against the portable one.
+`concat_shift` is now a **provided method on the generated backend traits**
+(`F32x4Backend` / `F32x8Backend` / `F32x16Backend`) rather than a standalone
+trait, with a wrapper on the generic `f32x4`/`f32x8`/`f32x16` types, and a
+native path on every tier: `valignd` (AVX-512), `vperm2f128` + `vpalignr`
+(AVX2), `palignr` (SSSE3), `vextq_f32` (NEON), `i8x16.shuffle` (wasm). The
+width polyfills delegate per sub-vector to the native leaf, so nothing falls
+back to the portable body. That also settles the design cost recorded below:
+code generic over the backend needs no extra bound, because the operation is
+part of the backend trait. imazen/archmage#111.
 
-Two things keep it out of zensr for now:
+The kernel change landed with it — and **the +11% above did not survive contact
+with the real kernel on the tier it was measured on.** In the shipped kernel the
+load-count change alone is +0.8% (3/5) on AVX-512; the tier that gains is AVX2,
+which this probe never measured. The shipped change is worth +1.5% / +2.3% /
++4.7% on AVX-512 and +4.9% / +11.2% / +19.5% on AVX2 at 128 / 256 / 512px, but
+most of that comes from a **one-cache-line row-stride skew** that the second
+load forced into the padding, not from the load count: the two-load form on its
+own raises the L1 miss rate by half at 512px, because two loads a full W apart
+span more cache lines than three overlapping ones.
 
-1. **It is unpublished.** zensr's tree must build against crates.io, so the
-   kernel change cannot land until magetypes ships the operation.
-2. **Only AVX-512 is fast.** Every other token gets the portable body, which
-   spills and reloads — correct, but a regression if used. The v3/NEON/wasm
-   backends need native implementations (`_mm256_alignr_epi8` + a lane permute,
-   `vextq_f32`) before the kernel can call it unconditionally.
+Full accounting, including the `perf` counters that separate the two effects:
+`benchmarks/conv3x3_tap_load_2026-09-08.md`.
 
-There is also a design cost worth recording: because the operation lives outside
-the generated backend trait, the bound `V<T>: ConcatShift` has to be threaded
-through every generic function that reaches the kernel. Putting it in the
-generated trait instead would remove that entirely — which is the argument for
-doing the generator work if this is adopted.
+The lesson worth keeping: **this probe is an upper bound on one effect in
+isolation, not a prediction.** It has no channel blocking, no output stores and
+everything resident, so it prices instruction issue and nothing else — and this
+change turned out to be decided by cache-set conflicts, with the instruction
+count moving the wrong way (132.5e9 -> 139.7e9 while cycles fell 47.7e9 ->
+37.4e9).
 
 ### What is left
 
-Loads (14.8%) are the largest remaining non-FMA block. Two of the three taps are
-4-byte-misaligned by construction, so a 64-byte load crosses a cache line on
-every one; synthesising the shifted vectors with `valignd` from one aligned load
-would trade two misaligned loads for two permutes. That needs a cross-vector
-element-shift op, which magetypes does not have — so it is a **new public API on
-a published crate**, i.e. a PR against archmage rather than a local change. At
-75% of peak the headroom left is ~33%, and this is the only identified route to
-it.
+Loads were the largest remaining non-FMA block at 14.8% and the tap-load change
+has taken the obvious part of it. The next profile has to be re-taken from the
+current kernel rather than reasoned from this one — the shape changed enough
+that the old breakdown no longer describes it.
 
 Everything else measured here is done: bounds checks hoisted, accumulators
 widened to 8 chains, loop order fixed, channels blocked for the TLB, scalar
-border deleted, tile size adapted to thread count.
+border deleted, tile size adapted to thread count, taps derived from two loads
+instead of three.

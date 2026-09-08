@@ -729,6 +729,68 @@ mod tests {
         assert_close_finite(&got, &want, 1e-4, "conv3x3");
     }
 
+    /// The same adversarial shapes with the AVX-512 tokens disabled, so the
+    /// f32x8/AVX2 arm of the ladder is exercised rather than shadowed.
+    ///
+    /// Without this, a bug confined to one tier ships silently on every machine
+    /// that has a higher one — and the tiers do NOT share their conv inner loop:
+    /// f32x16 and f32x8 are separate monomorphizations, and `concat_shift`
+    /// (which synthesises the middle and right taps) is a single `valignd` on
+    /// AVX-512 against an eight-arm `vperm2f128`+`vpalignr` match on AVX2. A
+    /// wrong immediate in one of those arms is off by one lane, which looks
+    /// entirely plausible in the output.
+    ///
+    /// Disabling is process-wide, so this test both sets and clears the flag and
+    /// must not run beside another that depends on tier selection.
+    #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+    #[test]
+    fn arbitrary_dims_v3_matches_scalar() {
+        let wbuf = lcg(TOTAL_FLOATS, 777, 0.12);
+        let w = SpanfWeights::parse(&wbuf).unwrap();
+        let disabled = archmage::X64V4xToken::dangerously_disable_token_process_wide(true).is_ok()
+            && archmage::X64V4Token::dangerously_disable_token_process_wide(true).is_ok();
+        assert!(
+            disabled,
+            "archmage testable_dispatch is required to force a tier"
+        );
+        let mut failure = None;
+        for &(h, wd) in &[
+            (1usize, 1usize),
+            (1, 9),
+            (3, 17),
+            (5, 18),
+            (8, 19),
+            (7, 33),
+            (13, 13),
+            (16, 16),
+            (61, 47),
+        ] {
+            let input = lcg(3 * h * wd, (h * 131 + wd) as u32, 1.0);
+            let a = spanf_x4(&input, h, wd, &w);
+            let b = spanf_x4_simd(&input, h, wd, &w);
+            // Collect rather than assert, so the flag is always restored — a
+            // panic here would leave every later test on the scalar tier.
+            if a.len() != b.len()
+                || a.iter()
+                    .zip(&b)
+                    .any(|(x, y)| !x.is_finite() || !y.is_finite() || (x - y).abs() >= 5e-4)
+            {
+                let max = a
+                    .iter()
+                    .zip(&b)
+                    .map(|(x, y)| (x - y).abs())
+                    .fold(0.0f32, f32::max);
+                failure = Some(format!("v3 dims {h}x{wd}: max diff {max}"));
+                break;
+            }
+        }
+        let _ = archmage::X64V4xToken::dangerously_disable_token_process_wide(false);
+        let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(false);
+        if let Some(msg) = failure {
+            panic!("{msg}");
+        }
+    }
+
     #[test]
     fn arbitrary_dims_simd_vs_scalar() {
         // Adversarial shapes: below/at/above the f32x8 (W=8) and f32x16 (W=16)

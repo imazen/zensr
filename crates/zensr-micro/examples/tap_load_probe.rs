@@ -152,7 +152,10 @@ fn main() {
     let w: Vec<f32> = (0..NTAP * 12).map(|i| (i % 17) as f32 * 0.01).collect();
 
     for (name, f) in [
-        ("3 unaligned loads", probe::loads as unsafe fn(&[*const f32], &[f32], usize, usize) -> _),
+        (
+            "3 unaligned loads",
+            probe::loads as unsafe fn(&[*const f32], &[f32], usize, usize) -> _,
+        ),
         ("2 aligned + 2 valignd", probe::aligned_shift),
         ("2 UNaligned + 2 valignd", probe::unaligned_shift),
     ] {

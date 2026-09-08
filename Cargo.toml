@@ -32,3 +32,10 @@ codegen-units = 1
 [patch.crates-io]
 zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+# conv3x3 calls magetypes' `concat_shift`, which is on imazen/archmage#111 and
+# unpublished. Pinned to the exact rev rather than the branch so the tree builds
+# the same bytes tomorrow. Drop all three lines and let the 0.9.30 crates.io
+# release satisfy the dependency once #111 ships.
+archmage = { git = "https://github.com/imazen/archmage", rev = "767286d25c9f8bda3c82b8e62dce2c53ab807f1a" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "767286d25c9f8bda3c82b8e62dce2c53ab807f1a" }
+archmage-macros = { git = "https://github.com/imazen/archmage", rev = "767286d25c9f8bda3c82b8e62dce2c53ab807f1a" }
