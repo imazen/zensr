@@ -16,8 +16,10 @@ fn ramp(n: usize, seed: u32) -> Vec<f32> {
 }
 
 fn main() {
-    const CIN: usize = 32;
-    const COUT: usize = 32;
+    // Third arg: channel count. cin*3 rows are touched per tile, each on its own
+    // page at large sizes, so this is the knob that decides TLB pressure.
+    let ch: usize = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(32);
+    let (cin, cout) = (ch, ch);
     let iters: usize = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
@@ -29,22 +31,22 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(128);
     let (h, wd) = (side, side);
-    let inp = ramp(CIN * h * wd, 7);
-    let wts = ramp(COUT * CIN * 9, 11);
-    let bias = ramp(COUT, 13);
-    let mut out = vec![0f32; COUT * h * wd];
+    let inp = ramp(cin * h * wd, 7);
+    let wts = ramp(cout * cin * 9, 11);
+    let bias = ramp(cout, 13);
+    let mut out = vec![0f32; cout * h * wd];
     // warm
     for _ in 0..20 {
-        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, h, wd);
+        zensr_micro::simd::conv3x3_dispatch(&inp, cin, &wts, &bias, &mut out, cout, h, wd);
     }
     let t = Instant::now();
     for _ in 0..iters {
-        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, h, wd);
+        zensr_micro::simd::conv3x3_dispatch(&inp, cin, &wts, &bias, &mut out, cout, h, wd);
     }
     let el = t.elapsed();
-    let flops = 2.0 * (CIN * COUT * 9 * h * wd) as f64 * iters as f64;
+    let flops = 2.0 * (cin * cout * 9 * h * wd) as f64 * iters as f64;
     eprintln!(
-        "{iters} iters @ {side}px, {:.3} ms/iter, {:.1} GFLOP/s, checksum {:.3}",
+        "{iters} iters @ {side}px c{ch}, {:.3} ms/iter, {:.1} GFLOP/s, checksum {:.3}",
         el.as_secs_f64() * 1e3 / iters as f64,
         flops / el.as_secs_f64() / 1e9,
         out.iter().take(64).sum::<f32>()

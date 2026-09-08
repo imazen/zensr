@@ -65,7 +65,25 @@ macro_rules! define_kernels {
                 }
                 let taps = &taps[..ntap];
 
+                // CHANNEL BLOCKING — the single biggest effect at production
+                // sizes. Each tile touches cin*3 input rows, and in the planar
+                // layout those rows are `cs` floats apart, so at 1024px they sit
+                // on cin*3 DISTINCT pages. Zen 4's L1 dTLB holds 64 entries, so
+                // 32 channels (96 pages) evicts the whole TLB on every tile.
+                // Measured at 1024px: cin=8 (24 pages) 99.6 GFLOP/s, cin=16 (48)
+                // 100.8, cin=32 (96) 48.9 — a 2.06x cliff exactly at the TLB
+                // boundary, and 13.3 page walks per MFLOP against 0.019 at
+                // 256px. Blocking to 16 channels keeps every tile inside the
+                // TLB; partial sums cross blocks through `out`, which stays in
+                // L1 for the row.
+                const IC_BLOCK: usize = 16;
+                let nky = ky_hi + 1 - ky_lo;
                 let mut x = 1usize;
+                for ic0 in (0..cin).step_by(IC_BLOCK) {
+                    let ic1 = (ic0 + IC_BLOCK).min(cin);
+                    let taps = &taps[ic0 * nky..ic1 * nky];
+                    let first = ic0 == 0;
+                    x = 1;
                 while x + W < wd {
                     // EIGHT independent accumulator chains instead of four:
                     // (l,m) share one per output, r gets its own, so the longest
@@ -107,19 +125,34 @@ macro_rules! define_kernels {
                     }
                     let mut acc = [V::<T>::splat(token, 0.0); 4];
                     for ob in 0..4 {
-                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat(token, bias[oc0 + ob]);
+                        // Bias belongs to the whole sum, so it is added once, on
+                        // the first channel block only.
+                        acc[ob] = acc_lm[ob] + acc_r[ob];
+                        if first {
+                            acc[ob] += V::<T>::splat(token, bias[oc0 + ob]);
+                        }
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
                             [(oc0 + ob) * cs + oy * wd + x..(oc0 + ob) * cs + oy * wd + x + W])
                             .try_into()
                             .unwrap();
+                        if !first {
+                            acc[ob] += V::<T>::load(token, dst);
+                        }
                         acc[ob].store(dst);
                     }
                     x += W;
                 }
+                } // end channel block
                 // Overlapped final tile: cover up to wd-2 by re-running one
-                // tile ending at wd-1 (stores are idempotent overwrites).
+                // tile ending at wd-1. It OVERLAPS positions the main loop
+                // already wrote, so it must OVERWRITE with the complete sum —
+                // it therefore runs once, outside the channel-block loop, over
+                // the full tap set. Accumulating it per block double-counts
+                // every block after the first on the overlapped columns (caught
+                // by arbitrary_dims_simd_vs_scalar at 8x19). One tile per row,
+                // so touching all cin*3 pages here costs nothing measurable.
                 if x < wd - 1 && wd >= W + 2 {
                     let xl = wd - 1 - W;
                     // EIGHT independent accumulator chains instead of four:
@@ -162,6 +195,8 @@ macro_rules! define_kernels {
                     }
                     let mut acc = [V::<T>::splat(token, 0.0); 4];
                     for ob in 0..4 {
+                        // Bias belongs to the whole sum, so it is added once, on
+                        // the first channel block only.
                         acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat(token, bias[oc0 + ob]);
                     }
                     for ob in 0..4 {

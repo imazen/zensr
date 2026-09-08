@@ -147,6 +147,72 @@ PASSes — the goldens are tolerance-based, not bit-exact. Cross-tier determinis
 is preserved because the per-pixel accumulation sequence does not depend on the
 vector width; only the lane count does.
 
+## 4. The real bottleneck at production sizes was the TLB
+
+Everything above was measured at 128x128, which is the size the kernel bench
+uses — and it is the one size where the kernel is compute-bound. Sweeping sizes
+told a different story:
+
+| size | AVX-512 GFLOP/s (as of §3) |
+|---|---|
+| 128px | 94.5 |
+| 256px | 104.6 |
+| 512px | 73.6 |
+| 1024px | **29.7** |
+
+Throughput collapses by 3.5x. Not DRAM bandwidth — the kernel needs well under
+1 GB/s at these sizes. **It is the TLB.** In the planar layout the `cin*3` input
+rows a tile needs are `cs` floats apart, so at 1024px they sit on `cin*3 = 96`
+distinct pages, against Zen 4's **64-entry L1 dTLB**. Every tile evicts the whole
+TLB.
+
+Measured page walks per MFLOP: **0.019 at 256px, 13.3 at 1024px** — a 700x
+increase. And varying only the channel count at 1024px puts the cliff exactly at
+the TLB boundary:
+
+| cin | pages per tile | GFLOP/s |
+|---|---|---|
+| 8 | 24 | 99.6 |
+| 16 | 48 | 100.8 |
+| 32 | **96** | **48.9** |
+
+### Two fixes, both bit-exact in effect and large
+
+**Loop order** (`oy` outer, output quad inner). The old nesting walked every row
+for one quad before returning to row 0 for the next. Bit-exact — output writes
+are disjoint per `(oc0, oy)`.
+
+**Channel blocking** (`IC_BLOCK = 16`, so 48 pages per tile). Partial sums cross
+blocks through `out`, which stays in L1 for the row. One trap, caught by
+`arbitrary_dims_simd_vs_scalar` at 8x19: the overlapped final tile recomputes
+columns the main loop already wrote, which is idempotent when it *overwrites* but
+**double-counts every block after the first** when it accumulates. It now runs
+once, outside the block loop, over the full tap set — one tile per row, so its
+TLB cost is nil.
+
+| size | original | + loop order | + channel blocking |
+|---|---|---|---|
+| **AVX-512** | | | |
+| 128px | 94.5 | 95.5 | 94.7 |
+| 256px | 104.6 | 106.7 | 106.5 |
+| 512px | 73.6 | 95.6 | **108.0** |
+| 1024px | 29.7 | 46.3 | **100.1** |
+| **AVX2** | | | |
+| 128px | 68.9 | 69.0 | 69.2 |
+| 512px | 67.2 | 65.8 | **72.3** |
+| 1024px | 25.4 | 35.4 | **68.4** |
+
+At 1024px: **AVX-512 +237%, AVX2 +169%.** Throughput is now flat across sizes
+instead of collapsing.
+
+### The lesson about the bench, restated
+
+The kernel bench measures one size, and it is the size where none of this is
+visible: at 128px both fixes together are worth ~0%. A bench that cannot see a
+237% improvement will approve the wrong kernel, and the size-sweep discipline in
+`~/work/zen/CLAUDE.md` exists precisely for this. `examples/conv_probe` now takes
+size and channel-count arguments; `kernel_tiers` should follow.
+
 ### What is left
 
 At 89.4 GFLOP/s the kernel is at ~57% of single-core AVX-512 FMA peak. Accumulator widening is done (above). At ~93.5 GFLOP/s the kernel sits at
