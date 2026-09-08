@@ -69,6 +69,60 @@ The remaining conv3x3 headroom (79.5 GFLOP/s against ~half of single-core FMA
 peak) is therefore a blocking/scheduling question inside the direct kernel, not
 a tiering question. The hot path is already tiered end to end.
 
+## 3. Where conv3x3's time actually goes, and a bit-exact +6%
+
+Profiled with `perf` on an isolated loop (`examples/conv_probe`, 32→32ch
+128×128, v4x tier) rather than reasoned about. Two hypotheses died immediately:
+the weight splats **are** folded into AVX-512 embedded broadcasts
+(`vfmadd231ps (%rbx,%rdi,4){1to16},%zmm9,%zmm8`), and the kernel is nowhere near
+memory-bound — arithmetic intensity is ~75 FLOP/byte. IPC is 3.96, but only
+~12.8% of retired instructions were FMAs.
+
+| instruction class | before | after |
+|---|---|---|
+| vector (packed) | 53% | **62%** |
+| **branch/compare** | **28%** | **2%** |
+| integer/addressing | 12% | 27% |
+| scalar float (border path) | 7% | 2% |
+
+The branches were per-(ic,ky)-per-tile indexing — `rowtab[ic*3+ky]`, re-slicing
+`wts[o..o+12]`, and three `from_slice` calls each doing
+`slice[..W].try_into().unwrap()` — about five checkable operations per twelve
+FMAs. Fixed by building the (row, weights) pairs once per output row and walking
+them by iterator, plus one checked window per tap from which l/m/r are constant
+sub-ranges of a fixed-size array.
+
+**Paired, interleaved, 5 pairs of 1500 iterations each** (single runs are not
+enough — the run-to-run spread on this box is ~3.4%, comparable to the effect):
+
+| pair | old GFLOP/s | new GFLOP/s |
+|---|---|---|
+| 1 | 84.3 | 89.7 |
+| 2 | 86.5 | 89.1 |
+| 3 | 84.9 | 89.4 |
+| 4 | 83.2 | 88.6 |
+| 5 | 82.7 | 91.4 |
+
+Median **84.3 → 89.4 GFLOP/s, +6.0%**, 5/5 pairs positive.
+
+**Bit-exact**, which was the gate rather than the speed: iteration order is
+unchanged, so FP accumulation order is untouched. `conv_probe`'s checksum is
+identical (−82.456), all 16 zensr-micro tests pass, and `zensr-verify` PASSes
+with golden deltas unchanged (5.364e-7 / 1.192e-7 / 2.027e-6). This kernel ships
+in a binary; a reordering would have silently changed users' pixels and
+invalidated every cached derivative.
+
+### What is left
+
+At 89.4 GFLOP/s the kernel is at ~57% of single-core AVX-512 FMA peak. The
+kernel carries **only 4 accumulators** (zmm5–zmm8) with three serially-dependent
+FMAs each, and the per-instruction samples pile up exactly on the third FMA of
+each chain and at chain switches — classic latency exposure, since hiding a
+4-cycle FMA at 2/cycle issue needs ~8 independent chains. Widening it is the
+next real win, but it **reorders FP addition**, so it needs a deliberate golden
+regeneration rather than a quiet refactor. Addressing is now the largest
+non-vector cost (27%).
+
 ## 3. archmage 0.9.29 is a correctness upgrade, not a speed one
 
 0.9.29 adds `silu_midp()`/`sigmoid_midp()` and restores the fast `recip()`
