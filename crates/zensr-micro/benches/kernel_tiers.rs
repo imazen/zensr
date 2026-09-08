@@ -16,10 +16,10 @@
 
 use zenbench::prelude::*;
 
+// Only the non-x86 path still needs a single alias; x86 disables every tier
+// explicitly (see set_simd).
 #[cfg(target_arch = "aarch64")]
 type TierToken = archmage::NeonToken;
-#[cfg(target_arch = "x86_64")]
-type TierToken = archmage::X64V3Token;
 
 /// The tier the dispatcher will ACTUALLY pick here, probed at runtime.
 ///
@@ -64,7 +64,7 @@ fn set_simd(enabled: bool) -> bool {
         let b = archmage::X64V4xToken::dangerously_disable_token_process_wide(!enabled).is_ok();
         #[cfg(not(feature = "avx512"))]
         let b = true;
-        return a && b;
+        a && b
     }
     #[cfg(not(target_arch = "x86_64"))]
     {

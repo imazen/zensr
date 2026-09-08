@@ -41,14 +41,29 @@ macro_rules! define_kernels {
                 // Row-slice table for this output row: rowtab[ic*3+ky].
                 // Built once per (oy); empty slice marks an invalid ky.
                 assert!(cin * 3 <= 192, "conv3x3: cin {cin} exceeds rowtab capacity");
-                let mut rowtab: [&[f32]; 192] = [&[]; 192];
-                for ic in 0..cin {
-                    for ky in ky_lo..=ky_hi {
-                        rowtab[ic * 3 + ky] = &inp[ic * cs + (oy + ky - 1) * wd..][..wd];
-                    }
-                }
                 let q = oc0 / 4;
                 let qbase = q * cin * 36; // cin * 3ky * 12
+                // (row, weights) pairs for this output row, built ONCE and then
+                // walked by iterator. Indexing `rowtab[ic*3+ky]` and re-slicing
+                // `wts[o..o+12]` inside the tile loop cost a bounds check each,
+                // per (ic,ky), per tile — and the profile put 28% of this
+                // kernel's samples in branch/compare. Pairing them here turns
+                // both into pointer bumps. Order of iteration, and therefore of
+                // FP accumulation, is identical to the previous nesting, so the
+                // output is bit-identical (goldens unchanged).
+                const ZERO12: [f32; 12] = [0.0; 12];
+                let mut taps: [(&[f32], &[f32; 12]); 192] = [(&[], &ZERO12); 192];
+                let mut ntap = 0usize;
+                for ic in 0..cin {
+                    for ky in ky_lo..=ky_hi {
+                        let irow = &inp[ic * cs + (oy + ky - 1) * wd..][..wd];
+                        let o = qbase + (ic * 3 + ky) * 12;
+                        let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
+                        taps[ntap] = (irow, w12);
+                        ntap += 1;
+                    }
+                }
+                let taps = &taps[..ntap];
 
                 let mut x = 1usize;
                 while x + W < wd {
@@ -58,19 +73,19 @@ macro_rules! define_kernels {
                         V::<T>::splat(token, bias[oc0 + 2]),
                         V::<T>::splat(token, bias[oc0 + 3]),
                     ];
-                    for ic in 0..cin {
-                        for ky in ky_lo..=ky_hi {
-                            let irow = rowtab[ic * 3 + ky];
-                            let o = qbase + (ic * 3 + ky) * 12;
-                            let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
-                            let l = V::<T>::from_slice(token, &irow[x - 1..]);
-                            let m = V::<T>::from_slice(token, &irow[x..]);
-                            let r = V::<T>::from_slice(token, &irow[x + 1..]);
-                            for ob in 0..4 {
-                                acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
-                                acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
-                                acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
-                            }
+                    for &(irow, w12) in taps {
+                        // One checked window per tap instead of three: l/m/r are
+                        // constant sub-ranges of a fixed-size array, which LLVM
+                        // proves in-bounds and lowers to plain loads.
+                        let win: &[f32; $w + 2] =
+                            (&irow[x - 1..x + 1 + W]).try_into().unwrap();
+                        let l = V::<T>::from_slice(token, &win[0..]);
+                        let m = V::<T>::from_slice(token, &win[1..]);
+                        let r = V::<T>::from_slice(token, &win[2..]);
+                        for ob in 0..4 {
+                            acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
+                            acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
+                            acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
                         }
                     }
                     for ob in 0..4 {
@@ -92,19 +107,19 @@ macro_rules! define_kernels {
                         V::<T>::splat(token, bias[oc0 + 2]),
                         V::<T>::splat(token, bias[oc0 + 3]),
                     ];
-                    for ic in 0..cin {
-                        for ky in ky_lo..=ky_hi {
-                            let irow = rowtab[ic * 3 + ky];
-                            let o = qbase + (ic * 3 + ky) * 12;
-                            let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
-                            let l = V::<T>::from_slice(token, &irow[xl - 1..]);
-                            let m = V::<T>::from_slice(token, &irow[xl..]);
-                            let r = V::<T>::from_slice(token, &irow[xl + 1..]);
-                            for ob in 0..4 {
-                                acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
-                                acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
-                                acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
-                            }
+                    for &(irow, w12) in taps {
+                        // One checked window per tap instead of three: l/m/r are
+                        // constant sub-ranges of a fixed-size array, which LLVM
+                        // proves in-bounds and lowers to plain loads.
+                        let win: &[f32; $w + 2] =
+                            (&irow[xl - 1..xl + 1 + W]).try_into().unwrap();
+                        let l = V::<T>::from_slice(token, &win[0..]);
+                        let m = V::<T>::from_slice(token, &win[1..]);
+                        let r = V::<T>::from_slice(token, &win[2..]);
+                        for ob in 0..4 {
+                            acc[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc[ob]);
+                            acc[ob] = m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc[ob]);
+                            acc[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc[ob]);
                         }
                     }
                     for ob in 0..4 {
@@ -120,17 +135,15 @@ macro_rules! define_kernels {
                 for xx in core::iter::once(0).chain(x.min(wd)..wd) {
                     for ob in 0..4 {
                         let mut s = bias[oc0 + ob];
-                        for ic in 0..cin {
-                            for ky in ky_lo..=ky_hi {
-                                let irow = rowtab[ic * 3 + ky];
-                                let o = qbase + (ic * 3 + ky) * 12 + ob * 3;
-                                if xx >= 1 {
-                                    s += wts[o] * irow[xx - 1];
-                                }
-                                s += wts[o + 1] * irow[xx];
-                                if xx + 1 < wd {
-                                    s += wts[o + 2] * irow[xx + 1];
-                                }
+                        // Same (ic, ky) order as the table was built in, so the
+                        // scalar accumulation order is unchanged.
+                        for &(irow, w12) in taps {
+                            if xx >= 1 {
+                                s += w12[ob * 3] * irow[xx - 1];
+                            }
+                            s += w12[ob * 3 + 1] * irow[xx];
+                            if xx + 1 < wd {
+                                s += w12[ob * 3 + 2] * irow[xx + 1];
                             }
                         }
                         out[(oc0 + ob) * cs + oy * wd + xx] = s;

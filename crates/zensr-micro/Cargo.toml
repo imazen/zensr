@@ -27,6 +27,12 @@ name = "zensr-verify"
 path = "src/bin/zensr-verify.rs"
 required-features = ["internals"]
 
+# Isolated conv3x3 loop for hardware-counter profiling. Needs `internals` for
+# the same reason the bench does: it calls the dispatch shims directly.
+[[example]]
+name = "conv_probe"
+required-features = ["internals"]
+
 [dev-dependencies]
 # First ARM tier measurement for this crate (2026-08-01). `testable_dispatch`
 # lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON

@@ -23,7 +23,7 @@ confirmed and roughly twice as strong as published.
 | grid | turbo × 4:2:0 × q ∈ {15,35,55,75,90} × 6 arms = 1,890 rows per model |
 | arms | `identity_off` (plain decode, the baseline) … `model_proj` (**the shipped pipeline**, S10 projection on) |
 | metric | ssim2; **paired** — median of per-file differences and win fraction, never a difference of medians |
-| commit / host | `52caf412bd7f` / dev (9950X3D, 32T), 2,849 s wall under run-heavy |
+| commit / host | `52caf412bd7f` / this workstation — WSL2, AMD Ryzen 9 7950X, 32T (NOT the 9950X3D box that the `dev` ssh alias reaches; the WSL hostname is also `dev`), 2,849 s wall under run-heavy |
 | raw | `/mnt/v/zensr/rescore/2026-09-08/` (see the pointer file) |
 
 The README's basis was 100% PNG references, so the like-for-like comparison is
