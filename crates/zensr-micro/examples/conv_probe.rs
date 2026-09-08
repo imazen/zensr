@@ -18,28 +18,33 @@ fn ramp(n: usize, seed: u32) -> Vec<f32> {
 fn main() {
     const CIN: usize = 32;
     const COUT: usize = 32;
-    const H: usize = 128;
-    const WD: usize = 128;
     let iters: usize = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(2000);
-    let inp = ramp(CIN * H * WD, 7);
+    // Second arg picks the plane size. 128 keeps the whole working set in L2;
+    // larger sizes are where input-row locality across output quads can matter.
+    let side: usize = std::env::args()
+        .nth(2)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(128);
+    let (h, wd) = (side, side);
+    let inp = ramp(CIN * h * wd, 7);
     let wts = ramp(COUT * CIN * 9, 11);
     let bias = ramp(COUT, 13);
-    let mut out = vec![0f32; COUT * H * WD];
+    let mut out = vec![0f32; COUT * h * wd];
     // warm
     for _ in 0..20 {
-        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, H, WD);
+        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, h, wd);
     }
     let t = Instant::now();
     for _ in 0..iters {
-        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, H, WD);
+        zensr_micro::simd::conv3x3_dispatch(&inp, CIN, &wts, &bias, &mut out, COUT, h, wd);
     }
     let el = t.elapsed();
-    let flops = 2.0 * (CIN * COUT * 9 * H * WD) as f64 * iters as f64;
+    let flops = 2.0 * (CIN * COUT * 9 * h * wd) as f64 * iters as f64;
     eprintln!(
-        "{iters} iters, {:.3} ms/iter, {:.1} GFLOP/s, checksum {:.3}",
+        "{iters} iters @ {side}px, {:.3} ms/iter, {:.1} GFLOP/s, checksum {:.3}",
         el.as_secs_f64() * 1e3 / iters as f64,
         flops / el.as_secs_f64() / 1e9,
         out.iter().take(64).sum::<f32>()

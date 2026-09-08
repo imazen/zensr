@@ -417,8 +417,16 @@ macro_rules! define_kernels {
                 wd: usize,
                 cs: usize,
             ) {
-                for oc0 in (0..cout).step_by(4) {
-                    for oy in 0..h {
+                // Row OUTER, output-quad INNER. The other nesting walks every
+                // row for one quad before returning to row 0 for the next, so
+                // the cin*3 input rows a given `oy` needs are evicted long
+                // before the next quad wants them — h*cin*wd*4 bytes of traffic
+                // between reuses. This way all `cout/4` quads consume the same
+                // rows back to back, while they are still resident.
+                // Output writes are disjoint per (oc0, oy), so the swap is
+                // bit-exact.
+                for oy in 0..h {
+                    for oc0 in (0..cout).step_by(4) {
                         conv3x3_row4(token, inp, cin, wts, bias, out, h, wd, oy, oc0, cs);
                     }
                 }
