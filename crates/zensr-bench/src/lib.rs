@@ -280,8 +280,8 @@ pub const EFFECTIVE_SPLIT: &str = "eval_split/imazen26_effective_split.tsv";
 /// Returns None when the file is absent; callers must fail rather than fall back
 /// to sorted order or to the raw manifests. Both fallbacks have leaked training
 /// images into an eval in this repo already.
-pub fn canonical_holdout() -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>>
-{
+pub fn canonical_holdout(
+) -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>> {
     let text = std::fs::read_to_string(EFFECTIVE_SPLIT).ok()?;
     // Warn if either input moved after the split was generated — the corpus
     // itself, or the rule that derives the buckets. A stale split is the same

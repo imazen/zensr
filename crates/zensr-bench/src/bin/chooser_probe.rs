@@ -31,7 +31,13 @@ use zensr_bench::*;
 // here — see AMBIGUOUS_SUBS in tools/routing_headroom.py; they are a measurement
 // to make, not a name to read.
 const GRAPHICS: &[&str] = &[
-    "screen", "documents", "art-scans", "maps", "patents", "plots", "clipart",
+    "screen",
+    "documents",
+    "art-scans",
+    "maps",
+    "patents",
+    "plots",
+    "clipart",
 ];
 
 fn main() {
@@ -90,7 +96,8 @@ fn main() {
             // "photos" spans six folders, so keying on the label finds nothing.
             let split = if pinned
                 .get(*dir)
-                .is_some_and(|s| s.contains(&pinned_stem(&fname))) {
+                .is_some_and(|s| s.contains(&pinned_stem(&fname)))
+            {
                 "eval"
             } else {
                 "train"

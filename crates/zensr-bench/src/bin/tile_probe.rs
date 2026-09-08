@@ -56,7 +56,11 @@ fn main() {
             "{tile:>6} {:>10.1} {:>8.3}x {:>6} {:>8.3}",
             ts[ts.len() / 2],
             overhead,
-            if tail == 0 { "-".to_string() } else { format!("{tail}") },
+            if tail == 0 {
+                "-".to_string()
+            } else {
+                format!("{tail}")
+            },
             sum
         );
     }

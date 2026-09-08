@@ -227,7 +227,9 @@ fn main() {
             // Recorded per row; ZENSR_EVAL_CLEAN_GT=1 skips JPEG references.
             let gt_src = gt_src_of(&fname);
             if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
-                *skipped.entry("non-PNG reference (ZENSR_EVAL_CLEAN_GT=1)".into()).or_default() += 1;
+                *skipped
+                    .entry("non-PNG reference (ZENSR_EVAL_CLEAN_GT=1)".into())
+                    .or_default() += 1;
                 continue;
             }
             used += 1;
