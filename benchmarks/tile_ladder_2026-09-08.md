@@ -156,5 +156,45 @@ the measured range at low thread counts. Adding a working-set cap to fix the
 12-thread behaviour made every score **worse** at every budget from 8 to 96 MB,
 so the cache hypothesis for that residual is falsified, not merely unproven.
 
-The residual is the tile count. It is worth up to ~25% and needs a model that
-explains the 12-thread behaviour before it can ship.
+## What is left, measured
+
+Dense sweep of every aligned tile from 36 to 560 against the shipped default, 2
+models x 6 sizes (128-768px) x 4 thread counts, 48 cells. Per-cell summary:
+`tile_dense_sweep_summary_2026-09-08.tsv`; the full sweep is in block storage
+via `tile_dense_sweep_2026-09-08.pointer.md`.
+
+**The shipped default is median +6.1% off the per-cell optimum, mean +11.5%,
+worst +75.6%.** The worst five are all the realtime model:
+
+| cell | default | best tile | penalty |
+|---|---|---|---|
+| 384px, 28T | 28.8 ms | 108 (16.4 ms) | **+75.6%** |
+| 512px, 8T | 62.0 ms | 140 (36.5 ms) | **+69.9%** |
+| 768px, 8T | 117.4 ms | 204 (77.2 ms) | +52.1% |
+| 192px, 28T | 8.2 ms | 44 (5.9 ms) | +39.0% |
+| 256px, 28T | 10.9 ms | 44 (8.6 ms) | +26.7% |
+
+Two distinct causes, and the second is the reason no rule fitted:
+
+**1. Wave packing.** At 512px/8 threads the rule stops at the first count that
+clears starvation — 9 tiles — which is 8 threads plus one straggler. 16 tiles is
+two clean waves and 70% faster. A wave-efficiency term fixes exactly this cell
+(+56.2% -> 0%) but breaks others: it costs +25.8% at 192px/12T and +32.3% at
+256px/12T, where the current rule is already optimal. Scored over all 48 cells,
+current is median +0.0% / worst +62.8% and wave-aware is median +6.6% / worst
++42.0% — neither dominates.
+
+**2. The machine stops scaling, and the tile chooser cannot see that.** At 384px
+the shipped default is **slower at 28 threads than at 12** (28.8 ms against 21.6
+ms). The rule keeps subdividing to reach one tile per thread, reaching 36 tiles
+of 76px, while 16 tiles of 108px is 1.76x faster despite leaving 12 threads
+idle. Every cost model here assumes parallel speedup `min(n_tiles, threads)`;
+at 28 threads this kernel does not deliver that, so the halo cost wins and the
+models all pick too small.
+
+That second term is not derivable from the inputs `upscale_tiled` has — it is a
+property of the machine, not of the image, the model, or the thread count. Three
+ways forward, none of them a constant to tune: measure the scaling curve once at
+runtime and cache it; cap the starvation target by a measured saturation point;
+or leave it to the caller, who can already pass an explicit `cfg.tile`. Fitting
+another closed-form rule to these 48 cells is not one of them.

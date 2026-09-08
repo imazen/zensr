@@ -19,6 +19,18 @@
 // either been rejected or replaced by a safe formulation with the same
 // codegen. Track the open sites with:
 //     rg '#\[allow\(unsafe_code\)\]' crates/zensr-micro
+//
+// STATUS 2026-09-08 — both experiments are now closed, so the only thing this
+// gate still carries is the ability to run the next one:
+//   REJECTED  a pointer cast replacing a per-tap bounds check: within noise,
+//             LLVM had already elided the check.
+//   REPLACED  the funnel-shift tap load (examples/tap_load_probe). It shipped
+//             as SAFE code — magetypes' `concat_shift` on the backend traits
+//             (imazen/archmage#111) — and the kernel now uses it, so the unsafe
+//             formulation has no remaining caller.
+// The gate is kept only because the user's grant of unsafe experimentation is
+// conditional on it existing; delete it, and `examples/tap_load_probe`, once
+// no further experiment is planned.
 #![cfg_attr(not(feature = "unsafe-experiments"), forbid(unsafe_code))]
 #![cfg_attr(feature = "unsafe-experiments", deny(unsafe_code))]
 // Three lints fight the kernel style rather than finding defects here:

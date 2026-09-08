@@ -48,6 +48,7 @@ HIGH-Q GATE", `ROADMAP.md` 1.1.
 | `tile_ladder_2026-09-08.tsv` | the 7-tile sweep behind it: 2 models x 3 sizes x 4 thread counts |
 | `tile_ladder_ab_2026-09-08.tsv` | the paired rule comparison, both tiles measured inside ONE binary |
 | `tile_ladder_e2e_2026-09-08.log` | the same change through the full pipeline — +37..+42% at 256px/12T, flat everywhere the tiling does not change |
+| `tile_dense_sweep_summary_2026-09-08.tsv` | per-cell default vs optimum, 48 cells — what the count rule still leaves on the table (raw sweep: `tile_dense_sweep_2026-09-08.pointer.md`) |
 
 ## Tools
 
