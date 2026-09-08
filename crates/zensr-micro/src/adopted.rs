@@ -98,6 +98,18 @@ impl AdoptedModel {
         // Winograd v1 measured 1.8x SLOWER than the magetypes direct kernel on
         // lianli (scalar transforms + untier'd GEMM lose more than the 2.25x
         // multiply cut saves) — opt-in only, kept for a future vectorized v2.
+        //
+        // RE-CONFIRMED 2026-09-08 on AVX-512 (7950X, v4x tier, end-to-end
+        // prod_bench with dejpeg_rt24g): 1.78x slower at 1 thread, 1.73x at 12
+        // — within 4% of the original verdict, so it survives a different box,
+        // microarchitecture and SIMD tier. Winograd does 2.25x fewer multiplies
+        // and still loses by 1.75x, so its transform+GEMM overhead costs ~3.9x
+        // what the multiply saving returns. That overhead is untiered: wino.rs
+        // is fixed [f32; T] blocks relying on LLVM, and its T=16 was picked as
+        // "2 AVX2 regs per row" (exactly one zmm on AVX-512, a shape it was
+        // never tuned for). v2 = tier the transforms and GEMM with magetypes;
+        // it is not an archmage-version or new-intrinsic problem.
+        // benchmarks/realtime_kernels_x86_2026-09-08.md
         let use_wino = std::env::var("ZENSR_WINOGRAD").as_deref() == Ok("1");
         let mut wino: Vec<Option<(Vec<f32>, Vec<f32>)>> = vec![None];
         for _ in 0..nc {
