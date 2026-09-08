@@ -6,8 +6,8 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 
 [dependencies]
-archmage = "0.9.28"
-magetypes = { version = "0.9.28", features = ["std"], default-features = false }
+archmage = "0.9.29"
+magetypes = { version = "0.9.29", features = ["std"], default-features = false }
 zenpixels = { version = ">=0.2.14, <0.4.0", optional = true }
 bytemuck = { version = "1.25.2", optional = true }
 
@@ -38,12 +38,18 @@ required-features = ["internals"]
 name = "conv_probe"
 required-features = ["internals"]
 
+# Prices two formulations of the 3x3 tap load. Needs the unsafe gate because it
+# calls AVX-512 intrinsics directly to compare against the safe path.
+[[example]]
+name = "tap_load_probe"
+required-features = ["internals", "unsafe-experiments"]
+
 [dev-dependencies]
 # First ARM tier measurement for this crate (2026-08-01). `testable_dispatch`
 # lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON
 # kernels can be compared against a real forced-scalar arm.
 zenbench = "0.1.9"
-archmage = { version = "0.9.28", features = ["testable_dispatch"] }
+archmage = { version = "0.9.29", features = ["testable_dispatch"] }
 
 [[bench]]
 name = "kernel_tiers"

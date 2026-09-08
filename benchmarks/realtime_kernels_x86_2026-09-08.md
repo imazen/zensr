@@ -293,6 +293,61 @@ and what remains is arithmetic with real latency.
 
 Cumulative on this kernel, AVX-512 at 128px: **84.3 → 126 GFLOP/s, +49%.**
 
+## 7. The tap load: +11%, blocked on an unpublished magetypes op
+
+Loads were the largest remaining non-FMA block. The 3x3 kernel needs three
+W-lane vectors at `x-1, x, x+1`; two of the three are 4-byte-misaligned. The
+alternative is two adjacent loads plus two funnel shifts (`valignd`).
+
+Priced in isolation first (`examples/tap_load_probe`, 96 taps, 8 accumulator
+chains — the shape the real kernel runs):
+
+| form | GFLOP/s |
+|---|---|
+| three unaligned loads | 125.1 |
+| two ALIGNED loads + two valignd | 142.6 |
+| two UNALIGNED loads + two valignd | 141.9 |
+
+**+13%, and alignment is irrelevant** — the win is the load COUNT, not
+cache-line splits. My stated mechanism ("misaligned loads cross cache lines")
+was wrong; the fix works for a simpler reason, and needs no alignment guarantee.
+
+The probe only shows this with **8 accumulator chains**. At two chains the loop
+is latency-bound and the three forms are indistinguishable — a micro-benchmark
+has to match the real kernel's ILP or it measures the wrong bottleneck.
+
+Confirmed in the real kernel, three-way interleaved at 128px on the same
+magetypes, which also clears the confound that the second load needs `pwd =
+wd + 2 + W` rather than `wd + 2`:
+
+| | median GFLOP/s |
+|---|---|
+| main (pad+2, three loads) | 118.2 |
+| three loads (pad+W) | 117.8 — the extra padding costs nothing |
+| **two loads + concat_shift (pad+W)** | **131.2, +11%, 3/3 wins** |
+
+### Status: implemented in archmage, not landable in zensr yet
+
+`magetypes::simd::concat_shift` is a hand-written extension (no generator
+change): a `ConcatShift` trait with a portable store/window/reload body, plus a
+native `_mm512_alignr_epi32` impl for `f32x16<X64V4xToken>`. Differential tests
+pin the native path against the portable one.
+
+Two things keep it out of zensr for now:
+
+1. **It is unpublished.** zensr's tree must build against crates.io, so the
+   kernel change cannot land until magetypes ships the operation.
+2. **Only AVX-512 is fast.** Every other token gets the portable body, which
+   spills and reloads — correct, but a regression if used. The v3/NEON/wasm
+   backends need native implementations (`_mm256_alignr_epi8` + a lane permute,
+   `vextq_f32`) before the kernel can call it unconditionally.
+
+There is also a design cost worth recording: because the operation lives outside
+the generated backend trait, the bound `V<T>: ConcatShift` has to be threaded
+through every generic function that reaches the kernel. Putting it in the
+generated trait instead would remove that entirely — which is the argument for
+doing the generator work if this is adopted.
+
 ### What is left
 
 Loads (14.8%) are the largest remaining non-FMA block. Two of the three taps are
