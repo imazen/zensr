@@ -21,15 +21,15 @@ hashes — which is how this one was used.
 
 ## 1. The headline: this is a corpus swap, not a path fix
 
-The training set did not just move — **60% of it is content the model has never
+The training set did not just move — **56% of it is content the model has never
 seen**, and its centre of gravity moved from photographs to synthetic graphics.
 
 | | old (invalid root) | new (canonical) |
 |---|---|---|
 | source | `/mnt/v/imazen-26` (deleted) | `github.com/imazen/imazen-26` |
 | corpus | 1,069 files, 8 flat subcorpora | 2,160 images, 21 id-assigned folders |
-| training files | ≤937 (not reproducible; upper bound = 1,001 in the eight trained subcorpora, less the 64 first-8-sorted) | **1,078** (measured) |
-| held out | "first 8 sorted ∪ 64 pinned" | **663 validate + 419 test** |
+| training files | ≤937 (not reproducible; upper bound = 1,001 in the eight trained subcorpora, less the 64 first-8-sorted) | **1,151** (measured) |
+| held out | "first 8 sorted ∪ 64 pinned" | **648 validate + 361 test** |
 | content classes | 8 | 21 folders → 13 labels |
 
 ## 2. Composition — the part that should change a decision
@@ -39,22 +39,22 @@ crop area, so crop share equals file share; nothing is size-weighted away.
 
 | folder | crops | share | |
 |---|---|---|---|
-| 9226-lilith-ai-products | 1,496 | **35.4%** | NEW |
-| 8100-lilith-web-screenshots | 651 | 15.4% | |
-| 1400-lilith-nature | 316 | 7.5% | |
-| 7000-lilith-plots | 252 | 6.0% | NEW |
-| 6000-lilith-scans-public-patents | 232 | 5.5% | NEW |
-| 9000-lilith-ai-clipart | 172 | 4.1% | NEW |
-| 9094-lilith-ai-illustrations | 152 | 3.6% | NEW |
-| *(14 more, each ≤3.4%)* | 1,060 | 25.1% | |
+| 9226-lilith-ai-products | 1,500 | **33.4%** | NEW |
+| 8100-lilith-web-screenshots | 912 | 20.3% | |
+| 1400-lilith-nature | 316 | 7.0% | |
+| 7000-lilith-plots | 252 | 5.6% | NEW |
+| 6000-lilith-scans-public-patents | 232 | 5.2% | NEW |
+| 9000-lilith-ai-clipart | 172 | 3.8% | NEW |
+| 9094-lilith-ai-illustrations | 152 | 3.4% | NEW |
+| *(14 more, each ≤3.4%)* | 960 | 21.4% | |
 
 Grouped by what the pixels actually are:
 
 | | share of training crops |
 |---|---|
-| synthetic / graphic (AI renders, clipart, screenshots, plots) | **66%** |
-| photographic | **20%** |
-| scans and documents | 15% |
+| synthetic / graphic (AI renders, clipart, screenshots, plots) | **68%** |
+| photographic | **18%** |
+| scans and documents | 14% |
 
 **This is the finding that matters.** zensr restores *web JPEGs*. A model whose
 training is two-thirds AI renders and screenshots, and a third one single folder,
@@ -63,8 +63,8 @@ falls out of "train on the whole canonical corpus", which is the only defensible
 default once the old eight-subcorpus list is gone.
 
 **Recommendation before Step 3 (retrain): cap per-folder contribution.** A cap
-around 15% of pairs would take ai-products from 35% to 15% and leave every other
-class untouched, at a cost of ~20% of the pool. That is a deliberate, recordable
+around 15% of pairs would take ai-products from 33% to 15% and leave every other
+class untouched, at a cost of ~18% of the pool. That is a deliberate, recordable
 choice; 35% by accident is not. The cap belongs in `make_distill_data.py` as an
 explicit knob, and the ladder should be reported per content label either way —
 an aggregate number over this mixture mostly measures AI-product renders.
@@ -84,15 +84,28 @@ derivative inheriting its image's bucket. Canonical totals: **1,084 / 658 / 418*
 Rust. Nothing is vendored into this repo, because a copy of someone else's split
 is a copy that will be wrong later — which is precisely what happened twice.
 
-**The one thing added on top is the repo's own instruction.**
-`manifests/README.md` says the id rule does not group near-duplicates, and lists
-the enumerable groups a near-duplicate-sensitive consumer should same-bucket.
-zensr restores compression damage, so scanner texture and page furniture are
-exactly the confound. Same-bucketing duplicate renders of one patent page, one
-brochure and one web capture across viewports moves **210 files** and leaves the
-proportions untouched: **1,078 / 663 / 419** (50/31/19%).
+**The one thing added on top is the repo's own instruction — and it needed
+extending.** `manifests/README.md` says the id rule does not group
+near-duplicates, and lists the enumerable groups a near-duplicate-sensitive
+consumer should same-bucket. zensr restores compression damage, so scanner
+texture and page furniture are exactly the confound.
 
-Two things measured while implementing that, both worth knowing:
+Applying **exactly** the repo's list is not enough, measured rather than assumed:
+after doing so, **105 multi-page documents still had pages on both sides of the
+split** — including 12 of the 20 NOAA hurricane advisories (three pages of one
+storm's report, consecutive ids, neither folder in the repo's list) and 61 of the
+web-screenshot sites (the list covers the viewport duplication but not the pages).
+Plain duplicate subjects straddled too: three `pink-rose-flower` shots in
+`1400-lilith-nature`, two `ornate-painted-ceiling` in `1200-lilith-interiors`.
+
+So the effective rule is the exact descriptor within a folder, loosened per folder
+only where it must be (patent+page, brochure, site, advisory). Result: **zero
+groups straddle the split**, **no content class loses its validate or test
+bucket**, 309 files move, and the buckets go 50/30/19% → **52/30/17%**
+(1,151 / 648 / 361). The two lost points of test share are what removing the
+leakage costs.
+
+Two limits measured while implementing it:
 
 - **The IA scans cannot have it both ways.** Grouping `6600`+`6800` by source work
   is right in principle, but there are only six works, so it empties both folders'
@@ -100,9 +113,24 @@ Two things measured while implementing that, both worth knowing:
   both zero leakage and a held-out set. It is left OFF, and the resulting IA
   numbers are mildly optimistic — a labelled optimistic number beats no number.
   `split_map(ia_group=True)` takes the other trade.
-- **Document-level grouping is too coarse.** Keying by patent rather than by page
-  collapses that class to 104 train / 0 validate / 9 test. The enumerated
-  render-level grouping is the right granularity, and that is what shipped.
+- **Document-level grouping everywhere is too coarse.** Keying patents by patent
+  rather than by page collapses that class to 104 train / 0 validate / 9 test.
+
+### One split file, because the two sides disagreed by 180 files
+
+The same-bucketing moves 309 files, and **180 of them cross between held-out and
+train**. So a trainer applying it while the eval harness read the corpus repo's
+raw buckets would score 180 files the model had been trained on. That is not a
+hypothetical — it is what the first version of this repoint did.
+
+`tools/corpus_split.py --write` (`just split`) emits
+`eval_split/imazen26_effective_split.tsv`, and **both** the Python trainer and
+`zensr_bench::canonical_holdout()` read that one file. It is generated, not
+committed: a deterministic function of the corpus repo, regenerable in a second,
+and consumers fail loudly when it is missing rather than falling back to the raw
+buckets — because that fallback *is* the 180-file disagreement. The Rust side
+also warns when the file is older than either input (the corpus manifest or the
+rule that derives it).
 
 ### A correction owed to the corpus repo
 
@@ -140,6 +168,19 @@ session to mistake it for one. The old directory is retired, not deleted.
 | noaa | 44 | **22** | rebuilt from the canonical folder, held-out buckets only |
 | nasa | 24 | **0** | dropped — no canonical replacement |
 | sci-figures, cid22, clic2025, gb82, gb82-sc | 538 | 538 | audited clean, 0 flagged |
+
+Audited as built: **0 byte-identical to training**, 823 of 828 fully clean. The 5
+residual fingerprint hits are recorded in the corpus's own `NO_PIN_REQUIRED`
+marker — 3 are identity-confirmed false positives (near-blank pages of patents
+that are not in the corpus at all), and 2 are noaa pages matching *different*
+storms' training pages, because NOAA advisories are template-driven. That last
+one is a property of the leg, not a filter bug; noaa numbers are mildly optimistic.
+
+Getting there took fixing a builder bug worth naming: `ln -sf` overwrites but
+never removes, so the output directories were never cleared between runs. Files
+excluded by a *later* filter survived from an earlier build — 6 training images
+sat in the "filtered" corpus, and the audit is the only reason anyone noticed.
+Each leg is now cleared before it is written.
 
 The nasa leg is gone because the canonical corpus's 72 "nasa" rows are
 `8100-lilith-web-screenshots` PNGs **of nasa.gov web pages** (source
@@ -206,7 +247,7 @@ photographic folders (`2000-unsplash-people` is 28/28 JPEG). A JPEG ground truth
 penalises the model for removing artifacts that are present in the reference —
 the defect that understated every gain in the 2026-07 record.
 
-The train pool is **820 PNG / 210 JPEG / 46 HEIC / 2 DNG**. `make_distill_data.py` now
+The train pool is **892 PNG / 211 JPEG / 46 HEIC / 2 DNG**. `make_distill_data.py` now
 records this breakdown in `meta.json` per run, so the ladder can be reported split
 by reference kind — the column whose absence caused the original defect.
 

@@ -264,38 +264,64 @@ pub fn imazen26_repo() -> PathBuf {
     }
 }
 
-/// The held-out half of the canonical split — `validate` ∪ `test` — as
+/// Path of the effective split — the contract between the trainer and the eval.
+pub const EFFECTIVE_SPLIT: &str = "eval_split/imazen26_effective_split.tsv";
+
+/// The held-out half of the effective split — `validate` ∪ `test` — as
 /// `content_class -> {file stem}`.
 ///
-/// Read straight from the corpus repo's `manifests/{validate,test}.tsv` rather
-/// than from a copy vendored into zensr. zensr held its own eval list twice (a
-/// hand-maintained 64-file pin, then a re-derived split) and both drifted from
-/// the corpus. The split belongs to the corpus; this just reads it.
+/// Reads `EFFECTIVE_SPLIT`, which `tools/corpus_split.py --write` generates from
+/// the corpus repo (`just split`). It is deliberately NOT the repo's raw
+/// `manifests/{validate,test}.tsv`, and that distinction is load-bearing: the
+/// near-duplicate same-bucketing the trainer applies moves 309 files, **180 of
+/// which cross between held-out and train**. Reading the raw buckets here would
+/// score 180 files the model was trained on — measured, not hypothesised.
 ///
-/// Columns are `id, split, content_class, path, ...`; the map keys on
-/// `content_class` and the basename of `path`, which is what every eval binary
-/// here already matches against.
+/// Returns None when the file is absent; callers must fail rather than fall back
+/// to sorted order or to the raw manifests. Both fallbacks have leaked training
+/// images into an eval in this repo already.
 pub fn canonical_holdout() -> Option<std::collections::HashMap<String, std::collections::HashSet<String>>>
 {
-    let repo = imazen26_repo();
+    let text = std::fs::read_to_string(EFFECTIVE_SPLIT).ok()?;
+    // Warn if either input moved after the split was generated — the corpus
+    // itself, or the rule that derives the buckets. A stale split is the same
+    // trainer/eval disagreement in slow motion.
+    if let Ok(a) = std::fs::metadata(EFFECTIVE_SPLIT).and_then(|m| m.modified()) {
+        for newer in [
+            imazen26_repo().join("CORPUS-MANIFEST.tsv"),
+            PathBuf::from("tools/corpus_split.py"),
+        ] {
+            if let Ok(b) = std::fs::metadata(&newer).and_then(|m| m.modified()) {
+                if b > a {
+                    eprintln!(
+                        "WARNING: {EFFECTIVE_SPLIT} is older than {} — run `just split`",
+                        newer.display()
+                    );
+                }
+            }
+        }
+    }
     let mut m: std::collections::HashMap<String, std::collections::HashSet<String>> =
         Default::default();
-    for bucket in ["validate", "test"] {
-        let p = repo.join("manifests").join(format!("{bucket}.tsv"));
-        let text = std::fs::read_to_string(&p).ok()?;
-        for (i, line) in text.lines().enumerate() {
-            if i == 0 || line.trim().is_empty() {
-                continue; // header
-            }
-            let c: Vec<&str> = line.split('\t').collect();
-            if c.len() < 4 {
-                continue;
-            }
-            let stem = c[3].rsplit('/').next().unwrap_or(c[3]);
-            m.entry(c[2].to_string())
-                .or_default()
-                .insert(pinned_stem(stem));
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
         }
+        let mut it = line.split('\t');
+        let (Some(path), Some(bucket)) = (it.next(), it.next()) else {
+            continue;
+        };
+        if bucket == "train" {
+            continue;
+        }
+        let Some((class, file)) = path.split_once('/') else {
+            continue;
+        };
+        let stem = file.rsplit('/').next().unwrap_or(file);
+        m.entry(class.to_string())
+            .or_default()
+            .insert(pinned_stem(stem));
     }
     if m.is_empty() {
         None
@@ -334,8 +360,7 @@ pub fn resolve_pinned(
     if std::env::var("ZENSR_EVAL_PIN").is_err() {
         if let Some(m) = canonical_holdout() {
             eprintln!(
-                "eval split: canonical validate+test from {} ({} classes)",
-                imazen26_repo().join("manifests").display(),
+                "eval split: effective validate+test from {EFFECTIVE_SPLIT} ({} classes)",
                 m.len()
             );
             return Some(m);
@@ -346,10 +371,10 @@ pub fn resolve_pinned(
     match &pinned {
         Some(m) => eprintln!("pinned eval split: {} ({} dirs)", path, m.len()),
         None => eprintln!(
-            "WARNING: no eval split — the canonical corpus was not found at {} and \
-             there is no pin at {path} or NO_PIN_REQUIRED marker in {}. Falling back \
-             to sorted order, which can admit training images. Clone \
-             github.com/imazen/imazen-26 or set IMAZEN26_REPO.",
+            "WARNING: no eval split — {EFFECTIVE_SPLIT} is missing (run `just split`; \
+             it needs the canonical corpus at {}), and there is no pin at {path} or \
+             NO_PIN_REQUIRED marker in {}. Falling back to sorted order, which can \
+             admit training images.",
             imazen26_repo().display(),
             root.display()
         ),

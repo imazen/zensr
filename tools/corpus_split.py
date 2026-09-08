@@ -21,7 +21,17 @@ are precisely the confound that makes a near-duplicate leak matter: a model that
 has seen page 2 of a document has effectively seen page 3. So zensr same-buckets
 them, by the group's minimum id, which keeps the canonical rule as the decider.
 
-The four groups, and how each is keyed (verified against the manifest 2026-09-08):
+**The corpus repo's list is necessary but not sufficient** — measured, not
+assumed. After applying exactly the groups it enumerates, **105 multi-page
+documents still had pages on both sides of the split**, including 12 of the 20
+NOAA hurricane advisories (pages of one storm's report, consecutive ids) and 61
+of the web-screenshot sites. Those are not in its list. So the base key here is
+the exact descriptor within a folder, loosened per folder only where it must be.
+Result: **zero groups straddle the split**, no content class loses its validate
+or test bucket, and the buckets move from 50/30/19% to 52/30/17% — the test share
+is what removing the leakage costs.
+
+The groups, and how each is keyed (verified against the manifest 2026-09-08):
 
 1. `6000-lilith-scans-public-patents` — 3 patents x 3 scan variants (1-bit
    original, colour rescan, grey rescan) of the SAME pages. Key: the patent and
@@ -30,10 +40,17 @@ The four groups, and how each is keyed (verified against the manifest 2026-09-08
 2. `5000-national-park-service-brochures` — `color/` and `grayscale/` renders of
    the same brochures. Key: the descriptor with the `_color` / `_grayscale`
    token removed. 59 files -> 33 groups.
-3. `8100-lilith-web-screenshots` — the same URL captured at up to 6 viewports
-   (the viewport is a path directory, not part of the descriptor). Key: the
-   descriptor alone. 370 files -> 81 groups.
-4. `6600` + `6800` IA scans — illustration plates and text pages drawn from the
+3. `8100-lilith-web-screenshots` — the same URL at up to 6 viewports, AND
+   multiple pages per capture. Key: the site (descriptor minus `_dprN_pageN`).
+   The repo's list covers only the viewport half; the page half straddled the
+   split for 61 sites.
+4. `5300-noaa-hurricane-documents` — **not in the repo's list.** Multi-page
+   advisories, 3 pages each, consecutive ids; 12 of 20 straddled. Key: the
+   advisory (descriptor minus `_pNN`).
+5. Everywhere else — the exact descriptor. Catches the plain duplicates: three
+   `pink-rose-flower` shots in `1400-lilith-nature`, two `ornate-painted-ceiling`
+   in `1200-lilith-interiors`, repeated `9226` product renders.
+6. `6600` + `6800` IA scans — illustration plates and text pages drawn from the
    same six source works. Key: the source work. **This one is OFF by default**,
    and that is a measured decision, not an oversight: there are only six works,
    so grouping by work leaves both IA folders with **no test bucket at all**
@@ -73,12 +90,21 @@ IA_FOLDERS = ("6600-ia-scans-manuscript-illustrations",
 def group_key(row, ia_group=False):
     """The near-duplicate group a manifest row belongs to, or None.
 
-    Groups duplicate RENDERS of one page/plate — the level the corpus repo
-    enumerates. Deliberately NOT document level: with 3 patents and 6 IA works,
+    The base rule is **the exact descriptor within a folder**, because in this
+    corpus an identical descriptor means the same subject: three
+    `1400-lilith-nature/pink-rose-flower` files are one flower, and they were
+    landing in different buckets. Four folders need a looser key than that, and
+    each is loosened only as far as it has to be — see the module docstring.
+
+    Deliberately NOT document level everywhere: with 3 patents and 6 IA works,
     grouping by document collapses those classes to one bucket each (measured:
     patents 104 train / 0 validate / 9 test).
     """
     folder, desc, path = row["folder"], row["descriptor"].strip(), row["path"]
+    # An empty descriptor identifies nothing — all 28 `2000-unsplash-people`
+    # rows have one, and keying on it merges 28 unrelated photographs.
+    if not desc:
+        return None
     if folder == "6000-lilith-scans-public-patents":
         parts = path.split("/")
         variant_dir = parts[1] if len(parts) > 2 else ""
@@ -95,12 +121,19 @@ def group_key(row, ia_group=False):
         return (folder, re.sub(r"_(color|gray|grayscale)(?=_|$)", "",
                                re.sub(r"_p\d+$", "", desc)))
     if folder == "8100-lilith-web-screenshots":
-        # The viewport is a path directory, not part of the descriptor, so the
-        # descriptor alone groups one capture across up to 6 viewports.
-        return (folder, desc)
+        # The viewport is a path directory; the descriptor carries the DPR and
+        # the page (`archives-exhibits_dpr1_page2`). Group by the SITE: pages of
+        # one capture share chrome, typography and palette, and 61 sites had
+        # pages on both sides of the split.
+        return (folder, re.sub(r"_dpr\d+(_page\d+)?$", "", desc))
+    if folder == "5300-noaa-hurricane-documents":
+        # Pages of one advisory: same storm, same scan, consecutive ids. 12 of
+        # the 20 advisories straddled the split before this. Grouping by
+        # document leaves 20 groups -> 22/15/7, which is healthy.
+        return (folder, re.sub(r"_p\d+$", "", desc))
     if ia_group and folder in IA_FOLDERS:
         return ("ia-scans", desc.split("-")[0])
-    return None
+    return (folder, desc)
 
 
 def split_map(dedup=True, ia_group=False):
@@ -130,7 +163,43 @@ def split_map(dedup=True, ia_group=False):
     return out
 
 
+def write_split(path, dedup=True, ia_group=False):
+    """Emit the effective split as `path<TAB>bucket`.
+
+    This file is the contract between the Python training side and the Rust eval
+    side. Both MUST read the same one: the near-duplicate same-bucketing moves
+    309 files, and 180 of them cross between held-out and train — if Rust read
+    the corpus repo's raw buckets while Python trained on these, it would score
+    180 files the model had been trained on. Measured, not hypothesised.
+
+    Generated, not committed: it is a deterministic function of the corpus repo
+    (`just split` regenerates it). Consumers fail loudly when it is missing
+    rather than falling back to the raw canonical buckets, because that fallback
+    IS the 180-file disagreement.
+    """
+    sm = split_map(dedup=dedup, ia_group=ia_group)
+    with open(path, "w") as f:
+        f.write("# Effective imazen-26 split for zensr. GENERATED — do not edit,\n"
+                "# do not commit. Regenerate: just split\n"
+                "#\n"
+                "# Canonical buckets from github.com/imazen/imazen-26\n"
+                "# (manifests/split_map.tsv), with near-duplicate groups\n"
+                "# same-bucketed per tools/corpus_split.py. Both the Python\n"
+                "# trainer and the Rust eval harness read THIS file.\n"
+                "# path\tbucket\n")
+        for k in sorted(sm):
+            f.write(f"{k}\t{sm[k]}\n")
+    return len(sm)
+
+
 if __name__ == "__main__":
+    if "--write" in sys.argv:
+        out = sys.argv[sys.argv.index("--write") + 1]
+        n = write_split(out)
+        c = collections.Counter(split_map().values())
+        print(f"wrote {out}: {n} rows "
+              f"(train {c['train']}, validate {c['validate']}, test {c['test']})")
+        raise SystemExit(0)
     canon = split_map(dedup=False)
     ded = split_map(dedup=True)
     rows = manifest_rows()

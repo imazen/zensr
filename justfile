@@ -65,3 +65,15 @@ report:
 cargo-local:
     mkdir -p .cargo
     printf '# LOCAL zen dep overrides (gitignored). Relative: works on every box.\n# Regenerate: just cargo-local\n[patch."https://github.com/imazen/zenjpeg"]\nzenjpeg = { path = "../zenjpeg/zenjpeg" }\n' > .cargo/config.toml
+
+# Regenerate the effective imazen-26 split. Read by BOTH the Python trainer and
+# the Rust eval harness — they must agree, and the near-duplicate same-bucketing
+# moves 180 files across the held-out boundary, so the raw canonical buckets are
+# not a safe fallback. Needs the canonical corpus (github.com/imazen/imazen-26,
+# by default ~/work/imazen-26; override with IMAZEN26_REPO).
+split:
+    python3 tools/corpus_split.py --write eval_split/imazen26_effective_split.tsv
+
+# What the split does, and where the near-duplicate groups are.
+split-report:
+    python3 tools/corpus_split.py

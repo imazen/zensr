@@ -65,8 +65,12 @@ mkdir -p "$OUT"
 # ~/work/codec-corpus/imazen-26, which is the pre-2026-08-23 location.
 CANON="${IMAZEN26_REPO:-$HOME/work/imazen-26}"
 MANIFEST="$CANON/CORPUS-MANIFEST.tsv"
-HOLDOUT_TSVS="$CANON/manifests/validate.tsv $CANON/manifests/test.tsv"
+# The EFFECTIVE split, not the repo's raw buckets: the near-duplicate
+# same-bucketing moves 180 files across the held-out boundary, so using the raw
+# buckets here would put training documents into this eval corpus.
+SPLIT="${ZENSR_EFFECTIVE_SPLIT:-eval_split/imazen26_effective_split.tsv}"
 [ -f "$MANIFEST" ] || { echo "canonical imazen-26 not at $CANON — clone github.com/imazen/imazen-26 or set IMAZEN26_REPO" >&2; exit 1; }
+[ -f "$SPLIT" ] || { echo "no $SPLIT — run \`just split\`" >&2; exit 1; }
 SOURCES=$(cat <<EOF
 patents	/mnt/v/collections/patent-corpus
 sci-figures	/mnt/v/collections/sci-figures-color
@@ -87,6 +91,11 @@ total=0
 while IFS=$'\t' read -r label src; do
   [ -z "${label:-}" ] && continue
   case "$label" in \#*) continue ;; esac   # tolerate comments in the list
+  # Clear the label first. `ln -sf` overwrites but never REMOVES, so without
+  # this a file that a later filter excludes stays behind from an earlier build
+  # — which is exactly how 6 training images survived the patents/noaa filters
+  # into an audited corpus on 2026-09-08.
+  rm -rf "$OUT/$label"
   mkdir -p "$OUT/$label"
   n=0
   skipped=0
@@ -123,6 +132,7 @@ done <<< "$SOURCES"
 # (validate + test). Symlinked one file at a time rather than by a find over the
 # folder, so the filter cannot be silently bypassed by a later edit that
 # "simplifies" it back into the SOURCES table.
+rm -rf "$OUT/noaa"
 mkdir -p "$OUT/noaa"
 n=0
 while IFS=$'\t' read -r path; do
@@ -132,7 +142,7 @@ while IFS=$'\t' read -r path; do
   flat="${path#5300-noaa-hurricane-documents/}"
   ln -sf "$src" "$OUT/noaa/${flat//\//__}"
   n=$((n+1))
-done < <(awk -F'\t' 'FNR>1 {print $4}' $HOLDOUT_TSVS)
+done < <(awk -F'\t' '!/^#/ && $2 != "train" {print $1}' "$SPLIT")
 if [ "$n" -gt 0 ]; then
   printf '%s\t%s\n' noaa noaa >> "$OUT/SUBCORPORA.tsv"
   printf '%-14s %5d  (held-out only, of 44)\n' noaa "$n"
@@ -151,10 +161,23 @@ Training is the TRAIN bucket of the canonical corpus repo (github.com/imazen/ima
 manifests/train.tsv. Two legs here overlap it and are filtered:
   patents — documents present in CORPUS-MANIFEST.tsv are dropped whole
             (US5046022, US77494, US3807657 = 39 of 357 pages).
-  noaa    — held-out buckets only, via the repo's manifests/{validate,test}.tsv.
+  noaa    — held-out buckets only, via eval_split/imazen26_effective_split.tsv
+            (regenerate with: just split), the same file the trainer excludes by.
 The other legs (sci-figures, cid22, clic2025, gb82, gb82-sc) were audited clean by
-tools/leakage_audit.py on 2026-09-07: 0 flagged files. Re-run it after any retrain,
+tools/leakage_audit.py on 2026-09-08: 0 flagged files. Re-run it after any retrain,
 because the training set is what changes, not this corpus.
+
+KNOWN RESIDUAL, 5 of 828 files, measured 2026-09-08 and left in deliberately:
+  3 patent pages (US299894, US3063966, US3819587) are fingerprint FALSE
+    POSITIVES — near-blank text pages colliding at 16x16 with pages of an
+    unrelated patent (distance 2.4-2.7 against 0.00 for true matches). None of
+    those three patents appears in CORPUS-MANIFEST.tsv, which is the deciding
+    test; the fingerprint is not.
+  2 noaa pages (5330 kirk_p05, 5343 rafael_p19) match TRAINING pages of DIFFERENT
+    storms at distance 0.89 and 2.36. NOAA advisories are template-driven, so
+    every held-out page resembles training pages of other advisories. This is a
+    property of the leg, not a filter bug: removing it means dropping noaa
+    entirely. Read noaa numbers as mildly optimistic.
 EOF
 
 printf '%-14s %5d\n' TOTAL "$total"

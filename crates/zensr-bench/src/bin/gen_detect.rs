@@ -884,8 +884,9 @@ fn main() {
     let mut evset: HashSet<(String, String)> = HashSet::new();
     {
         let holdout = zensr_bench::canonical_holdout().expect(
-            "canonical imazen-26 not found — clone github.com/imazen/imazen-26 or set \
-             IMAZEN26_REPO. gen_detect must know the held-out set; guessing it from \
+            "no eval_split/imazen26_effective_split.tsv — run `just split` (it needs \
+             the canonical corpus; clone github.com/imazen/imazen-26 or set \
+             IMAZEN26_REPO). gen_detect must know the held-out set; guessing it from \
              sorted order is how training images reached an eval twice.",
         );
         for (class, stems) in &holdout {
