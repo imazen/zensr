@@ -79,6 +79,21 @@ pub fn decode_any(path: &Path) -> Option<Rgb8Img> {
                 h: h as usize,
             })
         }
+        // HEIC. The crate's default decode already bakes the container's
+        // irot/imir on the primary item, so nothing here may apply EXIF on top
+        // — that double-rotates. (Verified corpus-wide 2026-06-10: 43/43
+        // same-aspect, and 15 iPhone 16/17 Pro files carry EXIF=6 with irot "0"
+        // where exiftool reads the wrong item and the crate is right.)
+        "heic" | "heif" => {
+            let out = heic::DecoderConfig::new()
+                .decode(&data, heic::PixelLayout::Rgb8)
+                .ok()?;
+            Some(Rgb8Img {
+                px: out.data,
+                w: out.width as usize,
+                h: out.height as usize,
+            })
+        }
         _ => None,
     }
 }
@@ -185,7 +200,15 @@ pub fn list_images(dir: &Path) -> Vec<PathBuf> {
             } else if p
                 .extension()
                 .and_then(|e| e.to_str())
-                .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg"))
+                // HEIC belongs here: 90 of the corpus's photographic sources
+                // are HEIC, and leaving them out of the listing is how they
+                // silently vanished from a training pool once already.
+                .map(|e| {
+                    matches!(
+                        e.to_ascii_lowercase().as_str(),
+                        "png" | "jpg" | "jpeg" | "heic" | "heif"
+                    )
+                })
                 .unwrap_or(false)
             {
                 out.push(p);

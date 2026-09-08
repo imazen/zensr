@@ -21,6 +21,13 @@ zenpng = "0.1.4"
 # so this pins the public repo. Swap to a version req when 0.9.0 ships.
 # Local sibling tree wins via the gitignored .cargo override: just cargo-local
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e277e9c9" }
+# HEIC decode for the clean-reference corpus: 90 of the corpus's photographic
+# sources are HEIC, and they are the CHEAP clean references — decode and they
+# are pristine, no downscale-to-pristine treatment needed. Git-pinned because
+# the API used here (`DecoderConfig::decode(.., PixelLayout::Rgb8)`) is 0.2.0
+# and crates.io is still on 0.1.6; drop the pin when 0.2 publishes.
+# The default feature set is empty by design — a backend must be named.
+heic = { git = "https://github.com/imazen/heic", rev = "9e7f75617fb1e62e642ee34ee1ac21a5f068ab51", default-features = false, features = ["backend-rust", "std"] }
 zenresize = "0.3.1"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 butteraugli = "0.9.3"
