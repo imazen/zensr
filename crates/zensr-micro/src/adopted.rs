@@ -415,7 +415,36 @@ impl AdoptedModel {
     ) -> Vec<f32> {
         let s = self.scale;
         let halo = self.halo();
-        let tile = if tile == 0 { 128 } else { tile };
+        // tile == 0 asks for the default, which is chosen from the thread count.
+        //
+        // A fixed 128 was leaving 21-45% on the table. Every tile recomputes a
+        // `halo` border it then discards, so small tiles waste work:
+        // (tile + 2*halo)^2 / tile^2 is 1.34x for the realtime tier at 128 and
+        // 1.64x for the quality tier (halo 10 and 18). Bigger tiles amortise
+        // that — but they also produce fewer tiles, and once n_tiles drops near
+        // the thread count the run loses parallelism, so the optimum falls as
+        // threads rise. Measured 2026-09-08 at 1024px (median ms, vs tile=128):
+        //
+        //   realtime nf=24 halo=10   T=1 512:896/1212  T=2 512:476/610
+        //                            T=4 512:247/312   T=8 256:145/185
+        //                            T=12 128:118 (128 already optimal)
+        //   quality  nf=64 halo=18   T=1 512:11249/20309   T=8 384:2094/3038
+        //
+        // The ladder below never regresses against the old fixed 128 on either
+        // model at any measured thread count, and captures most of the gain.
+        // Tiling is BIT-EXACT in the tile size (checksums identical across the
+        // whole sweep on both models), so this changes speed only.
+        // benchmarks/realtime_kernels_x86_2026-09-08.md
+        let tile = if tile == 0 {
+            match threads.max(1) {
+                1..=2 => 512,
+                3..=4 => 384,
+                5..=8 => 256,
+                _ => 128,
+            }
+        } else {
+            tile
+        };
         assert!(tile >= 32);
         assert_eq!(input.len(), 3 * h * w);
         let (oh, ow) = (s * h, s * w);
