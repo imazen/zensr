@@ -22,9 +22,15 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    **The existing checkpoints inherit this**: 47 models, 4 with a recorded git
    commit, 3 with dataset provenance; the README quality-tier default
    (`dejpeg7_graphics`) is in a fine-tune chain that trained on 20 corrupted
-   ground-truth pairs. Audit: **`docs/MODEL-PROVENANCE-AUDIT.md`**. Re-score the
-   existing models on the new held-out split BEFORE retraining — that is the
-   first trustworthy measurement any of them will have had.
+   ground-truth pairs. Audit: **`docs/MODEL-PROVENANCE-AUDIT.md`**.
+   **Re-scored 2026-09-08** (`benchmarks/rescore_canonical_2026-09-08.md`): both
+   shipped tiers survive — lower at q15, higher at q35-q90 than published, win
+   fractions 84-100% — and the dejpeg9 graphics route is confirmed at 1.7-2.7x
+   its claimed size while being NEGATIVE on photographs from q55 up. README
+   numbers replaced with measured ones. The retrain stays justified by the corpus
+   swap and the corrupt lineage, **not** by a quality failure. Open question it
+   raised: both models lose ~27% of their published **q15** gain — low-q is where
+   web traffic and every routing constant live.
    → **Step 1 of `docs/CORPUS-REPOINT-HANDOFF.md` is DONE**; what changed and what
    it costs: **`docs/CORPUS-REPOINT-IMPACT.md`**. Steps 2-4 (rebuild the derived
    corpora, retrain, re-run the audits) remain open. **Every constant in
