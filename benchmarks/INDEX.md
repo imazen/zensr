@@ -43,6 +43,7 @@ HIGH-Q GATE", `ROADMAP.md` 1.1.
 | `conv3x3_tap_load_2026-09-08.md` | two loads + funnel shift, and the cache-line row skew that has to come with it — and why the isolated probe named the wrong tier |
 | `conv3x3_tap_load_2026-09-08.tsv` | the shipping A/B, 10 paired reps x 2 tiers x 3 sizes |
 | `conv3x3_tap_load_arms_2026-09-08.tsv` | the three-arm run that separated the load-count change from the stride change |
+| `conv3x3_tap_load_e2e_2026-09-08.log` | the same change through the full production pipeline — 27/27 cells win, +3.5..+12.6% |
 
 ## Tools
 

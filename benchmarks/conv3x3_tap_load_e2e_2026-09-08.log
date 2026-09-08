@@ -1,0 +1,254 @@
+run-heavy: mem-cap=11G (cgroup, hard) jobs=28/32 avail=19218MiB :: /home/lilith/tmp/e2e_ab.sh
+##### rep 1 arm BEFORE
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	144.48
+restore	64	0.00	1	44.3	0.09
+sr_x2	64	0.00	1	34.8	0.12
+chain	64	0.00	1	79.1	0.05
+decode	64	0.00	12	0.0	145.30
+restore	64	0.00	12	43.8	0.09
+sr_x2	64	0.00	12	34.4	0.12
+chain	64	0.00	12	78.2	0.05
+decode	256	0.07	1	0.2	311.95
+restore	256	0.07	1	694.2	0.09
+sr_x2	256	0.07	1	627.3	0.10
+chain	256	0.07	1	1321.5	0.05
+decode	256	0.07	12	0.2	276.02
+restore	256	0.07	12	252.5	0.26
+sr_x2	256	0.07	12	218.4	0.30
+chain	256	0.07	12	470.8	0.14
+decode	1024	1.05	1	3.3	320.25
+restore	1024	1.05	1	11484.9	0.09
+sr_x2	1024	1.05	1	10059.0	0.10
+chain	1024	1.05	1	21543.9	0.05
+decode	1024	1.05	12	3.5	299.39
+restore	1024	1.05	12	1792.9	0.58
+sr_x2	1024	1.05	12	1628.9	0.64
+chain	1024	1.05	12	3421.8	0.31
+decode	2048	4.19	1	13.7	306.09
+restore	2048	4.19	1	48897.7	0.09
+sr_x2	2048	4.19	1	42203.1	0.10
+chain	2048	4.19	1	91100.8	0.05
+decode	2048	4.19	12	13.0	323.41
+restore	2048	4.19	12	7281.0	0.58
+sr_x2	2048	4.19	12	6503.3	0.64
+chain	2048	4.19	12	13784.3	0.30
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	73.2	229.17
+restore	4096	16.78	12	28525.7	0.59
+sr_x2	4096	16.78	12	26023.7	0.64
+chain	4096	16.78	12	54549.4	0.31
+# restore fit t=1: total_ms = -237.4 + 11683.8 * MP
+# restore fit t=12: total_ms = 85.9 + 1696.1 * MP
+##### rep 1 arm AFTER
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	141.58
+restore	64	0.00	1	42.6	0.10
+sr_x2	64	0.00	1	33.8	0.12
+chain	64	0.00	1	76.4	0.05
+decode	64	0.00	12	0.0	129.42
+restore	64	0.00	12	43.3	0.09
+sr_x2	64	0.00	12	31.7	0.13
+chain	64	0.00	12	75.0	0.05
+decode	256	0.07	1	0.2	310.83
+restore	256	0.07	1	602.6	0.11
+sr_x2	256	0.07	1	579.8	0.11
+chain	256	0.07	1	1182.3	0.06
+decode	256	0.07	12	0.2	301.28
+restore	256	0.07	12	238.4	0.27
+sr_x2	256	0.07	12	197.3	0.33
+chain	256	0.07	12	435.8	0.15
+decode	1024	1.05	1	3.2	329.17
+restore	1024	1.05	1	10217.8	0.10
+sr_x2	1024	1.05	1	9187.8	0.11
+chain	1024	1.05	1	19405.6	0.05
+decode	1024	1.05	12	3.3	321.91
+restore	1024	1.05	12	1706.2	0.61
+sr_x2	1024	1.05	12	1560.2	0.67
+chain	1024	1.05	12	3266.4	0.32
+decode	2048	4.19	1	13.8	303.22
+restore	2048	4.19	1	42741.0	0.10
+sr_x2	2048	4.19	1	37919.8	0.11
+chain	2048	4.19	1	80660.8	0.05
+decode	2048	4.19	12	13.4	313.06
+restore	2048	4.19	12	6609.7	0.63
+sr_x2	2048	4.19	12	6037.0	0.69
+chain	2048	4.19	12	12646.6	0.33
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	69.9	240.12
+restore	4096	16.78	12	26861.0	0.62
+sr_x2	4096	16.78	12	23856.9	0.70
+chain	4096	16.78	12	50717.9	0.33
+# restore fit t=1: total_ms = -157.1 + 10208.5 * MP
+# restore fit t=12: total_ms = 36.1 + 1597.0 * MP
+##### rep 2 arm BEFORE
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	145.04
+restore	64	0.00	1	43.5	0.09
+sr_x2	64	0.00	1	34.5	0.12
+chain	64	0.00	1	78.0	0.05
+decode	64	0.00	12	0.0	144.47
+restore	64	0.00	12	43.6	0.09
+sr_x2	64	0.00	12	34.9	0.12
+chain	64	0.00	12	78.5	0.05
+decode	256	0.07	1	0.2	306.75
+restore	256	0.07	1	705.2	0.09
+sr_x2	256	0.07	1	655.9	0.10
+chain	256	0.07	1	1361.1	0.05
+decode	256	0.07	12	0.2	305.67
+restore	256	0.07	12	254.4	0.26
+sr_x2	256	0.07	12	212.3	0.31
+chain	256	0.07	12	466.7	0.14
+decode	1024	1.05	1	3.3	319.35
+restore	1024	1.05	1	11610.1	0.09
+sr_x2	1024	1.05	1	10060.4	0.10
+chain	1024	1.05	1	21670.6	0.05
+decode	1024	1.05	12	3.4	311.83
+restore	1024	1.05	12	1845.8	0.57
+sr_x2	1024	1.05	12	1663.0	0.63
+chain	1024	1.05	12	3508.7	0.30
+decode	2048	4.19	1	13.7	306.92
+restore	2048	4.19	1	48534.0	0.09
+sr_x2	2048	4.19	1	42156.2	0.10
+chain	2048	4.19	1	90690.2	0.05
+decode	2048	4.19	12	13.2	316.63
+restore	2048	4.19	12	7171.8	0.58
+sr_x2	2048	4.19	12	6498.0	0.65
+chain	2048	4.19	12	13669.8	0.31
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	70.6	237.49
+restore	4096	16.78	12	29915.1	0.56
+sr_x2	4096	16.78	12	25753.8	0.65
+chain	4096	16.78	12	55668.9	0.30
+# restore fit t=1: total_ms = -170.0 + 11590.2 * MP
+# restore fit t=12: total_ms = -18.1 + 1780.1 * MP
+##### rep 2 arm AFTER
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	140.17
+restore	64	0.00	1	41.5	0.10
+sr_x2	64	0.00	1	33.3	0.12
+chain	64	0.00	1	74.8	0.05
+decode	64	0.00	12	0.0	143.06
+restore	64	0.00	12	41.2	0.10
+sr_x2	64	0.00	12	32.9	0.12
+chain	64	0.00	12	74.1	0.06
+decode	256	0.07	1	0.2	310.53
+restore	256	0.07	1	641.0	0.10
+sr_x2	256	0.07	1	561.9	0.12
+chain	256	0.07	1	1202.9	0.05
+decode	256	0.07	12	0.2	305.05
+restore	256	0.07	12	238.2	0.28
+sr_x2	256	0.07	12	190.0	0.34
+chain	256	0.07	12	428.2	0.15
+decode	1024	1.05	1	3.4	306.97
+restore	1024	1.05	1	10351.0	0.10
+sr_x2	1024	1.05	1	9302.9	0.11
+chain	1024	1.05	1	19654.0	0.05
+decode	1024	1.05	12	3.4	311.16
+restore	1024	1.05	12	1666.5	0.63
+sr_x2	1024	1.05	12	1567.9	0.67
+chain	1024	1.05	12	3234.4	0.32
+decode	2048	4.19	1	13.3	314.33
+restore	2048	4.19	1	42893.3	0.10
+sr_x2	2048	4.19	1	37774.0	0.11
+chain	2048	4.19	1	80667.3	0.05
+decode	2048	4.19	12	12.8	326.50
+restore	2048	4.19	12	6674.9	0.63
+sr_x2	2048	4.19	12	5877.7	0.71
+chain	2048	4.19	12	12552.6	0.33
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	68.2	245.84
+restore	4096	16.78	12	25789.6	0.65
+sr_x2	4096	16.78	12	23707.3	0.71
+chain	4096	16.78	12	49496.9	0.34
+# restore fit t=1: total_ms = -116.6 + 10238.7 * MP
+# restore fit t=12: total_ms = 112.4 + 1532.3 * MP
+##### rep 3 arm BEFORE
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	142.07
+restore	64	0.00	1	45.5	0.09
+sr_x2	64	0.00	1	36.0	0.11
+chain	64	0.00	1	81.6	0.05
+decode	64	0.00	12	0.0	143.31
+restore	64	0.00	12	44.2	0.09
+sr_x2	64	0.00	12	35.1	0.12
+chain	64	0.00	12	79.4	0.05
+decode	256	0.07	1	0.2	293.33
+restore	256	0.07	1	664.3	0.10
+sr_x2	256	0.07	1	612.9	0.11
+chain	256	0.07	1	1277.2	0.05
+decode	256	0.07	12	0.2	293.47
+restore	256	0.07	12	251.0	0.26
+sr_x2	256	0.07	12	212.1	0.31
+chain	256	0.07	12	463.1	0.14
+decode	1024	1.05	1	3.4	308.71
+restore	1024	1.05	1	11513.6	0.09
+sr_x2	1024	1.05	1	10237.1	0.10
+chain	1024	1.05	1	21750.7	0.05
+decode	1024	1.05	12	3.4	309.24
+restore	1024	1.05	12	1784.8	0.59
+sr_x2	1024	1.05	12	1630.7	0.64
+chain	1024	1.05	12	3415.6	0.31
+decode	2048	4.19	1	25.8	162.52
+restore	2048	4.19	1	49147.1	0.09
+sr_x2	2048	4.19	1	41559.6	0.10
+chain	2048	4.19	1	90706.7	0.05
+decode	2048	4.19	12	13.5	309.64
+restore	2048	4.19	12	7531.3	0.56
+sr_x2	2048	4.19	12	6409.0	0.65
+chain	2048	4.19	12	13940.4	0.30
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	71.7	233.87
+restore	4096	16.78	12	29247.8	0.57
+sr_x2	4096	16.78	12	24680.5	0.68
+chain	4096	16.78	12	53928.3	0.31
+# restore fit t=1: total_ms = -259.8 + 11747.7 * MP
+# restore fit t=12: total_ms = 84.5 + 1740.0 * MP
+##### rep 3 arm AFTER
+# prod_bench: restore_jpeg(dejpeg4_policy) on turbo q75 420 synth; sr=nomosuni_span_2x
+stage	side	mp	threads	min_ms	mp_per_s
+decode	64	0.00	1	0.0	141.93
+restore	64	0.00	1	40.9	0.10
+sr_x2	64	0.00	1	34.4	0.12
+chain	64	0.00	1	75.2	0.05
+decode	64	0.00	12	0.0	141.92
+restore	64	0.00	12	39.4	0.10
+sr_x2	64	0.00	12	31.6	0.13
+chain	64	0.00	12	71.0	0.06
+decode	256	0.07	1	0.2	291.16
+restore	256	0.07	1	604.4	0.11
+sr_x2	256	0.07	1	582.4	0.11
+chain	256	0.07	1	1186.9	0.06
+decode	256	0.07	12	0.2	301.06
+restore	256	0.07	12	234.7	0.28
+sr_x2	256	0.07	12	196.4	0.33
+chain	256	0.07	12	431.1	0.15
+decode	1024	1.05	1	3.2	326.76
+restore	1024	1.05	1	10187.0	0.10
+sr_x2	1024	1.05	1	9047.7	0.12
+chain	1024	1.05	1	19234.7	0.05
+decode	1024	1.05	12	3.2	328.81
+restore	1024	1.05	12	1671.8	0.63
+sr_x2	1024	1.05	12	1549.8	0.68
+chain	1024	1.05	12	3221.6	0.33
+decode	2048	4.19	1	13.5	310.69
+restore	2048	4.19	1	42845.0	0.10
+sr_x2	2048	4.19	1	37394.3	0.11
+chain	2048	4.19	1	80239.3	0.05
+decode	2048	4.19	12	14.2	296.12
+restore	2048	4.19	12	6497.7	0.65
+sr_x2	2048	4.19	12	5808.6	0.72
+chain	2048	4.19	12	12306.3	0.34
+# skipped: 4096 at 1 thread (cost/benefit; fit uses 64..2048)
+decode	4096	16.78	12	72.4	231.83
+restore	4096	16.78	12	26255.3	0.64
+sr_x2	4096	16.78	12	23196.3	0.72
+chain	4096	16.78	12	49451.5	0.34
+# restore fit t=1: total_ms = -173.8 + 10234.8 * MP
+# restore fit t=12: total_ms = 43.6 + 1560.9 * MP
+run-heavy: done rc=0 1387s | peak-RSS 1.53GiB | min-avail 13781MiB | peak-load 11.40

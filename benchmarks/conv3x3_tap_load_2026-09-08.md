@@ -16,8 +16,18 @@ separate runs would not survive this box's drift.
 
 The 3x3 kernel needs three W-lane vectors at `x-1`, `x`, `x+1`. It used to load
 all three. It now loads two vectors a full W apart and derives the middle and
-right taps with `magetypes`' `concat_shift` — `valignd` on AVX-512,
-`vperm2f128` + `vpalignr` on AVX2 (imazen/archmage#111).
+right taps with `magetypes`' `concat_shift`, the cross-vector funnel shift
+(imazen/archmage#111).
+
+**Which instruction that becomes is LLVM's choice, and it is not the obvious
+one.** Disassembling this binary: the AVX-512 path emits **`vpermt2ps` +
+`vpermt2pd`** with both mask registers hoisted out of the loop — not the
+`valignd` the intrinsic names, and `vpermt2pd` because LLVM noticed the N=2
+dword shift is a qword shift. The AVX2 path emits one **`vperm2f128`** CSE'd
+across both shifts, then `vshufps` x2 and `vshufpd` — not the `vpalignr` the
+source asks for. Both are one instruction per shift inside the loop, which is
+the property that matters; the mnemonic is not a contract, and archmage's
+`scripts/verify-asm.sh` gates the absence of a scalar lane gather instead.
 
 That change forces a second change: the second load runs off the end of the row
 at the last tile, so the padded row needs trailing slack. `pwd` went from
@@ -39,6 +49,27 @@ GFLOP/s. Checksums are identical to the previous kernel in every cell, and the
 tiers agree with each other and with scalar (`arbitrary_dims_simd_vs_scalar`,
 plus a new `arbitrary_dims_v3_matches_scalar` that disables the AVX-512 tokens
 so the AVX2 arm is exercised rather than shadowed).
+
+## End to end, on the full production pipeline
+
+`prod_bench` (restore_jpeg -> guarded x1 model -> S10 projection -> RGB, then
+the chained x2 SR step) on turbo q75 4:2:0, 3 interleaved paired reps, raw log
+`conv3x3_tap_load_e2e_2026-09-08.log`. **Every one of the 27 cells is a win.**
+
+| stage | 64px | 256px | 1024px | 2048px | 4096px |
+|---|---|---|---|---|---|
+| restore, 1 thread | +4.6% | +9.1% | +11.0% | +12.6% | — |
+| restore, 12 threads | +5.5% | +6.4% | +6.3% | +9.2% | +10.2% |
+| sr_x2, 1 thread | +3.5% | +7.6% | +8.7% | +10.1% | — |
+| sr_x2, 12 threads | +7.8% | +9.7% | +5.0% | +9.4% | +7.9% |
+| chain, 1 thread | +4.1% | +10.5% | +9.9% | +11.5% | — |
+| chain, 12 threads | +5.6% | +7.4% | +5.7% | +8.3% | +8.3% |
+
+3/3 paired wins in every cell. (4096px at 1 thread is skipped by the harness on
+cost/benefit.) The gain rises with size and is smaller at 12 threads, which is
+what a kernel-level change looks like once thread scaling absorbs part of it.
+conv3x3 is 91.3% of this pipeline, so a kernel gain of +5..+20% arriving as
++4..+13% end to end is the expected pass-through.
 
 ## The isolated harness predicted the wrong tier
 

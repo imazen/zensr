@@ -348,8 +348,10 @@ load forced into the padding, not from the load count: the two-load form on its
 own raises the L1 miss rate by half at 512px, because two loads a full W apart
 span more cache lines than three overlapping ones.
 
-Full accounting, including the `perf` counters that separate the two effects:
-`benchmarks/conv3x3_tap_load_2026-09-08.md`.
+End to end on the full production pipeline (`prod_bench`, restore + x2 SR, 3
+interleaved paired reps): **27 of 27 cells win**, +3.5% to +12.6%, across
+64..4096px at 1 and 12 threads. Full accounting, including the `perf` counters
+that separate the two effects: `benchmarks/conv3x3_tap_load_2026-09-08.md`.
 
 The lesson worth keeping: **this probe is an upper bound on one effect in
 isolation, not a prediction.** It has no channel blocking, no output stores and
