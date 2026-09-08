@@ -21,6 +21,11 @@ avx512 = ["magetypes/avx512"]
 # Off by default: they fall back to v3/AVX2, saving ~50KB of duplicate kernels.
 tier_v4 = ["avx512"]
 nan-debug = []
+# TEMPORARY, MARKED FOR REMOVAL — see the safety policy at the top of src/lib.rs.
+# Relaxes forbid(unsafe_code) to deny(unsafe_code) so raw-pointer/intrinsic
+# formulations can be MEASURED against the safe ones. Off by default; never ship
+# a build with this enabled. Delete once each experiment is rejected or replaced.
+unsafe-experiments = []
 
 [[bin]]
 name = "zensr-verify"

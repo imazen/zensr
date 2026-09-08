@@ -22,7 +22,7 @@ macro_rules! define_kernels {
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn conv3x3_row4<T: Backend>(
                 token: T,
-                inp: &[f32],
+                pin: &[f32],
                 cin: usize,
                 wts: &[f32], // PACKED quad-major (pack_conv3x3)
                 bias: &[f32],
@@ -32,8 +32,17 @@ macro_rules! define_kernels {
                 oy: usize,
                 oc0: usize,
                 cs: usize,
+                pwd: usize,
+                pcs: usize,
             ) {
                 const W: usize = $w;
+                // `inp` is the plane ZERO-PADDED by one column each side (row
+                // width pwd = wd + 2, plane stride pcs). Padding is what lets the
+                // vector tile loop cover EVERY output column, so the scalar edge
+                // path disappears — it cost 31% of this kernel at 128px, the tile
+                // size production runs (7% at 512px; it scales with
+                // perimeter/area). Output column x reads padded columns x, x+1,
+                // x+2. Vertical edges still come from ky_lo/ky_hi.
                 // Valid vertical taps for this output row (zero padding).
                 let ky_lo = if oy == 0 { 1usize } else { 0 };
                 let ky_hi = if oy + 1 == h { 1usize } else { 2 };
@@ -56,7 +65,7 @@ macro_rules! define_kernels {
                 let mut ntap = 0usize;
                 for ic in 0..cin {
                     for ky in ky_lo..=ky_hi {
-                        let irow = &inp[ic * cs + (oy + ky - 1) * wd..][..wd];
+                        let irow = &pin[ic * pcs + ((oy + ky - 1) % 3) * pwd..][..pwd];
                         let o = qbase + (ic * 3 + ky) * 12;
                         let w12: &[f32; 12] = (&wts[o..o + 12]).try_into().unwrap();
                         taps[ntap] = (irow, w12);
@@ -78,13 +87,12 @@ macro_rules! define_kernels {
                 // L1 for the row.
                 const IC_BLOCK: usize = 16;
                 let nky = ky_hi + 1 - ky_lo;
-                let mut x = 1usize;
                 for ic0 in (0..cin).step_by(IC_BLOCK) {
                     let ic1 = (ic0 + IC_BLOCK).min(cin);
                     let taps = &taps[ic0 * nky..ic1 * nky];
                     let first = ic0 == 0;
-                    x = 1;
-                while x + W < wd {
+                    let mut x = 0usize;
+                while x + W <= wd {
                     // EIGHT independent accumulator chains instead of four:
                     // (l,m) share one per output, r gets its own, so the longest
                     // dependency run per tap iteration is 2 rather than 3.
@@ -113,7 +121,7 @@ macro_rules! define_kernels {
                         // constant sub-ranges of a fixed-size array, which LLVM
                         // proves in-bounds and lowers to plain loads.
                         let win: &[f32; $w + 2] =
-                            (&irow[x - 1..x + 1 + W]).try_into().unwrap();
+                            (&irow[x..x + W + 2]).try_into().unwrap();
                         let l = V::<T>::from_slice(token, &win[0..]);
                         let m = V::<T>::from_slice(token, &win[1..]);
                         let r = V::<T>::from_slice(token, &win[2..]);
@@ -153,8 +161,8 @@ macro_rules! define_kernels {
                 // every block after the first on the overlapped columns (caught
                 // by arbitrary_dims_simd_vs_scalar at 8x19). One tile per row,
                 // so touching all cin*3 pages here costs nothing measurable.
-                if x < wd - 1 && wd >= W + 2 {
-                    let xl = wd - 1 - W;
+                if wd % W != 0 && wd >= W {
+                    let xl = wd - W;
                     // EIGHT independent accumulator chains instead of four:
                     // (l,m) share one per output, r gets its own, so the longest
                     // dependency run per tap iteration is 2 rather than 3.
@@ -183,7 +191,7 @@ macro_rules! define_kernels {
                         // constant sub-ranges of a fixed-size array, which LLVM
                         // proves in-bounds and lowers to plain loads.
                         let win: &[f32; $w + 2] =
-                            (&irow[xl - 1..xl + 1 + W]).try_into().unwrap();
+                            (&irow[xl..xl + W + 2]).try_into().unwrap();
                         let l = V::<T>::from_slice(token, &win[0..]);
                         let m = V::<T>::from_slice(token, &win[1..]);
                         let r = V::<T>::from_slice(token, &win[2..]);
@@ -206,24 +214,21 @@ macro_rules! define_kernels {
                             .unwrap();
                         acc[ob].store(dst);
                     }
-                    x = wd - 1;
                 }
-                // Scalar edges: x = 0, x = wd-1, plus any tail on tiny widths.
-                for xx in core::iter::once(0).chain(x.min(wd)..wd) {
-                    for ob in 0..4 {
-                        let mut s = bias[oc0 + ob];
-                        // Same (ic, ky) order as the table was built in, so the
-                        // scalar accumulation order is unchanged.
-                        for &(irow, w12) in taps {
-                            if xx >= 1 {
-                                s += w12[ob * 3] * irow[xx - 1];
+                // Widths under one vector cannot be tiled at all. Scalar over
+                // every column, reading the padded row directly — no edge
+                // special-case survives, because the padding supplies the zeros.
+                if wd < W {
+                    for xx in 0..wd {
+                        for ob in 0..4 {
+                            let mut acc = bias[oc0 + ob];
+                            for &(irow, w12) in taps {
+                                acc += w12[ob * 3] * irow[xx]
+                                    + w12[ob * 3 + 1] * irow[xx + 1]
+                                    + w12[ob * 3 + 2] * irow[xx + 2];
                             }
-                            s += w12[ob * 3 + 1] * irow[xx];
-                            if xx + 1 < wd {
-                                s += w12[ob * 3 + 2] * irow[xx + 1];
-                            }
+                            out[(oc0 + ob) * cs + oy * wd + xx] = acc;
                         }
-                        out[(oc0 + ob) * cs + oy * wd + xx] = s;
                     }
                 }
             }
@@ -460,9 +465,54 @@ macro_rules! define_kernels {
                 // rows back to back, while they are still resident.
                 // Output writes are disjoint per (oc0, oy), so the swap is
                 // bit-exact.
+                // Zero-pad one column each side, ONCE per call. This is what
+                // removes the scalar edge path: with it the vector tile loop
+                // covers every output column. The border cost 31% of this kernel
+                // at 128px — the tile size production runs — and 7% at 512px.
+                // The copy is cheap against the convolution it feeds: ~2 MB of
+                // streaming traffic for a production tile against ~230 MFLOP.
+                // ROLLING three-row window, not a padded copy of the whole
+                // plane. Padding the plane outright is the obvious version and
+                // it is 23% SLOWER at 512px: the buffer is cin*h*(wd+2) floats
+                // — 33 MB there — and a fresh allocation that size costs more in
+                // page faults and zeroing than the border ever cost. This keeps
+                // cin*3 padded rows (197 KB at 512px, 50 KB at the production
+                // tile), copies each input row exactly once, and reuses it for
+                // the three output rows that need it.
+                let pwd = wd + 2;
+                let pcs = 3 * pwd; // per channel: 3 row slots
+                let mut pin = vec![0.0f32; cin * pcs];
+                // `slot(y)` is where input row y lives. The zero columns at
+                // index 0 and pwd-1 are written once and never touched again.
+                let fill = |pin: &mut [f32], y: usize| {
+                    for ic in 0..cin {
+                        let d = ic * pcs + (y % 3) * pwd + 1;
+                        pin[d..d + wd].copy_from_slice(&inp[ic * cs + y * wd..][..wd]);
+                    }
+                };
+                // Rows 0 and 1 are needed before the first output row.
+                fill(&mut pin, 0);
+                if h > 1 {
+                    fill(&mut pin, 1);
+                }
+                // Row OUTER, output-quad INNER. The other nesting walks every
+                // row for one quad before returning to row 0 for the next, so
+                // the cin*3 input rows a given `oy` needs are evicted long
+                // before the next quad wants them — h*cin*wd*4 bytes of traffic
+                // between reuses. This way all `cout/4` quads consume the same
+                // rows back to back, while they are still resident.
+                // Output writes are disjoint per (oc0, oy), so the swap is
+                // bit-exact.
                 for oy in 0..h {
+                    // Row oy+1 becomes reachable now; rows oy-1 and oy are
+                    // already resident from previous iterations.
+                    if oy + 1 < h && oy > 0 {
+                        fill(&mut pin, oy + 1);
+                    }
                     for oc0 in (0..cout).step_by(4) {
-                        conv3x3_row4(token, inp, cin, wts, bias, out, h, wd, oy, oc0, cs);
+                        conv3x3_row4(
+                            token, &pin, cin, wts, bias, out, h, wd, oy, oc0, cs, pwd, pcs,
+                        );
                     }
                 }
             }

@@ -4,7 +4,23 @@
 //! grouped/plain conv3x3, conv1x1, SiLU, a sigmoid gate, channel concat, and
 //! PixelShuffle. Scalar-but-vectorizable safe Rust; magetypes SIMD comes later
 //! if the size/speed answer justifies it.
-#![forbid(unsafe_code)]
+// SAFETY POLICY.
+//
+// The crate is `forbid(unsafe_code)` by default and that is the shipping
+// configuration. The optional `unsafe-experiments` feature relaxes it to
+// `deny(unsafe_code)`, so unsafe becomes possible only where a site carries an
+// explicit `#[allow(unsafe_code)]` — which makes every such site greppable and
+// individually removable.
+//
+// *** TEMPORARY — MARKED FOR REMOVAL. ***
+// This feature exists to measure whether raw-pointer / intrinsic formulations
+// beat the safe ones in the conv kernels. It is off by default, must never be
+// enabled in a shipped build, and should be deleted once each experiment has
+// either been rejected or replaced by a safe formulation with the same
+// codegen. Track the open sites with:
+//     rg '#\[allow\(unsafe_code\)\]' crates/zensr-micro
+#![cfg_attr(not(feature = "unsafe-experiments"), forbid(unsafe_code))]
+#![cfg_attr(feature = "unsafe-experiments", deny(unsafe_code))]
 // Three lints fight the kernel style rather than finding defects here:
 //
 // `too_many_arguments` — convolution kernels take their shape (in/out channels,
