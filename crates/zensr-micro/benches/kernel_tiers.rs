@@ -21,16 +21,55 @@ type TierToken = archmage::NeonToken;
 #[cfg(target_arch = "x86_64")]
 type TierToken = archmage::X64V3Token;
 
+/// The tier the dispatcher will ACTUALLY pick here, probed at runtime.
+///
+/// This used to be a hardcoded `"v3(avx2)"` on every x86_64 host. It is wrong on
+/// any CPU with AVX-512: the `incant!` ladder is `[v4x(cfg(avx512)), v3, ...]`,
+/// so v4x is tried first and wins — measured on a 7950X (avx512f/bw/cd/dq/vl,
+/// both tokens summon, 153 zmm instructions in the bench binary), where the arm
+/// labelled "v3(avx2)" was running AVX-512. A benchmark that names the arm it
+/// did not measure is worse than no benchmark; naming is the one thing a
+/// measurement cannot be wrong about.
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
-const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
-    "neon"
-} else {
-    "v3(avx2)"
-};
+fn tier_name() -> &'static str {
+    #[cfg(target_arch = "aarch64")]
+    {
+        "neon"
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        use archmage::SimdToken as _;
+        // Ladder order, strongest first — must match the `incant!` lists in
+        // src/simd.rs, or this label lies in the other direction.
+        #[cfg(feature = "avx512")]
+        if archmage::X64V4xToken::summon().is_some() {
+            return "v4x(avx512)";
+        }
+        if archmage::X64V3Token::summon().is_some() {
+            return "v3(avx2)";
+        }
+        "scalar(no simd token)"
+    }
+}
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(enabled: bool) -> bool {
-    TierToken::dangerously_disable_token_process_wide(!enabled).is_ok()
+    // Disable every x86 tier, not just V3. V4x is a superset, so disabling V3
+    // alone could leave AVX-512 live and make the "scalar" arm not scalar —
+    // the ratio would then be v4x-vs-v4x and read as ~1.00x, i.e. a silent PASS.
+    #[cfg(target_arch = "x86_64")]
+    {
+        let a = archmage::X64V3Token::dangerously_disable_token_process_wide(!enabled).is_ok();
+        #[cfg(feature = "avx512")]
+        let b = archmage::X64V4xToken::dangerously_disable_token_process_wide(!enabled).is_ok();
+        #[cfg(not(feature = "avx512"))]
+        let b = true;
+        return a && b;
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        TierToken::dangerously_disable_token_process_wide(!enabled).is_ok()
+    }
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
 fn set_simd(_e: bool) -> bool {
@@ -53,13 +92,14 @@ fn bench_kernels(suite: &mut Suite) {
         return;
     }
     set_simd(true);
-    eprintln!("[kernel_tiers] comparing {TIER_NAME} vs forced scalar");
+    let tier = tier_name();
+    eprintln!("[kernel_tiers] comparing {tier} vs forced scalar");
 
     // SiLU — the pointwise activation, run after every conv.
     const N: usize = 1 << 20;
     suite.compare("silu_dispatch/1M", |g| {
         g.throughput(Throughput::Bytes((N * 4) as u64));
-        for (arm, simd) in [(TIER_NAME, true), ("scalar", false)] {
+        for (arm, simd) in [(tier, true), ("scalar", false)] {
             g.bench(arm, move |b| {
                 b.with_input(move || {
                     set_simd(simd);
@@ -84,7 +124,7 @@ fn bench_kernels(suite: &mut Suite) {
     let bias: &'static [f32] = Box::leak(ramp(COUT, 13).into_boxed_slice());
     suite.compare("conv3x3_dispatch/32x32x128x128", move |g| {
         g.throughput(Throughput::Elements((COUT * H * WD) as u64));
-        for (arm, simd) in [(TIER_NAME, true), ("scalar", false)] {
+        for (arm, simd) in [(tier, true), ("scalar", false)] {
             g.bench(arm, move |b| {
                 b.with_input(move || {
                     set_simd(simd);
