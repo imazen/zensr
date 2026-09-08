@@ -189,6 +189,11 @@ fn main() {
     // either, "first N sorted" silently admits training images whenever the
     // directory listing differs from the one the split was frozen against.
     let pinned = resolve_pinned(&root);
+    // Held-out files this run could not score, by reason. Reported at the end:
+    // `decode_any` handles PNG and JPEG only, so every held-out HEIC (90 in the
+    // canonical corpus) and both DNGs fall out here, and a silent `continue`
+    // would quietly shrink the eval set without changing any printed number.
+    let mut skipped: std::collections::BTreeMap<String, usize> = Default::default();
     for (sub, dir) in &subcorpora_for(&root) {
         let (sub, dir) = (sub.as_str(), dir.as_str());
         let files = list_images(&root.join(dir));
@@ -206,14 +211,23 @@ fn main() {
                 }
                 seen_pinned.insert(stem);
             }
-            let Some(img) = decode_any(&f) else { continue };
+            let ext = f
+                .extension()
+                .map(|e| e.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            let Some(img) = decode_any(&f) else {
+                *skipped.entry(format!("undecodable .{ext}")).or_default() += 1;
+                continue;
+            };
             let Some(hr) = center_crop(&img, crop_cap()) else {
+                *skipped.entry("smaller than the crop".into()).or_default() += 1;
                 continue;
             };
             let fname = f.file_name().unwrap().to_string_lossy().to_string();
             // Recorded per row; ZENSR_EVAL_CLEAN_GT=1 skips JPEG references.
             let gt_src = gt_src_of(&fname);
             if gt_src != "png" && std::env::var("ZENSR_EVAL_CLEAN_GT").as_deref() == Ok("1") {
+                *skipped.entry("non-PNG reference (ZENSR_EVAL_CLEAN_GT=1)".into()).or_default() += 1;
                 continue;
             }
             used += 1;
@@ -333,5 +347,12 @@ fn main() {
         }
     }
     std::fs::write(&out_path, &tsv).expect("write tsv");
+    if !skipped.is_empty() {
+        let total: usize = skipped.values().sum();
+        eprintln!("SKIPPED {total} held-out files that could not be scored:");
+        for (why, n) in &skipped {
+            eprintln!("  {n:>4}  {why}");
+        }
+    }
     eprintln!("wrote {}", out_path.display());
 }
