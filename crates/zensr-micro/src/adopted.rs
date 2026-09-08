@@ -95,20 +95,24 @@ impl AdoptedModel {
         packed.push(pack_conv3x3(take(&mut buf, 3 * nf * 9), 3, nf));
         biases.push(take(&mut buf, nf).to_vec());
         slopes.push(take(&mut buf, nf).to_vec());
-        // Winograd v1 measured 1.8x SLOWER than the magetypes direct kernel on
-        // lianli (scalar transforms + untier'd GEMM lose more than the 2.25x
-        // multiply cut saves) — opt-in only, kept for a future vectorized v2.
+        // Winograd stays OFF by default: it is measurably slower than the
+        // magetypes direct kernel, and that is now a settled result rather than
+        // a v1 artifact.
         //
-        // RE-CONFIRMED 2026-09-08 on AVX-512 (7950X, v4x tier, end-to-end
-        // prod_bench with dejpeg_rt24g): 1.78x slower at 1 thread, 1.73x at 12
-        // — within 4% of the original verdict, so it survives a different box,
-        // microarchitecture and SIMD tier. Winograd does 2.25x fewer multiplies
-        // and still loses by 1.75x, so its transform+GEMM overhead costs ~3.9x
-        // what the multiply saving returns. That overhead is untiered: wino.rs
-        // is fixed [f32; T] blocks relying on LLVM, and its T=16 was picked as
-        // "2 AVX2 regs per row" (exactly one zmm on AVX-512, a shape it was
-        // never tuned for). v2 = tier the transforms and GEMM with magetypes;
-        // it is not an archmage-version or new-intrinsic problem.
+        // History, because the obvious reading of this flag is wrong: v1 was
+        // scalar transforms + an untiered GEMM and lost 1.8x on lianli, which is
+        // why the flag exists. **v2/v3 (b714829) fixed exactly that** —
+        // magetypes-tiered, deinterleaved vector transforms, quad GEMM,
+        // row-wide U amortization, in simd.rs::conv3x3_wino_dispatch. wino.rs is
+        // now only the scalar fallback for shapes below one vector of tiles.
+        //
+        // RE-MEASURED 2026-09-08 against the TIERED v2/v3 on AVX-512 (7950X,
+        // v4x, end-to-end prod_bench with dejpeg_rt24g, wd>=1024 so nt=511 >> W
+        // and the vector path is the one running): 1.78x slower at 1 thread,
+        // 1.73x at 12. Vectorizing the transforms did not close the gap — the
+        // 2.25x multiply reduction simply does not pay for the transform and
+        // scatter/gather overhead at this model's channel count (nf=24).
+        // So this is not a "needs tiering" TODO; it is a negative result.
         // benchmarks/realtime_kernels_x86_2026-09-08.md
         let use_wino = std::env::var("ZENSR_WINOGRAD").as_deref() == Ok("1");
         let mut wino: Vec<Option<(Vec<f32>, Vec<f32>)>> = vec![None];

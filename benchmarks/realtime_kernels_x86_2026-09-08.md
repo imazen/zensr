@@ -44,21 +44,30 @@ Per-size, 12 threads: 202.2 → 276.1 ms at 1024px, 816.7 → 1273.5 ms at 2048p
 **The 1.8× verdict is robust** — it survives a different machine, a different
 microarchitecture and the AVX-512 tier, landing within 4% of the original.
 
-### What that implies for the fix
+### What that implies — and a correction
 
-Winograd does 2.25× fewer multiplies and still comes out 1.75× behind, so its
-non-multiply overhead currently costs about **3.9× what the multiply saving
-returns**. That overhead is the transforms and the GEMM, and neither is tiered:
-`wino.rs` is written as fixed `[f32; T]` blocks "so LLVM vectorizes the inner
-loops" rather than through magetypes, and its `T = 16` was chosen as "2 AVX2
-regs per row" — which on AVX-512 is exactly one zmm register, a shape it was
-never tuned for.
+**First reading of this was wrong and is retracted.** I read `wino.rs`, saw
+fixed `[f32; T]` blocks relying on LLVM autovectorization, read
+`adopted.rs`'s comment ("kept for a future vectorized v2"), and concluded the
+remaining win was to tier the transforms and GEMM with magetypes.
 
-So the optimization target is **tiering the Winograd transforms and GEMM with
-magetypes**, not new intrinsics and not an archmage upgrade. Closing a 3.9× gap
-is not guaranteed — but the transforms are currently scalar, where the measured
-scalar→v4x factor on this box is 10.3× (silu) and the transform entries are
-exact-in-f32 (0, ±1, ±0.5), so there is real room. Re-measure before believing.
+That work already exists. Commit `b714829` — *"Winograd v2/v3 —
+magetypes-tiered kernel (deinterleaved vector transforms, quad GEMM, row-wide U
+amortization)"* — lives in `simd.rs::conv3x3_wino_dispatch`, and it is the path
+`adopted.rs` calls under `ZENSR_WINOGRAD=1`. `wino.rs` is only the scalar
+fallback, taken when `h < 4 || wd < 4` or when the tile count `nt` is under one
+vector width. At the sizes measured here (wd ≥ 1024 → nt = 511, W = 16) the
+**tiered** kernel is what ran.
+
+So the honest result is stronger than "needs tiering": **vectorizing the
+transforms did not close the gap.** Winograd does 2.25× fewer multiplies and is
+still 1.75× slower with a fully tiered implementation, which means the transform
+plus scatter/gather overhead — not the multiply count, and not the ISA — is what
+decides this at nf=24. That is a negative result to keep, not a TODO.
+
+The remaining conv3x3 headroom (79.5 GFLOP/s against ~half of single-core FMA
+peak) is therefore a blocking/scheduling question inside the direct kernel, not
+a tiering question. The hot path is already tiered end to end.
 
 ## 3. archmage 0.9.29 is a correctness upgrade, not a speed one
 
