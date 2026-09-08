@@ -81,17 +81,22 @@ v3 is intact, so any retrain simply uses good data.
 
 ## 4. What to do, in order
 
-1. **Do not retrain first.** The models exist and CPU inference is cheap. Re-score
-   them against the new held-out buckets (`just split`, then the eval binaries,
-   which now read `eval_split/imazen26_effective_split.tsv`). That is the first
-   trustworthy measurement any of these models will have had, and it tells you
-   which recipes are worth the retrain.
-2. **Correct the README before it is quoted again.** Mark the table's basis as
-   superseded, or re-measure it. The numbers are precise to two decimals and
-   currently rest on a deleted corpus.
+1. ~~**Do not retrain first.**~~ **DONE 2026-09-08 —
+   `benchmarks/rescore_canonical_2026-09-08.md`.** All three shipped models
+   re-scored on the canonical held-out split, 0 training files scored, 0 files
+   skipped. Both tiers survive: lower at q15 (−27%), *higher* at q35–q90 than
+   published. The dejpeg9 graphics route is confirmed at 1.7–2.7× its claimed
+   size and is negative on photographs from q55 up, so it must stay a route.
+   The published numbers were unverifiable, not wrong.
+2. ~~**Correct the README before it is quoted again.**~~ **DONE** — the table now
+   carries measured numbers with the held-out basis stated.
 3. **Retrain the quality tier from the repointed pipeline**, which uses v3-clean
    data by construction and the canonical split. `dejpeg7_graphics` is the one
-   that matters — it is the default.
+   that matters — it is the default. The re-score justifies this on the corpus
+   swap and the corrupt lineage, **not** on a quality failure: the model works.
+   The one open question it raised is the **q15 gap** — both models lose ~27% of
+   their published low-q gain on the new PNG population, consistently. Low-q is
+   where web traffic and the routing constants live, so understand it first.
 4. **Fix the provenance hole at the source**: record `git commit`, embed the
    dataset `meta.json`, and refuse to write `repro.sh` claims that are not true.
    A checkpoint whose training set cannot be identified cannot be audited for

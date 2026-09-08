@@ -21,24 +21,28 @@ calibrated slack + absolute sample-quantization slack) → optional ×2 SR.
 
 | tier | model | params / f16 size | ssim2 gain q15/35/55/75/90 | s/MP @12T |
 |---|---|---|---|---|
-| quality (default) | dejpeg7_graphics | 595k / 1.16 MB | **+10.65/+5.64/+3.53/+2.03/+0.95** | 5.3 |
-| realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | **+6.88/+3.36/+2.02/+1.15/+0.32** = 57–65% of quality tier | **0.16** |
-| low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | +1.6/+0.7/+0.4 OVER dejpeg7 on graphics at q15/35/55 *(not yet re-measured on clean references)* | 5.3 |
+| quality (default) | dejpeg7_graphics | 595k / 1.16 MB | **+7.78/+6.11/+4.60/+3.19/+1.06** | 5.3 |
+| realtime | **dejpeg_rt24g** (distilled, 200k steps) | 43k / **84 KB** | **+5.07/+4.44/+3.26/+2.85/+0.87** = 47–71% of quality tier | **0.16** |
+| low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | **+2.72/+1.45/+1.09/+0.78/+0.21 OVER dejpeg7 on graphics** (paired, 81/81/89/81/67% of files); **negative on photographs from q55 up** — route it, do not default to it | 5.3 |
 
-> **These numbers are provisional and not currently reproducible (2026-09-08).**
-> They were measured against `/mnt/v/imazen-26-clean` and a pinned eval split that
-> were both derived from the wrong imazen-26 corpus; that root has since been
-> deleted and the split superseded by the canonical one
-> (`docs/CORPUS-REPOINT-IMPACT.md`). Under the canonical split those 64 files are
-> now spread across train/validate/test. Separately, the quality-tier default
+> **Re-measured 2026-09-08 on the canonical corpus.** The previous figures
+> (+10.65/+5.64/+3.53/+2.03/+0.95 and +6.88/+3.36/+2.02/+1.15/+0.32) were produced
+> against the wrong imazen-26 and a split that was never a split; both are gone.
+> The models held up — they are *lower at q15* and *higher at q35–q90* than
+> before — but no old number was reproducible, so all of them are replaced rather
+> than defended. Method and the full comparison:
+> `benchmarks/rescore_canonical_2026-09-08.md`. Note also that
 > `dejpeg7_graphics` inherits from a fine-tune chain that trained on 20 corrupted
-> ground-truth pairs — `docs/MODEL-PROVENANCE-AUDIT.md`. The committed realtime
-> weights (`dejpeg_rt24g`) are outside that lineage. Re-measurement is queued
-> before any of this is quoted again.
+> ground-truth pairs (`docs/MODEL-PROVENANCE-AUDIT.md`); the committed realtime
+> weights are outside that lineage, and a retrain is queued for the corpus swap
+> regardless.
 
-Both tier rows: clean PNG references (`/mnt/v/imazen-26-clean`), pinned eval
-split, libjpeg-turbo 4:2:0, **per-file median** gain over the plain decode,
-n=64/cell, shipped pipeline output (post-projection). Rows:
+Both tier rows: **canonical imazen-26** (`github.com/imazen/imazen-26`),
+held-out split (validate ∪ test of `eval_split/imazen26_effective_split.tsv`,
+**0 training files scored**), PNG references, libjpeg-turbo 4:2:0, **per-file
+median** gain over the plain decode, n=36/cell across 21 content classes, shipped
+pipeline output (post-projection). Win fractions 97/100/100/94/84%
+(dejpeg7) and 98/100/94/84/67% (rt24g) on the full 63-file sample. Rows:
 `benchmarks/clean_ladder_2026-08-03.pointer.md`.
 
 > Corrected 2026-08-03, in **two opposite directions**. Absolute gains were
