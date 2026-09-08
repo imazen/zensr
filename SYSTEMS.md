@@ -294,6 +294,14 @@ pinned; distill gen val split is image-level; rtc (S-E) retrained on the
 clean regen. Policy: frozen-by-file-list, dev slices for selection, test
 slices touched once per milestone.
 
+> **SUPERSEDED 2026-09-07 by the corpus repoint.** "First-8 ∪ pinned" was an
+> approximation of a split, needed because the old corpus had no ids; it leaked
+> twice. The canonical corpus has ids, so the split is now the canonical
+> zenmetrics rule applied at origin level — `tools/corpus_split.py`,
+> `eval_split/imazen26_split.tsv`, 1,083 train / 657 val / 420 test. Training
+> excludes by BUCKET; there is no first-N rule left to slide.
+> See `docs/CORPUS-REPOINT-IMPACT.md`.
+
 **True held-out TEST — people-test-v1** (64 images, 6 virgin pxhere
 shards, zero id overlap with any pool/dev slice, scored exactly once):
 

@@ -157,7 +157,10 @@ files and butteraugli on 7, while SSIM2 says the median image gets worse — a
 metric disagreement on synthetic content, not a demonstrated regression.
 
 References are 100% PNG (`/mnt/v/imazen-26-clean`), files pinned to
-`eval_split/imazen26_eval_files.tsv`. Harness: `eval` bin (zenpng/zenjpeg
+`eval_split/imazen26_eval_files.tsv`. (Both were rebuilt by the 2026-09-07
+corpus repoint — `imazen-26-clean` derived from the deleted acquisition root
+and the pin was keyed in its layout; numbers below predate it and are
+provisional. `docs/CORPUS-REPOINT-IMPACT.md`.) Harness: `eval` bin (zenpng/zenjpeg
 decode → CatmullRom ×4 down → {spanf, lanczos, catmullrom} up →
 psnr/ssimulacra2/butteraugli-n3 vs HR). Caveat: LR degradation is linear-light
 CatmullRom, not SPANF's encoded-space-bicubic training distribution — SPANF

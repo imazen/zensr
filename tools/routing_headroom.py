@@ -148,7 +148,35 @@ def bootstrap_crossover(data, iters=2000, seed=20260803):
 # palette. JPEG damage there is ringing and mosquito noise, which is both very
 # visible and very removable. The rest is photographic — stochastic detail,
 # grain, stippling — where the "artifacts" are entangled with real texture.
-GRAPHIC_SUBS = {"documents", "maps", "screen"}
+#
+# Covers BOTH label spaces this tool is pointed at: the canonical imazen-26
+# labels (zensr-bench SUBCORPORA) and the XL corpus legs. Membership is the
+# ORACLE label the content-split curves are fit against — the shipped router
+# does not use it; it measures the zero-AC-block fraction at runtime.
+#
+# Extended 2026-09-07 for the corpus repoint. Before that this set named three
+# labels and every other label fell through to "photographic", which was
+# harmless while only eight subcorpora existed and silently wrong the moment
+# patents, plots and clipart appeared — those are line art and text, and binning
+# them as photographs would have fit the photo curve on graphic content.
+GRAPHIC_SUBS = {
+    # canonical imazen-26 labels
+    "documents", "maps", "screen", "patents", "plots", "clipart",
+    # XL corpus legs
+    "sci-figures", "noaa", "gb82-sc",
+}
+# UNRESOLVED, and deliberately left on the photographic side until measured:
+#   illustrations (9094-lilith-ai-illustrations) — AI illustration, often
+#     painterly with continuous tone rather than flat regions.
+#   ai-products   (9226-lilith-ai-products)      — AI product renders, which
+#     look photographic; at 35% of the training pool this label matters more
+#     than any other.
+#   art-scans     (6600-ia-...-illustrations)    — engravings; stippled, which
+#     reads as stochastic detail to a DCT.
+# Decide these by MEASUREMENT during the recalibration (handoff Step 3): run the
+# zero-AC-block fraction over each and compare against GRAPHIC_ZERO_AC_THRESHOLD,
+# rather than by how the folder name sounds.
+AMBIGUOUS_SUBS = {"illustrations", "ai-products", "art-scans"}
 
 
 def content(data):

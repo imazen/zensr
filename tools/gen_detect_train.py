@@ -4,7 +4,8 @@
 Input: features TSV(s) emitted by crates/zensr-bench/src/bin/gen_detect.rs
 (one row per generated JPEG, split column = train|eval; eval rows come from
 the pinned eval_split/imazen26_eval_files.tsv sources and are never used for
-fitting or threshold selection). Multiple TSVs are concatenated (e.g. a big
+fitting or threshold selection — since 2026-09-07 that pin is val ∪ test of the
+origin-level split, not the old "first 8 sorted ∪ 64" list). Multiple TSVs are concatenated (e.g. a big
 train-only run + an eval run).
 
 Outputs (stdout + summary TSV):
