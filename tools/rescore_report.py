@@ -10,6 +10,17 @@ itself compressed, so a "gain" measured against one partly rewards REPRODUCING
 the reference's own artifacts. The 2026-07 defect happened for want of this
 column; reporting an aggregate over both kinds hides it again.
 
+**Do not read the png/jpg gap as a pure reference-quality effect.** In the
+canonical corpus the two are nearly collinear with CONTENT: only 6 of 207
+photographic files are natively PNG, so "png reference" is mostly screenshots,
+plots and AI renders, and "jpg reference" is mostly photographs. Graphic content
+is also where dejpeg legitimately gains most — flat regions and hard edges make
+ringing both visible and removable. So a gap between the two columns mixes
+reference cleanliness with content type and cannot be attributed to either alone.
+Separating them needs clean PHOTOGRAPHIC references, i.e. the
+downscale-to-pristine treatment (handoff §5 step 2). Until that exists, the two
+columns are two different populations, not a controlled comparison.
+
 Usage: rescore_report.py <model.tsv> [more.tsv ...] [--arm model_proj]
 """
 import argparse
