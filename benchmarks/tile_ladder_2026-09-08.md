@@ -44,42 +44,61 @@ their guards:
   one thread the tiles run sequentially, so imbalance is irrelevant and the
   extra tiles are pure added halo.
 
-A floor of `6 x halo` stops subdivision before the discarded border dominates —
-halo cost is `(1 + 2*halo/tile)²`, so `6*halo` pays 1.78x and `2*halo` pays 4x.
-Without it a 128px image at 12 threads is split into four 44px tiles, each
-paying 2.1x, chasing parallelism it has no work for.
+A floor on the tile stops subdivision running to nothing — the loop ends only
+when there are enough tiles, and on a 64px image at 12 threads that would drive
+the tile to zero.
+
+**The floor wants to be much lower than the halo cost alone suggests, and
+getting this wrong made the whole change invisible.** The first version used
+`6 x halo`, reasoning that `(1 + 2*halo/tile)²` makes `2*halo` cost 4x in
+wasted border. Measured, paying that 4x is still right, because it buys threads:
+
+| | best tile | ms | what a 6x floor forces | ms |
+|---|---|---|---|---|
+| halo 10, 128px, 12T | 44 (4.4x halo) | 3.8 | 76 | 6.6 |
+| halo 10, 128px, 28T | 44 | 3.8 | 140 | 12.3 |
+| halo 18, 128px, 12T | 44 (2.4x halo) | 70.2 | 140 | 156.0 |
+| halo 21, 256px, 12T | 86 (4.1x halo) | 154.0 | 134 | 204.4 |
+
+A `6 x halo` floor is 74% slow at 128px on the realtime model and 2.2x slow on
+the quality one. `2 x halo` lands within 8% of the measured optimum in every
+cell swept, across halos 10/18/21 and 8/12/28 threads. With the 6x floor the
+change was **invisible end to end** (median −0.5% through `prod_bench`), because
+the production models' halos are large enough that it blocked every
+subdivision — the floor, not the rule, was doing the deciding.
 
 ## Result
 
-The rule changes 16 of the measured cells. Both tiles measured **inside one
-binary**, interleaved, 3 paired reps:
+The rule changes 47 of the swept cells. Both tiles measured **inside one
+binary**, interleaved, 3 paired reps, across the three shipped models
+(halo 10 / 18 / 21) at 128-768px and 4/8/12/28 threads:
 
-| model | size | threads | ladder | new | faster by | wins |
-|---|---|---|---|---|---|---|
-| realtime | 128x128 | 4 | 396 | 76 | **+51.4%** | 3/3 |
-| realtime | 128x128 | 8 | 268 | 76 | **+50.4%** | 3/3 |
-| realtime | 128x128 | 12 | 140 | 76 | **+50.7%** | 3/3 |
-| realtime | 256x256 | 4 | 396 | 140 | **+64.9%** | 3/3 |
-| realtime | 256x256 | 8 | 268 | 92 | **+72.7%** | 3/3 |
-| realtime | 256x256 | 12 | 140 | 76 | +24.8% | 3/3 |
-| realtime | 512x512 | 4 | 396 | 268 | **+51.7%** | 3/3 |
-| realtime | 512x512 | 8 | 268 | 172 | +26.8% | 3/3 |
-| realtime | 768x512 | 8 | 268 | 204 | +13.4% | 3/3 |
-| quality | 128x128 | 4 | 396 | 140 | +1.7% | 3/3 |
-| quality | 128x128 | 8 | 268 | 140 | +1.9% | 3/3 |
-| quality | 256x256 | 4 | 396 | 140 | **+61.0%** | 3/3 |
-| quality | 256x256 | 8 | 268 | 140 | **+59.4%** | 3/3 |
-| quality | 512x512 | 4 | 396 | 268 | **+43.8%** | 3/3 |
-| quality | 512x512 | 8 | 268 | 172 | +20.3% | 3/3 |
-| quality | 768x512 | 8 | 268 | 204 | −3.0% | 0/3 |
+**46 of 47 cells win. Median +51.1%, best +75.0%, worst −7.1%.**
 
-15 wins, 1 loss. The loss is the one cell where the starvation fix does not pay
-for itself on the quality model; the same cell is +13.4% on the realtime one, so
-the mechanism (6 tiles across 8 threads) is right even where the trade is not.
-Every cell the rule no longer touches keeps its old behaviour by construction.
+| model | size | threads | ladder | new | faster by |
+|---|---|---|---|---|---|
+| realtime (h10) | 128 | 28 | 140 | 44 | **+70.2%** |
+| realtime | 192 | 8 | 268 | 76 | **+71.6%** |
+| realtime | 256 | 8 | 268 | 92 | **+74.0%** |
+| realtime | 256 | 28 | 140 | 44 | +55.2% |
+| realtime | 512 | 4 | 396 | 268 | +51.3% |
+| realtime | 512 | 28 | 140 | 92 | +30.8% |
+| realtime | 768x512 | 8 | 268 | 204 | +28.0% |
+| quality (h18) | 128 | 28 | 140 | 44 | **+59.5%** |
+| quality | 256 | 8 | 268 | 92 | **+70.9%** |
+| quality | 512 | 4 | 396 | 268 | +47.9% |
+| SR span (h21) | 192 | 8 | 262 | 70 | **+67.3%** |
+| SR span | 256 | 8 | 262 | 86 | **+68.1%** |
+| SR span | 512 | 4 | 390 | 262 | +50.7% |
+| SR span | 512 | 28 | 134 | 86 | **−7.1%** |
+
+Full table: `tile_ladder_ab_2026-09-08.tsv`. The single loss is the one cell
+where the starvation fix does not pay for itself — 16 tiles across 28 threads is
+genuine starvation, but at halo 21 the 2.2x border cost of the smaller tile
+outweighs the twelve extra threads.
 
 Tiling stays **bit-exact in the tile size** — checksums are identical across the
-whole sweep on both models — so this changes speed only.
+whole sweep on all three models — so this changes speed only.
 
 ## Comparing two BUILDS of the rule does not work
 

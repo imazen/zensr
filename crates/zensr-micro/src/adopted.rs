@@ -482,13 +482,25 @@ impl AdoptedModel {
             //   lopsided  — the last tile is under half the others, and the run
             //               is paced by the largest, so the cost is the ratio
             //               of their convolved areas
-            // Never subdivide past the point where the discarded border
-            // dominates. Halo cost is (1 + 2*halo/tile)^2, so a tile of 6*halo
-            // pays 1.78x and one of 2*halo pays 4x. Without this floor a 64px
-            // image at 12 threads is split into four 44px tiles chasing
-            // parallelism it does not have the work for, each paying 2.1x —
-            // strictly worse than the single tile the old ladder produced.
-            let min_tile = (6 * halo).max(32);
+            // A floor on the tile, so a small image at many threads cannot be
+            // subdivided into nothing. It has to exist — the loop below stops
+            // only when there are enough tiles, and on a 64px image at 12
+            // threads that would run the tile to zero.
+            //
+            // MEASURED 2026-09-08, and it wants to be much lower than the halo
+            // cost alone suggests. Halo cost is (1 + 2*halo/tile)^2, so 2*halo
+            // pays 4x in wasted border — and paying it is still right, because
+            // it buys threads:
+            //   halo 10, 128px, 12T   tile 44 (4.4x halo) 3.8 ms   vs 76: 6.6
+            //   halo 10, 128px, 28T   tile 44             3.8 ms   vs 140: 12.3
+            //   halo 18, 128px, 12T   tile 44 (2.4x halo) 70.2 ms  vs 140: 156.0
+            //   halo 21, 256px, 12T   tile 86 (4.1x halo) 154.0 ms vs 134: 204.4
+            // A 6*halo floor (the first version of this) picks the right-hand
+            // column: it is 74% slow at 128px on the realtime model and 2.2x
+            // slow on the quality one. 2*halo lands within 8% of the measured
+            // optimum in every cell swept, across halos 10/18/21 and 8/12/28
+            // threads.
+            let min_tile = (2 * halo).max(32);
             // Tile count on the LONGER axis; the size follows from it.
             let side = h.max(w);
             let mut n = side.div_ceil(base).max(1);
