@@ -44,6 +44,9 @@ HIGH-Q GATE", `ROADMAP.md` 1.1.
 | `conv3x3_tap_load_2026-09-08.tsv` | the shipping A/B, 10 paired reps x 2 tiers x 3 sizes |
 | `conv3x3_tap_load_arms_2026-09-08.tsv` | the three-arm run that separated the load-count change from the stride change |
 | `conv3x3_tap_load_e2e_2026-09-08.log` | the same change through the full production pipeline — 27/27 cells win, +3.5..+12.6% |
+| `tile_ladder_2026-09-08.md` | the tile default picked a SIZE, not a COUNT — a runt tile cost up to 2.25x at 512px and 1 tile for 4 threads at 256px |
+| `tile_ladder_2026-09-08.tsv` | the 7-tile sweep behind it: 2 models x 3 sizes x 4 thread counts |
+| `tile_ladder_ab_2026-09-08.tsv` | the paired rule comparison, both tiles measured inside ONE binary |
 
 ## Tools
 

@@ -435,21 +435,101 @@ impl AdoptedModel {
         // Tiling is BIT-EXACT in the tile size (checksums identical across the
         // whole sweep on both models), so this changes speed only.
         // benchmarks/realtime_kernels_x86_2026-09-08.md
+        //
+        // 2026-09-08: the ladder above picks a tile SIZE, which is the wrong
+        // quantity. A size that does not divide the image leaves a RUNT tile,
+        // and a tiled run is paced by its LARGEST tile, so the cost is the
+        // ratio of their convolved areas. At 512px the T=3..4 rung picks 396,
+        // giving tiles of 396 and 116 — (416/288)^2 = 2.09x — and the measured
+        // penalty is 2.25x. Same defect at the T=5..8 rung.
+        //
+        // So: choose the tile COUNT first and let the size follow, which makes
+        // every tile the same size by construction. Then raise the count until
+        // there is at least one tile per thread — four tiles across eight
+        // threads leaves half of them idle for the whole run, worth another
+        // 1.85x at 512px.
+        //
+        // MEASURED 2026-09-08, 2 models x 3 sizes x 4 thread counts x 7 tiles
+        // (benchmarks/tile_ladder_2026-09-08.tsv). Against the size-only
+        // ladder this is NEVER worse in any measured cell, and at 512px:
+        //   realtime T=4  396 -> 268   142.8 -> 67.4 ms   -53%
+        //   realtime T=8  268 -> 172    68.8 -> 54.8 ms   -20%
+        //   quality  T=4  396 -> 268  1584.3 -> 791.5 ms  -50%
+        //   quality  T=8  268 -> 172   765.9 -> 677.0 ms  -12%
+        // Mean penalty against the per-cell optimum falls 20.4% -> 6.8%, worst
+        // case 125% -> 47%. The residual is the tile COUNT, which the measured
+        // optimum picks differently for the two models at the same thread count
+        // (halo 10 wants more, smaller tiles than halo 18) — a thread-count
+        // ladder cannot express that, and every analytic rule I fitted for it
+        // regressed at least one cell, so the count rule is left alone. See the
+        // benchmark note for the rules tried and rejected.
         let tile = if tile == 0 {
-            let base = match threads.max(1) {
+            let t = threads.max(1);
+            let base = match t {
                 1..=2 => 512,
                 3..=4 => 384,
                 5..=8 => 256,
                 _ => 128,
             };
+            // Only RE-TILE when the ladder's tile is actually pathological.
+            // Re-tiling for its own sake loses: at 1024px with 4 threads both
+            // the ladder's 396 and the even 348 give three tiles per axis and
+            // the same total convolved area, and 348 measured 6.7% (realtime)
+            // and 11.9% (quality) SLOWER, 0/3 — the tile-size landscape is
+            // bumpy in ways an area model does not see. Pathological means one
+            // of two things, both of which cost far more than that:
+            //   starved   — fewer tiles than threads, so threads sit idle
+            //   lopsided  — the last tile is under half the others, and the run
+            //               is paced by the largest, so the cost is the ratio
+            //               of their convolved areas
+            // Never subdivide past the point where the discarded border
+            // dominates. Halo cost is (1 + 2*halo/tile)^2, so a tile of 6*halo
+            // pays 1.78x and one of 2*halo pays 4x. Without this floor a 64px
+            // image at 12 threads is split into four 44px tiles chasing
+            // parallelism it does not have the work for, each paying 2.1x —
+            // strictly worse than the single tile the old ladder produced.
+            let min_tile = (6 * halo).max(32);
+            // Tile count on the LONGER axis; the size follows from it.
+            let side = h.max(w);
+            let mut n = side.div_ceil(base).max(1);
+            while side.div_ceil(n + 1) >= min_tile {
+                let cand = side.div_ceil(n);
+                // The real tile count, not n^2 — a wide image tiles once on its
+                // short axis and n^2 would over-count it into starvation.
+                if w.div_ceil(cand) * h.div_ceil(cand) >= t {
+                    break;
+                }
+                n += 1;
+            }
+            let even = side.div_ceil(n).max(min_tile.min(side));
             // Round UP so that the CONVOLVED width, tile + 2*halo, is a multiple
             // of the widest vector (16 f32). Otherwise the row kernel needs an
             // overlapping tail tile that recomputes (16 - width%16) columns on
             // every row. At the production shape that is tile 128 + 2*10 = 148,
             // a 4-column tail, and rounding to 140 (width 160) measured -3.5%.
             // Rounding up rather than down also shrinks the discarded halo
-            // fraction, so it wins on both counts.
-            base + (16 - (base + 2 * halo) % 16) % 16
+            // fraction, so it wins on both counts. It reintroduces a runt of at
+            // most 15*(n-1) px, which is a fraction of a tile rather than the
+            // 3.4x imbalance a size-first ladder produces.
+            let align = |tile: usize| tile + (16 - (tile + 2 * halo) % 16) % 16;
+            let ladder = align(base);
+            // Is the ladder's own tile pathological on this image?
+            let runt = |extent: usize| -> bool {
+                extent > ladder && 2 * (extent - (extent.div_ceil(ladder) - 1) * ladder) < ladder
+            };
+            let n_tiles = w.div_ceil(ladder) * h.div_ceil(ladder);
+            let starved = n_tiles < t;
+            // Lopsidedness only costs when the run is PACED by one tile. On a
+            // single thread the tiles are sequential, so only the total matters
+            // and re-tiling is pure added halo: at 768x512 with one thread it
+            // measured -15.2% (quality, 0/3). Once there are several tiles per
+            // thread the runt is a small share of the work and averages out.
+            let lopsided = t > 1 && n_tiles <= 2 * t && (runt(w) || runt(h));
+            if starved || lopsided {
+                align(even)
+            } else {
+                ladder
+            }
         } else {
             tile
         };
