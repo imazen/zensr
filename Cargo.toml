@@ -36,6 +36,6 @@ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
 # unpublished. Pinned to the exact rev rather than the branch so the tree builds
 # the same bytes tomorrow. Drop all three lines and let the 0.9.30 crates.io
 # release satisfy the dependency once #111 ships.
-archmage = { git = "https://github.com/imazen/archmage", rev = "d24e0994f07dede6810bef9fa986e6387cfbf76d" }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "d24e0994f07dede6810bef9fa986e6387cfbf76d" }
-archmage-macros = { git = "https://github.com/imazen/archmage", rev = "d24e0994f07dede6810bef9fa986e6387cfbf76d" }
+archmage = { git = "https://github.com/imazen/archmage", rev = "1e9d4131afd1feac3e48deec1198dfcb1224d5f3" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "1e9d4131afd1feac3e48deec1198dfcb1224d5f3" }
+archmage-macros = { git = "https://github.com/imazen/archmage", rev = "1e9d4131afd1feac3e48deec1198dfcb1224d5f3" }
