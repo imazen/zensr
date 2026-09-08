@@ -23,7 +23,8 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_distill_data import SUBS, list_train_files  # noqa: E402
+from make_distill_data import (build_pool, read_image_bgr,  # noqa: E402
+                               report_unreadable)
 
 OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-dejpeg-v2"))
 ZJTOOL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
@@ -107,7 +108,9 @@ def gen_crops(files, want, rng):
     while len(out) < want:
         f = files[fi % len(files)]
         fi += 1
-        img = cv2.imread(f, cv2.IMREAD_COLOR)
+        # HEIC-capable, and counts what it cannot read instead of dropping it
+        # silently — 46 HEIC + 2 DNG training files were vanishing here.
+        img = read_image_bgr(f)
         if img is None or min(img.shape[:2]) < CROP:
             continue
         for _ in range(6):
@@ -127,11 +130,8 @@ def main():
     workers = int(sys.argv[2]) if len(sys.argv) > 2 else 8
     for arm in ("off", "auto"):
         os.makedirs(os.path.join(OUT, arm), exist_ok=True)
-    pool_files = []
-    for s in SUBS:
-        fs = list_train_files(s)
-        pool_files += fs
     rng = random.Random(SEED)
+    pool_files = build_pool(rng=rng)
     rng.shuffle(pool_files)
     n_val = max(16, len(pool_files) // 20)
     val_f, train_f = pool_files[-n_val:], pool_files[:-n_val]
@@ -176,6 +176,7 @@ def main():
     with open(os.path.join(OUT, "pairs.tsv"), "w") as f:
         f.write("idx\tencoder\tss\tq\tclean\n")
         f.write("\n".join(meta_rows) + "\n")
+    report_unreadable()
     print(f"DONE {n} pairs x 2 arms ({(hr.nbytes*3)/1e9:.2f} GB)", flush=True)
 
 

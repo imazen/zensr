@@ -27,6 +27,7 @@ and is stale. Two things changed together:
 Anything trained before this date was fitted through the wrong corpus and is
 provisional.
 """
+import collections
 import json
 import os
 import random
@@ -151,6 +152,78 @@ def cap_folders(per_folder, rng):
     return pool
 
 
+# Formats cv2 cannot open. Measured 2026-09-08 against the canonical train pool:
+# cv2.imread returns None for all 46 HEIC and both DNG files, and every caller
+# here did `if img is None: continue` — so 48 of 1,151 training files contributed
+# nothing and said nothing. HEIC matters most: 46 files, ~9,090 clean 128px crops
+# at 2x, concentrated in 1400-lilith-nature, and the handoff calls them "the cheap
+# win" for clean references precisely because they are not JPEG.
+_HEIF_READY = None
+_UNREADABLE = collections.Counter()
+
+
+def read_image_bgr(path):
+    """Decode to BGR uint8, HEIC included. None if genuinely undecodable.
+
+    Every failure is COUNTED (`report_unreadable()`), because a silent `continue`
+    is how 48 files left the training set without anyone noticing.
+    """
+    global _HEIF_READY
+    ext = path.rsplit(".", 1)[-1].lower()
+    if ext in ("heic", "heif"):
+        if _HEIF_READY is None:
+            try:
+                import pillow_heif
+                pillow_heif.register_heif_opener()
+                _HEIF_READY = True
+            except ImportError:
+                _HEIF_READY = False
+        if not _HEIF_READY:
+            _UNREADABLE["heic (pillow_heif not installed)"] += 1
+            return None
+        try:
+            from PIL import Image
+            im = Image.open(path).convert("RGB")
+            return np.asarray(im)[:, :, ::-1].copy()
+        except Exception:
+            _UNREADABLE["heic (decode failed)"] += 1
+            return None
+    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    if img is None:
+        _UNREADABLE[ext] += 1
+    return img
+
+
+def report_unreadable():
+    """Say what was dropped. Loud by design — see the note above."""
+    if _UNREADABLE:
+        total = sum(_UNREADABLE.values())
+        print(f"WARNING: {total} source files could not be decoded and were "
+              f"excluded: {dict(_UNREADABLE)}", flush=True)
+    return dict(_UNREADABLE)
+
+
+def build_pool(subs=None, rng=None):
+    """The training pool every generator here should use: canonical train bucket,
+    folder cap applied, provenance reported.
+
+    Exists because the three dejpeg generators each rebuilt this by hand as
+    `for s in SUBS: pool += list_train_files(s)`, which bypassed the folder cap
+    entirely — the cap lived in this module's main() and reached only the SR
+    distillation.
+    """
+    per_folder = {}
+    for s in (subs or SUBS):
+        fs = list_train_files(s)
+        if fs:
+            per_folder[s] = fs
+    pool = cap_folders(per_folder, rng or random.Random(SEED))
+    print(f"reference provenance: {ref_provenance(pool)}", flush=True)
+    if not pool:
+        sys.exit("no training files — check ZENSR_ROOT / ZENSR_SUBS")
+    return pool
+
+
 def ref_provenance(files):
     """Count references by kind. A JPEG ground truth is itself compressed, so a
     pair built from one measures artifact REPRODUCTION as fidelity; the ladder
@@ -183,16 +256,7 @@ def main():
         fwd = lambda t: span_forward(sd, t, 2)
     sd = {k: v.to(dev) for k, v in sd.items()}
 
-    per_folder = {}
-    for s in SUBS:
-        fs = list_train_files(s)
-        if fs:
-            per_folder[s] = fs
-    pool = cap_folders(per_folder, rng)
-    prov = ref_provenance(pool)
-    print(f"reference provenance: {prov}")
-    if not pool:
-        sys.exit("no training files — check ZENSR_ROOT / ZENSR_SUBS")
+    pool = build_pool(rng=rng)
     rng.shuffle(pool)
     # image-level val: last 512 pairs come ONLY from val-reserved files
     n_val_files = max(16, len(pool) // 20)
@@ -210,7 +274,7 @@ def main():
         src = train_pool if made < TRAIN_TARGET else val_pool
         f = src[fi % len(src)]
         fi += 1
-        img = cv2.imread(f, cv2.IMREAD_COLOR)  # BGR
+        img = read_image_bgr(f)  # BGR, HEIC included
         if img is None or img.shape[0] < CROP or img.shape[1] < CROP:
             continue
         for _ in range(min(4, 1 + img.shape[0] * img.shape[1] // (CROP * CROP * 4))):
@@ -251,6 +315,7 @@ def main():
                # Per handoff §5: record what KIND of reference each pair came
                # from, because the 2026-07 defect happened for want of this column.
                "ref_provenance": ref_provenance(train_pool + val_pool),
+               "unreadable": report_unreadable(),
                "val_split": "image-level (last 5% of shuffled files)"},
               open(os.path.join(OUT, "meta.json"), "w"), indent=1)
     print("DONE", lr_all.nbytes / 1e9, "GB +", tg_all.nbytes / 1e9, "GB")

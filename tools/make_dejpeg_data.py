@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_distill_data import SUBS, list_train_files  # noqa: E402  (pinned exclusion)
+from make_distill_data import build_pool, report_unreadable  # noqa: E402
 
 OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-dejpeg"))
 CROP = 128
@@ -28,12 +28,8 @@ VAL_TAIL = 512
 def main():
     n_pairs = int(sys.argv[1]) if len(sys.argv) > 1 else 24000
     os.makedirs(OUT, exist_ok=True)
-    pool = []
-    for s in SUBS:
-        fs = list_train_files(s)
-        pool += fs
-        print(f"{s}: {len(fs)} train files", flush=True)
     rng = random.Random(SEED)
+    pool = build_pool(rng=rng)
     rng.shuffle(pool)
     n_val = max(16, len(pool) // 20)
     val_pool, train_pool = pool[-n_val:], pool[:-n_val]
@@ -78,6 +74,7 @@ def main():
                "source": "imazen-26 train files (pinned eval exclusion)",
                "val_split": "image-level"},
               open(os.path.join(OUT, "meta.json"), "w"), indent=1)
+    report_unreadable()
     print(f"DONE {lr.shape[0]} pairs ({(lr.nbytes+hr.nbytes)/1e9:.2f} GB)", flush=True)
 
 

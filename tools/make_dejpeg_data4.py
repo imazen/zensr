@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_distill_data import SUBS, list_train_files  # noqa: E402
+from make_distill_data import build_pool, report_unreadable  # noqa: E402
 from make_dejpeg_data2 import (ENCODERS, encode, read_ppm, write_ppm, run,  # noqa: E402
                                gen_crops, ZJTOOL, CROP, VAL_TAIL)
 
@@ -91,10 +91,8 @@ def main():
     n_pairs = int(sys.argv[1]) if len(sys.argv) > 1 else 24000
     workers = int(sys.argv[2]) if len(sys.argv) > 2 else 8
     os.makedirs(OUT, exist_ok=True)
-    pool_files = []
-    for s in SUBS:
-        pool_files += list_train_files(s)
     rng = random.Random(SEED)
+    pool_files = build_pool(rng=rng)
     rng.shuffle(pool_files)
     n_val = max(16, len(pool_files) // 20)
     val_f, train_f = pool_files[-n_val:], pool_files[:-n_val]
@@ -146,6 +144,7 @@ def main():
     with open(os.path.join(OUT, "pairs.tsv"), "w") as f:
         f.write("idx\tencoder\tss\tq\tclean\tseverity\tgens\n")
         f.write("\n".join(meta_rows) + "\n")
+    report_unreadable()
     print(f"DONE {n} pairs ({(hr.nbytes + lr.nbytes + dm.nbytes)/1e9:.2f} GB)", flush=True)
 
 
