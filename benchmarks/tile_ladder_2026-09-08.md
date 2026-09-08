@@ -100,6 +100,29 @@ outweighs the twelve extra threads.
 Tiling stays **bit-exact in the tile size** — checksums are identical across the
 whole sweep on all three models — so this changes speed only.
 
+## End to end
+
+`prod_bench` (restore_jpeg -> guarded x1 model -> S10 projection -> RGB, then the
+chained x2 SR step), 3 interleaved paired reps, raw log
+`tile_ladder_e2e_2026-09-08.log`:
+
+| stage | 256px, 12 threads | every other cell |
+|---|---|---|
+| restore | 233.9 -> 135.6 ms, **+41.5%**, 3/3 | flat, ±2% |
+| sr_x2 | 198.4 -> 126.1 ms, **+36.5%**, 3/3 | flat, ±2% |
+| chain | 431.3 -> 261.7 ms, **+39.2%**, 3/3 | flat, ±2% |
+
+That is exactly right, and the flat cells are the point: 256px at 12 threads is
+the **only** shape in this harness where the rule changes the tiling. At 64px
+the image is one tile either way; at 256px with one thread the ladder is not
+starved; at 1024px and above the ladder already produces plenty of tiles and no
+runt. Everything else is unchanged **by construction**, and reads flat, which is
+the control this comparison needed.
+
+The gain is not confined to that one shape — `tile_probe` finds it across
+128-768px at 4/8/12/28 threads on all three models. It is confined to the shapes
+`prod_bench` happens to sweep.
+
 ## Comparing two BUILDS of the rule does not work
 
 The first attempt at this A/B built one binary per rule and compared their
