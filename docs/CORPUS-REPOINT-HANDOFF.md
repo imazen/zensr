@@ -334,6 +334,23 @@ Gotcha: `codec-corpus.r2.imazen.org` returns **403** to a default
 `python-urllib` user-agent. A sweep without a normal UA reports every file as
 divergent, which reads like corpus-wide corruption. It cost one run here.
 
+**Root cause, and a landmine that comes with it.** All **2,160 image files in the
+canonical checkout are hardlinks** into `~/work/codec-corpus/imazen-26` — the
+pre-2026-08-23 location — not copies (2,160 shared inodes, 0 separate; measured
+2026-09-09). The "populated from a local mirror, 2,160/2,160 verified, 0
+downloaded" step did not fetch anything, it linked to an existing tree, and that
+tree's copy of 5314 was already damaged. `manifests/train.tsv` was committed
+2026-08-30 (`187fbf3`) over those bytes, so it is an accurate hash of this disk
+and a wrong hash of the corpus.
+
+The landmine: this repo's docs call `~/work/codec-corpus/imazen-26` stale and say
+not to read from it, which invites deleting it. **Deleting the directory is
+harmless** — the canonical checkout holds the inodes and keeps every byte. But
+anything that **writes in place** into the stale clone (an rsync into it, a
+re-sync, a "refresh the old copy" script) rewrites the canonical checkout's bytes
+too, silently, because they are the same files. Treat the two paths as one tree
+until someone breaks the links.
+
 #### The original Step 4 text
 
 `tools/leakage_audit.py` and `tools/picker_leakage_audit.py` both define "training"
