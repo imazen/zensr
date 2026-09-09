@@ -9,7 +9,7 @@ identical to zenmetrics `scripts/picker/origin_split.py`. Totals: 1,084 / 658 /
 
 zensr reads it directly: `zensr_bench::canonical_holdout()` in Rust,
 `tools/corpus_split.py` in Python. Point `IMAZEN26_REPO` at the checkout if it is
-not at `~/work/imazen-26`.
+not at `~/work/zen/imazen-26`.
 
 **Why nothing is vendored here.** zensr kept its own eval list twice — a
 hand-maintained 64-file pin (`imazen26_eval_files.tsv`, keyed to the deleted

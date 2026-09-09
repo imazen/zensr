@@ -70,7 +70,7 @@ cargo-local:
 # the Rust eval harness — they must agree, and the near-duplicate same-bucketing
 # moves 180 files across the held-out boundary, so the raw canonical buckets are
 # not a safe fallback. Needs the canonical corpus (github.com/imazen/imazen-26,
-# by default ~/work/imazen-26; override with IMAZEN26_REPO).
+# by default ~/work/zen/imazen-26; override with IMAZEN26_REPO).
 split:
     python3 tools/corpus_split.py --write eval_split/imazen26_effective_split.tsv
 

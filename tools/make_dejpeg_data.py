@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_distill_data import build_pool, report_unreadable  # noqa: E402
+from make_distill_data import build_pool, read_image_bgr, report_unreadable  # noqa: E402
 
 OUT = os.path.expanduser(os.environ.get("ZENSR_DATA", "~/tmp/zensr-dejpeg"))
 CROP = 128
@@ -41,7 +41,10 @@ def main():
         while len(hr_l) < want:
             f = files[fi % len(files)]
             fi += 1
-            img = cv2.imread(f, cv2.IMREAD_COLOR)
+            # read_image_bgr, not cv2.imread: this file already imported
+            # report_unreadable() but fed it nothing, so HEIC training
+            # sources dropped out silently and the warning stayed empty.
+            img = read_image_bgr(f)
             if img is None or min(img.shape[:2]) < CROP:
                 continue
             for _ in range(6):

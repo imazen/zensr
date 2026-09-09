@@ -23,7 +23,28 @@ this module adds anything it is because the repo told it to — see
 import csv
 import os
 
-REPO = os.path.expanduser(os.environ.get("IMAZEN26_REPO", "~/work/imazen-26"))
+# The checkout moved from `~/work/imazen-26` to `~/work/zen/imazen-26` on
+# 2026-09-08 17:44, which broke every tool that hardcoded the old path (measured:
+# `build_xl_corpus.sh` exited 1 rather than building). So resolve rather than
+# hardcode — but only over locations that are the canonical repo. Neither
+# `/mnt/v/imazen-26*` nor `~/work/codec-corpus/imazen-26` is a candidate: they are
+# invalid and stale respectively, and a "helpful" fallback onto one of them would
+# silently train and evaluate on the wrong corpus.
+_CANDIDATES = ("~/work/zen/imazen-26", "~/work/imazen-26")
+
+
+def _resolve_repo():
+    env = os.environ.get("IMAZEN26_REPO")
+    if env:
+        return os.path.expanduser(env)
+    for c in _CANDIDATES:
+        c = os.path.expanduser(c)
+        if os.path.exists(os.path.join(c, "manifests", "split_map.tsv")):
+            return c
+    return os.path.expanduser(_CANDIDATES[0])
+
+
+REPO = _resolve_repo()
 MANIFEST = os.path.join(REPO, "CORPUS-MANIFEST.tsv")
 SPLIT_MAP = os.path.join(REPO, "manifests", "split_map.tsv")
 

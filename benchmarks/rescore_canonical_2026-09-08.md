@@ -15,7 +15,7 @@ confirmed and roughly twice as strong as published.
 
 | | |
 |---|---|
-| corpus | `github.com/imazen/imazen-26` @ `187fbf3`, checked out at `~/work/imazen-26`; all 2,160 files sha256-verified against the manifest |
+| corpus | `github.com/imazen/imazen-26` @ `187fbf3`, checked out at `~/work/imazen-26` at run time; **the checkout moved to `~/work/zen/imazen-26` later that day (17:44)** — same clone, re-verified 2026-09-09 (2,160/2,160 present, 60-file sha256 sample clean). All 2,160 files sha256-verified against the manifest |
 | held-out set | validate ∪ test of `eval_split/imazen26_effective_split.tsv` (`just split`) — canonical id rule + the near-duplicate same-bucketing |
 | leakage check | **0 training files scored**; a spot audit of the smoke run resolved 120 validate + 6 test rows, 0 train |
 | files | 63 = 3 per folder across **all 21 content classes** (the old basis was 8 per folder across 8) |
@@ -125,6 +125,6 @@ travels with the output.
   exists, with a split that holds.
 
 Reproduce: `just split`, then for each model
-`ZENSR_EVAL_ENCODERS=turbo ZENSR_EVAL_SS=420 ./target/release/dejpeg_eval ~/work/imazen-26 out.tsv 3 12 <m> <m> <m>`
+`ZENSR_EVAL_ENCODERS=turbo ZENSR_EVAL_SS=420 ./target/release/dejpeg_eval ~/work/zen/imazen-26 out.tsv 3 12 <m> <m> <m>`
 — the model must be passed **three** times or the `model_proj` arm is not emitted
 and the run measures the raw model instead of the shipped pipeline.

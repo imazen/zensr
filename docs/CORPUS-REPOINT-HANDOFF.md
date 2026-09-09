@@ -8,7 +8,7 @@
 > now live and version together. User directive 2026-09-07: *"nothing in
 > /mnt/v/imazen* is valid"* — and the codec-corpus subdirectory is stale, not
 > canonical. Read every "`~/work/codec-corpus/imazen-26`" below as
-> "`github.com/imazen/imazen-26`, checked out at `~/work/imazen-26`".
+> "`github.com/imazen/imazen-26`, checked out at `~/work/zen/imazen-26`".
 >
 > Consequences for §6 in particular: the split is **not** something to derive.
 > The repo publishes it (`manifests/split_map.tsv`, 1,084/658/418). §6's

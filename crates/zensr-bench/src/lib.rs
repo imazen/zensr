@@ -639,7 +639,7 @@ pub fn subcorpora_for(root: &Path) -> Vec<(String, String)> {
         !present.is_empty(),
         "no subcorpora found under {}: it has no SUBCORPORA.tsv and none of the \
          canonical imazen-26 directories. Point it at the canonical corpus \
-         (github.com/imazen/imazen-26, by default ~/work/imazen-26; override with \
+         (github.com/imazen/imazen-26, by default ~/work/zen/imazen-26; override with \
          IMAZEN26_REPO) or give the corpus a SUBCORPORA.tsv.",
         root.display()
     );

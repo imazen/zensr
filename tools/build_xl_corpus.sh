@@ -63,7 +63,18 @@ mkdir -p "$OUT"
 # grouping has to mean something.
 # The canonical corpus REPOSITORY (github.com/imazen/imazen-26). Not
 # ~/work/codec-corpus/imazen-26, which is the pre-2026-08-23 location.
-CANON="${IMAZEN26_REPO:-$HOME/work/imazen-26}"
+# Resolve rather than hardcode: the checkout moved from ~/work/imazen-26 to
+# ~/work/zen/imazen-26 on 2026-09-08 17:44 and this script exited 1 instead of
+# building. Candidates are canonical locations only — never /mnt/v/imazen-26*
+# (invalid) or ~/work/codec-corpus/imazen-26 (stale), which would silently build
+# an eval corpus filtered against the wrong training set.
+CANON="${IMAZEN26_REPO:-}"
+if [ -z "$CANON" ]; then
+  for c in "$HOME/work/zen/imazen-26" "$HOME/work/imazen-26"; do
+    if [ -f "$c/manifests/split_map.tsv" ]; then CANON="$c"; break; fi
+  done
+  CANON="${CANON:-$HOME/work/zen/imazen-26}"
+fi
 MANIFEST="$CANON/CORPUS-MANIFEST.tsv"
 # The EFFECTIVE split, not the repo's raw buckets: the near-duplicate
 # same-bucketing moves 180 files across the held-out boundary, so using the raw

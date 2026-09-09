@@ -2,7 +2,7 @@
 """Generate distillation pairs for the realtime-2x student (S-E pilot).
 
 Input crops: HR from the **canonical** imazen-26 corpus repo
-(github.com/imazen/imazen-26, checked out at `~/work/imazen-26`), restricted to
+(github.com/imazen/imazen-26, checked out at `~/work/zen/imazen-26`), restricted to
 the TRAIN bucket of its canonical split, downscaled 2x (area) then JPEG-degraded
 via cv2 (libjpeg-turbo lineage) at q in [40,90], 4:2:0.
 Target: 2xNomosUni_span_multijpg (teacher) output on the degraded LR, computed

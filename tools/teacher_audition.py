@@ -26,6 +26,7 @@ from spandrel import ModelLoader
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corpus_split import split_map  # noqa: E402
 from imazen26_canonical import REPO, canonical_for  # noqa: E402
+from make_distill_data import read_image_bgr, report_unreadable  # noqa: E402
 
 SPLIT = split_map()
 
@@ -89,7 +90,10 @@ def main():
 
     for sub, folders in SUBS:
         for fn in eval_files(folders):
-            img = cv2.imread(os.path.join(SRC, fn), cv2.IMREAD_COLOR)
+            # read_image_bgr, not cv2.imread: cv2 returns None for HEIC and
+            # DNG, and `people`/`photos` draw from folders that contain
+            # both — a bare skip silently shrinks the audition set.
+            img = read_image_bgr(os.path.join(SRC, fn))
             if img is None or img.shape[0] < 512 or img.shape[1] < 512:
                 continue
             y0 = (img.shape[0] - 512) // 2
@@ -116,6 +120,7 @@ def main():
                         y = cv2.resize(y, (512, 512), interpolation=cv2.INTER_AREA)
                     cv2.imwrite(os.path.join(OUT, name, f"{stem}__{deg}.png"), y)
             print(f"done {stem}", flush=True)
+    report_unreadable()
     print("AUDITION DONE", flush=True)
 
 

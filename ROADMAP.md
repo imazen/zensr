@@ -14,7 +14,7 @@ Status date: 2026-07-31. Production ladder + routing: see `README.md`.
    repointed 2026-09-08).** zensr trained and evaluated against
    `/mnt/v/imazen-26`, the pre-curation acquisition corpus, since **deleted**.
    The canonical imazen-26 is the corpus **repository**,
-   **`github.com/imazen/imazen-26`** (checked out at `~/work/imazen-26`; override
+   **`github.com/imazen/imazen-26`** (checked out at `~/work/zen/imazen-26`; override
    with `IMAZEN26_REPO`) — it carries the manifests, the canonical
    train/validate/test split and the variant registry, versioned as one unit, and
    its image bytes come from public R2. Neither `/mnt/v/imazen*` (invalid) nor

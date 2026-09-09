@@ -6,7 +6,7 @@ carried over from the pre-repoint record, which was fitted through the deleted
 `/mnt/v/imazen-26` root and cannot be reproduced.
 
 **The destination is a repository, not a directory.**
-`github.com/imazen/imazen-26` — checked out at `~/work/imazen-26` — carries the
+`github.com/imazen/imazen-26` — checked out at `~/work/zen/imazen-26` — carries the
 provenance manifests, the canonical train/validate/test split, the variant-set
 registry and the generation tooling, versioned as one unit. Image bytes are not
 in git; they are served from public R2 and synced into the gitignored class
