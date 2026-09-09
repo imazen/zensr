@@ -1304,6 +1304,11 @@ large dataset. It now prints the decision.
 Supersedes the gate description above ("skip the model at probe q>=94.5 ... or
 d<=0.6"): that threshold is correct for 4:2:0 and WRONG for 4:4:4.
 
+<!-- STALE 2026-09-08: that corpus was built from the invalid root and is now an
+empty shell (0 files). Replacement: /mnt/v/imazen-26-clean-2026-09-08, 2,152 refs
+with per-file ref_kind. The finding below (4:4:4 vs 4:2:0 thresholds) is
+structural and expected to survive, but the numbers are provisional until Step 3
+of docs/CORPUS-REPOINT-HANDOFF.md re-measures them. -->
 Measured on the new clean corpus (`/mnt/v/imazen-26-clean`, 974 refs, 0 JPEG),
 files taken from the pinned eval split, n=64/cell, gate disabled so the ladder
 could see past it. Per-file median delta (model+projection vs plain decode)

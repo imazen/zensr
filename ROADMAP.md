@@ -192,6 +192,13 @@ the least improvable of the four, which is the right outcome.
 Corpus `/mnt/v/imazen-26-clean` (974 refs, 0 JPEG: native PNGs unioned with
 downscaled-to-pristine replacements). Files selected from the **pinned split**,
 8 per subcorpus, n=64 per cell, gate DISABLED so the ladder can see past it.
+
+> **STALE 2026-09-08 — this number cannot be reproduced.** That corpus was built
+> from the invalid root and is now an empty shell (0 files); the pinned split it
+> drew from is superseded by the canonical one. The replacement is
+> `/mnt/v/imazen-26-clean-2026-09-08` (2,152 refs, per-file `ref_kind`). Treat
+> the value below as provisional until Step 3 of
+> `docs/CORPUS-REPOINT-HANDOFF.md` re-measures it.
 Summaries `benchmarks/pinned_gate_{main,s444,jpegli}_2026-08-02.tsv`; raw in
 `/mnt/v/output/zensr/pinned-gate-2026-08-02/`.
 
@@ -613,7 +620,17 @@ the effects (±0.05). This is the run that removes that constraint.
 **Corpus** `/mnt/v/imazen-26-clean-xl`, built by `tools/build_xl_corpus.sh`:
 913 PNG images, **14× the current eval**, every source verifiably absent from
 training (training reads only `/mnt/v/imazen-26` and only eight named
-subcorpora; none of these is one). patents 357, cid22 250, sci-figures 141,
+subcorpora; none of these is one).
+
+> **THAT JUSTIFICATION IS DEAD — 2026-09-08.** Training now reads the TRAIN
+> BUCKET of the whole canonical corpus, not eight named subcorpora of a root that
+> no longer exists, so "none of these is one" no longer establishes anything. Any
+> leg sharing content with the canonical train bucket must be **filtered, not
+> waved through**: `build_xl_corpus.sh` filters `patents` (per document, keyed on
+> the patent number in `CORPUS-MANIFEST.tsv`) and `noaa` (held-out buckets only),
+> and dropped `nasa` for want of a canonical replacement. Re-run
+> `tools/leakage_audit.py` after any retrain — what changes is the training set,
+> not this corpus. patents 357, cid22 250, sci-figures 141,
 clic2025 62, noaa 44, gb82 25, nasa 24, gb82-sc 10. Declares `NO_PIN_REQUIRED`
 with its reason, since there are no training images to exclude.
 

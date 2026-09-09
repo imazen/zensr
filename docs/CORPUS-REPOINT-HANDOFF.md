@@ -17,7 +17,34 @@
 > near-duplicate same-bucketing the corpus repo itself prescribes.
 > What actually changed: `docs/CORPUS-REPOINT-IMPACT.md`.
 
-**Status: Step 1 complete; Steps 2-4 open. Nothing in this repo's measured record is trustworthy until they are done.**
+**Status 2026-09-08: Steps 1 and 2 complete; Step 3 (retrain) and Step 4 open.
+Nothing in this repo's measured record is trustworthy until they are done.**
+
+**Step 2 result — the clean-reference corpus exists:**
+`/mnt/v/imazen-26-clean-2026-09-08`, 2,152 references, 6.1 GB, built by
+`zensr-bench/src/bin/make_pristine` from the canonical repo. Per-file provenance
+in its `PRISTINE_MANIFEST.tsv` (`ref_kind` column), which is the column whose
+absence made the 2026-07 record understate every gain:
+
+| ref_kind | count | treatment |
+|---|---|---|
+| `native-png` | 1,650 | copied byte-for-byte; already clean |
+| `heic` | 90 | decoded to PNG, no downscale |
+| `jpeg` | 412 | downscaled to pristine (3x below q90, 2x at q90+) |
+
+That reconciles with §5 Step 2's table: 90 HEIC exactly, and 417 JPEG = 412
+converted + 5 skipped as too small after downscale. **Report every ladder split
+by `ref_kind`** — that is what the column is for.
+
+Two things verified while building it, both worth not re-deriving:
+- **zenjpeg#149 (auto_orient wrong on EXIF-rotated 4:2:0) is genuinely fixed** in
+  the pinned rev. Every clean reference decodes through that path, so it was
+  checked rather than assumed: `orient_check` against ImageMagick
+  `-auto-orient` gives **max abs diff 0** on two rotated files (36M samples each)
+  and an unrotated control (47M). Tool committed as
+  `zensr-bench/src/bin/orient_check`.
+- **The heic crate bakes the container's irot/imir itself.** Nothing may apply
+  EXIF on top — that double-rotates.
 Written 2026-09-07. Supersedes nothing; read alongside
 `benchmarks/imazen26_contamination_audit_2026-08-05.md`, which has the per-file
 evidence this summarises.
@@ -154,7 +181,19 @@ not. Re-derive from the split rule in §6 rather than trying to preserve the
 old picks — the old "first-8-sorted + pinned" exclusion scheme is superseded by a
 real origin split.
 
-### Step 2 — rebuild the derived corpora
+### Step 2 — rebuild the derived corpora — **DONE 2026-09-08**
+
+> Built to `/mnt/v/imazen-26-clean-2026-09-08` (2,152 refs: 1,650 native-png,
+> 90 heic, 412 jpeg-downscaled). The decision below was resolved as written:
+> HEIC decoded, JPEGs downscaled to pristine, and **every file carries its
+> `ref_kind`**. `make_pristine` now does all three kinds in one pass — it
+> previously skipped non-JPEG sources outright, so the 90 HEIC never reached the
+> corpus. It also runs in parallel: single-threaded it measured 5 files/min
+> (~6.7 h); the whole corpus now converts in about two minutes.
+>
+> `imazen-26-clean-xl` is still open — `build_xl_corpus.sh` covers the six
+> non-imazen legs and last built 830 files into `/mnt/v/zensr/xl-eval-corpus`.
+
 
 `imazen-26-clean` and `imazen-26-clean-xl` are empty shells; rebuild both from the
 valid root. `build_xl_corpus.sh` still works for the six non-imazen legs.
