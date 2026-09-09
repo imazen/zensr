@@ -17,7 +17,7 @@
 > near-duplicate same-bucketing the corpus repo itself prescribes.
 > What actually changed: `docs/CORPUS-REPOINT-IMPACT.md`.
 
-**Status 2026-09-08: Steps 1 and 2 complete; Step 3 (retrain) and Step 4 open.
+**Status 2026-09-09: Steps 1, 2 and 4 complete; Step 3 (retrain) is the only one open.
 Nothing in this repo's measured record is trustworthy until they are done.**
 
 **Step 2 result — the clean-reference corpus exists:**
@@ -191,8 +191,22 @@ real origin split.
 > corpus. It also runs in parallel: single-threaded it measured 5 files/min
 > (~6.7 h); the whole corpus now converts in about two minutes.
 >
-> `imazen-26-clean-xl` is still open — `build_xl_corpus.sh` covers the six
-> non-imazen legs and last built 830 files into `/mnt/v/zensr/xl-eval-corpus`.
+> **XL half DONE 2026-09-09.** `/mnt/v/zensr/xl-eval-corpus` rebuilt: **828
+> files** across seven legs — patents 318 (39 pages excluded), sci-figures 141,
+> cid22 250, clic2025 62, gb82 25, gb82-sc 10, noaa 22 (held-out only, of 44).
+> `tools/leakage_audit.py` over all 828 against the effective train bucket (1,151
+> files, 1,102 fingerprinted): **823 SAFE, 5 flagged**, and the 5 are exactly the
+> residual `NO_PIN_REQUIRED` already documents — the same three patent pages
+> (US299894, US3063966, US3819587, fingerprint false positives; none appears in
+> `CORPUS-MANIFEST.tsv`, which is the deciding test) and the same two NOAA pages
+> (5330 kirk_p05, 5343 rafael_p19, template collisions against training pages of
+> *different* storms). Reproduce with `just xl-corpus`.
+>
+> The build had to be unblocked first: the corpus checkout moved from
+> `~/work/imazen-26` to `~/work/zen/imazen-26` on 2026-09-08 17:44, and every
+> tool hardcoded the old path, so `build_xl_corpus.sh` exited 1 instead of
+> building. Both the shell and Python entry points now resolve the location
+> (`cf958d2a`).
 
 
 `imazen-26-clean` and `imazen-26-clean-xl` are empty shells; rebuild both from the
@@ -248,7 +262,54 @@ The identity gate (q ≥ 94.5 at 4:2:0, q ≥ 88 at 4:4:4) is the highest-stakes
 number here: ungated, the model *lost* up to 2.1 ssim2 and harmed 91% of files.
 Re-derive it first and independently.
 
-### Step 4 — re-run both leakage audits
+### Step 4 — re-run both leakage audits — **DONE 2026-09-09**
+
+> Both were already repointed off the hardcoded `IMAZEN = "/mnt/v/imazen-26"`;
+> they now derive "training" from `corpus_split.split_map()`, i.e. the effective
+> train bucket of the canonical repo. Re-run against it:
+>
+> - `leakage_audit.py` over the rebuilt XL corpus — 828 files, **823 safe**, 5
+>   flagged and all 5 accounted for above.
+> - `picker_leakage_audit.py` over `clean-picker-corpus-2026-06-26` — see the
+>   result recorded in `benchmarks/`.
+>
+> **A coverage limit worth knowing:** the perceptual test cannot see 49 of the
+> 1,151 training files, because PIL has no decoder for HEIC (46) or DNG (2) and
+> one PNG is corrupt (below). A near-duplicate of one of those 49 would pass the
+> audit. It does not affect this corpus — none of the seven XL legs is a
+> `lilith-photos`/`lilith-nature` leg, where all 48 HEIC/DNG live — but any
+> future candidate corpus drawn from photographic sources needs a HEIC-capable
+> fingerprint pass (`make_distill_data.read_image_bgr` has one, via `pillow_heif`).
+
+#### Corpus integrity: one training file is corrupt, and the manifest certifies it
+
+`5300-noaa-hurricane-documents/5314_noaa_nhc-al062024-francine_p01_2550x3300.png`
+is 54.4% NUL, begins with 32 zero bytes, holds one fully-zeroed 1 MiB-aligned
+block, and does not decode. **Its manifest `sha256` is the hash of those corrupt
+bytes** — length unchanged at 1,937,400 — so the file was damaged before the
+manifest was generated and the manifest then certified the damage. The published
+R2 object is a valid PNG with a different hash. Filed as imazen/imazen-26#2.
+
+Consequence for zensr: it is in the **train** bucket, so every generator here
+reads it and gets nothing. That was previously silent — `make_dejpeg_data.py`
+imported `report_unreadable()` but called `cv2.imread` directly, so it fed the
+counter nothing; both it and `teacher_audition.py` now go through
+`read_image_bgr`, which counts what it drops.
+
+**Verifying against the manifest does not answer this question.** A full
+2,160-file manifest check reported 0 mismatches on the same checkout. Use
+`just verify-corpus`, which checks R2 (ETags are plain MD5s for single-part
+uploads) plus a local decode and zeroed-block scan. Full result 2026-09-09:
+2,151 ETag-clean, 6 multipart download-clean, **1 divergent (5314)**, 3
+unverifiable because their manifest `raw_url` returns 404
+(`9226-lilith-ai-products` — 9869, 9874, 9231; local copies exist, but a fresh
+clone cannot obtain them).
+
+Gotcha: `codec-corpus.r2.imazen.org` returns **403** to a default
+`python-urllib` user-agent. A sweep without a normal UA reports every file as
+divergent, which reads like corpus-wide corruption. It cost one run here.
+
+#### The original Step 4 text
 
 `tools/leakage_audit.py` and `tools/picker_leakage_audit.py` both define "training"
 via `IMAZEN = "/mnt/v/imazen-26"` (hardcoded near the top of each). Their verdicts

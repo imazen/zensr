@@ -74,6 +74,20 @@ cargo-local:
 split:
     python3 tools/corpus_split.py --write eval_split/imazen26_effective_split.tsv
 
+# Is the local canonical-corpus checkout actually the published corpus? Verifying
+# against the manifest is NOT the same question: 5314's manifest sha256 is the
+# hash of its corrupt bytes, so a manifest check passes on a file that is 54% NUL
+# and will not decode (imazen/imazen-26#2). This checks R2 instead, plus a local
+# decode + zeroed-block scan. Run it after any corpus re-sync.
+verify-corpus *ARGS:
+    python3 tools/verify_canonical_corpus.py {{ARGS}}
+
+# Rebuild the XL eval corpus, then prove it holds no training content.
+xl-corpus OUT="/mnt/v/zensr/xl-eval-corpus":
+    bash tools/build_xl_corpus.sh {{OUT}}
+    find -L {{OUT}} -type f \( -iname '*.png' -o -iname '*.jpg' \) | sort > ~/tmp/xl-files.txt
+    python3 tools/leakage_audit.py --files ~/tmp/xl-files.txt
+
 # What the split does, and where the near-duplicate groups are.
 split-report:
     python3 tools/corpus_split.py
