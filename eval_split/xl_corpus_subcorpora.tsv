@@ -1,10 +1,29 @@
-# XL eval corpus — PNG-only, none of it in any training set.
-# Built by tools/build_xl_corpus.sh; see that file for provenance.
+# XL eval corpus — PNG-only, filtered at build time so it holds no training content.
+# Label→directory map, mirroring what tools/build_xl_corpus.sh writes into the
+# corpus itself (SUBCORPORA.tsv). Rebuild both with `just xl-corpus`.
+#
+# Built 2026-09-09 → /mnt/v/zensr/xl-eval-corpus, 828 files:
+#   patents      318   (39 pages excluded: their patent is in CORPUS-MANIFEST.tsv)
+#   sci-figures  141
+#   cid22        250
+#   clic2025      62
+#   gb82          25
+#   gb82-sc       10
+#   noaa          22   (held-out buckets only, of 44)
+#
+# Audited the same day with tools/leakage_audit.py against the effective train
+# bucket: 823 SAFE, 5 flagged — the same 5 the corpus's own NO_PIN_REQUIRED
+# documents as fingerprint false positives / template collisions.
+#
+# `nasa` was DROPPED, not renamed: its 24 files came from the deleted acquisition
+# root and the canonical corpus has no replacement (its 72 "nasa" rows are web
+# screenshots of nasa.gov, which is a different content class). This file listed
+# it until 2026-09-09 — a consumer following the map looked for a leg that the
+# builder had already stopped producing.
 patents	patents
 sci-figures	sci-figures
 cid22	cid22
 clic2025	clic2025
 gb82	gb82
 gb82-sc	gb82-sc
-nasa	nasa
 noaa	noaa
