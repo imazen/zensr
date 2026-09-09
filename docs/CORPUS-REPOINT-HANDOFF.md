@@ -302,6 +302,25 @@ imported `report_unreadable()` but called `cv2.imread` directly, so it fed the
 counter nothing; both it and `teacher_audition.py` now go through
 `read_image_bgr`, which counts what it drops.
 
+**Measured 2026-09-09 over the 1,151-file training pool** (211 jpg, 892 png, 46
+heic, 2 dng):
+
+| reader | files that decode |
+|---|---|
+| `cv2.imread` alone | 1,102 of 1,151 |
+| `read_image_bgr` (adds `pillow_heif`) | **1,148 of 1,151** |
+| still undecodable | 3 — two DNG, and the corrupt `5314_noaa…` |
+
+So the swap recovers exactly the 46 HEIC the handoff called "the cheap win", and
+it moves the **clean-reference** share of the training pool from 892/1,151 (77%)
+to 938/1,151 (81%) — HEIC-decoded references are not JPEG-sourced, which is the
+whole point of ROADMAP §0.1. The two DNG need a raw decoder (rawler/darktable;
+neither cv2 nor PIL reads them) and are left for now: 2 files, and cv2's attempt
+on the 8160×6120 one drove available RAM to 414 MiB under an 11 G cap.
+
+The 3 remaining failures are now **reported**, not silent:
+`WARNING: N source files could not be decoded and were excluded: {'dng': 2, 'png': 1}`.
+
 **Verifying against the manifest does not answer this question.** A full
 2,160-file manifest check reported 0 mismatches on the same checkout. Use
 `just verify-corpus`, which checks R2 (ETags are plain MD5s for single-part
