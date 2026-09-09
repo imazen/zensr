@@ -270,8 +270,14 @@ Re-derive it first and independently.
 >
 > - `leakage_audit.py` over the rebuilt XL corpus — 828 files, **823 safe**, 5
 >   flagged and all 5 accounted for above.
-> - `picker_leakage_audit.py` over `clean-picker-corpus-2026-06-26` — see the
->   result recorded in `benchmarks/`.
+> - `picker_leakage_audit.py` over `clean-picker-corpus-2026-06-26` — **171 safe
+>   origins, 1,865 of 4,497 renditions**, down from 319 / 3,452 against the
+>   invalid training set. Already recorded on 2026-09-08
+>   (`eval_split/picker_safe_origins_2026-09-08.txt`, `CORPUS-REPOINT-IMPACT.md`);
+>   re-run on 2026-09-09 and the safe-origin list came back **byte-identical**.
+>   The corpus did not change — the training set did, and it now spans all 21
+>   content classes instead of eight subcorpora, so more of the picker corpus is
+>   leaked.
 >
 > **A coverage limit worth knowing:** the perceptual test cannot see 49 of the
 > 1,151 training files, because PIL has no decoder for HEIC (46) or DNG (2) and

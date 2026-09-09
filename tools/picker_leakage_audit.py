@@ -43,8 +43,34 @@ luma thumbnail with mean |Δ| < 3/255 catches re-encodes and format conversions
 of the same scene, which is what leakage means here — the model saw the picture,
 not the file.
 
-Result (2026-08-04): 319 safe, 81 exact training files, 14 near-duplicates
-→ 3,452 of 4,497 renditions usable. Those renditions are **size-diverse**
+Result — **the 2026-08-04 verdict below is SUPERSEDED and the difference is
+large.** Against the repointed training set (the effective train bucket of the
+canonical corpus, 1,151 files spanning all 21 content classes, rather than eight
+flat subcorpora of the deleted root) the corpus loses nearly half its usable
+renditions:
+
+| | 2026-08-04 (invalid training set) | 2026-09-08, reproduced 2026-09-09 |
+|---|---|---|
+| dejpeg-safe origins | 319 | **171** (41%) |
+| exact training file | 81 | 91 (22%) |
+| near-duplicate | 14 | 117 (28%) |
+| unresolved | — | 35 (8%) |
+| **usable renditions** | **3,452 of 4,497** | **1,865 of 4,497** |
+
+The corpus never changed; the training set did, and more training content means
+more of the picker corpus is now leaked. Current list:
+`eval_split/picker_safe_origins_2026-09-08.txt` (171 origins, reproduced exactly
+on 2026-09-09). The 2026-08-04 list is superseded — do not use it.
+
+**Known coverage limit.** 49 of the 1,151 training files cannot be fingerprinted
+here: PIL has no decoder for HEIC (46) or DNG (2), and one PNG is corrupt
+(`5314_noaa…`, imazen/imazen-26#2). A near-duplicate of one of those 49 passes
+this audit. It matters for this corpus specifically, because the 48 HEIC/DNG are
+photographic (`1400-lilith-nature` and siblings) and so is much of the picker
+corpus. `make_distill_data.read_image_bgr` has a HEIC-capable reader via
+`pillow_heif` if this needs tightening.
+
+Those renditions are **size-diverse**
 (`scale36x64` upward), which the XL corpus is not — every XL image is a 512
 crop, and the sweep discipline asks for 16-20 log-spaced sizes for anything a
 model is fitted on.
