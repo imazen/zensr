@@ -1,5 +1,24 @@
 # Handoff: repointing zensr onto the valid imazen-26
 
+> **Corrected 2026-09-09 — the canonical home moved again, before this document
+> was written.** Everything below says `~/work/codec-corpus/imazen-26`. Per
+> `DATA_PROVENANCE.md` (2026-08-23) the corpus moved to its own repo,
+> **`imazen/imazen-26`** — local `~/work/zen/imazen-26` — which now owns the
+> manifests, the canonical split, `VARIANTS-SPEC.md` and a `variant-sets/`
+> registry. Image bytes are served from public R2 and distributed on `variant/*`
+> Git-LFS branches; the git checkout holds manifests, not pixels.
+>
+> The codec-corpus copy is not *wrong* — its `CORPUS-MANIFEST.tsv` is
+> byte-identical to canonical (`sha256 a85038a8…`, verified 2026-09-09) and it
+> holds a complete local set of the bytes. Treat it as a verified cache: fine to
+> read from, but the manifests, split and registry come from the new repo, and
+> anything new registers there.
+>
+> Also relevant to step 2 below: a **`pristine-8th@2026-09-09`** variant set now
+> exists — every lossy-sourced corpus image downscaled 1/8 to PNG, which is the
+> downscale-to-pristine treatment step 2 asks for, already built and registered.
+> Plus `pristine-8th-hdr@2026-09-09` for the 16-bit PQ layer.
+
 > **Step 1 DONE 2026-09-08, and this document's destination was wrong.** It names
 > `~/work/codec-corpus/imazen-26` as the valid corpus throughout. That is the
 > **pre-2026-08-23 location**: the corpus moved out of `imazen/codec-corpus` into
