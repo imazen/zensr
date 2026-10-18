@@ -14,6 +14,7 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   JPEGs recorded in
   [the pointer](benchmarks/exactness_counterexamples_2026-10-18.pointer.md).
   Results: [the repair note](benchmarks/exactness_repair_2026-10-18.md).
+  `--compare-bin` checks a second worker on every configuration.
 - Run existing core runtime unit tests from the isolated profiling workspace,
   including default, no-default-features, and tier_v4 configurations; test
   source and assertions unchanged (14435363).
@@ -85,8 +86,8 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   `len % W` elements with different scalar code (libm `exp` instead of
   `exp_midp`, unfused sums); and the scalar backend's `mul_add` rounds twice.
   Every path now runs the main loop's per-element sequence (tail and narrow
-  tiles in registers, remainders as zero-padded vectors), and every FMA is
-  `mul_add_portable`, which is the same FMA on x86 v3/v4 and NEON and a
+  tiles in registers, remainders as zero-padded vectors), and every FMA on the
+  default path is `mul_add_portable`, which is the same FMA on x86 v3/v4 and NEON and a
   one-rounding software FMA on scalar and WASM. PReLU and the exp clamp use
   compare-and-select with x86 `maxps`/`minps` semantics, because the wasm and
   NEON `max`/`min` return NaN for a NaN operand where x86 returns the other.

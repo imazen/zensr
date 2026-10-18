@@ -28,14 +28,19 @@ includes span48, which has no PReLU.
 | SiLU / gate last `len % W` | libm `exp` instead of `exp_midp` | zero-padded vector, same formula |
 | PReLU last `plane % W` | `f32::max`/`min` | zero-padded vector, same formula |
 | PReLU and the exp clamp, NaN operand | magetypes `max`/`min`: x86 returns the other operand, wasm128 and NEON return NaN (wasm128 PReLU(NaN) = NaN, x86 and scalar 0) | `max_x86`/`min_x86`: compare-and-select with x86 `maxps`/`minps` semantics on every backend |
-| every FMA | `mul_add`, which rounds twice on the scalar and WASM backends | `mul_add_portable`: the same FMA on x86 v3/v4 and NEON, a one-rounding software FMA on scalar and WASM |
+| every FMA on the default path | `mul_add`, which rounds twice on the scalar and WASM backends | `mul_add_portable`: the same FMA on x86 v3/v4 and NEON, a one-rounding software FMA on scalar and WASM |
 | SiLU / gate exp | magetypes `exp_midp` (unfused polynomial on scalar) | `exp_midp_portable`: the same algorithm with one-rounding steps |
+
+The SPANF research kernel (`conv_near`) still uses `mul_add`. The opt-in
+Winograd GEMM moved to `mul_add_portable` in the Winograd fix below.
 
 What the repair leaves unchanged:
 - The main tile loop on the FMA tiers still produces the same bits. Every case
   in the real-model matrix whose width is a multiple of 16 (so every layer runs
   only the main loop) is byte-identical to the build before the repair: 20 of
-  72 cases, all seven models, span48 included.
+  72 cases, all seven models, span48 included. That comparison covered the
+  whole-image auto run only, the one configuration `--compare-bin` compared
+  at the time.
 - The cases that changed are exactly those that used a tail, a narrow row or a
   remainder.
 
@@ -61,9 +66,15 @@ functions with summoned tokens (no process-wide token flags):
     slopes ±0
   - NaN is compared as NaN; Rust and the backends do not specify its payload
 - **`exp_midp_portable`:**
-  - bit-identical to magetypes `exp_midp` on the FMA tiers
-  - equal on every tier
+  - bit-identical to magetypes `exp_midp` on the x86 FMA tiers for every
+    input, and on NEON for non-NaN inputs
+  - equal on every tier, NaN included
   - checked on the special values plus 200,000 inputs over [-100, 100]
+  - On NEON, magetypes `exp_midp(NaN)` is NaN, because NEON `max`
+    propagates NaN. The portable clamp keeps x86 `maxps` semantics and gives
+    the clamped value. The test therefore leaves NaN out of the NEON
+    portable-vs-magetypes comparison only. **This narrowing of a new test
+    awaits the user's approval.**
 - **Adopted models:**
   - procedural compact nf 4/12/24/64, scales 1–4
   - procedural span48 ×2/×4
@@ -91,16 +102,27 @@ Built from the repaired tree; the worker is `tools/coz-profile`.
 - Configurations: whole forward plus tiled at threads 1/4/8, on tiers auto/v3,
   and scalar on small inputs.
 
-Result: **72 cases, 656 runs, 0 inconsistent.**
+Result: **72 cases, 656 runs, 0 inconsistent** (worker `51ded788…`). The
+final worker (`b8d13d76…`, after the Winograd, tier-forcing and dependency
+changes below) gives the same result. It is byte-identical to `51ded788…` on
+all 656 configurations, compared one by one.
 
 ## Shipped pipeline (`tools/exactness/product.py`)
 
 `restore_jpeg` on the two counterexample JPEGs, with dejpeg7_graphics and
 dejpeg_rt24g:
 - tiers auto and v3 at threads 1/2/4/8/12/16
-- the scalar tier at threads 16, 12, 8, 4, 2 and 1 (threads 1–12 on the
-  probe build before the NaN-semantics change, which changes no output in the
-  real-model matrix: 0 of 72 cases differ)
+- the scalar tier at threads 16, 12, 8, 4, 2 and 1
+
+Two builds were run:
+- **First run:** threads 1–12 of the scalar tier used the product probe
+  `44e370d3…`, built before the NaN-semantics change.
+- **Final build** (zenjpeg `b88f02e3`, product worker `8acf4b59…`): every tier
+  and thread count above was re-run, and all give the same four digests.
+
+Separately, the model worker from before the NaN-semantics change
+(`44ed1f2a…`) is byte-identical to the final worker on all 656 real-model
+matrix configurations, scalar rows included.
 
 Every output of each (JPEG, model) pair has one SHA-256, recorded in
 `tools/exactness/product-expect-2026-10-18.json`:
@@ -188,10 +210,10 @@ Coverage of the passing runs:
 ### Results after the fix
 
 - **Real-model matrix, `--winograd`:** 68 cases, 622 runs, 0 inconsistent
-  (worker `d96aaebc…`).
-- **Default path:** byte-identical to the build above. All 72 cases agree with
-  `51ded788…` on the whole-image auto run, and every configuration agrees
-  within the new build.
+  (worker `d96aaebc…`, and again on the final worker `b8d13d76…`).
+- **Default path:** byte-identical to the build above on all 656
+  configurations (final worker `b8d13d76…` against `51ded788…`, compared one
+  by one).
 - **`restore_jpeg` with Winograd on:** for each of the four (JPEG, model)
   pairs, one RGB8 SHA-256 across auto and v3 at threads 1–16 plus scalar at 16.
   The previous product worker gives the same four digests, so these 576×576
