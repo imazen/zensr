@@ -7,6 +7,9 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Added
 
+- Run existing core runtime unit tests from the isolated profiling workspace,
+  including default, no-default-features, and tier_v4 configurations; test
+  source and assertions unchanged (14435363).
 - Standalone compact-model Coz profiler with exact raw-output repeatability
   checks; production runtime unchanged (4abe56e7). See
   [the probe record](benchmarks/coz_runtime_2026-10-18.pointer.md).

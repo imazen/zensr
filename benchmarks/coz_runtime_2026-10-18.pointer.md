@@ -44,3 +44,15 @@ dev-dependencies when it is not a workspace member. Preserve those tests and
 resolve the workspace build before landing any production runtime change.
 
 Harness details: [tools/coz-profile/README.md](../tools/coz-profile/README.md).
+
+
+## Follow-up: existing unit-test gate
+
+`14435363` adds an isolated `runtime_unit` target pointing to the actual runtime
+crate root. It executes the existing tests with unchanged assertions, without
+resolving the benchmark codec graph. `just coz-test` passed with 19 tests;
+`--no-default-features` passed with 18; `--features tier_v4` passed with 19.
+The full workspace graph and optional `px` integration remain outside this
+local gate. Logs are `runtime-matrix.log` and
+`clippy-runtime-unit-final.log` in the artifact directory above.
+The runtime source remains unchanged.
