@@ -124,6 +124,12 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   ignoring the result. Off x86-64, a forced tier is an error. The tool enables
   archmage's `testable_dispatch`, under which the disable cannot fail, so
   earlier matrix rows are unaffected.
+- `tools/coz-profile` under Coz: a positive `threads` now exits with an
+  error before the model loads. coz-rs asks for `coz::thread_init()` on every
+  thread Coz samples, and `upscale_tiled`'s workers never call it, so profile
+  with `threads=0`. Positive `threads` remain a workload mode outside Coz.
+  - `just coz-build` now builds with `--locked`.
+  - `just coz-run` writes the profiled binary's sha256 next to the profile.
 - `classify_rgb8_scanning` returns the analysis error instead of swallowing it.
   `classify_rgb8` keeps the infallible `Photo`-on-failure fallback, which is the
   precision-biased safe direction the rule was fit for.

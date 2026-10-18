@@ -107,6 +107,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert!(args.next().is_none(), "unexpected extra argument");
     }
     assert!(height > 0 && width > 0 && iterations > 0 && scale > 0);
+    // coz-rs asks for coz::thread_init() on every thread Coz samples: it
+    // enlarges the alternate signal stack that Coz's SIGPROF handler runs on.
+    // upscale_tiled's workers are zensr-micro's scoped threads and never call
+    // it, so under Coz only the whole-image forward (threads=0) is profiled.
+    // `coz run` appends its runtime (libcoz.so, or COZ_PRELOAD) to LD_PRELOAD
+    // and always sets COZ_BINARY_SCOPE.
+    let under_coz = std::env::var_os("LD_PRELOAD")
+        .is_some_and(|v| v.to_string_lossy().contains("libcoz"))
+        || std::env::var_os("COZ_BINARY_SCOPE").is_some();
+    if threads > 0 && under_coz {
+        return Err(format!(
+            "threads={threads} under Coz: upscale_tiled's worker threads never call \
+             coz::thread_init(); profile the whole-image forward with threads=0"
+        )
+        .into());
+    }
     let count = height
         .checked_mul(width)
         .and_then(|n| n.checked_mul(3))

@@ -94,7 +94,7 @@ split-report:
 
 # Standalone causal profiler: does not resolve the benchmark codec graph.
 coz-build:
-    cargo build --release --manifest-path tools/coz-profile/Cargo.toml
+    cargo build --release --locked --manifest-path tools/coz-profile/Cargo.toml
 
 coz-check:
     cargo fmt --manifest-path tools/coz-profile/Cargo.toml -- --check
@@ -102,6 +102,8 @@ coz-check:
 
 coz-run profile +args:
     test ! -e "{{profile}}"
+    test ! -e "{{profile}}.bin.sha256"
+    sha256sum ./tools/coz-profile/target/release/zensr-coz-profile > "{{profile}}.bin.sha256"
     {{env_var_or_default("COZ_BIN", "coz")}} run --source-scope '%/zensr-micro/src/%' --output "{{profile}}" --- ./tools/coz-profile/target/release/zensr-coz-profile {{args}}
 
 

@@ -43,6 +43,23 @@ with `cmp` and record their SHA256 hashes. The writer refuses to replace an
 existing file. Validate each applicable model, size, thread mode, and SIMD
 tier separately. This tool does not establish cross-tier numerical parity.
 
+### Threads under Coz
+
+Under `coz run`, the tool accepts only `threads=0`. A positive value exits
+with an error before the model loads.
+- **Why:** coz-rs asks for `coz::thread_init()` on every thread that Coz
+  samples. `upscale_tiled`'s workers are `zensr-micro`'s scoped threads, and
+  they never call it. A worker hook would be a runtime change, which this tool
+  does not make.
+- **What positive `threads` still do:** they remain a workload mode for runs
+  without Coz, such as `coz-repro`, the exactness matrix and plain runs. Under
+  Coz they are not profiled.
+- **How the tool detects Coz:** the launcher puts its runtime (`libcoz.so`) in
+  `LD_PRELOAD` and sets `COZ_BINARY_SCOPE`. The tool checks for either.
+
+`just coz-run` also writes `<profile>.bin.sha256`, the hash of the binary it
+profiles. `just coz-build` builds with `--locked`.
+
 
 ## Existing runtime unit tests
 
