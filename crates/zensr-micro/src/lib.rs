@@ -25,9 +25,10 @@
 //   REJECTED  a pointer cast replacing a per-tap bounds check: within noise,
 //             LLVM had already elided the check.
 //   REPLACED  the funnel-shift tap load (examples/tap_load_probe). It shipped
-//             as SAFE code — magetypes' `concat_shift` on the backend traits
-//             (imazen/archmage#111) — and the kernel now uses it, so the unsafe
-//             formulation has no remaining caller.
+//             as SAFE code on magetypes' unpublished `concat_shift`; the kernel
+//             now reads the three taps as three safe unaligned loads instead (no
+//             released magetypes has `concat_shift`), so the unsafe formulation
+//             has no remaining caller.
 // The gate is kept only because the user's grant of unsafe experimentation is
 // conditional on it existing; delete it, and `examples/tap_load_probe`, once
 // no further experiment is planned.
@@ -751,11 +752,9 @@ mod tests {
     ///
     /// Without this, a bug confined to one tier ships silently on every machine
     /// that has a higher one — and the tiers do NOT share their conv inner loop:
-    /// f32x16 and f32x8 are separate monomorphizations, and `concat_shift`
-    /// (which synthesises the middle and right taps) is a single `valignd` on
-    /// AVX-512 against an eight-arm `vperm2f128`+`vpalignr` match on AVX2. A
-    /// wrong immediate in one of those arms is off by one lane, which looks
-    /// entirely plausible in the output.
+    /// f32x16 and f32x8 are separate monomorphizations with their own load and
+    /// FMA lowering, and a lane error in one of them looks entirely plausible
+    /// in the output.
     ///
     /// Disabling is process-wide, so this test both sets and clears the flag and
     /// must not run beside another that depends on tier selection.

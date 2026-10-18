@@ -16,6 +16,13 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Changed
 
+- **Released archmage/magetypes 0.9.30 instead of the f46cf941 git pin.** The
+  pin existed for magetypes' `concat_shift`, which no release has; conv3x3 now
+  reads its three taps as three unaligned loads (same lane values, same
+  arithmetic; speed effect not measured) and uses the `_t` constructors 0.9.30
+  asks for. Both lockfiles were regenerated from a clean tree, so the workspace
+  lock records the committed git zenjpeg rather than a local path override.
+  Raw outputs are bit-identical to the pinned build on a 378-case model matrix.
 - **The chooser takes an `Offer`; the `&dyn FeatureProvider` path is gone.**
   `zenanalyze-api` cut `FeatureProvider` / `ProviderError` / `OwnedCatalog` before
   its 0.1.1 shipped — the contract is data, not behaviour, and the model is push

@@ -115,42 +115,36 @@ macro_rules! define_kernels {
                         // at the end) — deliberate, user-authorised. It stays
                         // bit-identical ACROSS TIERS because the per-pixel sequence
                         // does not depend on the vector width; only lane count does.
-                        let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
-                        let mut acc_r = [V::<T>::splat(token, 0.0); 4];
+                        let mut acc_lm = [V::<T>::splat_t(token, 0.0); 4];
+                        let mut acc_r = [V::<T>::splat_t(token, 0.0); 4];
                         for &(irow, w12) in taps {
-                            // TWO loads, not three. l/m/r are lanes 0/1/2 of the
-                            // same 2W-lane window, so the middle and right taps come
-                            // from a funnel shift over the pair rather than their own
-                            // loads. `pwd` carries W-2 trailing zero floats precisely
-                            // so the second load stays in bounds at the last tile;
-                            // its upper lanes are discarded by the shift.
-                            //
-                            // MEASURED in isolation on a 7950X at 96 taps and 8
-                            // chains (examples/tap_load_probe): 125.1 GFLOP/s for
-                            // three unaligned loads against 141.9 for two unaligned
-                            // loads plus two shifts. Alignment is irrelevant — the
-                            // win is the load COUNT.
+                            // l/m/r are lanes 0/1/2 of the same window, read as three
+                            // unaligned loads at offsets 0, 1 and 2. The two-load funnel
+                            // shift measured faster (examples/tap_load_probe, 7950X: 141.9
+                            // against 125.1 GFLOP/s) but needs magetypes `concat_shift`,
+                            // which no released magetypes provides; the loads produce the
+                            // same lane values, so the arithmetic is unchanged. `pwd` keeps
+                            // its trailing zero floats so the window stays in bounds.
                             let win: &[f32; $w * 2] = (&irow[x..x + W * 2]).try_into().unwrap();
-                            let l = V::<T>::from_slice(token, &win[0..]);
-                            let hi = V::<T>::from_slice(token, &win[W..]);
-                            let m = l.concat_shift::<1>(hi);
-                            let r = l.concat_shift::<2>(hi);
+                            let l = V::<T>::from_slice_t(token, &win[0..]);
+                            let m = V::<T>::from_slice_t(token, &win[1..]);
+                            let r = V::<T>::from_slice_t(token, &win[2..]);
                             for ob in 0..4 {
                                 acc_lm[ob] =
-                                    l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
+                                    l.mul_add(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
                                 acc_lm[ob] =
-                                    m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                                    m.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 1]), acc_lm[ob]);
                                 acc_r[ob] =
-                                    r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
+                                    r.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 2]), acc_r[ob]);
                             }
                         }
-                        let mut acc = [V::<T>::splat(token, 0.0); 4];
+                        let mut acc = [V::<T>::splat_t(token, 0.0); 4];
                         for ob in 0..4 {
                             // Bias belongs to the whole sum, so it is added once, on
                             // the first channel block only.
                             acc[ob] = acc_lm[ob] + acc_r[ob];
                             if first {
-                                acc[ob] += V::<T>::splat(token, bias[oc0 + ob]);
+                                acc[ob] += V::<T>::splat_t(token, bias[oc0 + ob]);
                             }
                         }
                         for ob in 0..4 {
@@ -159,7 +153,7 @@ macro_rules! define_kernels {
                                 .try_into()
                                 .unwrap();
                             if !first {
-                                acc[ob] += V::<T>::load(token, dst);
+                                acc[ob] += V::<T>::load_t(token, dst);
                             }
                             acc[ob].store(dst);
                         }
@@ -197,38 +191,33 @@ macro_rules! define_kernels {
                     // at the end) — deliberate, user-authorised. It stays
                     // bit-identical ACROSS TIERS because the per-pixel sequence
                     // does not depend on the vector width; only lane count does.
-                    let mut acc_lm = [V::<T>::splat(token, 0.0); 4];
-                    let mut acc_r = [V::<T>::splat(token, 0.0); 4];
+                    let mut acc_lm = [V::<T>::splat_t(token, 0.0); 4];
+                    let mut acc_r = [V::<T>::splat_t(token, 0.0); 4];
                     for &(irow, w12) in taps {
-                        // TWO loads, not three. l/m/r are lanes 0/1/2 of the
-                        // same 2W-lane window, so the middle and right taps come
-                        // from a funnel shift over the pair rather than their own
-                        // loads. `pwd` carries W-2 trailing zero floats precisely
-                        // so the second load stays in bounds at the last tile;
-                        // its upper lanes are discarded by the shift.
-                        //
-                        // MEASURED in isolation on a 7950X at 96 taps and 8
-                        // chains (examples/tap_load_probe): 125.1 GFLOP/s for
-                        // three unaligned loads against 141.9 for two unaligned
-                        // loads plus two shifts. Alignment is irrelevant — the
-                        // win is the load COUNT.
+                        // l/m/r are lanes 0/1/2 of the same window, read as three
+                        // unaligned loads at offsets 0, 1 and 2. The two-load funnel
+                        // shift measured faster (examples/tap_load_probe, 7950X: 141.9
+                        // against 125.1 GFLOP/s) but needs magetypes `concat_shift`,
+                        // which no released magetypes provides; the loads produce the
+                        // same lane values, so the arithmetic is unchanged. `pwd` keeps
+                        // its trailing zero floats so the window stays in bounds.
                         let win: &[f32; $w * 2] = (&irow[xl..xl + W * 2]).try_into().unwrap();
-                        let l = V::<T>::from_slice(token, &win[0..]);
-                        let hi = V::<T>::from_slice(token, &win[W..]);
-                        let m = l.concat_shift::<1>(hi);
-                        let r = l.concat_shift::<2>(hi);
+                        let l = V::<T>::from_slice_t(token, &win[0..]);
+                        let m = V::<T>::from_slice_t(token, &win[1..]);
+                        let r = V::<T>::from_slice_t(token, &win[2..]);
                         for ob in 0..4 {
-                            acc_lm[ob] = l.mul_add(V::<T>::splat(token, w12[ob * 3]), acc_lm[ob]);
+                            acc_lm[ob] = l.mul_add(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
                             acc_lm[ob] =
-                                m.mul_add(V::<T>::splat(token, w12[ob * 3 + 1]), acc_lm[ob]);
-                            acc_r[ob] = r.mul_add(V::<T>::splat(token, w12[ob * 3 + 2]), acc_r[ob]);
+                                m.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 1]), acc_lm[ob]);
+                            acc_r[ob] =
+                                r.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 2]), acc_r[ob]);
                         }
                     }
-                    let mut acc = [V::<T>::splat(token, 0.0); 4];
+                    let mut acc = [V::<T>::splat_t(token, 0.0); 4];
                     for ob in 0..4 {
                         // Bias belongs to the whole sum, so it is added once, on
                         // the first channel block only.
-                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat(token, bias[oc0 + ob]);
+                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat_t(token, bias[oc0 + ob]);
                     }
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
@@ -278,15 +267,15 @@ macro_rules! define_kernels {
                         let ky_hi = if oy + 1 == h { 1usize } else { 2 };
                         let mut x = 1usize;
                         while x + W < wd {
-                            let mut acc = V::<T>::zero(token);
+                            let mut acc = V::<T>::zero_t(token);
                             for ky in ky_lo..=ky_hi {
                                 let irow = &ip[(oy + ky - 1) * wd..][..wd];
-                                let l = V::<T>::from_slice(token, &irow[x - 1..]);
-                                let m = V::<T>::from_slice(token, &irow[x..]);
-                                let r = V::<T>::from_slice(token, &irow[x + 1..]);
-                                acc = l.mul_add(V::<T>::splat(token, w9[ky * 3]), acc);
-                                acc = m.mul_add(V::<T>::splat(token, w9[ky * 3 + 1]), acc);
-                                acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
+                                let l = V::<T>::from_slice_t(token, &irow[x - 1..]);
+                                let m = V::<T>::from_slice_t(token, &irow[x..]);
+                                let r = V::<T>::from_slice_t(token, &irow[x + 1..]);
+                                acc = l.mul_add(V::<T>::splat_t(token, w9[ky * 3]), acc);
+                                acc = m.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
+                                acc = r.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
                                 [oc * cs + oy * wd + x..oc * cs + oy * wd + x + W])
@@ -297,15 +286,15 @@ macro_rules! define_kernels {
                         }
                         if x < wd - 1 && wd >= W + 2 {
                             let xl = wd - 1 - W;
-                            let mut acc = V::<T>::zero(token);
+                            let mut acc = V::<T>::zero_t(token);
                             for ky in ky_lo..=ky_hi {
                                 let irow = &ip[(oy + ky - 1) * wd..][..wd];
-                                let l = V::<T>::from_slice(token, &irow[xl - 1..]);
-                                let m = V::<T>::from_slice(token, &irow[xl..]);
-                                let r = V::<T>::from_slice(token, &irow[xl + 1..]);
-                                acc = l.mul_add(V::<T>::splat(token, w9[ky * 3]), acc);
-                                acc = m.mul_add(V::<T>::splat(token, w9[ky * 3 + 1]), acc);
-                                acc = r.mul_add(V::<T>::splat(token, w9[ky * 3 + 2]), acc);
+                                let l = V::<T>::from_slice_t(token, &irow[xl - 1..]);
+                                let m = V::<T>::from_slice_t(token, &irow[xl..]);
+                                let r = V::<T>::from_slice_t(token, &irow[xl + 1..]);
+                                acc = l.mul_add(V::<T>::splat_t(token, w9[ky * 3]), acc);
+                                acc = m.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
+                                acc = r.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
                                 [oc * cs + oy * wd + xl..oc * cs + oy * wd + xl + W])
@@ -354,19 +343,19 @@ macro_rules! define_kernels {
                     let mut x = 0usize;
                     while x < n {
                         let mut acc = [
-                            V::<T>::splat(token, bias[oc0]),
-                            V::<T>::splat(token, bias[oc0 + 1]),
-                            V::<T>::splat(token, bias[oc0 + 2]),
-                            V::<T>::splat(token, bias[oc0 + 3]),
+                            V::<T>::splat_t(token, bias[oc0]),
+                            V::<T>::splat_t(token, bias[oc0 + 1]),
+                            V::<T>::splat_t(token, bias[oc0 + 2]),
+                            V::<T>::splat_t(token, bias[oc0 + 3]),
                         ];
                         let mut wi = 0usize;
                         for (src, cin) in srcs.iter() {
                             for ic in 0..*cin {
-                                let v = V::<T>::from_slice(token, &src[ic * cs + x..]);
+                                let v = V::<T>::from_slice_t(token, &src[ic * cs + x..]);
                                 let o = qbase + wi * 4;
                                 let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
                                 for ob in 0..4 {
-                                    acc[ob] = v.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
+                                    acc[ob] = v.mul_add(V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                 }
                                 wi += 1;
                             }
@@ -400,11 +389,11 @@ macro_rules! define_kernels {
             #[inline(always)]
             pub(crate) fn silu<T: Backend>(token: T, data: &mut [f32]) {
                 const W: usize = $w;
-                let one = V::<T>::splat(token, 1.0);
+                let one = V::<T>::splat_t(token, 1.0);
                 let n = data.len() / W * W;
                 let mut x = 0usize;
                 while x < n {
-                    let v = V::<T>::from_slice(token, &data[x..]);
+                    let v = V::<T>::from_slice_t(token, &data[x..]);
                     let s = one / ((-v).exp_midp() + one);
                     let dst: &mut [f32; W] = (&mut data[x..x + W]).try_into().unwrap();
                     (v * s).store(dst);
@@ -426,14 +415,14 @@ macro_rules! define_kernels {
                 cs: usize,
             ) {
                 const W: usize = $w;
-                let zero = V::<T>::splat(token, 0.0);
+                let zero = V::<T>::splat_t(token, 0.0);
                 for c in 0..channels {
-                    let a = V::<T>::splat(token, slopes[c]);
+                    let a = V::<T>::splat_t(token, slopes[c]);
                     let ch = &mut data[c * cs..c * cs + plane];
                     let n = plane / W * W;
                     let mut x = 0usize;
                     while x < n {
-                        let v = V::<T>::from_slice(token, &ch[x..]);
+                        let v = V::<T>::from_slice_t(token, &ch[x..]);
                         let dst: &mut [f32; W] = (&mut ch[x..x + W]).try_into().unwrap();
                         (v.max(zero) + a * v.min(zero)).store(dst);
                         x += W;
@@ -448,13 +437,13 @@ macro_rules! define_kernels {
             #[inline(always)]
             pub(crate) fn gate<T: Backend>(token: T, a: &[f32], skip: &[f32], out: &mut [f32]) {
                 const W: usize = $w;
-                let one = V::<T>::splat(token, 1.0);
-                let half = V::<T>::splat(token, 0.5);
+                let one = V::<T>::splat_t(token, 1.0);
+                let half = V::<T>::splat_t(token, 0.5);
                 let n = out.len() / W * W;
                 let mut x = 0usize;
                 while x < n {
-                    let av = V::<T>::from_slice(token, &a[x..]);
-                    let sk = V::<T>::from_slice(token, &skip[x..]);
+                    let av = V::<T>::from_slice_t(token, &a[x..]);
+                    let sk = V::<T>::from_slice_t(token, &skip[x..]);
                     let sig = one / ((-av).exp_midp() + one);
                     let dst: &mut [f32; W] = (&mut out[x..x + W]).try_into().unwrap();
                     ((av + sk) * (sig - half)).store(dst);
@@ -672,16 +661,16 @@ macro_rules! define_kernels {
                     for (bi, &bx) in starts.iter().enumerate() {
                         let lane0 = bi * W;
                         for ic in 0..cin {
-                            let mut d = [[V::<T>::splat(token, 0.0); 4]; 4];
+                            let mut d = [[V::<T>::splat_t(token, 0.0); 4]; 4];
                             for r in 0..4 {
                                 let be = ((ic * 4 + r) * 2) * half;
                                 let bo = be + half;
-                                d[r][0] = V::<T>::from_slice(token, &eo[be + bx..]);
-                                d[r][1] = V::<T>::from_slice(token, &eo[bo + bx..]);
-                                d[r][2] = V::<T>::from_slice(token, &eo[be + bx + 1..]);
-                                d[r][3] = V::<T>::from_slice(token, &eo[bo + bx + 1..]);
+                                d[r][0] = V::<T>::from_slice_t(token, &eo[be + bx..]);
+                                d[r][1] = V::<T>::from_slice_t(token, &eo[bo + bx..]);
+                                d[r][2] = V::<T>::from_slice_t(token, &eo[be + bx + 1..]);
+                                d[r][3] = V::<T>::from_slice_t(token, &eo[bo + bx + 1..]);
                             }
-                            let mut t = [[V::<T>::splat(token, 0.0); 4]; 4];
+                            let mut t = [[V::<T>::splat_t(token, 0.0); 4]; 4];
                             for c in 0..4 {
                                 t[0][c] = d[0][c] - d[2][c];
                                 t[1][c] = d[1][c] + d[2][c];
@@ -712,16 +701,17 @@ macro_rules! define_kernels {
                         for q in 0..cout / 4 {
                             for bi in 0..nblk {
                                 let lane0 = bi * W;
-                                let mut acc = [V::<T>::splat(token, 0.0); 4];
+                                let mut acc = [V::<T>::splat_t(token, 0.0); 4];
                                 for ic in 0..cin {
                                     let vv =
-                                        V::<T>::from_slice(token, &vb[vpb + ic * ntp + lane0..]);
+                                        V::<T>::from_slice_t(token, &vb[vpb + ic * ntp + lane0..]);
                                     let w4: &[f32; 4] = (&uq
                                         [upb + (q * cin + ic) * 4..upb + (q * cin + ic) * 4 + 4])
                                         .try_into()
                                         .unwrap();
                                     for ob in 0..4 {
-                                        acc[ob] = vv.mul_add(V::<T>::splat(token, w4[ob]), acc[ob]);
+                                        acc[ob] =
+                                            vv.mul_add(V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                     }
                                 }
                                 for ob in 0..4 {
@@ -735,16 +725,18 @@ macro_rules! define_kernels {
                     }
                     // phase 3: inverse transform + bias + scatter, whole row
                     for oc in 0..cout {
-                        let bv = V::<T>::splat(token, bias[oc]);
+                        let bv = V::<T>::splat_t(token, bias[oc]);
                         for (bi, &bx) in starts.iter().enumerate() {
                             let lane0 = bi * W;
-                            let mut mm = [V::<T>::splat(token, 0.0); 16];
+                            let mut mm = [V::<T>::splat_t(token, 0.0); 16];
                             for (p, m) in mm.iter_mut().enumerate() {
-                                *m =
-                                    V::<T>::from_slice(token, &mb[(p * cout + oc) * ntp + lane0..]);
+                                *m = V::<T>::from_slice_t(
+                                    token,
+                                    &mb[(p * cout + oc) * ntp + lane0..],
+                                );
                             }
-                            let mut t0 = [V::<T>::splat(token, 0.0); 4];
-                            let mut t1 = [V::<T>::splat(token, 0.0); 4];
+                            let mut t0 = [V::<T>::splat_t(token, 0.0); 4];
+                            let mut t1 = [V::<T>::splat_t(token, 0.0); 4];
                             for c in 0..4 {
                                 t0[c] = mm[c] + mm[4 + c] + mm[8 + c];
                                 t1[c] = mm[4 + c] - mm[8 + c] - mm[12 + c];

@@ -10,15 +10,9 @@ publish = false
 
 [dependencies]
 coz = "0.1.3"
-archmage = { version = "0.9.29", features = ["testable_dispatch"] }
-magetypes = { version = "0.9.29", default-features = false, features = ["std"] }
+archmage = { version = "0.9.30", features = ["testable_dispatch"] }
+magetypes = { version = "0.9.30", default-features = false, features = ["std"] }
 zensr-micro = { path = "../../crates/zensr-micro" }
-
-# Match the runtime workspace's unpublished concat_shift implementation.
-[patch.crates-io]
-archmage = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
-archmage-macros = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
 
 [profile.release]
 debug = 1
@@ -31,7 +25,7 @@ name = "runtime_unit"
 path = "../../crates/zensr-micro/src/lib.rs"
 
 [dev-dependencies]
-archmage = { version = "0.9.29", features = ["testable_dispatch"] }
+archmage = { version = "0.9.30", features = ["testable_dispatch"] }
 
 [features]
 default = ["avx512"]
