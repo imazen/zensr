@@ -23,8 +23,9 @@ python3 tools/exactness/matrix.py --bin tools/coz-profile/target/release/zensr-c
   so it runs only on small inputs (up to 64×64 for nf ≤ 24, 17×13 otherwise).
 - `--winograd` sets `ZENSR_WINOGRAD=1` (the opt-in algorithm); its results are
   compared within that mode only.
-- `--compare-bin` also reports whether a second worker (for example a baseline
-  build) gives the same bytes.
+- `--compare-bin` also runs every configuration on a second worker (for example
+  a baseline build) and reports, per configuration, whether it gives the same
+  bytes. This is informative and does not change the exit status.
 
 Models are read from `models/adopted/<dir>/weights_f16.raw`. Only
 `dejpeg_rt24g` is tracked in git; the others are local adoption dumps, and a

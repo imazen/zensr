@@ -8,8 +8,9 @@ the tools/coz-profile worker (deterministic synthetic input, raw dump). Exits 1
 on any disagreement and records where, including the shipping RGB8 quantizer
 `(v * 255 + 0.5).clamp(0, 255) as u8` applied to the disagreeing values.
 
-Optional --compare-bin reports, per case, whether a second worker binary (for
-example a baseline build) gives the same bytes; that comparison is informative
+Optional --compare-bin runs every configuration of each case on a second
+worker binary too (for example a baseline build) and reports, per
+configuration, whether it gives the same bytes; that comparison is informative
 and does not affect the exit status.
 
 Usage: matrix.py --bin tools/coz-profile/target/release/zensr-coz-profile \
@@ -234,28 +235,38 @@ def main():
                 }
                 row["reference"] = ref_key
             if args.compare_bin:
-                k0 = next(iter(runs))
-                t0, tier0 = k0[1:].split("-")
-                other = run(
-                    args.compare_bin,
-                    args.models_dir,
-                    model,
-                    hw,
-                    int(t0),
-                    tier0,
-                    args.out,
-                    f"cmp{n}",
-                    args.winograd,
-                )
-                row["compare_bin_same"] = other == runs[k0]
-                if other != runs[k0]:
-                    row["compare_bin_diff"] = diff(args.out, runs[k0], other)
+                other = {}
+                for threads, tier in configs(model, hw, tiers):
+                    k = f"t{threads}-{tier}"
+                    other[k] = run(
+                        args.compare_bin,
+                        args.models_dir,
+                        model,
+                        hw,
+                        threads,
+                        tier,
+                        args.out,
+                        f"cmp{n}-{k}",
+                        args.winograd,
+                    )
+                row["compare_bin_runs"] = other
+                row["compare_bin_same"] = other == runs
+                if other != runs:
+                    row["compare_bin_diff"] = {
+                        k: diff(args.out, runs[k], v)
+                        for k, v in other.items()
+                        if v != runs[k]
+                    }
             results.append(row)
             status = "OK" if row["consistent"] else "MISMATCH"
             cmp = (
                 ""
                 if not args.compare_bin
-                else (" compare=same" if row["compare_bin_same"] else " compare=DIFF")
+                else (
+                    " compare=same"
+                    if row["compare_bin_same"]
+                    else f" compare=DIFF({len(row['compare_bin_diff'])}/{len(runs)})"
+                )
             )
             print(
                 f"{model:6s} {hw[0]}x{hw[1]:<5} configs={len(runs):2d} {status}{cmp} {distinct[0][:16]}",
