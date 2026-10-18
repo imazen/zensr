@@ -52,6 +52,25 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Fixed
 
+- **Threads, tiles and CPU tier no longer change the output.** The same JPEG
+  restored with 2 threads differed from 1 thread, and AVX2 from AVX-512, by one
+  RGB8 level (2026-10-18 counterexamples, dejpeg7_graphics on gb82 `girl` and
+  `city` at q40). Raw model output differed in the last bit between whole and
+  tiled runs and between tiers on every shipped model. Causes: conv3x3's
+  overlapped final tile summed all taps in one chain while the main loop sums
+  16-channel blocks, so any column it covered depended on the row width and
+  vector width when cin > 16; rows narrower than one vector used an unfused
+  scalar loop; conv1x1, SiLU, gate and PReLU computed their last
+  `len % W` elements with different scalar code (libm `exp` instead of
+  `exp_midp`, unfused sums); and the scalar backend's `mul_add` rounds twice.
+  Every path now runs the main loop's per-element sequence (tail and narrow
+  tiles in registers, remainders as zero-padded vectors), and every FMA is
+  `mul_add_portable`, which is the same FMA on x86 v3/v4 and NEON and a
+  one-rounding software FMA on scalar and WASM. PReLU and the exp clamp use
+  compare-and-select with x86 `maxps`/`minps` semantics, because the wasm and
+  NEON `max`/`min` return NaN for a NaN operand where x86 returns the other.
+  Outputs of the main loop on the FMA tiers are unchanged. New exact
+  regressions: `simd::exactness`.
 - `classify_rgb8_scanning` returns the analysis error instead of swallowing it.
   `classify_rgb8` keeps the infallible `Photo`-on-failure fallback, which is the
   precision-biased safe direction the rule was fit for.

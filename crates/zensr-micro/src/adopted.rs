@@ -432,8 +432,11 @@ impl AdoptedModel {
         //
         // The ladder below never regresses against the old fixed 128 on either
         // model at any measured thread count, and captures most of the gain.
-        // Tiling is BIT-EXACT in the tile size (checksums identical across the
-        // whole sweep on both models), so this changes speed only.
+        // Tiling is BIT-EXACT in the tile size, so this changes speed only.
+        // (The 2026-09-08 checksum sweep that first said so did not reach the
+        // overlapped-tail and narrow-row paths, which until 2026-10-18 made tiled
+        // runs differ from whole ones in the last bit; enforced now by
+        // `simd::exactness::adopted_models_tiled_equals_whole_bitwise`.)
         // benchmarks/realtime_kernels_x86_2026-09-08.md
         //
         // 2026-09-08: the ladder above picks a tile SIZE, which is the wrong

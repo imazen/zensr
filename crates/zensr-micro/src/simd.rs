@@ -15,6 +15,67 @@ macro_rules! define_kernels {
             use magetypes::simd::backends::$bnd as Backend;
             use magetypes::simd::generic::$vec as V;
 
+            /// Input-channel block of the conv3x3 main loop (see the TLB note
+            /// in `conv3x3_row4`). `tile_complete` must use the same block.
+            const IC_BLOCK: usize = 16;
+
+            /// `max` and `min` with x86 `maxps`/`minps` semantics on every
+            /// backend: `a` where it compares strictly greater (less) than `b`,
+            /// otherwise `b`. So a NaN `a` gives `b`, and ±0 against ±0 gives
+            /// `b`. The existing outputs were produced with these on x86; the
+            /// wasm and NEON `max`/`min` return NaN for a NaN operand instead.
+            #[inline(always)]
+            fn max_x86<T: Backend>(a: V<T>, b: V<T>) -> V<T> {
+                V::<T>::blend(a.simd_gt(b), a, b)
+            }
+            #[inline(always)]
+            fn min_x86<T: Backend>(a: V<T>, b: V<T>) -> V<T> {
+                V::<T>::blend(a.simd_lt(b), a, b)
+            }
+
+            /// `exp(x)` with the algorithm of magetypes' `exp_midp`
+            /// (0.9.30 `transcendentals`: `exp2_midp` of `x * log2(e)`,
+            /// round-to-nearest split, degree-6 polynomial, clamp to
+            /// [-126, 128)), but every polynomial step is a ONE-rounding
+            /// `mul_add_portable`. On x86 v3/v4 and NEON that is the FMA
+            /// `exp_midp` already uses, so those tiers give the same bits;
+            /// on the scalar backend and WASM, whose `mul_add` rounds twice,
+            /// it is what makes them agree with the FMA tiers. The clamps use
+            /// `max_x86`/`min_x86`, so a NaN input gives the same result as on
+            /// x86 (the low clamp) on every backend.
+            #[inline(always)]
+            pub(crate) fn exp_midp_portable<T: Backend>(token: T, v: V<T>) -> V<T> {
+                const C0: f32 = 1.0;
+                const C1: f32 = core::f32::consts::LN_2;
+                const C2: f32 = 0.240_226_46;
+                const C3: f32 = 0.055_504_545;
+                const C4: f32 = 0.009_618_055;
+                const C5: f32 = 0.001_333_37;
+                const C6: f32 = 0.000_154_47;
+                let sp = |c: f32| V::<T>::splat_t(token, c);
+                let x = v * sp(core::f32::consts::LOG2_E);
+                let lo = sp(-126.0);
+                let hi = sp(128.0);
+                let c = min_x86(max_x86(x, lo), hi);
+                let xi = min_x86(c.round(), sp(127.0));
+                let xf = c - xi;
+                let poly = sp(C6).mul_add_portable(xf, sp(C5));
+                let poly = poly.mul_add_portable(xf, sp(C4));
+                let poly = poly.mul_add_portable(xf, sp(C3));
+                let poly = poly.mul_add_portable(xf, sp(C2));
+                let poly = poly.mul_add_portable(xf, sp(C1));
+                let poly = poly.mul_add_portable(xf, sp(C0));
+                // xi is an integer in [-126, 127], so xi + 127 is exact and
+                // equals magetypes' integer `xi + 127` before the shift.
+                let scale = (xi + sp(127.0))
+                    .to_i32_round()
+                    .shl_const::<23>()
+                    .bitcast_to_f32();
+                let r = poly * scale;
+                let r = V::<T>::blend(x.simd_lt(lo), sp(0.0), r);
+                V::<T>::blend(x.simd_ge(hi), sp(f32::INFINITY), r)
+            }
+
             /// 3x3 conv for one output row `oy`, four output channels
             /// `oc0..oc0+4`. Quad accumulators live in REGISTERS across the
             /// whole (ic, ky) reduction per x-tile; one store per tile.
@@ -86,7 +147,6 @@ macro_rules! define_kernels {
                 // 256px. Blocking to 16 channels keeps every tile inside the
                 // TLB; partial sums cross blocks through `out`, which stays in
                 // L1 for the row.
-                const IC_BLOCK: usize = 16;
                 let nky = ky_hi + 1 - ky_lo;
                 for ic0 in (0..cin).step_by(IC_BLOCK) {
                     let ic1 = (ic0 + IC_BLOCK).min(cin);
@@ -113,8 +173,11 @@ macro_rules! define_kernels {
                         //
                         // This REORDERS FP addition (per-tap partial sums, combined
                         // at the end) — deliberate, user-authorised. It stays
-                        // bit-identical ACROSS TIERS because the per-pixel sequence
-                        // does not depend on the vector width; only lane count does.
+                        // bit-identical ACROSS TIERS AND POSITIONS because every
+                        // path (this loop, and the overlapped tail and narrow rows
+                        // through `tile_complete`) runs the same per-pixel sequence
+                        // with one-rounding FMA, whatever the vector width;
+                        // `simd::exactness` enforces it.
                         let mut acc_lm = [V::<T>::splat_t(token, 0.0); 4];
                         let mut acc_r = [V::<T>::splat_t(token, 0.0); 4];
                         for &(irow, w12) in taps {
@@ -130,12 +193,18 @@ macro_rules! define_kernels {
                             let m = V::<T>::from_slice_t(token, &win[1..]);
                             let r = V::<T>::from_slice_t(token, &win[2..]);
                             for ob in 0..4 {
-                                acc_lm[ob] =
-                                    l.mul_add(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
-                                acc_lm[ob] =
-                                    m.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 1]), acc_lm[ob]);
-                                acc_r[ob] =
-                                    r.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 2]), acc_r[ob]);
+                                acc_lm[ob] = l.mul_add_portable(
+                                    V::<T>::splat_t(token, w12[ob * 3]),
+                                    acc_lm[ob],
+                                );
+                                acc_lm[ob] = m.mul_add_portable(
+                                    V::<T>::splat_t(token, w12[ob * 3 + 1]),
+                                    acc_lm[ob],
+                                );
+                                acc_r[ob] = r.mul_add_portable(
+                                    V::<T>::splat_t(token, w12[ob * 3 + 2]),
+                                    acc_r[ob],
+                                );
                             }
                         }
                         let mut acc = [V::<T>::splat_t(token, 0.0); 4];
@@ -160,65 +229,21 @@ macro_rules! define_kernels {
                         x += W;
                     }
                 } // end channel block
-                  // Overlapped final tile: cover up to wd-2 by re-running one
-                  // tile ending at wd-1. It OVERLAPS positions the main loop
-                  // already wrote, so it must OVERWRITE with the complete sum —
-                  // it therefore runs once, outside the channel-block loop, over
-                  // the full tap set. Accumulating it per block double-counts
-                  // every block after the first on the overlapped columns (caught
-                  // by arbitrary_dims_simd_vs_scalar at 8x19). One tile per row,
-                  // so touching all cin*3 pages here costs nothing measurable.
+                  // Overlapped final tile: cover the columns past the last full
+                  // tile by re-running one tile ending at wd-1. It OVERLAPS
+                  // columns the main loop already wrote, so it stores the
+                  // COMPLETE sum — and `tile_complete` computes that sum with the
+                  // main loop's own per-block sequence, so the overlapped columns
+                  // are rewritten with the same bits and the new ones get the
+                  // value a wider row would give them. (One chain over every tap
+                  // here instead made these columns depend on wd and on the vector
+                  // width whenever cin > IC_BLOCK: tiled and whole-image runs, and
+                  // the AVX2 and AVX-512 tiers, disagreed in the last bit, and
+                  // after quantisation in final pixels.) One tile per row, so
+                  // touching all cin*3 pages here costs little.
                 if wd % W != 0 && wd >= W {
                     let xl = wd - W;
-                    // EIGHT independent accumulator chains instead of four:
-                    // (l,m) share one per output, r gets its own, so the longest
-                    // dependency run per tap iteration is 2 rather than 3.
-                    //
-                    // Twelve chains (one per tap) is faster still on AVX-512
-                    // (+4.2%) but REGRESSES AVX2 by 12%: 12 accumulators + 3
-                    // loads + a broadcast temp exceed the 16 ymm registers, and
-                    // AVX2 has no embedded broadcast to fold the weight operand.
-                    // Eight fits both. We ship one binary and the CPU picks the
-                    // tier, so a win that costs older CPUs is not a win.
-                    // The old shape gave each acc[ob] three
-                    // back-to-back dependent FMAs, so the per-instruction
-                    // profile piled up on the third of every chain: hiding a
-                    // ~4-cycle FMA at 2/cycle issue needs ~8 chains, and four
-                    // capped the kernel near half of FMA peak. Each chain now
-                    // takes exactly one FMA per tap iteration.
-                    //
-                    // This REORDERS FP addition (per-tap partial sums, combined
-                    // at the end) — deliberate, user-authorised. It stays
-                    // bit-identical ACROSS TIERS because the per-pixel sequence
-                    // does not depend on the vector width; only lane count does.
-                    let mut acc_lm = [V::<T>::splat_t(token, 0.0); 4];
-                    let mut acc_r = [V::<T>::splat_t(token, 0.0); 4];
-                    for &(irow, w12) in taps {
-                        // l/m/r are lanes 0/1/2 of the same window, read as three
-                        // unaligned loads at offsets 0, 1 and 2. The two-load funnel
-                        // shift measured faster (examples/tap_load_probe, 7950X: 141.9
-                        // against 125.1 GFLOP/s) but needs magetypes `concat_shift`,
-                        // which no released magetypes provides; the loads produce the
-                        // same lane values, so the arithmetic is unchanged. `pwd` keeps
-                        // its trailing zero floats so the window stays in bounds.
-                        let win: &[f32; $w * 2] = (&irow[xl..xl + W * 2]).try_into().unwrap();
-                        let l = V::<T>::from_slice_t(token, &win[0..]);
-                        let m = V::<T>::from_slice_t(token, &win[1..]);
-                        let r = V::<T>::from_slice_t(token, &win[2..]);
-                        for ob in 0..4 {
-                            acc_lm[ob] = l.mul_add(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
-                            acc_lm[ob] =
-                                m.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 1]), acc_lm[ob]);
-                            acc_r[ob] =
-                                r.mul_add(V::<T>::splat_t(token, w12[ob * 3 + 2]), acc_r[ob]);
-                        }
-                    }
-                    let mut acc = [V::<T>::splat_t(token, 0.0); 4];
-                    for ob in 0..4 {
-                        // Bias belongs to the whole sum, so it is added once, on
-                        // the first channel block only.
-                        acc[ob] = acc_lm[ob] + acc_r[ob] + V::<T>::splat_t(token, bias[oc0 + ob]);
-                    }
+                    let acc = tile_complete(token, taps, nky, cin, bias, oc0, xl);
                     for ob in 0..4 {
                         let dst: &mut [f32; W] = (&mut out
                             [(oc0 + ob) * cs + oy * wd + xl..(oc0 + ob) * cs + oy * wd + xl + W])
@@ -227,22 +252,76 @@ macro_rules! define_kernels {
                         acc[ob].store(dst);
                     }
                 }
-                // Widths under one vector cannot be tiled at all. Scalar over
-                // every column, reading the padded row directly — no edge
-                // special-case survives, because the padding supplies the zeros.
+                // Rows narrower than one vector: one tile at x = 0 over the
+                // zero-padded row (`conv3x3` makes `pwd` at least 2W for this),
+                // keeping the first wd lanes. The padding supplies exactly the
+                // zeros a wider row's border would, so every column gets the main
+                // loop's value. (A scalar loop here summed in another order and
+                // without FMA, so narrow images and tiles disagreed with wide ones.)
                 if wd < W {
-                    for xx in 0..wd {
-                        for ob in 0..4 {
-                            let mut acc = bias[oc0 + ob];
-                            for &(irow, w12) in taps {
-                                acc += w12[ob * 3] * irow[xx]
-                                    + w12[ob * 3 + 1] * irow[xx + 1]
-                                    + w12[ob * 3 + 2] * irow[xx + 2];
-                            }
-                            out[(oc0 + ob) * cs + oy * wd + xx] = acc;
-                        }
+                    let acc = tile_complete(token, taps, nky, cin, bias, oc0, 0);
+                    for ob in 0..4 {
+                        let mut lanes = [0.0f32; W];
+                        acc[ob].store(&mut lanes);
+                        out[(oc0 + ob) * cs + oy * wd..][..wd].copy_from_slice(&lanes[..wd]);
                     }
                 }
+            }
+
+            /// The complete 3x3 sum of one W-wide tile at column `x` for one
+            /// output row and four output channels, in EXACTLY the per-element
+            /// sequence of the main tile loop: per IC_BLOCK channel block, the
+            /// (l,m) and r FMA chains over that block's taps starting from +0.0,
+            /// their sum, then `+ bias` on the first block or `+ running` (the
+            /// sum of the earlier blocks) after it. The main loop carries
+            /// `running` through `out`; this carries it in registers, which
+            /// stores and reloads exactly. Each output column therefore has one
+            /// value whichever path computes it.
+            #[inline(always)]
+            #[allow(clippy::too_many_arguments)]
+            fn tile_complete<T: Backend>(
+                token: T,
+                taps: &[(&[f32], &[f32; 12])],
+                nky: usize,
+                cin: usize,
+                bias: &[f32],
+                oc0: usize,
+                x: usize,
+            ) -> [V<T>; 4] {
+                const W: usize = $w;
+                let mut running = [V::<T>::splat_t(token, 0.0); 4];
+                for ic0 in (0..cin).step_by(IC_BLOCK) {
+                    let ic1 = (ic0 + IC_BLOCK).min(cin);
+                    let mut acc_lm = [V::<T>::splat_t(token, 0.0); 4];
+                    let mut acc_r = [V::<T>::splat_t(token, 0.0); 4];
+                    for &(irow, w12) in &taps[ic0 * nky..ic1 * nky] {
+                        let win: &[f32; $w * 2] = (&irow[x..x + W * 2]).try_into().unwrap();
+                        let l = V::<T>::from_slice_t(token, &win[0..]);
+                        let m = V::<T>::from_slice_t(token, &win[1..]);
+                        let r = V::<T>::from_slice_t(token, &win[2..]);
+                        for ob in 0..4 {
+                            acc_lm[ob] =
+                                l.mul_add_portable(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
+                            acc_lm[ob] = m.mul_add_portable(
+                                V::<T>::splat_t(token, w12[ob * 3 + 1]),
+                                acc_lm[ob],
+                            );
+                            acc_r[ob] = r.mul_add_portable(
+                                V::<T>::splat_t(token, w12[ob * 3 + 2]),
+                                acc_r[ob],
+                            );
+                        }
+                    }
+                    for ob in 0..4 {
+                        let sum = acc_lm[ob] + acc_r[ob];
+                        running[ob] = if ic0 == 0 {
+                            sum + V::<T>::splat_t(token, bias[oc0 + ob])
+                        } else {
+                            sum + running[ob]
+                        };
+                    }
+                }
+                running
             }
 
             /// Grouped conv_near: 48 out channels, ic = oc/16, no bias.
@@ -355,7 +434,8 @@ macro_rules! define_kernels {
                                 let o = qbase + wi * 4;
                                 let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
                                 for ob in 0..4 {
-                                    acc[ob] = v.mul_add(V::<T>::splat_t(token, w4[ob]), acc[ob]);
+                                    acc[ob] =
+                                        v.mul_add_portable(V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                 }
                                 wi += 1;
                             }
@@ -369,17 +449,38 @@ macro_rules! define_kernels {
                         }
                         x += W;
                     }
-                    for xx in n..plane {
-                        for ob in 0..4 {
-                            let mut s = bias[oc0 + ob];
-                            let mut wi = 0usize;
-                            for (src, cin) in srcs.iter() {
-                                for ic in 0..*cin {
-                                    s += wts[qbase + wi * 4 + ob] * src[ic * cs + xx];
-                                    wi += 1;
+                    // The last plane % W elements: one tile over zero-padded
+                    // lanes, so they get the same FMA chain as every other
+                    // element. (A scalar sum here rounded differently, and
+                    // where the remainder falls depends on the tile size.)
+                    let rem = plane - n;
+                    if rem > 0 {
+                        let mut acc = [
+                            V::<T>::splat_t(token, bias[oc0]),
+                            V::<T>::splat_t(token, bias[oc0 + 1]),
+                            V::<T>::splat_t(token, bias[oc0 + 2]),
+                            V::<T>::splat_t(token, bias[oc0 + 3]),
+                        ];
+                        let mut wi = 0usize;
+                        for (src, cin) in srcs.iter() {
+                            for ic in 0..*cin {
+                                let mut lanes = [0.0f32; W];
+                                lanes[..rem].copy_from_slice(&src[ic * cs + n..ic * cs + plane]);
+                                let v = V::<T>::from_array_t(token, lanes);
+                                let o = qbase + wi * 4;
+                                let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
+                                for ob in 0..4 {
+                                    acc[ob] =
+                                        v.mul_add_portable(V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                 }
+                                wi += 1;
                             }
-                            out[(oc0 + ob) * cs + xx] = s;
+                        }
+                        for ob in 0..4 {
+                            let mut lanes = [0.0f32; W];
+                            acc[ob].store(&mut lanes);
+                            out[(oc0 + ob) * cs + n..(oc0 + ob) * cs + plane]
+                                .copy_from_slice(&lanes[..rem]);
                         }
                     }
                 }
@@ -394,13 +495,22 @@ macro_rules! define_kernels {
                 let mut x = 0usize;
                 while x < n {
                     let v = V::<T>::from_slice_t(token, &data[x..]);
-                    let s = one / ((-v).exp_midp() + one);
+                    let s = one / (exp_midp_portable(token, -v) + one);
                     let dst: &mut [f32; W] = (&mut data[x..x + W]).try_into().unwrap();
                     (v * s).store(dst);
                     x += W;
                 }
-                for v in &mut data[n..] {
-                    *v *= 1.0 / (1.0 + (-*v).exp());
+                // Remainder through the same vector formula on zero-padded
+                // lanes (libm `exp` here gave different values from
+                // `exp_midp`, at positions that move with the tile size).
+                let rem = data.len() - n;
+                if rem > 0 {
+                    let mut lanes = [0.0f32; W];
+                    lanes[..rem].copy_from_slice(&data[n..]);
+                    let v = V::<T>::from_array_t(token, lanes);
+                    let s = one / (exp_midp_portable(token, -v) + one);
+                    (v * s).store(&mut lanes);
+                    data[n..].copy_from_slice(&lanes[..rem]);
                 }
             }
 
@@ -424,11 +534,18 @@ macro_rules! define_kernels {
                     while x < n {
                         let v = V::<T>::from_slice_t(token, &ch[x..]);
                         let dst: &mut [f32; W] = (&mut ch[x..x + W]).try_into().unwrap();
-                        (v.max(zero) + a * v.min(zero)).store(dst);
+                        (max_x86(v, zero) + a * min_x86(v, zero)).store(dst);
                         x += W;
                     }
-                    for v in &mut ch[n..] {
-                        *v = v.max(0.0) + slopes[c] * v.min(0.0);
+                    // Remainder through the same vector formula on padded lanes,
+                    // so every element of a channel takes one code path.
+                    let rem = plane - n;
+                    if rem > 0 {
+                        let mut lanes = [0.0f32; W];
+                        lanes[..rem].copy_from_slice(&ch[n..]);
+                        let v = V::<T>::from_array_t(token, lanes);
+                        (max_x86(v, zero) + a * min_x86(v, zero)).store(&mut lanes);
+                        ch[n..].copy_from_slice(&lanes[..rem]);
                     }
                 }
             }
@@ -444,14 +561,23 @@ macro_rules! define_kernels {
                 while x < n {
                     let av = V::<T>::from_slice_t(token, &a[x..]);
                     let sk = V::<T>::from_slice_t(token, &skip[x..]);
-                    let sig = one / ((-av).exp_midp() + one);
+                    let sig = one / (exp_midp_portable(token, -av) + one);
                     let dst: &mut [f32; W] = (&mut out[x..x + W]).try_into().unwrap();
                     ((av + sk) * (sig - half)).store(dst);
                     x += W;
                 }
-                for i in n..out.len() {
-                    let s = 1.0 / (1.0 + (-a[i]).exp());
-                    out[i] = (a[i] + skip[i]) * (s - 0.5);
+                // Remainder through the same vector formula on zero-padded lanes.
+                let rem = out.len() - n;
+                if rem > 0 {
+                    let mut la = [0.0f32; W];
+                    let mut ls = [0.0f32; W];
+                    la[..rem].copy_from_slice(&a[n..n + rem]);
+                    ls[..rem].copy_from_slice(&skip[n..n + rem]);
+                    let av = V::<T>::from_array_t(token, la);
+                    let sk = V::<T>::from_array_t(token, ls);
+                    let sig = one / (exp_midp_portable(token, -av) + one);
+                    ((av + sk) * (sig - half)).store(&mut la);
+                    out[n..].copy_from_slice(&la[..rem]);
                 }
             }
 
@@ -509,7 +635,9 @@ macro_rules! define_kernels {
                 //    4 KiB page, so a wd + 2 stride puts rows 0 and 2 of every
                 //    tap group in the SAME L1 set; one line of skew separates
                 //    them. That mechanism is a hypothesis — the numbers are not.
-                let pwd = wd + 18;
+                // At least 2W so a row narrower than one vector can still run
+                // one zero-padded tile at x = 0 (see `conv3x3_row4`).
+                let pwd = (wd + 18).max(2 * $w);
                 let pcs = 3 * pwd; // per channel: 3 row slots
                 let mut pin = vec![0.0f32; cin * pcs];
                 // `slot(y)` is where input row y lives. The zero columns at
@@ -1478,3 +1606,6 @@ fn force_setup(
     let out = vec![0.0f32; 3 * h * wd * 16];
     (model, sc, out)
 }
+
+#[cfg(test)]
+mod exactness;

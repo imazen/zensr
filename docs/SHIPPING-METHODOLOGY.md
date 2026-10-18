@@ -62,6 +62,10 @@ Ordered by what a failure costs a user.
    the same input hashed through v4x, v3, neon and scalar, compared to a
    committed digest. Tests prove the kernels agree with each other; a golden
    proves this build agrees with the last one.
+   The equivalence tests above are tolerance-based, and until 2026-10-18 the
+   tiers, thread counts and tile sizes did NOT agree bit for bit (one RGB8 level
+   in final pixels; CHANGELOG). `simd::exactness` now checks bit equality per
+   tier on x86; the per-tier golden is still missing.
 2. **Resource bounds on untrusted input.** `restore_jpeg` has a *time* budget and
    no pixel or memory ceiling. On a server that is a scaling problem; on a user's
    laptop it is the application dying. `prod_bench` already has the RSS harness
