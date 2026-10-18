@@ -91,3 +91,24 @@ xl-corpus OUT="/mnt/v/zensr/xl-eval-corpus":
 # What the split does, and where the near-duplicate groups are.
 split-report:
     python3 tools/corpus_split.py
+
+# Standalone causal profiler: does not resolve the benchmark codec graph.
+coz-build:
+    cargo build --release --manifest-path tools/coz-profile/Cargo.toml
+
+coz-check:
+    cargo fmt --manifest-path tools/coz-profile/Cargo.toml -- --check
+    cargo clippy --manifest-path tools/coz-profile/Cargo.toml --all-targets --locked
+
+coz-run profile +args:
+    test ! -e "{{profile}}"
+    {{env_var_or_default("COZ_BIN", "coz")}} run --source-scope '%/zensr-micro/src/%' --output "{{profile}}" --- ./tools/coz-profile/target/release/zensr-coz-profile {{args}}
+
+
+# Repeat the deterministic realtime probe and compare every output byte.
+coz-repro outdir:
+    mkdir -p "{{outdir}}"
+    ./tools/coz-profile/target/release/zensr-coz-profile models/adopted/dejpeg_rt24g/weights_f16.raw 24 8 1 64 64 1 0 "{{outdir}}/baseline-a.f32"
+    ./tools/coz-profile/target/release/zensr-coz-profile models/adopted/dejpeg_rt24g/weights_f16.raw 24 8 1 64 64 1 0 "{{outdir}}/baseline-b.f32"
+    cmp "{{outdir}}/baseline-a.f32" "{{outdir}}/baseline-b.f32"
+    sha256sum "{{outdir}}/baseline-a.f32" "{{outdir}}/baseline-b.f32"

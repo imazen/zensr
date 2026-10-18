@@ -1,0 +1,22 @@
+[package]
+name = "zensr-coz-profile"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Keep profiling independent of the benchmark workspace's codec dependencies.
+[workspace]
+
+[dependencies]
+coz = "0.1.3"
+zensr-micro = { path = "../../crates/zensr-micro" }
+
+# Match the runtime workspace's unpublished concat_shift implementation.
+[patch.crates-io]
+archmage = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
+archmage-macros = { git = "https://github.com/imazen/archmage", rev = "f46cf941661e0befa47fb7dc2fb9147239062325" }
+
+[profile.release]
+debug = 1
+lto = "thin"
