@@ -112,3 +112,7 @@ coz-repro outdir:
     ./tools/coz-profile/target/release/zensr-coz-profile models/adopted/dejpeg_rt24g/weights_f16.raw 24 8 1 64 64 1 0 "{{outdir}}/baseline-b.f32"
     cmp "{{outdir}}/baseline-a.f32" "{{outdir}}/baseline-b.f32"
     sha256sum "{{outdir}}/baseline-a.f32" "{{outdir}}/baseline-b.f32"
+
+# Compile and run the runtime's actual unit-test source in the isolated graph.
+coz-test *args:
+    cargo test --manifest-path tools/coz-profile/Cargo.toml --test runtime_unit {{args}}

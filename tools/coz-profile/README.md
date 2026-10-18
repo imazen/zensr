@@ -42,3 +42,14 @@ pass a new raw output path, then compare the complete little-endian f32 files
 with `cmp` and record their SHA256 hashes. The writer refuses to replace an
 existing file. Validate each applicable model, size, thread mode, and SIMD
 tier separately. This tool does not establish cross-tier numerical parity.
+
+
+## Existing runtime unit tests
+
+`just coz-test` compiles the runtime's actual `src/lib.rs` as the isolated
+`runtime_unit` test target. No test source or expectation is copied or changed.
+The tool uses edition 2021 to match that crate root. Run the feature variants
+with `just coz-test --no-default-features` and
+`just coz-test --features tier_v4`. These cover the core runtime unit tests;
+workspace integration tests and the optional `px` API are outside this gate.
+The profiler tool does not expose the runtime's unsafe experiment feature.
