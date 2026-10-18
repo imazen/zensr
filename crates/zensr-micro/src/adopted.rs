@@ -82,6 +82,14 @@ impl AdoptedModel {
                 raw.len()
             ));
         }
+        // The 3x3 kernel computes output channels in quads and holds at most 64
+        // input channels in its row table (`cin * 3 <= 192`). Any other nf used to
+        // load and then panic inside the first forward.
+        if nf < 4 || !nf.is_multiple_of(4) || nf > 64 {
+            return Err(format!(
+                "compact: nf {nf} cannot run (needs a multiple of 4 in 4..=64)"
+            ));
+        }
         // final cout must be a multiple of 4 for the quad-blocked kernel; pad
         // with zero output channels (s=1: 3->4, s=3: 27->28). The pixel shuffle
         // reads only the first 3*s^2 channels, so pad rows are never consumed.
@@ -168,6 +176,15 @@ impl AdoptedModel {
                 raw.len()
             ));
         }
+        // The upsampler's 3*s^2 output channels go through the quad-blocked 3x3
+        // kernel unpadded, so a scale whose count is not a multiple of 4 (1, 3)
+        // used to load and then panic inside the first forward.
+        if !(3 * s2).is_multiple_of(4) {
+            return Err(format!(
+                "span48: scale {scale} gives {} output channels, which cannot run (needs a multiple of 4)",
+                3 * s2
+            ));
+        }
         let mut buf = raw;
         let mut packed = Vec::new();
         let mut biases = Vec::new();
@@ -202,6 +219,11 @@ impl AdoptedModel {
         let s = self.scale;
         assert_eq!(input.len(), 3 * plane);
         assert_eq!(out.len(), 3 * plane * s * s);
+        if plane == 0 {
+            // No rows or no columns: the upscaled image is empty as well (`out`
+            // is checked to be empty above). The kernels assume one row to fill.
+            return;
+        }
         match self.arch {
             Arch::Compact { nf, nc } => {
                 let s2 = s * s;
@@ -544,11 +566,15 @@ impl AdoptedModel {
             // measured -15.2% (quality, 0/3). Once there are several tiles per
             // thread the runt is a small share of the work and averages out.
             let lopsided = t > 1 && n_tiles <= 2 * t && (runt(w) || runt(h));
-            if starved || lopsided {
+            let chosen = if starved || lopsided {
                 align(even)
             } else {
                 ladder
-            }
+            };
+            // An image under 32 px on a side made `even` (and so `chosen`) smaller
+            // than the 32 asserted below, panicking whenever threads >= 2. At
+            // least 32 covers such an image with one tile.
+            chosen.max(32)
         } else {
             tile
         };
@@ -614,5 +640,122 @@ impl AdoptedModel {
             });
         }
         out.into_inner().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lcg_vec(n: usize, seed: u32, scale: f32) -> Vec<f32> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((s >> 8) as f32 / (1u32 << 24) as f32 - 0.5) * scale
+            })
+            .collect()
+    }
+
+    fn compact_len(nf: usize, nc: usize, s: usize) -> usize {
+        (3 * nf * 9 + nf + nf) + nc * (nf * nf * 9 + nf + nf) + (nf * 3 * s * s * 9 + 3 * s * s)
+    }
+
+    fn span48_len(s: usize) -> usize {
+        let fc = SPAN_FC;
+        (3 * fc * 9 + fc)
+            + 18 * (fc * fc * 9 + fc)
+            + (fc * fc * 9 + fc)
+            + (4 * fc * fc + fc)
+            + (fc * 3 * s * s * 9 + 3 * s * s)
+    }
+
+    /// These nf loaded and then panicked in the first forward (quad-blocked
+    /// output channels; at most 64 input channels); they are now an error. Every
+    /// multiple of 4 in 4..=64 still loads and runs.
+    #[test]
+    fn compact_rejects_nf_the_kernel_cannot_run() {
+        for nf in [0usize, 1, 2, 3, 5, 6, 7, 10, 62, 66, 68, 72] {
+            let raw = vec![0.01f32; compact_len(nf, 1, 1)];
+            let e = AdoptedModel::load_compact(&raw, nf, 1, 1).err();
+            assert!(
+                e.is_some_and(|e| e.contains("cannot run")),
+                "nf={nf} must be rejected"
+            );
+        }
+        for nf in (4..=64).step_by(4) {
+            let raw = lcg_vec(compact_len(nf, 1, 2), nf as u32, 0.1);
+            let m = AdoptedModel::load_compact(&raw, nf, 1, 2)
+                .unwrap_or_else(|e| panic!("nf={nf}: {e}"));
+            let mut out = vec![0.0f32; 3 * 5 * 7 * 4];
+            m.forward(&lcg_vec(3 * 5 * 7, 7, 1.0), 5, 7, &mut out);
+            assert!(out.iter().all(|v| v.is_finite()), "nf={nf}");
+        }
+    }
+
+    /// The span48 upsampler runs 3*s^2 output channels unpadded, so scales 1 and
+    /// 3 loaded and then panicked; they are now an error. 2 and 4 still run.
+    #[test]
+    fn span48_rejects_scales_the_kernel_cannot_run() {
+        for s in [1usize, 3] {
+            let e = AdoptedModel::load_span48(&vec![0.01f32; span48_len(s)], s).err();
+            assert!(
+                e.is_some_and(|e| e.contains("cannot run")),
+                "scale={s} must be rejected"
+            );
+        }
+        for s in [2usize, 4] {
+            let m = AdoptedModel::load_span48(&lcg_vec(span48_len(s), s as u32, 0.02), s).unwrap();
+            let mut out = vec![0.0f32; 3 * 6 * 5 * s * s];
+            m.forward(&lcg_vec(3 * 6 * 5, 9, 1.0), 6, 5, &mut out);
+            assert!(out.iter().all(|v| v.is_finite()), "scale={s}");
+        }
+    }
+
+    /// A zero-sized image upscales to a zero-sized one instead of panicking in
+    /// the kernels; input and output lengths are still checked first.
+    #[test]
+    fn zero_sized_images_give_empty_output() {
+        let raw = lcg_vec(compact_len(8, 1, 2), 3, 0.1);
+        let m = AdoptedModel::load_compact(&raw, 8, 1, 2).unwrap();
+        for (h, w) in [(0usize, 0usize), (0, 5), (5, 0), (0, 40), (40, 0)] {
+            let mut out: Vec<f32> = Vec::new();
+            m.forward(&[], h, w, &mut out);
+            for threads in [1usize, 4] {
+                assert!(
+                    m.upscale_tiled(&[], h, w, threads, 0).is_empty(),
+                    "{h}x{w} t{threads}"
+                );
+                assert!(
+                    m.upscale_tiled(&[], h, w, threads, 32).is_empty(),
+                    "{h}x{w} t{threads}"
+                );
+            }
+        }
+    }
+
+    /// Images under 32 px on a side with threads >= 2 and the automatic tile
+    /// used to panic (`tile >= 32`); they now run as one tile and match the
+    /// whole-image forward bit for bit.
+    #[test]
+    fn tiny_images_with_auto_tiles_match_whole() {
+        let raw = lcg_vec(compact_len(24, 2, 1), 11, 0.1);
+        let m = AdoptedModel::load_compact(&raw, 24, 2, 1).unwrap();
+        for (h, w) in [(1usize, 1usize), (5, 7), (13, 9), (31, 31), (8, 30)] {
+            let input = lcg_vec(3 * h * w, (h * 31 + w) as u32, 1.0);
+            let mut whole = vec![0.0f32; 3 * h * w];
+            m.forward(&input, h, w, &mut whole);
+            for threads in [1usize, 2, 4, 16] {
+                let tiled = m.upscale_tiled(&input, h, w, threads, 0);
+                let same = tiled
+                    .iter()
+                    .zip(&whole)
+                    .all(|(a, b)| a.to_bits() == b.to_bits());
+                assert!(
+                    same && tiled.len() == whole.len(),
+                    "{h}x{w} threads={threads}"
+                );
+            }
+        }
     }
 }
