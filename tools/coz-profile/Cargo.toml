@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 coz = "0.1.3"
-archmage = "0.9.29"
+archmage = { version = "0.9.29", features = ["testable_dispatch"] }
 magetypes = { version = "0.9.29", default-features = false, features = ["std"] }
 zensr-micro = { path = "../../crates/zensr-micro" }
 
