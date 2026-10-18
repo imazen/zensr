@@ -343,7 +343,7 @@ checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
+source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
 dependencies = [
  "archmage",
  "garb",
@@ -368,7 +368,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=e277e9c9#e277e9c9ee7cfa447b8be843abbe40383544f8df"
+source = "git+https://github.com/imazen/zenjpeg?rev=b88f02e3dd722a07abb2d0a8262a2c50a7584b99#b88f02e3dd722a07abb2d0a8262a2c50a7584b99"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -449,9 +449,10 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=e277e9c9#e277e9c9ee7cfa447b8be843abbe40383544f8df"
+source = "git+https://github.com/imazen/zenjpeg?rev=b88f02e3dd722a07abb2d0a8262a2c50a7584b99#b88f02e3dd722a07abb2d0a8262a2c50a7584b99"
 dependencies = [
  "archmage",
+ "imgref",
  "libm",
  "linear-srgb",
  "magetypes",
@@ -477,11 +478,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
-
-[[patch.unused]]
-name = "zenanalyze"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
 
 [[patch.unused]]
 name = "zenanalyze-api"

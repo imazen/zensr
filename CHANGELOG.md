@@ -23,6 +23,20 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Changed
 
+- **zenjpeg git pin e277e9c9 → b88f02e3 (2026-10-12), so the graph resolves one
+  zenanalyze.**
+  - e277e9c9 pinned zenanalyze by git rev 13d40c3b. The root
+    `[patch.crates-io]` rewrites only registry requirements, so two zenanalyze
+    0.2.0 sources compiled, against the root manifest's stated invariant.
+  - b88f02e3 is the newest zenjpeg `main` rev whose zenanalyze and zencodec
+    edges are registry requirements.
+  - Later revs pin zencodec and zenmeta by git. Head 64a92f78 would add a
+    second zencodec (0.1.27 git beside 0.1.26) and a second ultrahdr-core
+    (0.6.0 beside 0.5.0).
+  - Lock changes: the 13d40c3b zenanalyze is gone; zenjpeg and zenyuv change
+    source; zenyuv gains an `imgref` edge. Nothing else.
+  - `restore_jpeg` gives the same recorded digests, and `zensr-adopted-verify`
+    prints identical lines.
 - **Released archmage/magetypes 0.9.30 instead of the f46cf941 git pin.** The
   pin existed for magetypes' `concat_shift`, which no release has; conv3x3 now
   reads its three taps as three unaligned loads (same lane values, same

@@ -3500,19 +3500,6 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
-dependencies = [
- "archmage",
- "garb",
- "linear-srgb",
- "magetypes",
- "zenpixels",
- "zenpixels-convert",
-]
-
-[[package]]
-name = "zenanalyze"
-version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
 dependencies = [
  "archmage",
@@ -3728,7 +3715,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=e277e9c9#e277e9c9ee7cfa447b8be843abbe40383544f8df"
+source = "git+https://github.com/imazen/zenjpeg?rev=b88f02e3dd722a07abb2d0a8262a2c50a7584b99#b88f02e3dd722a07abb2d0a8262a2c50a7584b99"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -3745,7 +3732,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
+ "zenanalyze",
  "zencodec",
  "zenpixels",
  "zenyuv",
@@ -3868,7 +3855,7 @@ dependencies = [
  "rayon",
  "rgb",
  "tract-onnx",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze)",
+ "zenanalyze",
  "zenjpeg",
  "zenpixels",
  "zenpng",
@@ -3910,7 +3897,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "rgb",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze)",
+ "zenanalyze",
  "zenanalyze-api",
  "zenjpeg",
  "zensr-micro",
@@ -3931,9 +3918,10 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=e277e9c9#e277e9c9ee7cfa447b8be843abbe40383544f8df"
+source = "git+https://github.com/imazen/zenjpeg?rev=b88f02e3dd722a07abb2d0a8262a2c50a7584b99#b88f02e3dd722a07abb2d0a8262a2c50a7584b99"
 dependencies = [
  "archmage",
+ "imgref",
  "libm",
  "linear-srgb",
  "magetypes",

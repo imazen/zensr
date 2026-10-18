@@ -20,7 +20,10 @@ zenpng = "0.1.4"
 # zenjpeg 0.9.0 is not published yet and 0.8.4 keeps DeblockMode pub(crate),
 # so this pins the public repo. Swap to a version req when 0.9.0 ships.
 # Local sibling tree wins via the gitignored .cargo override: just cargo-local
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "e277e9c9" }
+# b88f02e3 (2026-10-12) is the newest main rev whose zenanalyze and zencodec
+# edges are registry requirements, so the root patch keeps one zenanalyze
+# source; later revs pin zencodec by git, a second zencodec source here.
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "b88f02e3dd722a07abb2d0a8262a2c50a7584b99" }
 # HEIC decode for the clean-reference corpus: 90 of the corpus's photographic
 # sources are HEIC, and they are the CHEAP clean references — decode and they
 # are pristine, no downscale-to-pristine treatment needed. Git-pinned because
