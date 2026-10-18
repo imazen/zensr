@@ -678,10 +678,27 @@ macro_rules! define_kernels {
             }
 
             /// Winograd F(2x2,3x3) middle-layer conv (zero pad, planar, bias).
-            /// Interior: even/odd-deinterleaved staging makes every transform
-            /// access a contiguous W-lane load; quad-blocked GEMM in the
-            /// transform domain; vector inverse transform. Borders + tiny
-            /// buffers: scalar (crate::wino). Overlap blocks are idempotent.
+            ///
+            /// One canonical computation per output pixel, whatever the buffer
+            /// size, tiling or tier:
+            ///
+            /// - The 2x2 output tiles sit on a grid fixed in IMAGE coordinates
+            ///   (tile corners at odd image x and y). `ox`/`oy` give the image
+            ///   parity of this buffer's column 0 / row 0, so a tile of a tiled
+            ///   run covers the same pixels, at the same in-tile positions, as in
+            ///   a whole-image run. (An F(2x2,3x3) output's formula depends on
+            ///   its position in the tile, and its bits on the whole 4x4 input
+            ///   patch, so a grid anchored at the buffer made tiled and whole
+            ///   runs disagree.)
+            /// - Tiles reaching into the 1-pixel border frame or past the buffer
+            ///   store only their interior pixels; the patch reads zeros outside
+            ///   the buffer. The border frame is the scalar direct conv.
+            /// - Every row of tiles, however short, goes through the same vector
+            ///   code, with lanes past the last tile zero-padded and unstored.
+            /// - The transform-domain GEMM uses one-rounding `mul_add_portable`.
+            ///
+            /// A tiled caller must keep pixels within 2 of a buffer edge out of
+            /// the region it keeps (see `AdoptedModel::halo`).
             #[inline(always)]
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn wino_mid<T: Backend>(
@@ -696,107 +713,79 @@ macro_rules! define_kernels {
                 h: usize,
                 wd: usize,
                 cs: usize,
+                ox: usize,
+                oy: usize,
             ) {
                 const W: usize = $w;
-                if h < 4 || wd < 4 {
-                    crate::wino::conv3x3_wino(inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+                if h == 0 || wd == 0 {
                     return;
                 }
-                let nt = (wd - 4) / 2 + 1;
-                if nt < W {
-                    crate::wino::conv3x3_wino(inp, cin, uq, raw, bias, out, cout, h, wd, cs);
-                    return;
-                }
-                // scalar border frame (+ the wd-even rightmost interior column)
-                let extra_col = 2 * nt < wd - 2;
+                // Border frame: scalar direct conv, the same at every position.
                 for oc in 0..cout {
                     for x in 0..wd {
                         out[oc * cs + x] =
                             crate::wino::direct_px(inp, cin, raw, bias[oc], oc, 0, x, h, wd, cs);
-                        out[oc * cs + (h - 1) * wd + x] = crate::wino::direct_px(
-                            inp,
-                            cin,
-                            raw,
-                            bias[oc],
-                            oc,
-                            h - 1,
-                            x,
-                            h,
-                            wd,
-                            cs,
-                        );
+                        let y = h - 1;
+                        out[oc * cs + y * wd + x] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, x, h, wd, cs);
                     }
-                    for y in 1..h - 1 {
+                    for y in 1..h.saturating_sub(1) {
                         out[oc * cs + y * wd] =
                             crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, 0, h, wd, cs);
-                        out[oc * cs + y * wd + wd - 1] = crate::wino::direct_px(
-                            inp,
-                            cin,
-                            raw,
-                            bias[oc],
-                            oc,
-                            y,
-                            wd - 1,
-                            h,
-                            wd,
-                            cs,
-                        );
-                        if extra_col {
-                            out[oc * cs + y * wd + wd - 2] = crate::wino::direct_px(
-                                inp,
-                                cin,
-                                raw,
-                                bias[oc],
-                                oc,
-                                y,
-                                wd - 2,
-                                h,
-                                wd,
-                                cs,
-                            );
-                        }
+                        let x = wd - 1;
+                        out[oc * cs + y * wd + x] =
+                            crate::wino::direct_px(inp, cin, raw, bias[oc], oc, y, x, h, wd, cs);
                     }
                 }
-                let half = wd / 2 + 2 + W;
-                // padded tile count: full-W blocks + one overlap block tail
-                let nblk = nt / W + usize::from(nt % W != 0);
-                let starts: Vec<usize> = (0..nblk)
-                    .map(|b| if (b + 1) * W <= nt { b * W } else { nt - W })
-                    .collect();
-                let ntp = nblk * W; // lane slots (overlap block recomputes)
+                if h < 3 || wd < 3 {
+                    return; // no interior pixels
+                }
+                // Tile j covers buffer columns 2j + xa and 2j + xa + 1 (xa = 1 when
+                // column 0 is at an even image x); tile i covers rows 2i + ya and
+                // 2i + ya + 1. Every tile touching an interior pixel is computed.
+                let (xa, ya) = (1 - (ox & 1), 1 - (oy & 1));
+                let nt = (wd - 2 - xa) / 2 + 1;
+                let nty = (h - 2 - ya) / 2 + 1;
+                let nblk = nt.div_ceil(W);
+                let ntp = nblk * W;
+                // Even/odd-deinterleaved patch columns: patch column k of tile j
+                // is buffer column 2j + xa - 1 + k, i.e. E[j], O[j], E[j+1], O[j+1].
+                let half = ntp + 1;
                 let mut eo = vec![0.0f32; cin * 4 * 2 * half];
                 let mut vb = vec![0.0f32; 16 * cin * ntp];
                 let mut mb = vec![0.0f32; 16 * cout * ntp];
-                let mut ys: Vec<usize> = (1..=h - 3).step_by(2).collect();
-                if ys.last().copied().unwrap_or(1) + 1 < h - 2 {
-                    ys.push(h - 3);
-                }
-                for &y0 in &ys {
+                for ti in 0..nty {
+                    let y0 = 2 * ti + ya;
                     for ic in 0..cin {
                         for r in 0..4 {
-                            let row = &inp[ic * cs + (y0 - 1 + r) * wd..][..wd];
                             let be = ((ic * 4 + r) * 2) * half;
                             let bo = be + half;
-                            for i in 0..wd.div_ceil(2) {
-                                eo[be + i] = row[2 * i];
-                            }
-                            for i in 0..wd / 2 {
-                                eo[bo + i] = row[2 * i + 1];
+                            // patch row r is buffer row y0 - 1 + r
+                            let yy = (y0 + r).checked_sub(1).filter(|&y| y < h);
+                            for i in 0..half {
+                                for (k, base) in [(2 * i, be), (2 * i + 1, bo)] {
+                                    // buffer column k + xa - 1
+                                    let v = match (yy, (k + xa).checked_sub(1)) {
+                                        (Some(y), Some(x)) if x < wd => inp[ic * cs + y * wd + x],
+                                        _ => 0.0,
+                                    };
+                                    eo[base + i] = v;
+                                }
                             }
                         }
                     }
-                    // phase 1: input transform for EVERY block in the row
-                    for (bi, &bx) in starts.iter().enumerate() {
+                    // phase 1: input transform for every block of tiles
+                    for bi in 0..nblk {
                         let lane0 = bi * W;
                         for ic in 0..cin {
                             let mut d = [[V::<T>::splat_t(token, 0.0); 4]; 4];
                             for r in 0..4 {
                                 let be = ((ic * 4 + r) * 2) * half;
                                 let bo = be + half;
-                                d[r][0] = V::<T>::from_slice_t(token, &eo[be + bx..]);
-                                d[r][1] = V::<T>::from_slice_t(token, &eo[bo + bx..]);
-                                d[r][2] = V::<T>::from_slice_t(token, &eo[be + bx + 1..]);
-                                d[r][3] = V::<T>::from_slice_t(token, &eo[bo + bx + 1..]);
+                                d[r][0] = V::<T>::from_slice_t(token, &eo[be + lane0..]);
+                                d[r][1] = V::<T>::from_slice_t(token, &eo[bo + lane0..]);
+                                d[r][2] = V::<T>::from_slice_t(token, &eo[be + lane0 + 1..]);
+                                d[r][3] = V::<T>::from_slice_t(token, &eo[bo + lane0 + 1..]);
                             }
                             let mut t = [[V::<T>::splat_t(token, 0.0); 4]; 4];
                             for c in 0..4 {
@@ -821,7 +810,7 @@ macro_rules! define_kernels {
                             }
                         }
                     }
-                    // phase 2: GEMM — each U quad amortized over the WHOLE row
+                    // phase 2: GEMM — each U quad amortized over the whole row
                     for p in 0..16 {
                         let upb = p * (cout / 4) * cin * 4;
                         let vpb = p * cin * ntp;
@@ -838,8 +827,10 @@ macro_rules! define_kernels {
                                         .try_into()
                                         .unwrap();
                                     for ob in 0..4 {
-                                        acc[ob] =
-                                            vv.mul_add(V::<T>::splat_t(token, w4[ob]), acc[ob]);
+                                        acc[ob] = vv.mul_add_portable(
+                                            V::<T>::splat_t(token, w4[ob]),
+                                            acc[ob],
+                                        );
                                     }
                                 }
                                 for ob in 0..4 {
@@ -851,10 +842,10 @@ macro_rules! define_kernels {
                             }
                         }
                     }
-                    // phase 3: inverse transform + bias + scatter, whole row
+                    // phase 3: inverse transform + bias; store interior pixels only
                     for oc in 0..cout {
                         let bv = V::<T>::splat_t(token, bias[oc]);
-                        for (bi, &bx) in starts.iter().enumerate() {
+                        for bi in 0..nblk {
                             let lane0 = bi * W;
                             let mut mm = [V::<T>::splat_t(token, 0.0); 16];
                             for (p, m) in mm.iter_mut().enumerate() {
@@ -879,13 +870,17 @@ macro_rules! define_kernels {
                             for (i, y) in ytile.iter().enumerate() {
                                 y.store(&mut tmp[i]);
                             }
-                            let obase = oc * cs + y0 * wd;
-                            for tt in 0..W {
-                                let x0 = 1 + 2 * (bx + tt);
-                                out[obase + x0] = tmp[0][tt];
-                                out[obase + x0 + 1] = tmp[1][tt];
-                                out[obase + wd + x0] = tmp[2][tt];
-                                out[obase + wd + x0 + 1] = tmp[3][tt];
+                            for tt in 0..W.min(nt - lane0) {
+                                let x0 = 2 * (lane0 + tt) + xa;
+                                for (k, (dy, dx)) in [(0usize, 0usize), (0, 1), (1, 0), (1, 1)]
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    let (y, x) = (y0 + dy, x0 + dx);
+                                    if (1..h - 1).contains(&y) && (1..wd - 1).contains(&x) {
+                                        out[oc * cs + y * wd + x] = tmp[k][tt];
+                                    }
+                                }
                             }
                         }
                     }
@@ -1278,8 +1273,10 @@ fn wino_lay(
     h: usize,
     wd: usize,
     cs: usize,
+    ox: usize,
+    oy: usize,
 ) {
-    k8::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+    k8::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
 #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
 #[arcane]
@@ -1296,8 +1293,10 @@ fn wino_lay_v4(
     h: usize,
     wd: usize,
     cs: usize,
+    ox: usize,
+    oy: usize,
 ) {
-    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
@@ -1314,10 +1313,15 @@ fn wino_lay_v4x(
     h: usize,
     wd: usize,
     cs: usize,
+    ox: usize,
+    oy: usize,
 ) {
-    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs);
+    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
 
+/// Winograd middle-layer conv through the tier dispatch. `ox`/`oy`: image
+/// parity of the buffer's column 0 / row 0 (0 for a whole image); see
+/// `wino_mid` for why the tile grid is anchored to the image.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn conv3x3_wino_dispatch(
     inp: &[f32],
@@ -1330,9 +1334,11 @@ pub(crate) fn conv3x3_wino_dispatch(
     h: usize,
     wd: usize,
     cs: usize,
+    ox: usize,
+    oy: usize,
 ) {
     incant!(
-        wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs),
+        wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy),
         [
             v4x(cfg(avx512)),
             v4(cfg(tier_v4)),

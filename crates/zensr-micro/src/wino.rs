@@ -1,16 +1,15 @@
 //! Winograd F(2x2, 3x3) for the compact-model middle layers (cin==cout==nf).
 //!
-//! 2.25x multiply reduction vs direct 3x3. Interior output pixels are
-//! computed in 2x2 tiles (16-tile GEMM batches over the transform domain,
-//! written with fixed [f32; T] blocks so LLVM vectorizes the inner loops);
-//! the 1-pixel border frame (and any h/w<4 buffer) uses a scalar direct
-//! conv with identical zero-pad semantics. Overlapped edge tiles recompute
-//! the same math (idempotent stores, same trick as the direct kernel).
+//! The production kernel is `simd::wino_mid` (every buffer size, every tier,
+//! tile grid anchored to the image). This file keeps the weight transform, the
+//! scalar direct conv it uses for the 1-pixel border frame, and — for tests
+//! only — the original scalar Winograd it is compared against.
 //!
 //! Numerics: transforms are exact-in-f32 (B/A entries 0,±1; G entries
 //! 0,±0.5); accumulated error vs direct conv measured < 1e-4 on the golden
 //! tolerance scale (see `wino_matches_direct` test).
 
+#[cfg(test)]
 const T: usize = 16; // tiles per GEMM batch (2 AVX2 regs per [f32; T] row)
 
 /// U = G g G^T for every (oc, ic) 3x3 kernel; QUAD-major layout
@@ -47,6 +46,7 @@ pub(crate) fn wino_weights(raw: &[f32], cin: usize, cout: usize) -> Vec<f32> {
 }
 
 /// B^T d B for a 4x4 input tile (rows are 4 consecutive f32 quads).
+#[cfg(test)]
 #[inline(always)]
 fn input_transform(d: &[[f32; 4]; 4]) -> [f32; 16] {
     // rows: B^T d  (B^T = [[1,0,-1,0],[0,1,1,0],[0,-1,1,0],[0,1,0,-1]])
@@ -68,6 +68,7 @@ fn input_transform(d: &[[f32; 4]; 4]) -> [f32; 16] {
 }
 
 /// A^T m A -> 2x2 (A^T = [[1,1,1,0],[0,1,-1,-1]]).
+#[cfg(test)]
 #[inline(always)]
 fn output_transform(m: &[f32; 16]) -> [f32; 4] {
     let mut t = [[0.0f32; 4]; 2];
@@ -119,7 +120,8 @@ pub(crate) fn direct_px(
 }
 
 /// Full same-size conv3x3 (zero pad, planar, bias) — Winograd interior +
-/// scalar borders. Drop-in equivalent of `conv3x3_packed_dispatch`.
+/// scalar borders: the original scalar formulation, kept as a test reference.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn conv3x3_wino(
     inp: &[f32],
@@ -264,7 +266,7 @@ mod tests {
             let u = wino_weights(&raw, cin, cout);
             let mut got = vec![0.0f32; cout * cs];
             crate::simd::conv3x3_wino_dispatch(
-                &inp, cin, &u, &raw, &bias, &mut got, cout, h, wd, cs,
+                &inp, cin, &u, &raw, &bias, &mut got, cout, h, wd, cs, 0, 0,
             );
             let mut mx = 0.0f32;
             for oc in 0..cout {

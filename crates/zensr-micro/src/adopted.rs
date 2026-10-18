@@ -64,10 +64,13 @@ impl AdoptedModel {
         self.space = space;
     }
 
-    /// Receptive-field radius in input pixels (number of chained 3x3 convs).
+    /// Receptive-field radius in input pixels (number of chained 3x3 convs),
+    /// as far as bit-exact tiling is concerned: a Winograd layer
+    /// (`ZENSR_WINOGRAD=1`) computes each output from its tile's 4x4 input
+    /// patch, so it reaches 2 pixels instead of 1.
     pub fn halo(&self) -> usize {
         match self.arch {
-            Arch::Compact { nc, .. } => nc + 2,
+            Arch::Compact { nc, .. } => nc + 2 + self.wino.iter().filter(|w| w.is_some()).count(),
             Arch::Span48 => 21,
         }
     }
@@ -111,8 +114,10 @@ impl AdoptedModel {
         // scalar transforms + an untiered GEMM and lost 1.8x on lianli, which is
         // why the flag exists. **v2/v3 (b714829) fixed exactly that** —
         // magetypes-tiered, deinterleaved vector transforms, quad GEMM,
-        // row-wide U amortization, in simd.rs::conv3x3_wino_dispatch. wino.rs is
-        // now only the scalar fallback for shapes below one vector of tiles.
+        // row-wide U amortization, in simd.rs::conv3x3_wino_dispatch. Since
+        // 2026-10-18 that kernel runs every shape (zero-padded lanes, tile grid
+        // anchored to the image) and wino.rs keeps only the weight transform,
+        // the direct border pixel and a test reference.
         //
         // RE-MEASURED 2026-09-08 against the TIERED v2/v3 on AVX-512 (7950X,
         // v4x, end-to-end prod_bench with dejpeg_rt24g, wd>=1024 so nt=511 >> W
@@ -214,6 +219,14 @@ impl AdoptedModel {
 
     /// Whole-tile forward: input [3,h,w] tight -> out [3,s*h,s*w] tight.
     pub fn forward(&self, input: &[f32], h: usize, w: usize, out: &mut [f32]) {
+        self.forward_at(input, h, w, out, 0, 0);
+    }
+
+    /// `forward` on a window whose column 0 / row 0 sit at image x / y parity
+    /// `ox` / `oy`. Only the Winograd layers use it: they anchor their 2x2 tile
+    /// grid to the image, so a tile window and the whole image compute every
+    /// kept pixel the same way.
+    fn forward_at(&self, input: &[f32], h: usize, w: usize, out: &mut [f32], ox: usize, oy: usize) {
         let plane = h * w;
         let cs = plane; // identity stride (padding measured 2x slower — see PLAN appendix)
         let s = self.scale;
@@ -261,6 +274,8 @@ impl AdoptedModel {
                             h,
                             w,
                             cs,
+                            ox,
+                            oy,
                         ),
                         None => conv3x3_packed_dispatch(
                             &cur[..span_nf],
@@ -616,7 +631,7 @@ impl AdoptedModel {
                 }
                 tile_out.clear();
                 tile_out.resize(3 * eh * ew * s * s, 0.0);
-                self.forward(&ext_in, eh, ew, &mut tile_out);
+                self.forward_at(&ext_in, eh, ew, &mut tile_out, ex0 % 2, ey0 % 2);
                 let (cx, cy) = ((x0 - ex0) * s, (y0 - ey0) * s);
                 let (cw, ch) = ((x1 - x0) * s, (y1 - y0) * s);
                 let mut guard = out.lock().unwrap();
@@ -755,6 +770,52 @@ mod tests {
                     same && tiled.len() == whole.len(),
                     "{h}x{w} threads={threads}"
                 );
+            }
+        }
+    }
+
+    /// The opt-in Winograd layers (`ZENSR_WINOGRAD=1`) tile bit-exactly too:
+    /// the whole-image forward and tiled runs at several thread counts and tile
+    /// sizes agree bit for bit, because the tile grid is anchored to the image
+    /// and `halo` covers Winograd's 2-pixel reach.
+    #[test]
+    fn winograd_models_tiled_equals_whole_bitwise() {
+        for (nf, nc, s) in [(8usize, 2usize, 1usize), (24, 2, 2), (64, 1, 1)] {
+            let raw = lcg_vec(compact_len(nf, nc, s), (nf * 7 + nc) as u32, 0.1);
+            let mut m = AdoptedModel::load_compact(&raw, nf, nc, s).unwrap();
+            // What load_compact does under ZENSR_WINOGRAD=1, without the env var.
+            let mut off = 3 * nf * 9 + 2 * nf;
+            for i in 0..nc {
+                let wraw = &raw[off..off + nf * nf * 9];
+                m.wino[1 + i] = Some((crate::wino::wino_weights(wraw, nf, nf), wraw.to_vec()));
+                off += nf * nf * 9 + 2 * nf;
+            }
+            assert_eq!(m.halo(), 2 * nc + 2, "nf={nf} nc={nc}");
+            for (h, w) in [(37usize, 53usize), (21, 40), (6, 9)] {
+                let input = lcg_vec(3 * h * w, (h * 13 + w) as u32, 1.0);
+                let mut whole = vec![0.0f32; 3 * h * w * s * s];
+                m.forward(&input, h, w, &mut whole);
+                assert!(whole.iter().all(|v| v.is_finite()));
+                for (threads, tile) in [
+                    (1usize, 32usize),
+                    (3, 32),
+                    (2, 40),
+                    (1, 64),
+                    (4, 0),
+                    (16, 0),
+                ] {
+                    let tiled = m.upscale_tiled(&input, h, w, threads, tile);
+                    if let Some(i) = tiled
+                        .iter()
+                        .zip(&whole)
+                        .position(|(a, b)| a.to_bits() != b.to_bits())
+                    {
+                        panic!(
+                            "nf={nf} nc={nc} s={s} {h}x{w} threads={threads} tile={tile}: element {i} {:e} != whole {:e}",
+                            tiled[i], whole[i]
+                        );
+                    }
+                }
             }
         }
     }

@@ -736,3 +736,152 @@ fn adopted_models_tiled_equals_whole_bitwise() {
         }
     }
 }
+
+#[allow(clippy::too_many_arguments)]
+fn wino(
+    t: Tier,
+    inp: &[f32],
+    c: usize,
+    u: &[f32],
+    raw: &[f32],
+    b: &[f32],
+    out: &mut [f32],
+    h: usize,
+    wd: usize,
+    cs: usize,
+    ox: usize,
+    oy: usize,
+) {
+    match t {
+        Tier::Scalar => wino_lay_scalar(
+            archmage::ScalarToken,
+            inp,
+            c,
+            u,
+            raw,
+            b,
+            out,
+            c,
+            h,
+            wd,
+            cs,
+            ox,
+            oy,
+        ),
+        #[cfg(target_arch = "x86_64")]
+        Tier::V3(k) => wino_lay_v3(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+        Tier::V4(k) => wino_lay_v4(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+        Tier::V4x(k) => wino_lay_v4x(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        #[cfg(target_arch = "aarch64")]
+        Tier::Neon(k) => wino_lay_neon(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        #[cfg(target_arch = "wasm32")]
+        Tier::Wasm(k) => wino_lay_wasm128(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+    }
+}
+
+/// Winograd (opt-in `ZENSR_WINOGRAD=1`): a window of an image, computed with
+/// the window's image parity, must give every pixel at least 2 away from a
+/// window edge inside the image the same bits as the whole image; windows
+/// touching an image edge keep that edge. Every tier must equal the scalar
+/// tier on the whole image. Covers buffers below one vector of tiles and
+/// under 4 px, odd and even sizes and offsets.
+#[test]
+fn winograd_windows_and_tiers_match_the_whole_image() {
+    let ts = tiers();
+    let mut g = Lcg(0x5eed_0005);
+    for c in [4usize, 8, 24] {
+        let raw = g.vec(c * c * 9, 0.6 / (3.0 * (c as f32).sqrt()));
+        let bias = g.vec(c, 0.2);
+        let u = crate::wino::wino_weights(&raw, c, c);
+        for (hh, ww) in [
+            (1usize, 1usize),
+            (2, 5),
+            (3, 3),
+            (4, 7),
+            (5, 4),
+            (7, 9),
+            (13, 9),
+            (17, 33),
+            (40, 70),
+        ] {
+            let img = g.vec(c * hh * ww, 2.0);
+            let whole_of = |t: Tier| {
+                let mut o = vec![0.0f32; c * hh * ww];
+                wino(t, &img, c, &u, &raw, &bias, &mut o, hh, ww, hh * ww, 0, 0);
+                o
+            };
+            let whole = whole_of(Tier::Scalar);
+            for &t in &ts {
+                assert_eq!(
+                    bits(&whole_of(t)),
+                    bits(&whole),
+                    "{t:?} c={c} {hh}x{ww}: tier differs from scalar"
+                );
+            }
+            // windows: every start parity, ends inside and at the image edge
+            let mut wins = Vec::new();
+            for y0 in [0usize, 1, 2, 3] {
+                for x0 in [0usize, 1, 2, 3, 5] {
+                    for (dy, dx) in [(9usize, 11usize), (6, 7), (hh, ww)] {
+                        let (y1, x1) = ((y0 + dy).min(hh), (x0 + dx).min(ww));
+                        if y0 < y1 && x0 < x1 {
+                            wins.push((y0, y1, x0, x1));
+                        }
+                    }
+                }
+            }
+            for &t in &ts {
+                for &(y0, y1, x0, x1) in &wins {
+                    let (eh, ew) = (y1 - y0, x1 - x0);
+                    let mut win = vec![0.0f32; c * eh * ew];
+                    for ic in 0..c {
+                        for y in 0..eh {
+                            win[(ic * eh + y) * ew..][..ew]
+                                .copy_from_slice(&img[(ic * hh + y0 + y) * ww + x0..][..ew]);
+                        }
+                    }
+                    let mut o = vec![0.0f32; c * eh * ew];
+                    wino(
+                        t,
+                        &win,
+                        c,
+                        &u,
+                        &raw,
+                        &bias,
+                        &mut o,
+                        eh,
+                        ew,
+                        eh * ew,
+                        x0 % 2,
+                        y0 % 2,
+                    );
+                    // keep pixels >= 2 from any window edge that is not an image edge
+                    let keep = |v: usize, lo: usize, hi: usize, lo_img: bool, hi_img: bool| {
+                        (lo_img || v >= lo + 2) && (hi_img || v + 2 < hi)
+                    };
+                    for oc in 0..c {
+                        for y in y0..y1 {
+                            if !keep(y, y0, y1, y0 == 0, y1 == hh) {
+                                continue;
+                            }
+                            for x in x0..x1 {
+                                if !keep(x, x0, x1, x0 == 0, x1 == ww) {
+                                    continue;
+                                }
+                                let a = o[(oc * eh + y - y0) * ew + x - x0];
+                                let b = whole[(oc * hh + y) * ww + x];
+                                assert_eq!(
+                                    a.to_bits(),
+                                    b.to_bits(),
+                                    "{t:?} c={c} image {hh}x{ww} window y{y0}..{y1} x{x0}..{x1}: ({oc},{y},{x}) {a:e} != whole {b:e}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

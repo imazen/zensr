@@ -78,6 +78,32 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   NEON `max`/`min` return NaN for a NaN operand where x86 returns the other.
   Outputs of the main loop on the FMA tiers are unchanged. New exact
   regressions: `simd::exactness`.
+- **Opt-in Winograd (`ZENSR_WINOGRAD=1`) no longer depends on threads, tiles
+  or tier.** A Winograd output depends on which 2×2 tile it falls in. Tiles
+  started at buffer row and column 1, so a tiled run grouped image pixels into
+  different tiles than the whole-image run. Beyond that:
+  - an odd interior width computed its last column with the direct formula;
+  - an odd interior height re-ran an overlapping last tile row;
+  - buffers under 4 px, or under one vector of tiles, took the scalar
+    `wino.rs` path with unfused multiply-adds;
+  - the tile halo did not count a Winograd layer's 2-pixel reach.
+
+  On the previous build, 14 of 68 real-model matrix cases disagreed, 5 of them
+  in RGB8. The largest was animevideo_x4v3 150×140, tiled vs whole: 4 RGB8
+  values.
+
+  The vector kernel now runs every shape:
+  - tiles are anchored to the image's row and column parity, with
+    zero-padded lanes;
+  - edge tiles store only interior pixels;
+  - the one-pixel border uses `direct_px`;
+  - the GEMM uses `mul_add_portable`;
+  - `halo()` adds one pixel per Winograd layer.
+
+  All 68 cases now agree, and the default path is byte-identical to the
+  previous build. New regressions:
+  `simd::exactness::winograd_windows_and_tiers_match_the_whole_image` and
+  `adopted::tests::winograd_models_tiled_equals_whole_bitwise`.
 - `classify_rgb8_scanning` returns the analysis error instead of swallowing it.
   `classify_rgb8` keeps the infallible `Photo`-on-failure fallback, which is the
   precision-biased safe direction the rule was fit for.

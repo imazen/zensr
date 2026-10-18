@@ -120,18 +120,92 @@ significant digit (for example animevideo_x4v3 40x36 2.66e-4 → 2.67e-4,
 dejpeg2_auto 17x13 3.63e-5 → 3.68e-5), because the 40x36 and 17x13 goldens use
 widths that are not multiples of 16.
 
+## Winograd (`ZENSR_WINOGRAD=1`, opt-in)
+
+A Winograd F(2×2,3×3) output depends on which 2×2 tile it falls in, so
+whole-image and tiled runs agree only if they put every pixel in the same tile
+and compute that tile the same way.
+
+### What was wrong
+
+On the build above, the following differed:
+
+| case | comparison | f32 values | RGB8 values |
+|---|---|---|---|
+| animevideo_x4v3 150×140 | tiled vs whole | 77,305 | 4 |
+| nomosuni_compact_2x 150×140 | tiled vs whole | 19,721 | 1 |
+| nomosuni_compact_2x 33×19 | v3 vs auto | 6,952 | 2 |
+| general_x4v3 33×19 | v3 vs auto | 27,839 | 1 |
+| animevideo_x4v3 33×19 | v3 vs auto | 26,998 | 1 |
+
+In all, 14 of 68 cases disagreed, 5 of them in RGB8 (worker `51ded788…`,
+`matrix.py --winograd` on the six compact models).
+
+The causes, all in `wino_mid`:
+- Tiles started at buffer row and column 1, so a tile of a tiled run sat at a
+  different image parity than in the whole image.
+- An odd interior width computed its last column with the direct formula.
+- An odd interior height re-ran an overlapping last tile row.
+- Buffers under 4 px, or under one vector of tiles, used the scalar `wino.rs`
+  path with unfused multiply-adds.
+- `halo()` counted 1 pixel per 3×3 layer, while a Winograd layer reads its
+  tile's 4×4 patch, which is 2 pixels.
+
+### The fix
+
+The vector kernel runs every shape:
+- The tile grid is anchored to the image: the caller passes the buffer's
+  image-row and image-column parity.
+- Lanes beyond the last tile read zeros.
+- Edge tiles store only interior pixels; the one-pixel border uses
+  `direct_px`.
+- The GEMM uses `mul_add_portable`.
+- `halo()` adds one pixel per Winograd layer, and the tiled runner passes each
+  tile's origin parity.
+
+### Regressions
+
+- `winograd_windows_and_tiers_match_the_whole_image` (kernel):
+  - every tier equals scalar on whole images from 1×1 to 40×70
+  - windows at row offsets 0–3 and column offsets 0, 1, 2, 3 and 5 equal the
+    whole image, bitwise, on their pixels at least 2 from an inner window edge
+- `winograd_models_tiled_equals_whole_bitwise`: procedural models nf 8/24/64,
+  the same thread and tile set as the default model test, at 37×53, 21×40 and
+  6×9.
+
+Both fail on the previous kernel. For example:
+- `Scalar c=4 image 4x7 window y0..4 x1..7: (0,1,3) 2.1106455e-2 != whole 2.1106474e-2`
+- `nf=8 nc=2 s=1 37x53 threads=1 tile=32: element 152 1.896697e-1 != whole 1.8966971e-1`
+
+Coverage of the passing runs:
+- The kernel test checks scalar, v3, v4x, and v4 with `tier_v4`. The model
+  test uses the auto tier.
+- Both pass on x86-64, in the default and `tier_v4` builds.
+- Both pass on i686 and under qemu aarch64 (NEON).
+- Under wasmtime `+simd128` (wasm128), only the kernel test runs, because the
+  model test needs threads.
+
+### Results after the fix
+
+- **Real-model matrix, `--winograd`:** 68 cases, 622 runs, 0 inconsistent
+  (worker `d96aaebc…`).
+- **Default path:** byte-identical to the build above. All 72 cases agree with
+  `51ded788…` on the whole-image auto run, and every configuration agrees
+  within the new build.
+- **`restore_jpeg` with Winograd on:** for each of the four (JPEG, model)
+  pairs, one RGB8 SHA-256 across auto and v3 at threads 1–16 plus scalar at 16.
+  The previous product worker gives the same four digests, so these 576×576
+  inputs do not show the defect.
+- **Default `restore_jpeg`:** still matches the recorded digests.
+- **Torch goldens with Winograd on** (`ZENSR_WINOGRAD=1 zensr-adopted-verify`,
+  5e-4): the same 90 checks pass and the same 4 fail as with the previous
+  kernel and on the default path. In 21 of the 94 lines (17 at 17×13, 4 at
+  40×36) the maximum difference moves in the third significant digit.
+
 ## Not covered, or still inconsistent
 
-- **Winograd (`ZENSR_WINOGRAD=1`, opt-in, off by default) is still not
-  consistent within its own mode.** On the repaired build:
-  - animevideo_x4v3 150×140, tiled vs whole: 77,305 f32 values and 4 RGB8
-    values differ
-  - nomosuni_compact_2x 33×19, v3 vs auto: 2 RGB8 values differ
-  - tier disagreements in 14 of 68 cases
-  
-  Its borders and buffers under one vector fall back to the scalar `wino.rs`
-  path, so a pixel's sequence depends on where tile borders fall. Aligning it
-  needs that fallback redesigned; not done here.
+- The Winograd kernel was not timed. Earlier speed results
+  (`realtime_kernels_x86_2026-09-08.md`) describe the previous kernel.
 - NEON and WASM ran only under emulation (qemu user mode, wasmtime); no ARM
   hardware or browser run. Windows (x64, ARM64) was compiled, not run.
 - The scalar tier and WASM now compute every multiply-add with a software FMA,
