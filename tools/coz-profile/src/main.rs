@@ -16,21 +16,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     coz::thread_init();
     // Optional dispatch-tier forcing for cross-tier bit-exactness runs:
     // ZENSR_PROFILE_TIER=auto (default) | v3 | scalar. Process-wide token
-    // disable before model load; runtime source is not modified.
+    // disable before model load; runtime source is not modified. A disable
+    // that fails would silently turn a forced row into an auto row, so it
+    // panics instead.
+    let tier = std::env::var("ZENSR_PROFILE_TIER").unwrap_or_else(|_| "auto".into());
     #[cfg(target_arch = "x86_64")]
     {
-        match std::env::var("ZENSR_PROFILE_TIER").as_deref() {
-            Ok("v3") => {
-                archmage::X64V4xToken::dangerously_disable_token_process_wide(true).ok();
+        let off = |r: Result<(), archmage::CompileTimeGuaranteedError>, what: &str| {
+            r.unwrap_or_else(|e| {
+                panic!("cannot force ZENSR_PROFILE_TIER={tier}: disabling {what}: {e:?}")
+            })
+        };
+        match tier.as_str() {
+            "auto" => {}
+            "v3" => {
+                off(
+                    archmage::X64V4xToken::dangerously_disable_token_process_wide(true),
+                    "v4x",
+                );
+                off(
+                    archmage::X64V4Token::dangerously_disable_token_process_wide(true),
+                    "v4",
+                );
             }
-            Ok("scalar") => {
-                archmage::X64V4xToken::dangerously_disable_token_process_wide(true).ok();
-                archmage::X64V3Token::dangerously_disable_token_process_wide(true).ok();
+            "scalar" => {
+                off(
+                    archmage::X64V4xToken::dangerously_disable_token_process_wide(true),
+                    "v4x",
+                );
+                off(
+                    archmage::X64V4Token::dangerously_disable_token_process_wide(true),
+                    "v4",
+                );
+                off(
+                    archmage::X64V3Token::dangerously_disable_token_process_wide(true),
+                    "v3",
+                );
             }
-            Ok("auto") | Err(_) => {}
-            Ok(other) => panic!("unknown ZENSR_PROFILE_TIER={other}"),
+            other => panic!("unknown ZENSR_PROFILE_TIER={other}"),
         }
     }
+    #[cfg(not(target_arch = "x86_64"))]
+    assert_eq!(tier, "auto", "tier forcing is implemented for x86_64 only");
     let mut args = std::env::args().skip(1);
     let first = args.next().expect("weights_f16.raw path or 'spec'");
     let (weights, nf, nc, scale, height, width, iterations, threads, dump);

@@ -104,6 +104,11 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   previous build. New regressions:
   `simd::exactness::winograd_windows_and_tiers_match_the_whole_image` and
   `adopted::tests::winograd_models_tiled_equals_whole_bitwise`.
+- `tools/coz-profile`: forcing `ZENSR_PROFILE_TIER=v3` or `scalar` now also
+  disables the v4 token, and it panics if a token cannot be disabled instead of
+  ignoring the result. Off x86-64, a forced tier is an error. The tool enables
+  archmage's `testable_dispatch`, under which the disable cannot fail, so
+  earlier matrix rows are unaffected.
 - `classify_rgb8_scanning` returns the analysis error instead of swallowing it.
   `classify_rgb8` keeps the infallible `Photo`-on-failure fallback, which is the
   precision-biased safe direction the rule was fit for.
