@@ -5,6 +5,12 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ## [Unreleased]
 
+### Added
+
+- Standalone compact-model Coz profiler with exact raw-output repeatability
+  checks; production runtime unchanged (4abe56e7). See
+  [the probe record](benchmarks/coz_runtime_2026-10-18.pointer.md).
+
 ### Changed
 
 - **The chooser takes an `Offer`; the `&dyn FeatureProvider` path is gone.**
