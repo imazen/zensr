@@ -7,6 +7,13 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Added
 
+- `tools/exactness/`: a real-model matrix (`just exact-matrix`) requiring the
+  same raw output from whole-image and tiled runs at threads 1/4/8 on tiers
+  auto/v3/scalar, and a `restore_jpeg` probe (`just exact-product`) requiring
+  the same final RGB8 at threads 1..16 on every tier, with the counterexample
+  JPEGs recorded in
+  [the pointer](benchmarks/exactness_counterexamples_2026-10-18.pointer.md).
+  Results: [the repair note](benchmarks/exactness_repair_2026-10-18.md).
 - Run existing core runtime unit tests from the isolated profiling workspace,
   including default, no-default-features, and tier_v4 configurations; test
   source and assertions unchanged (14435363).

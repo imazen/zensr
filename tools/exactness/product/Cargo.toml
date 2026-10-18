@@ -1,0 +1,24 @@
+# Product-path exactness probe: the shipped x1 pipeline (`restore_jpeg`)
+# restored at several thread counts and dispatch tiers, final RGB8 written out
+# for exact comparison. Standalone so the product dependency graph is unchanged.
+[package]
+name = "zensr-exactness-product"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
+zensr-micro = { path = "../../../crates/zensr-micro" }
+# testable_dispatch lets ZENSR_EXACT_TIER force a tier process-wide.
+archmage = { version = "0.9.30", features = ["testable_dispatch"] }
+
+# Mirror the workspace root: zenanalyze 0.2.x is unpublished.
+[patch.crates-io]
+zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+
+[profile.release]
+lto = "thin"

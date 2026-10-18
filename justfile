@@ -116,3 +116,13 @@ coz-repro outdir:
 # Compile and run the runtime's actual unit-test source in the isolated graph.
 coz-test *args:
     cargo test --manifest-path tools/coz-profile/Cargo.toml --test runtime_unit {{args}}
+
+# Exactness: raw model output must not depend on threads, tile size or tier.
+exact-matrix out:
+    cargo build --release --manifest-path tools/coz-profile/Cargo.toml
+    python3 tools/exactness/matrix.py --bin tools/coz-profile/target/release/zensr-coz-profile --out "{{out}}"
+
+# Exactness of final RGB8 through restore_jpeg on the recorded counterexamples.
+exact-product out:
+    cargo build --release --manifest-path tools/exactness/product/Cargo.toml
+    python3 tools/exactness/product.py --bin tools/exactness/product/target/release/zensr-exactness-product --out "{{out}}" --jpeg /mnt/v/output/zensr/exactness-2026-10-18/inputs/girl-576x576-q40-420.jpg --jpeg /mnt/v/output/zensr/exactness-2026-10-18/inputs/city-576x576-q40-420.jpg --model q7=models/adopted/dejpeg7_graphics/weights_f16.raw:64:16 --model rt24g=models/adopted/dejpeg_rt24g/weights_f16.raw:24:8 --scalar-threads 16 --expect tools/exactness/product-expect-2026-10-18.json
