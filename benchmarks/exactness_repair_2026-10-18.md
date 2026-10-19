@@ -73,8 +73,8 @@ functions with summoned tokens (no process-wide token flags):
   - On NEON, magetypes `exp_midp(NaN)` is NaN, because NEON `max`
     propagates NaN. The portable clamp keeps x86 `maxps` semantics and gives
     the clamped value. The test therefore leaves NaN out of the NEON
-    portable-vs-magetypes comparison only. **This narrowing of a new test
-    awaits the user's approval.**
+    portable-vs-magetypes comparison only. The user approved this narrowing
+    of a new test on 2026-10-18.
 - **Adopted models:**
   - procedural compact nf 4/12/24/64, scales 1–4
   - procedural span48 ×2/×4
