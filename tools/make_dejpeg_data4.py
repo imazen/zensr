@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_distill_data import build_pool, report_unreadable  # noqa: E402
+from make_distill_data import SUBS, build_pool, report_unreadable  # noqa: E402
 from make_dejpeg_data2 import (ENCODERS, encode, read_ppm, write_ppm, run,  # noqa: E402
                                gen_crops, ZJTOOL, CROP, VAL_TAIL)
 

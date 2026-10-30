@@ -128,3 +128,9 @@ exact-matrix out:
 exact-product out:
     cargo build --release --manifest-path tools/exactness/product/Cargo.toml
     python3 tools/exactness/product.py --bin tools/exactness/product/target/release/zensr-exactness-product --out "{{out}}" --jpeg /mnt/v/output/zensr/exactness-2026-10-18/inputs/girl-576x576-q40-420.jpg --jpeg /mnt/v/output/zensr/exactness-2026-10-18/inputs/city-576x576-q40-420.jpg --model q7=models/adopted/dejpeg7_graphics/weights_f16.raw:64:16 --model rt24g=models/adopted/dejpeg_rt24g/weights_f16.raw:24:8 --scalar-threads 16 --expect tools/exactness/product-expect-2026-10-18.json
+
+# Sync imazen-26 image bytes from public R2 into the canonical checkout
+# (manifests-only in git). Skips files already present. All three buckets:
+# the effective split re-buckets ~180 files, so the train pool reads from all.
+fetch-corpus:
+    for b in train validate test; do nice -n 19 python3 tools/fetch_corpus_bytes.py $b; done
