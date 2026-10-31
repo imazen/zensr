@@ -13,7 +13,7 @@ crop. Grid: encoders below x {420,444} x q{15,35,55,75,90}; 30,240 rows per TSV.
 All references are PNG here; `ref_kind` is in the corpus `PRISTINE_MANIFEST.tsv`
 and was not joined into these rows.
 
-Raw: `zenjpeg_knobs_rt24g_2026-10-30.tsv`, `zenjpeg_knobs_rt24h_canon_2026-10-30.tsv`.
+Raw: `zenjpeg_knobs_rt24g_2026-10-30.pointer.md`, `zenjpeg_knobs_rt24h_canon_2026-10-30.pointer.md` (4.6 MB each, kept out of git).
 Report: `python3 tools/knob_report.py <A.tsv> [B.tsv]`. Variants: `zjtool.rs`
 (`zenjpeg:<variant>` in `ZENSR_EVAL_ENCODERS`). Model gain = ssim2(model_off) −
 ssim2(identity_off), paired per file; deltas are medians of per-file differences
