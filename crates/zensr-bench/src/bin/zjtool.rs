@@ -1,7 +1,11 @@
 //! zenjpeg encode/decode/probe CLI for the dejpeg-v2 data pipeline.
 //! The DEPLOYMENT decoder is zenjpeg — all training pairs run through here.
 //!
-//!   zjtool enc <in.ppm> <out.jpg> <q> <420|444>       zenjpeg encoder
+//!   zjtool enc <in.ppm> <out.jpg> <q> <420|444> [variant]   zenjpeg encoder
+//!       variant (default `default`): one of the knob settings below. Used by
+//!       dejpeg_eval's `zenjpeg:<variant>` encoder names to measure whether a
+//!       zenjpeg encode-side knob changes restoration behaviour at equal quality
+//!       (zenjpeg#189: which fields an APPn parameter record should carry).
 //!   zjtool dec <in.jpg> <out.ppm> <off|auto>          zenjpeg decoder (deblock mode)
 //!   zjtool probe <in.jpg>                             fingerprint -> one TSV line
 
@@ -49,6 +53,36 @@ fn write_ppm(img: &Rgb8Img, p: &str) {
     std::fs::write(p, buf).expect("write ppm");
 }
 
+/// Encode-side knob settings for the #189 sensitivity study. `default` is
+/// what every training generator and the ladder used so far (jpegli lineage:
+/// progressive, AQ on, deringing on, no trellis).
+fn zenjpeg_variant(
+    cfg: zenjpeg::encoder::EncoderConfig,
+    v: &str,
+) -> zenjpeg::encoder::EncoderConfig {
+    use zenjpeg::encoder::{OptimizationPreset as P, TrellisConfig};
+    match v {
+        "default" => cfg,
+        "baseline" => cfg.optimization(P::JpegliBaseline),
+        "progressive" => cfg.optimization(P::JpegliProgressive),
+        "auto" => cfg.auto_optimize(true),
+        "hybrid" => cfg.optimization(P::HybridProgressive),
+        "hybridmax" => cfg.optimization(P::HybridMaxCompression),
+        "mozbase" => cfg.optimization(P::MozjpegBaseline),
+        "mozprog" => cfg.optimization(P::MozjpegProgressive),
+        "trellis" => cfg.trellis(TrellisConfig::default()),
+        "trellisdc" => cfg.trellis(TrellisConfig {
+            dc_enabled: true,
+            ..TrellisConfig::default()
+        }),
+        "noaq" => cfg.aq_enabled(false),
+        "nodering" => cfg.deringing(false),
+        "noaq_nodering" => cfg.aq_enabled(false).deringing(false),
+        "blur" => cfg.pre_blur(0.4),
+        other => panic!("unknown zenjpeg variant {other}"),
+    }
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();
     match a[0].as_str() {
@@ -60,7 +94,10 @@ fn main() {
                 "444" => zenjpeg::encoder::ChromaSubsampling::None,
                 other => panic!("subsampling {other}"),
             };
-            let cfg = zenjpeg::encoder::EncoderConfig::ycbcr(q, ss);
+            let cfg = zenjpeg_variant(
+                zenjpeg::encoder::EncoderConfig::ycbcr(q, ss),
+                a.get(5).map(|s| s.as_str()).unwrap_or("default"),
+            );
             let px: &[rgb::Rgb<u8>] = bytemuck::cast_slice(&img.px);
             let jpeg = cfg
                 .encode(px, img.w as u32, img.h as u32)

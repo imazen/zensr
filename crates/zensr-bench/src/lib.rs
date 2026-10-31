@@ -282,7 +282,7 @@ pub fn imazen26_repo() -> PathBuf {
         return PathBuf::from(p);
     }
     match std::env::var("HOME") {
-        Ok(h) => PathBuf::from(h).join("work").join("imazen-26"),
+        Ok(h) => PathBuf::from(h).join("work").join("zen").join("imazen-26"),
         Err(_) => PathBuf::from("imazen-26"),
     }
 }

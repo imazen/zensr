@@ -68,12 +68,14 @@ fn encode(ppm: &PathBuf, jpg: &PathBuf, enc: &str, q: u32, ss: &str) -> bool {
             .args(["-q", &q.to_string(), &format!("--chroma_subsampling={ss}")])
             .status(),
         _ => {
+            // "zenjpeg" or "zenjpeg:<variant>" (knob settings: zjtool.rs)
+            let variant = enc.split_once(':').map(|(_, v)| v).unwrap_or("default");
             let me = std::env::current_exe().unwrap();
             Command::new(me.parent().unwrap().join("zjtool"))
                 .arg("enc")
                 .arg(ppm)
                 .arg(jpg)
-                .args([&q.to_string(), ss])
+                .args([&q.to_string(), ss, variant])
                 .status()
         }
     };

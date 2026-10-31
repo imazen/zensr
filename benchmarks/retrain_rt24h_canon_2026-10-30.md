@@ -22,3 +22,8 @@ bytes synced from R2 with `tools/fetch_corpus_bytes.py`). Host i265 (RTX 4080 16
 - Verdict rule: NOT the val curve (ROADMAP §0.2). Score with `tools/model_ab.py`
   against `dejpeg_rt24g` on the clean-reference pinned split, per file, paired, by
   `ref_kind`, before anything is written into README/SYSTEMS or `api.rs` constants.
+
+**DONE 2026-10-30 23:10**: 200k steps, final val PSNR 33.15, exported to
+`models/adopted/dejpeg_rt24h_canon`. Verdict (clean refs, paired per file):
+`zenjpeg_knobs_2026-10-30.md` §"Model A/B" — beats rt24g on every encoder x q
+cell, median +0.41 ssim2, 79% win, negatives halved.
