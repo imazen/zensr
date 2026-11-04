@@ -20,6 +20,7 @@ import warnings
 import joblib
 import numpy as np
 import sklearn
+import threadpoolctl
 from scipy.stats import binomtest
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
@@ -65,7 +66,15 @@ def environment_contract():
         actual=importlib.metadata.version(package)
         if actual!=expected:raise ValueError(f'{package}: expected {expected}, installed {actual}')
         versions[package]=actual
-    return dict(python=platform.python_version(),packages=versions)
+    pools=[]
+    fields=('user_api','internal_api','prefix','version','num_threads','threading_layer','architecture')
+    for pool in threadpoolctl.threadpool_info():
+        record={key:pool.get(key) for key in fields}
+        record['library_sha256']=sha(pool['filepath'])
+        pools.append(record)
+    pools.sort(key=lambda value:json.dumps(value,sort_keys=True))
+    return dict(python=platform.python_version(),packages=versions,machine=platform.machine(),
+                numerical_thread_pools=pools)
 
 
 def study_contract(root):

@@ -78,3 +78,9 @@
   runtime warnings, rather than merely logging them. A controlled estimator
   warning is covered by regression. This is a pre-fit integrity correction;
   no real router fit had run or emitted such a warning.
+
+- Publication fit resume/evaluation now binds effective numerical thread counts,
+  BLAS/OpenMP library bytes and dispatch architecture as well as package versions.
+  Previously a changed wrapper job limit could pass the environment check.
+  Thread-count and library-byte changes are covered by regression; no real fit
+  existed when the contract was strengthened.

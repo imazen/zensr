@@ -700,3 +700,11 @@ Fitting treats estimator non-convergence and numerical runtime warnings as
 errors. A controlled logistic-regression warning verifies that an unconverged
 fit cannot enter model selection. This was established before any real router
 fit; all 34 integrity tests pass. Model grids and selection budgets are unchanged.
+
+The fitting environment contract also records machine architecture and resolved
+BLAS/OpenMP implementations, library SHA256s, dispatch architecture and effective
+thread counts, sorted independently of library load order. Resume and evaluation
+require the same numerical configuration; use the same resource-wrapper job limit.
+A live four-job probe resolved four threads for both BLAS libraries and OpenMP.
+Regression checks detect changed thread counts and library bytes without storing
+host-specific library paths in the contract. All 35 integrity tests pass.

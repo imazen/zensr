@@ -333,6 +333,20 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(result['origin_mean'],.5)
         self.assertEqual(result['origin_harm'],.5)
 
+    def test_environment_binds_effective_thread_count_and_library_bytes(self):
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='numerical-environment-',dir=base))
+        library=root/'synthetic-library';library.write_bytes(b'first library')
+        pool=dict(filepath=str(library),user_api='blas',internal_api='test',num_threads=1)
+        with patch.object(study.threadpoolctl,'threadpool_info',return_value=[pool]):
+            first=study.environment_contract()
+            pool['num_threads']=2;second=study.environment_contract()
+            library.write_bytes(b'second library');third=study.environment_contract()
+        self.assertNotEqual(first,second);self.assertNotEqual(second,third)
+        self.assertNotIn('filepath',first['numerical_thread_pools'][0])
+        self.assertEqual(first['numerical_thread_pools'][0]['library_sha256'],
+                         hashlib.sha256(b'first library').hexdigest())
+
     def test_unconverged_estimator_cannot_enter_selection(self):
         import warnings
         from sklearn.exceptions import ConvergenceWarning
