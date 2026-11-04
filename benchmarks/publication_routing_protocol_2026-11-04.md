@@ -666,7 +666,7 @@ The first native dense transfer was stopped recoverably after observing three
 transfer workers waiting on filesystem journal commits. Its partial copies,
 verified archive links and logs remain preserved; its interrupted wall time is
 not a completed-transfer performance result. The native backend now supports
-an explicitly enabled batched path: copy and hash up to 256 artifacts, synchronize
+an explicitly enabled batched path: copy and hash a bounded group of artifacts, synchronize
 the archive filesystem, then replace source paths with archive aliases and
 synchronize staging. No source path is released before the archive barrier.
 The previous per-file path remains available. This changes storage orchestration,
@@ -679,3 +679,11 @@ That includes preparation and audit and is not a controlled speed comparison.
 All 31 integrity tests pass, including barrier failure retaining every source
 and preservation of conflicting archive bytes. The Linux storage backend uses
 `syncfs` for the batched durability barrier; missing support or errors fail closed.
+
+The initial 256-file live batch completed with verified archive links. Batch
+size is now configurable from 1 through 4,096 (default 256), independently of
+the four-copy-worker limit. The active run uses 4,096 to reduce repeated
+filesystem-wide barriers while retaining all source files until each archive
+barrier succeeds. All 32 tests pass, including batch-size bounds and grouping.
+The 66-artifact pilot's storage process recorded 29,372 KiB maximum RSS via
+GNU time; the wrapper RSS above measures the client process tree only.

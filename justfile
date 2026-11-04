@@ -255,3 +255,7 @@ publication-routing-resume-check root *args:
 # Replay existing artifacts through a frozen native transfer and full audit.
 publication-routing-transfer-pilot config source archive reference logs:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} -c 'import json,sys; from pathlib import Path; sys.path.insert(0,"tools"); from publication_routing_native_pilot import transfer_pilot; transfer_pilot(json.loads(Path(sys.argv[1]).read_text()),*[Path(p) for p in sys.argv[2:]])' "{{config}}" "{{source}}" "{{archive}}" "{{reference}}" "{{logs}}"
+
+# Run beside storage; stop only the exact native-transfer Python child.
+publication-routing-stop-native container:
+    docker exec "{{container}}" python3 -c 'import os,signal,pathlib; rows=[(int(p.parent.name),p.read_bytes().split(b"\0")) for p in pathlib.Path("/proc").glob("[0-9]*/cmdline")]; ids=[pid for pid,args in rows if args[0]==b"python3" and b"/tools/publication_routing_native_stage.py" in args and b"drain" in args]; assert len(ids)==1,ids; os.kill(ids[0],signal.SIGTERM)'

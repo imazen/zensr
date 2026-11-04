@@ -91,6 +91,9 @@ def drain(source,destination,request):
         raise ValueError('frozen writer or verified ended writer request required')
     if not re.fullmatch('[0-9a-f]{32}',request.get('nonce','')):raise ValueError('invalid request nonce')
     if request.get('tools')!=identities():raise ValueError('native stage tool identity changed')
+    batch_size=request.get('batch_size',256)
+    if type(batch_size) is not int or not 1<=batch_size<=4096:
+        raise ValueError('batch size must be an integer from 1 through 4096')
     source=source.resolve();destination=destination.resolve()
     if source==destination or source in destination.parents or destination in source.parents:
         raise ValueError('staging and archive must be disjoint')
@@ -114,8 +117,8 @@ def drain(source,destination,request):
         relative=path.relative_to(source)
         return transfer(path,destination/relative,keep_alias=True,alias_target=alias_root/relative)
     if request.get('batch_sync',False):
-        for offset in range(0,len(ready),256):
-            batch=ready[offset:offset+256]
+        for offset in range(0,len(ready),batch_size):
+            batch=ready[offset:offset+batch_size]
             total+=transfer_group(batch,source,destination,alias_root);count+=len(batch)
             print(json.dumps(dict(phase='transfer-progress',nonce=request['nonce'],artifacts=count,bytes=total)),flush=True)
     else:

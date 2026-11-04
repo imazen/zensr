@@ -13,6 +13,25 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_native_batch_size_validation_and_grouping(self):
+        import publication_routing_native_stage as native
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='native-batch-size-',dir=base))
+        source=root/'source';destination=root/'archive';destination.mkdir()
+        for data in (b'one',b'two'):
+            h=hashlib.sha256(data).hexdigest();path=source/h[:2]/(h+'.zst')
+            path.parent.mkdir(parents=True);path.write_bytes(data)
+        request=dict(version='zensr-frozen-native-stage-v1',nonce='b'*32,writer_frozen=True,
+                     alias_root=str(destination),excluded=[],tools=native.identities(),batch_sync=True)
+        for size in (0,4097,True,1.5):
+            request['batch_size']=size
+            with self.assertRaisesRegex(ValueError,'batch size'):native.drain(source,destination,request)
+        request['batch_size']=1
+        with patch.object(native,'sync_filesystem') as barrier:
+            self.assertEqual(native.drain(source,destination,request)['transferred'],2)
+            self.assertEqual(barrier.call_count,4)
+        self.assertEqual(native.usage(source)['payload_bytes'],0)
+
     def test_grouped_transfer_preserves_conflicting_archive_bytes(self):
         import publication_routing_native_stage as native
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

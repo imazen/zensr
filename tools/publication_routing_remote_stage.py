@@ -61,7 +61,7 @@ def frozen_request(config):
     return dict(version='zensr-frozen-native-stage-v1',nonce=uuid.uuid4().hex,
                 writer_frozen=True,writer_pid=config['writer_pid'],writer_scope=config['writer_scope'],
                 alias_root=config['alias_root'],excluded=sorted(excluded),tools=config['tools'],
-                batch_sync=config.get('batch_sync',False))
+                batch_sync=config.get('batch_sync',False),batch_size=config.get('batch_size',256))
 
 
 def ended_request(config):
@@ -80,7 +80,7 @@ def ended_request(config):
     return dict(version='zensr-ended-native-stage-v1',nonce=uuid.uuid4().hex,
                 writer_ended=True,writer_pid=config['writer_pid'],writer_scope=config['writer_scope'],
                 alias_root=config['alias_root'],excluded=[],tools=config['tools'],
-                batch_sync=config.get('batch_sync',False))
+                batch_sync=config.get('batch_sync',False),batch_size=config.get('batch_size',256))
 
 
 def transfer_batch(config,log_root,final=False):
