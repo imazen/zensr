@@ -43,6 +43,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
+      - name: Artifact writer atomic publication
+        shell: bash
+        run: |
+          export TMPDIR="$HOME/tmp/routing-storage-ci"
+          mkdir -p "$TMPDIR"
+          rustc --edition 2024 --test tools/test_routing_storage.rs -o "$TMPDIR/routing-storage-tests.exe"
+          "$TMPDIR/routing-storage-tests.exe"
+
       - name: Test (default features)
         run: cargo test -p zensr-micro -p zensr-zenjpeg
 

@@ -215,3 +215,8 @@ publication-routing-lint:
 
 publication-routing-storage-tests:
     cargo test -p zensr-bench --bin routing_study storage::tests -- --nocapture
+
+publication-routing-storage-portable:
+    mkdir -p "{{env_var('TMPDIR')}}"
+    rustc --edition 2024 --test tools/test_routing_storage.rs -o "{{env_var('TMPDIR')}}/routing-storage-tests.exe"
+    "{{env_var('TMPDIR')}}/routing-storage-tests.exe"
