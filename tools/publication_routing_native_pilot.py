@@ -52,6 +52,31 @@ def pilot(config,manifest,source,archive,reference,guard_scope,logs):
         control(config,'thaw')
 
 
+def transfer_pilot(config,source,archive,reference,logs):
+    """Replay retained artifacts through a transfer; leave the writer frozen."""
+    from publication_routing_remote_stage import frozen_request
+    frozen_request(config)
+    if source.exists() or archive.exists():raise ValueError('fresh pilot directories required')
+    logs.mkdir(parents=True,exist_ok=True);source.mkdir(parents=True);archive.mkdir(parents=True)
+    shutil.copytree(reference/'artifacts',source/'artifacts')
+    (archive/'artifacts').mkdir()
+    for name in ('COMPLETE','COVERAGE.tsv','ENCODERS.tsv','FEATURES.tsv','IDENTITY.tsv'):
+        shutil.copyfile(reference/name,archive/name)
+    shutil.copytree(reference/'cells',archive/'cells')
+    paths=list((source/'artifacts').glob('*/*'))
+    result=transfer_batch(config,logs)
+    if result['transferred']!=len(paths):raise ValueError('transfer pilot artifact count differs')
+    for path in paths:
+        if not path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest()!=path.name.split('.')[0]:
+            raise ValueError('client archive alias is not readable/hash-correct')
+    if transfer_batch(config,logs)['transferred']!=0:raise ValueError('repeated drain changed artifacts')
+    with (logs/'audit.log').open('w') as output:
+        subprocess.run([sys.executable,'tools/publication_routing_cells.py','audit',str(archive)],
+                       stdout=output,stderr=subprocess.STDOUT,check=True)
+    print(json.dumps(dict(artifacts=len(paths),archive_audited=True,transfer_only=True,
+                          source=str(source),archive=str(archive))),flush=True)
+
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     for name in ('config','manifest','source','archive','reference'):parser.add_argument(name,type=Path)

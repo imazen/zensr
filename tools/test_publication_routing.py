@@ -13,6 +13,45 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_grouped_transfer_preserves_conflicting_archive_bytes(self):
+        import publication_routing_native_stage as native
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='grouped-conflict-',dir=base))
+        source=root/'source';destination=root/'archive'
+        data=b'original artifact';h=hashlib.sha256(data).hexdigest();relative=Path(h[:2])/(h+'.zst')
+        path=source/relative;target=destination/relative
+        path.parent.mkdir(parents=True);target.parent.mkdir(parents=True)
+        path.write_bytes(data);target.write_bytes(b'conflict')
+        with patch.object(native,'sync_filesystem') as barrier:
+            with self.assertRaisesRegex(ValueError,'conflicting destination'):
+                native.transfer_group([path],source,destination,destination)
+            barrier.assert_not_called()
+        self.assertFalse(path.is_symlink());self.assertEqual(path.read_bytes(),data)
+        self.assertEqual(target.read_bytes(),b'conflict')
+
+    def test_grouped_transfer_barrier_precedes_source_release(self):
+        import publication_routing_native_stage as native
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='grouped-transfer-',dir=base))
+        source=root/'source';destination=root/'archive';destination.mkdir()
+        paths=[]
+        for data in (b'first grouped artifact',b'second grouped artifact'):
+            h=hashlib.sha256(data).hexdigest();path=source/h[:2]/(h+'.zst')
+            path.parent.mkdir(parents=True);path.write_bytes(data);paths.append(path)
+        with patch.object(native,'sync_filesystem',side_effect=OSError('barrier failure')):
+            with self.assertRaisesRegex(OSError,'barrier failure'):
+                native.transfer_group(paths,source,destination,destination)
+        self.assertTrue(all(p.is_file() and not p.is_symlink() for p in paths))
+        events=[]
+        def barrier(path):
+            events.append(path)
+            if path==destination:self.assertTrue(all(not p.is_symlink() for p in paths))
+            else:self.assertTrue(all(p.is_symlink() for p in paths))
+        with patch.object(native,'sync_filesystem',side_effect=barrier):
+            native.transfer_group(paths,source,destination,destination)
+        self.assertEqual(events,[destination,source])
+        self.assertEqual([p.read_bytes() for p in paths],[b'first grouped artifact',b'second grouped artifact'])
+
     def test_final_drain_requires_ended_writer_and_completion_marker(self):
         import os
         import publication_routing_remote_stage as remote

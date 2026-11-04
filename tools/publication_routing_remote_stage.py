@@ -60,7 +60,8 @@ def frozen_request(config):
                 if re.fullmatch(r'[0-9a-f]{2}/[0-9a-f]{64}\.[a-z0-9.-]+',relative):excluded.add(relative)
     return dict(version='zensr-frozen-native-stage-v1',nonce=uuid.uuid4().hex,
                 writer_frozen=True,writer_pid=config['writer_pid'],writer_scope=config['writer_scope'],
-                alias_root=config['alias_root'],excluded=sorted(excluded),tools=config['tools'])
+                alias_root=config['alias_root'],excluded=sorted(excluded),tools=config['tools'],
+                batch_sync=config.get('batch_sync',False))
 
 
 def ended_request(config):
@@ -78,7 +79,8 @@ def ended_request(config):
         raise ValueError('successful generation marker missing')
     return dict(version='zensr-ended-native-stage-v1',nonce=uuid.uuid4().hex,
                 writer_ended=True,writer_pid=config['writer_pid'],writer_scope=config['writer_scope'],
-                alias_root=config['alias_root'],excluded=[],tools=config['tools'])
+                alias_root=config['alias_root'],excluded=[],tools=config['tools'],
+                batch_sync=config.get('batch_sync',False))
 
 
 def transfer_batch(config,log_root,final=False):
@@ -132,9 +134,12 @@ def watch(config,log_root):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('config',type=Path)
-    parser.add_argument('logs',type=Path);parser.add_argument('--final',action='store_true')
+    parser.add_argument('logs',type=Path)
+    mode=parser.add_mutually_exclusive_group()
+    mode.add_argument('--final',action='store_true')
+    mode.add_argument('--once',action='store_true',help='drain an already frozen writer without resuming it')
     args=parser.parse_args();config=json.loads(args.config.read_text())
-    if args.final:
+    if args.final or args.once:
         args.logs.mkdir(parents=True,exist_ok=True)
-        transfer_batch(config,args.logs,final=True)
+        transfer_batch(config,args.logs,final=args.final)
     else:watch(config,args.logs)

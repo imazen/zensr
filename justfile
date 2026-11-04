@@ -251,3 +251,7 @@ publication-routing-table-snapshot source output:
 
 publication-routing-resume-check root *args:
     python3 tools/publication_routing_resume.py "{{root}}" {{args}}
+
+# Replay existing artifacts through a frozen native transfer and full audit.
+publication-routing-transfer-pilot config source archive reference logs:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} -c 'import json,sys; from pathlib import Path; sys.path.insert(0,"tools"); from publication_routing_native_pilot import transfer_pilot; transfer_pilot(json.loads(Path(sys.argv[1]).read_text()),*[Path(p) for p in sys.argv[2:]])' "{{config}}" "{{source}}" "{{archive}}" "{{reference}}" "{{logs}}"

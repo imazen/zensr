@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Storage-local staging operations, coordinated by a frozen writer's owner."""
 import argparse
+import ctypes
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
@@ -8,8 +9,10 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
+import uuid
 
-from publication_routing_stage import transfer
+from publication_routing_stage import transfer, digest
 
 
 def identities():
@@ -31,6 +34,51 @@ def usage(source):
     space=os.statvfs(source)
     return dict(allocated_bytes=allocated,payload_bytes=payload,files=files,
                 aliases=aliases,free_bytes=space.f_bavail*space.f_frsize,tools=identities())
+
+
+def sync_filesystem(path):
+    """Linux storage backend: commit file data and namespace in one barrier."""
+    libc=ctypes.CDLL(None,use_errno=True)
+    syncfs=libc.syncfs;syncfs.argtypes=[ctypes.c_int];syncfs.restype=ctypes.c_int
+    fd=os.open(path,os.O_RDONLY|os.O_DIRECTORY)
+    try:
+        if syncfs(fd)!=0:
+            error=ctypes.get_errno();raise OSError(error,os.strerror(error))
+    finally:os.close(fd)
+
+
+def prepare_copy(source,destination):
+    expected=source.name.split('.')[0]
+    if not re.fullmatch('[0-9a-f]{64}',expected):raise ValueError('not a content-addressed artifact')
+    if source.is_symlink() or destination.is_symlink():raise ValueError('symlink artifact')
+    if digest(source)!=expected:raise ValueError('corrupt staged artifact')
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    if not destination.exists():
+        fd,name=tempfile.mkstemp(prefix='.transfer-',dir=destination.parent)
+        temporary=Path(name)
+        with os.fdopen(fd,'wb') as out,source.open('rb') as inp:
+            for data in iter(lambda:inp.read(1024*1024),b''):out.write(data)
+        if digest(temporary)!=expected:raise ValueError('transfer digest mismatch')
+        try:os.link(temporary,destination)
+        except FileExistsError:pass
+        if digest(destination)!=expected:raise ValueError('conflicting destination')
+        temporary.unlink()
+    elif digest(destination)!=expected:raise ValueError('conflicting destination')
+    return source.stat().st_size
+
+
+def transfer_group(paths,source,destination,alias_root):
+    # No source pathname changes before every copy passes and syncfs succeeds.
+    # Failed copies and partial destinations remain available for diagnosis.
+    def prepare(path):return prepare_copy(path,destination/path.relative_to(source))
+    with ThreadPoolExecutor(max_workers=4) as pool:sizes=list(pool.map(prepare,paths))
+    sync_filesystem(destination)
+    for path in paths:
+        alias=path.parent/('.archive-alias-'+uuid.uuid4().hex)
+        alias.symlink_to(alias_root/path.relative_to(source))
+        os.replace(alias,path)
+    sync_filesystem(source)
+    return sum(sizes)
 
 
 def drain(source,destination,request):
@@ -65,11 +113,17 @@ def drain(source,destination,request):
     def move(path):
         relative=path.relative_to(source)
         return transfer(path,destination/relative,keep_alias=True,alias_target=alias_root/relative)
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        for size in pool.map(move,ready):
-            count+=1;total+=size
-            if count%256==0:
-                print(json.dumps(dict(phase='transfer-progress',nonce=request['nonce'],artifacts=count,bytes=total)),flush=True)
+    if request.get('batch_sync',False):
+        for offset in range(0,len(ready),256):
+            batch=ready[offset:offset+256]
+            total+=transfer_group(batch,source,destination,alias_root);count+=len(batch)
+            print(json.dumps(dict(phase='transfer-progress',nonce=request['nonce'],artifacts=count,bytes=total)),flush=True)
+    else:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for size in pool.map(move,ready):
+                count+=1;total+=size
+                if count%256==0:
+                    print(json.dumps(dict(phase='transfer-progress',nonce=request['nonce'],artifacts=count,bytes=total)),flush=True)
     return dict(phase='transfer-complete',nonce=request['nonce'],transferred=count,
                 bytes=total,open_files_retained=skipped,usage=usage(source),tools=identities())
 

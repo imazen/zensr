@@ -661,3 +661,21 @@ watch keeps its immutable deployed helper identities; an updated helper snapshot
 is required before using the final-drain mode. All 29 integrity tests pass,
 including refusing a live PID and a missing completion marker and transferring
 an artifact that was excluded while the writer was active.
+
+The first native dense transfer was stopped recoverably after observing three
+transfer workers waiting on filesystem journal commits. Its partial copies,
+verified archive links and logs remain preserved; its interrupted wall time is
+not a completed-transfer performance result. The native backend now supports
+an explicitly enabled batched path: copy and hash up to 256 artifacts, synchronize
+the archive filesystem, then replace source paths with archive aliases and
+synchronize staging. No source path is released before the archive barrier.
+The previous per-file path remains available. This changes storage orchestration,
+not the frozen scientific executable or numerical outputs.
+
+A separate 66-artifact pilot passed client-link hash checks, a zero-transfer
+repeated drain and the full 12-cell artifact audit. Its complete wrapper recorded
+`rc=0 122s | peak-RSS 0.02GiB | min-avail 21724MiB | peak-load 4.60`.
+That includes preparation and audit and is not a controlled speed comparison.
+All 31 integrity tests pass, including barrier failure retaining every source
+and preservation of conflicting archive bytes. The Linux storage backend uses
+`syncfs` for the batched durability barrier; missing support or errors fail closed.
