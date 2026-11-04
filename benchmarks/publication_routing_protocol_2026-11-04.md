@@ -51,8 +51,8 @@ hashes are frozen. Once inspected, it is an audit set, not fresh confirmation.
 
 ## Coverage and limits
 
-The primary grid must include low quality as densely as high quality: q0–100 at
-step 5; dense fitted studies additionally use step 2 above 70. Cover 420/444 and
+The primary grid includes q0–100 at both step 2 and step 5, including the
+low-quality range as densely as the high-quality range. Cover 420/444 and
 all four encoder families, with encoder mode variants separated. Tiny through
 large image sizes are separate axes; the size study uses 16–20 log-spaced sizes
 without upscaling, recording native-size exclusions. Choose representative
@@ -150,3 +150,19 @@ RSS 0.53 GiB, minimum available 22,149 MiB, peak load 3.15. Artifact/oracle audi
 6 s, peak RSS 0.04 GiB, minimum available 23,024 MiB, peak load 3.72. A separate
 four-cell replay produced byte-identical result rows after the shared-helper
 refactor and array-chunk maintenance.
+
+## Baseline and legacy-feature controls
+
+Before fitting, the threshold-only baseline retains the existing fixed minimum-
+gain and separate quality/distance-margin grids in `tools/routing_frontier.py`.
+Its gate constants are read from the frozen runtime calibration source and stored
+in the selection record. All learned policies also report flat 0.1 and flat 0.5
+harm sensitivity without reselecting on the reserved set.
+
+The historical chooser fit predates the current corpus split and did not record
+feature versions. Its probability is therefore a legacy comparison with unresolved
+training-provenance limits. The main decoded and post-inference families exclude
+that probability. A separate `decoded_legacy_chooser` family measures its incremental
+contribution; it must not inherit an unqualified independent-test claim. The
+coefficient-only and edge-only families likewise do not depend on that chooser.
+This separation was fixed before any new router fitting or reserved evaluation.

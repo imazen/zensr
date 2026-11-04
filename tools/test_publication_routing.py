@@ -20,6 +20,19 @@ class PublicationIntegrity(unittest.TestCase):
         np.testing.assert_array_equal(before,inputs([row],('width',)))
         with self.assertRaises(ValueError):inputs([row],('identity_ssim2',))
         with self.assertRaises(ValueError):inputs([row],('nominal_q',))
+        with self.assertRaises(ValueError):inputs([row],('reference_metric',))
+
+    def test_threshold_margins_match_both_runtime_scale_directions(self):
+        gates=study.runtime_gates()
+        rows=[dict(probe_scale='IjgQuality',probe_family='ImageMagick',probe_value='94',ss='420',estimated_gain='2'),
+              dict(probe_scale='ButteraugliDistance',probe_family='Jpegli',probe_value='.6',ss='420',estimated_gain='2'),
+              dict(probe_scale='MozjpegQuality',probe_family='Mozjpeg',probe_value='98',ss='420',estimated_gain='2')]
+        choice=dict(skip=False,min_gain=.25,quality_margin=0.,distance_margin=0.)
+        np.testing.assert_array_equal(study.threshold_decisions(rows,choice,gates),[True,True,True])
+        choice.update(quality_margin=2.,distance_margin=.2)
+        np.testing.assert_array_equal(study.threshold_decisions(rows,choice,gates),[False,False,False])
+        choice.update(skip=True)
+        np.testing.assert_array_equal(study.threshold_decisions(rows,choice,gates),[False,False,False])
 
     def test_exact_harm_curve_boundaries(self):
         rows=[dict(identity_ssim2='89.000',restored_ssim2='88.500'),

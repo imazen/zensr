@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import re
 import time
 
 import joblib
@@ -36,8 +37,9 @@ FEATURES={
     'coefficient':BASE+COEF,
     'chooser':BASE+('coef_zero_ac_blocks','chooser_p_graphics'),
     'edge':BASE+('coef_zero_ac_blocks','pixel_edge_slope_stdev'),
-    'decoded':BASE+COEF+PIXELS+('chooser_p_graphics',),
-    'post':BASE+COEF+PIXELS+('chooser_p_graphics',)+POST,
+    'decoded':BASE+COEF+PIXELS,
+    'decoded_legacy_chooser':BASE+COEF+PIXELS+('chooser_p_graphics',),
+    'post':BASE+COEF+PIXELS+POST,
 }
 CONFIGS=(('linear',1.),('linear',10.),('hist',2),('hist',3))
 
@@ -87,6 +89,8 @@ def inputs(rows,numeric):
     # never silently make it an inference input.
     forbidden=('identity','restored','nominal','origin','content','encoder','file')
     if any(c.startswith(forbidden) for c in numeric):raise ValueError('reference/label feature requested')
+    allowed=set(BASE+COEF+PIXELS+POST+('chooser_p_graphics',))
+    if not set(numeric)<=allowed:raise ValueError('feature outside inference allowlist')
     x=np.empty((len(rows),len(numeric)+len(CATEGORICAL)),dtype=object)
     for j,c in enumerate(numeric):
         vals=np.asarray([float(r[c]) for r in rows])
@@ -166,6 +170,41 @@ def decisions(pg,pr,choice):
     return np.zeros(len(pg),dtype=bool) if choice['skip'] else pg-choice['penalty']*pr>=choice['threshold']
 
 
+def runtime_gates():
+    source=Path(__file__).resolve().parents[1]/'crates/zensr-zenjpeg/src/calibration.rs'
+    gates={name:float(value) for name,value in re.findall(r'const GATE_(\w+): f32 = ([0-9.]+);',source.read_text())}
+    if len(gates)!=6:raise ValueError('runtime gate schema changed')
+    return gates
+
+
+def threshold_decisions(rows,choice,gates):
+    if choice['skip']:return np.zeros(len(rows),bool)
+    decision=[]
+    for r in rows:
+        scale=r['probe_scale'];value=float(r['probe_value']);ss=r['ss']
+        if scale=='ButteraugliDistance':
+            gated=value<=gates['DISTANCE_'+ss]+choice['distance_margin']
+        elif scale in ('IjgQuality','MozjpegQuality'):
+            family='MOZJPEG' if r['probe_family']=='Mozjpeg' else 'IJG'
+            gated=value>=gates[family+'_'+ss]-choice['quality_margin']
+        else:gated=False  # Matches the runtime's unknown-scale gate behavior.
+        decision.append(float(r['estimated_gain'])>=choice['min_gain'] and not gated)
+    return np.asarray(decision)
+
+
+def threshold_frontier(rows,gain,harm,groups,gates):
+    # Reuse the existing threshold-only study's fixed grid, not its labels.
+    from routing_frontier import MIN_GAINS, QUALITY_MARGINS, DISTANCE_MARGINS
+    import itertools
+    weights=origin_weights(groups);weights/=weights.sum()
+    candidates=[dict(skip=True,min_gain=0.,quality_margin=0.,distance_margin=0.,mean=0.,harm=0.,coverage=0.)]
+    for minimum,qmargin,dmargin in itertools.product(MIN_GAINS,QUALITY_MARGINS,DISTANCE_MARGINS):
+        c=dict(skip=False,min_gain=minimum,quality_margin=qmargin,distance_margin=dmargin)
+        d=threshold_decisions(rows,c,gates)
+        candidates.append(dict(c,mean=float(weights@(gain*d)),harm=float(weights@(harm&d)),coverage=float(weights@d)))
+    return [dict(choose(candidates,budget),budget=budget) for budget in BUDGETS]
+
+
 def fit(root,out):
     if out.exists():raise ValueError('refusing to overwrite model selection')
     rows,identity=read_cells(root,'router_development')
@@ -173,6 +212,8 @@ def fit(root,out):
     groups=np.asarray([r['origin'] for r in rows]);gain,harm,limits=labels(rows)
     if len(set(groups))<20:raise ValueError('insufficient independent development origins')
     folds=list(GroupKFold(n_splits=5,shuffle=True,random_state=20261104).split(np.zeros(len(rows)),gain,groups))
+    gates=runtime_gates()
+    threshold_selection=threshold_frontier(rows,gain,harm,groups,gates)
     all_models={};selection={};progress=[]
     for family,numeric in FEATURES.items():
         x=inputs(rows,numeric);candidates=[]
@@ -220,7 +261,7 @@ def fit(root,out):
         (out/'stability.json').write_text(json.dumps(stability,indent=2)+'\n')
         print('completed grouped stability split',repetition+1,'/20',flush=True)
     frozen=dict(development_cells_sha256=identity,development_origins=sorted(set(groups)),
-                selection=selection,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
+                selection=selection,threshold_selection=threshold_selection,runtime_gates=gates,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
                 numpy=np.__version__,sklearn=sklearn.__version__,
                 harm_curve='0.5 - 0.04*clamp(identity_ssim2-90,0,10)',
                 methodology='Five grouped cross-fit folds for development selection; no random-row early stopping. Origin-balanced budget and objective. OOF results are selection data, not final test evidence.')
@@ -273,6 +314,8 @@ def evaluate(root,selection,out):
     choices['current_fidelity']=(base>=.25)&~gate
     choices['current_conservative']=(base>=.25)&~cons
     choices['oracle_positive']=gain>0
+    for c in frozen['threshold_selection']:
+        choices[f'threshold/budget-{c["budget"]:g}']=threshold_decisions(rows,c,frozen['runtime_gates'])
     for family,frontier in frozen['selection'].items():
         for c in frontier:
             pg,pr=predicted[c['model']] if not c['skip'] else (np.zeros(len(rows)),np.zeros(len(rows)))
@@ -288,6 +331,7 @@ def evaluate(root,selection,out):
                 mask=np.asarray([r[column]==value for r in rows]);strata[column][value]=summary(gain[mask],harm[mask],limits[mask],d[mask],groups[mask])
         entry['content_macro_gain']=float(np.mean([v['origin_mean'] for v in strata['content'].values()]))
         entry['content_macro_harm']=float(np.mean([v['origin_harm'] for v in strata['content'].values()]))
+        entry['harm_sensitivity']={str(limit):summary(gain,gain < -limit,np.full(len(rows),limit),d,groups) for limit in (.1,.5)}
         entry['strata']=strata;result['policies'][name]=entry
     out.write_text(json.dumps(result,indent=2)+'\n')
     for name,v in result['policies'].items():print(name,{k:v[k] for k in ('origin_mean','origin_harm','coverage','worst')},flush=True)
