@@ -156,7 +156,7 @@ Pairing makes the magnitude precise because it cancels image-to-image variance;
 an unpaired cell median does not, and per-image spread runs −1.4..+4.2 in a
 single cell. **Do not derive per-encoder thresholds from a 64-image ladder.**
 Folding the effect in as a paired offset — the sound form — costs 0.011 ssim2
-for 4 points less work, an order of magnitude under the metric floor.
+for 4 points less work, below the historical 0.3 SSIM2 practical threshold.
 
 ### 1.1c jpegli/zenjpeg gain curve measured — FIXED 2026-08-03
 
@@ -179,7 +179,8 @@ Replaced by `DIST420`/`DIST444`, keyed on distance directly. Held-out:
 | IJG curve via 100−12·d | +0.7998 | 0.60 | **0.17** |
 | measured distance curve | +0.7940 | **0.30** | **0.03** |
 
-Quality is a tie (0.006, far under the metric floor); the new curve gets it for
+The measured mean gap is 0.006 SSIM2; that alone does not establish equivalence.
+The new curve restores fewer cells, with
 **half the cycles and one sixth the harm**. Full report
 `benchmarks/clean_ladder_jpegli_2026-08-03.md`.
 
@@ -401,7 +402,7 @@ per-file median (n=512):
 Affinity roughly halves the deficit in both pairs, and seed 2's affinity arm
 gets within 0.06 ssim2 of the shipped model — it even edges ahead on mozjpeg at
 q35/55/75 (+0.03 to +0.04, win 0.58). But it still loses on turbo throughout and
-at q15 by −0.70, and everything except q15 sits under the metric floor.
+at q15 by −0.70; the smaller gaps are not automatically imperceptible.
 
 So the rung's question — does affinity KD beat output-KD? — is **yes,
 replicated, at every quality in one seed and at q15 in both**. The follow-on
@@ -591,17 +592,17 @@ and ignored.
 ### 1.10 Tier routing: the gap is quality-dependent, and steeply
 
 Measured per-file median gain on clean references, gap in multiples of the
-~0.3 ssim2 the metric resolves:
+historical 0.3 SSIM2 practical threshold (not a resolution limit):
 
-| input | Quality | Realtime | gap | vs metric floor |
+| input | Quality | Realtime | gap | vs 0.3 threshold |
 |---|---|---|---|---|
 | q15 | +11.62 | +6.88 | 4.74 | **15.8x** |
 | q35 | +6.18 | +4.14 | 2.04 | 6.8x |
 | q55 | +4.02 | +3.06 | 0.96 | 3.2x |
 | q75 | +2.05 | +1.58 | 0.47 | **1.6x** |
 
-At q75 the quality tier's 16x compute buys a difference only 1.6x the metric's
-own resolution. At q15 it buys nearly double the gain. A fixed tier choice is
+At q75 the quality tier's recorded 16x compute buys a 0.47 SSIM2 median gap.
+That number alone does not establish visibility. At q15 it buys nearly double the gain. A fixed tier choice is
 therefore leaving a lot on the table in both directions, and a router keyed on
 damage would pay for itself — which is the argument for `Budget::Adaptive`,
 dropped from 0.1 only because the damage estimator does not exist (see 1.8;
@@ -715,7 +716,7 @@ ceiling, for 0.29 ms.** Full record `benchmarks/content_routing_2026-08-03.md`.
 **The cheaper classifier won on value, not accuracy.** Measured head-to-head,
 the existing pixel-domain chooser is the better classifier (F1 0.900 at t=0.75
 vs 0.846) and reaches 85% of the ceiling — but costs 4.54 ms against 0.29 ms.
-The 0.006 ssim2 it buys is an order of magnitude *below* the metric floor, for
+The recorded mean gain difference is 0.006 SSIM2, for
 16× the cost (11% of a 512-crop realtime restore versus 0.7%). Note this
 corrects the earlier estimate in this section: simulating the chooser from its
 *fit-record* operating points predicted only 39% of the ceiling, because those
@@ -876,12 +877,14 @@ trade against the classes that currently work.
   and an inflicted harm as equal; users do not. An explicit asymmetric loss
   would make that trade a decision rather than an accident of the default.
 - **Harm is concentrated and large.** At `min_gain: 0.25` the restores that go
-  wrong average **−1.45 ssim2** — far above the metric floor, i.e. visible. A
+  wrong average **−1.45 SSIM2**. This is a metric loss; visibility was not
+  established by that number alone. A
   predictor of *harm probability* may be more useful than a predictor of median
   gain, and the two are not the same model.
-- **Most routing decisions live under the metric floor.** Cell medians between
-  q75 and q94 sit in ±0.5 ssim2 while per-image spread runs −4 to +4. Widening
-  the eval grid cannot resolve these; only human judgment (§4, squintly) can.
+- **Small aggregate gains hide large per-image variation.** Cell medians between
+  q75 and q94 sit in ±0.5 ssim2 while per-image spread runs −4 to +4. A larger
+  origin-separated grid can estimate numerical uncertainty; human judgment
+  (§4, squintly) is needed to establish visibility.
   Worth pointing squintly at exactly the q85–94 band where the gate lives.
 - **`CjpegliXyb` is unmeasured.** The jpegli distance curve (§1.1c) covers `CjpegliYcbcr`
   only. The XYB path is a separate family and may need its own curve.

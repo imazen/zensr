@@ -447,8 +447,9 @@ repeat.
    over 20 splits (7/20), and a per-encoder crossover at q83 that the held-out
    half put at q90. Use the 20-random-origin-split protocol for anything you
    intend to ship, and treat a single split as a hypothesis.
-3. **The metric floor is ~0.3 ssim2.** Differences below it are not resolvable
-   and should not be argued about.
+3. **0.3 SSIM2 was a historical practical threshold, not a metric floor.**
+   Numerical uncertainty requires paired origin-level analysis; visibility
+   requires perceptual evidence. Small differences are not automatically ties.
 4. **`edge_slope_stdev` is a real but unconfirmed finding** — a zenanalyze source
    feature that beat the shipped binary content class 20/20 splits and captured
    71% of per-image oracle headroom, at 2.15 ms against 0.29 ms. It was held back

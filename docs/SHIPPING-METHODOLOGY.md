@@ -112,7 +112,9 @@ Each has cost real time here; none is hypothetical.
 
 - **n=64 produces false positives.** Two shipped-looking results died on
   re-testing. Use the 20-random-split protocol for anything intended to ship.
-- **The metric floor is ~0.3 ssim2.** Differences below it are not resolvable.
+- **0.3 SSIM2 was a practical threshold, not a metric resolution limit.**
+  Use paired origin-level uncertainty for numerical differences and human
+  evaluation for visibility. Neither follows from a universal SSIM2 cutoff.
 - **`pgrep -f` matches your own shell.** Use `pgrep -x`, a recorded PID, or a
   completion marker.
 - **Check for existing data before generating any.** Three runs were launched and
