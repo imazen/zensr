@@ -357,8 +357,7 @@ The geometry-only resource selector accepts an explicit reference count for a
 concurrency pilot. The two-reference manifest contains the two previously inspected
 7016×4961 brochure pages (one origin); its SHA-256 is
 `0455e458131961689fde844ad472737be9bfee04469c4769115da7acc7345d5c`.
-This is a resource workload, not two independent statistical samples. Its run
-remains pending while the primary sweep owns compute.
+This is a resource workload, not two independent statistical samples. Its completed resource and audit results are recorded below.
 
 ## Zero-event uncertainty diagnostic
 
@@ -396,7 +395,7 @@ upscaling. Manifest SHA-256:
 `12558dadc7ab2978487e601eae8f98c049efaf06a05e5a433491cd5c21173572`.
 The selector rejects the reserved role. These resource cells are not additional
 training observations; the audited representative-grid contract still controls
-fitting membership. The pilot has not run yet.
+fitting membership. The completed resource and audit results are recorded below.
 
 Storage-local verification was tested after finding that the client route used
 1 Gbit/s Ethernet and local disk had only 3.8 GiB free. A 15-second whole-interface
@@ -423,3 +422,16 @@ Resource wrapper:
 `rc=0 4466s | peak-RSS 1.08GiB | min-avail 21586MiB | peak-load 13.08`.
 Elapsed time includes serialized locality experiments; it is not an isolated
 throughput benchmark. The dense development input remains required before fitting.
+
+## Large-image concurrency validation
+
+The two-worker pilot completed four 4096×2896 cells and its 22 artifacts passed
+storage-local verification. Generation wrapper:
+`rc=0 48s | peak-RSS 4.75GiB | min-avail 18175MiB | peak-load 8.66`.
+The four-worker pilot completed eight nature-image cells at 4096×3072 or
+3072×4096; all 44 artifacts passed verification. Generation wrapper:
+`rc=0 58s | peak-RSS 8.93GiB | min-avail 14340MiB | peak-load 5.04`.
+Both used the frozen study executable and a 16 GiB cap. The dense development
+run will start with four workers under that cap, based on this measured workload.
+These measurements include encoding, restoration, metrics and artifact writes;
+they are not isolated restoration latency or square-4096 memory measurements.

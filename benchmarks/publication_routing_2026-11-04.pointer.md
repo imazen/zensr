@@ -87,7 +87,7 @@ just publication-routing-report "$root/reserved-report.json" "$root/report"
 The renderer writes CSV, Markdown, SVG, PDF and PNG, with source hashes. Synthetic
 plot directories are smoke tests only. They are not model-quality evidence.
 
-Still required: completed primary and size-dense development sweeps and audits,
+Still required: the size-dense development sweep and audit,
 frozen fitting, reserved
 evaluation, dense size generalization, encoder-mode coverage, and measured
 routing cost. Primary 512-pixel results alone cannot close the publication gates.
