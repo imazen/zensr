@@ -19,6 +19,7 @@ import time
 import joblib
 import numpy as np
 import sklearn
+from scipy.stats import binomtest
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression, Ridge
@@ -478,6 +479,15 @@ def bootstrap(gain,harm,decision,groups,iters=2000):
                 origin_harm_95=list(map(float,np.quantile(risks[indices].mean(axis=1),[.025,.975]))))
 
 
+def harmed_origin_interval(harm,decision,groups):
+    """A distinct estimand: any harmed cell in an origin's tested grid."""
+    total=len(set(groups));affected=len(set(groups[harm & decision]))
+    interval=binomtest(affected,total).proportion_ci(confidence_level=.95,method='exact')
+    return dict(origins=total,harmed_origins=affected,fraction=affected/total,
+        interval_95=[float(interval.low),float(interval.high)],
+        interpretation="Two-sided pointwise Clopper-Pearson interval for any-harm origin incidence under an independent, identically sampled origin model. Not an interval for cell harm or origin-average cell harm. Corpus selection and grid coverage limit population interpretation; this is not a deployment guarantee.")
+
+
 def paired_interval(gain,harm,decision,baseline,groups,iters=2000):
     unique,inverse=np.unique(groups,return_inverse=True);counts=np.bincount(inverse)
     delta=decision.astype(float)-baseline.astype(float)
@@ -565,6 +575,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
             operating_points[name]=dict(selection=c,router_artifact_bytes=spec.get('serialized_bytes') if not c['skip'] else None,features=spec['features'],model_config=spec['config'])
     for name,d in choices.items():
         entry=summary(gain,harm,limits,d,groups);entry.update(bootstrap(gain,harm,d,groups))
+        entry['harmed_origin_incidence']=harmed_origin_interval(harm,d,groups)
         weights=origin_weights(groups);weights/=weights.sum()
         secondary={'psnr':psnr_changes(rows,d,groups)}
         for metric,sign in (('butter_max',-1.),('butter_pnorm3',-1.)):

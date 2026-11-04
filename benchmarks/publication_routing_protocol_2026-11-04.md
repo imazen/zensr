@@ -359,3 +359,15 @@ concurrency pilot. The two-reference manifest contains the two previously inspec
 `0455e458131961689fde844ad472737be9bfee04469c4769115da7acc7345d5c`.
 This is a resource workload, not two independent statistical samples. Its run
 remains pending while the primary sweep owns compute.
+
+## Zero-event uncertainty diagnostic
+
+Alongside origin-cluster bootstrap intervals for mean gain and average cell harm,
+report the fraction of origins with any harmed tested variant and its two-sided
+pointwise 95% Clopper–Pearson interval, using
+[SciPy's exact binomial interval](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binomtest.html).
+This interval stays nondegenerate when no harmed origins are observed. It is a
+separate estimand: an origin counts once regardless of the number of harmful
+variants. Its independent, identically sampled origin model does not correct
+purposeful corpus selection or establish deployment-population coverage. It does
+not replace the primary harm interval or enter policy selection.

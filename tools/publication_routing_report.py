@@ -21,7 +21,8 @@ def render(source, output):
             'harm_among_restored','harmed_origins','excess_loss','content_macro_gain',
             'content_macro_harm','flat01_harm','flat05_harm','gain_low','gain_high',
             'harm_low','harm_high','gain_difference_vs_conservative',
-            'gain_difference_vs_conservative_low','gain_difference_vs_conservative_high','router_artifact_bytes']
+            'gain_difference_vs_conservative_low','gain_difference_vs_conservative_high','router_artifact_bytes',
+            'any_harm_origin_fraction','any_harm_origin_low','any_harm_origin_high']
     with (output/'policies.csv').open('w') as f:
         writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader()
         for name,p in policies.items():
@@ -34,6 +35,8 @@ def render(source, output):
                        gain_difference_vs_conservative_low=p['paired_vs_conservative']['gain_difference_95'][0],
                        gain_difference_vs_conservative_high=p['paired_vs_conservative']['gain_difference_95'][1])
             row['router_artifact_bytes']=(p.get('operating_point') or {}).get('router_artifact_bytes')
+            incidence=p['harmed_origin_incidence']
+            row.update(any_harm_origin_fraction=incidence['fraction'],any_harm_origin_low=incidence['interval_95'][0],any_harm_origin_high=incidence['interval_95'][1])
             writer.writerow(row)
     (output/'operating-points.json').write_text(json.dumps({name:p.get('operating_point') for name,p in policies.items()},indent=2)+'\n')
     worst={name:p['worst_origin_cases'] for name,p in policies.items()}
@@ -81,6 +84,7 @@ def render(source, output):
     for name,p in policies.items():
         text.append(f'| {name} | {p["origin_mean"]:.4f} | {100*p["origin_harm"]:.3f} | {100*p["coverage"]:.2f} | {p["worst"]:.4f} |')
     text += ['', 'Gain and harm are origin-balanced. Restore coverage is cell-weighted.',
+             'The CSV also reports any-harm origin incidence with a pointwise exact binomial interval. This distinct estimand counts an origin once if any tested variant is harmed; its independent, identically sampled origin assumption does not establish deployment-population coverage.',
              'The oracle uses reference outcomes and is not deployable.',
              'Post-inference policies pay restoration cost even when rejecting output.',
              data.get('uncertainty',''),data.get('legacy_chooser',''),data.get('training_provenance',''),data.get('router_size_scope',''),

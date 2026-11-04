@@ -87,6 +87,20 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertAlmostEqual(scaler.mean_[2],mean)
         self.assertAlmostEqual(scaler.var_[2],variance)
 
+    def test_harmed_origin_interval_counts_origins_and_handles_zero_events(self):
+        groups=np.repeat(np.arange(20),3);decision=np.ones(60,bool);harm=np.zeros(60,bool)
+        zero=study.harmed_origin_interval(harm,decision,groups)
+        self.assertEqual(zero['interval_95'][0],0.)
+        self.assertAlmostEqual(zero['interval_95'][1],1-.025**(1/20))
+        harm[:3]=True
+        repeated=study.harmed_origin_interval(harm,decision,groups)
+        self.assertEqual(repeated['harmed_origins'],1)
+        self.assertEqual(repeated['fraction'],.05)
+        harm[:]=True
+        self.assertEqual(study.harmed_origin_interval(harm,decision,groups)['interval_95'][1],1.)
+        decision[:]=False
+        self.assertEqual(study.harmed_origin_interval(harm,decision,groups),zero)
+
     def test_folds_keep_all_variants_of_origin_together(self):
         groups=np.repeat(np.arange(25),8)
         folds=GroupKFold(n_splits=5,shuffle=True,random_state=7)
