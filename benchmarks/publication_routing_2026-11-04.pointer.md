@@ -131,3 +131,25 @@ coverage digest is
 `de7b72e19315fd3caef4cdcba844a95a4018d90c6ebb716ff82e0316e5459f89`.
 `development-primary/AUDITED.json` records the tool/dependency identity and
 `development-primary/audit.log` retains the resource record.
+
+## Dense development execution
+
+The supplemented 45-reference, 44-origin grid has 402,408 required cells across
+all 20 sizes, the same 61 quality values and four encoders/subsampling pairs.
+It writes directly to array storage, exposed on i265 at
+`/home/lilith/data/zensr-array/development-size` (verified 2026-11-04).
+This separate root avoids placing the bulk output in the storage cache pool.
+The original primary artifact root is unchanged. The complete manifest and
+selection metadata are retained beside the dense run. `IDENTITY.tsv` retains
+the frozen executable and encoder dependencies. Four workers run under a 16 GiB
+cap. `first-cell-artifacts.json` records successful hash, decompression and JPEG
+inspection of the first sampled completed cell; a full audit remains mandatory.
+
+An initial SSHFS transport was replaced by a temporary client-restricted NFS
+export of the same direct-array directory. A 15-second syscall profile found
+77.04% of aggregate traced syscall wall time in `fsync`; its average traced
+`fsync` call took 1,019,737 microseconds. The process was briefly suspended for
+the transport switch and resumed with identical files and scientific inputs.
+`orchestration-events.jsonl` preserves this event. Elapsed generation time is
+not a runtime benchmark. Temporary mount/export cleanup is required after the
+study; private execution records retain the exact resolving commands.
