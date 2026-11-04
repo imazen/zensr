@@ -3,6 +3,10 @@
 import argparse
 import csv
 import hashlib
+import datetime
+import json
+import os
+import tempfile
 import io
 import functools
 import shutil
@@ -72,9 +76,17 @@ def inspect_artifact(artifact):
     return dict(bytes=size)
 
 
+def write_record(path,record):
+    fd,name=tempfile.mkstemp(prefix='.'+path.name+'-',suffix='.partial',dir=path.parent)
+    with os.fdopen(fd,'w') as f:
+        json.dump(record,f,indent=2);f.write('\n');f.flush();os.fsync(f.fileno())
+    os.replace(name,path)
+
+
 def audit(root,workers=1):
     if workers<1:raise ValueError('audit workers must be positive')
     if not (root/'COMPLETE').is_file():raise ValueError('grid completion marker required')
+    audit_source=digest(Path(__file__));coverage_hash=digest(root/'COVERAGE.tsv')
     planned=required_coverage(root)
     if (root/'AUDITED.json').exists():
         import time
@@ -85,47 +97,62 @@ def audit(root,workers=1):
     if not paths:raise ValueError('no completed cells')
     required_artifacts=('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact',
                         'identity_butter_map','restored_butter_map')
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        # Bound queued reads and decompressions independently of total grid size.
-        for start in range(0,len(paths),128):
-            batch=[];pending={}
-            for path in paths[start:start+128]:
-                data=path.read_bytes();cell_hash.update(path.name.encode());cell_hash.update(data)
-                rows=list(csv.DictReader(io.StringIO(data.decode()),delimiter='\t'))
-                if len(rows)!=1:raise ValueError(f'incomplete cell {path}')
-                row=rows[0];batch.append(row)
-                key=tuple(row[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
-                if key in seen:raise ValueError(f'duplicate {key}')
-                seen.add(key)
-                covered.add(tuple(row[c] for c in ('file','size','encoder','ss','nominal_q')))
-                for name in required_artifacts:
-                    value=row[name];artifact=root/value
-                    expected_suffix='.jpg' if name=='jpeg_artifact' else ('.butter-f32le.zst' if name.endswith('_butter_map') else '.rgb8.zst')
-                    if not artifact.name.endswith(expected_suffix):raise ValueError('artifact kind mismatch')
-                    if value not in verified and value not in pending:
-                        pending[value]=pool.submit(inspect_artifact,artifact)
-            for row in batch:
-                dims=(int(row['width']),int(row['height']))
-                for name in required_artifacts:
-                    value=row[name];artifact=root/value
-                    if value not in verified:verified[value]=pending.pop(value).result()
-                    info=verified[value]
-                    # Shared byte verification never bypasses any row's shape
-                    # or chroma-sampling contract.
-                    if name=='jpeg_artifact':
-                        if info['dimensions']!=dims:raise ValueError(f'independent decoder dimensions differ: {artifact}')
-                        if info['ss']!=row['ss']:raise ValueError(f'independent decoder subsampling differs: {artifact}')
-                    else:
-                        bytes_per_pixel=4 if name.endswith('_butter_map') else 3
-                        if info['bytes']!=dims[0]*dims[1]*bytes_per_pixel:
-                            raise ValueError(f'pixel/map size mismatch: {artifact}')
-                count+=1
-    if planned!=covered:raise ValueError(f'grid mismatch: missing {len(planned-covered)}, unexpected {len(covered-planned)}')
-    import json,PIL
-    from PIL import features
-    (root/'AUDITED.json').write_text(json.dumps(dict(cells=count,artifacts=len(verified),cells_sha256=cell_hash.hexdigest(),
-        audit_source_sha256=digest(Path(__file__)),coverage_sha256=digest(root/'COVERAGE.tsv'),artifact_workers=workers,zstd_binary_sha256=digest(Path(zstd_program())),
-        independent_jpeg_decoder='Pillow/libjpeg',pillow_version=PIL.__version__,libjpeg_version=features.version('jpg')),indent=2)+'\n')
+    def progress(stage,error=None):
+        write_record(root/'AUDIT_PROGRESS.json',dict(stage=stage,checked=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            pid=os.getpid(),root=str(root),workers=workers,checked_cells=count,required_cells=len(planned),
+            cell_files=len(paths),verified_artifacts=len(verified),audit_source_sha256=audit_source,
+            coverage_sha256=coverage_hash,error=error))
+    progress('verifying')
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            # Bound queued reads and decompressions independently of total grid size.
+            for start in range(0,len(paths),128):
+                batch=[];pending={}
+                for path in paths[start:start+128]:
+                    data=path.read_bytes();cell_hash.update(path.name.encode());cell_hash.update(data)
+                    rows=list(csv.DictReader(io.StringIO(data.decode()),delimiter='\t'))
+                    if len(rows)!=1:raise ValueError(f'incomplete cell {path}')
+                    row=rows[0];batch.append(row)
+                    key=tuple(row[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
+                    if key in seen:raise ValueError(f'duplicate {key}')
+                    seen.add(key)
+                    covered.add(tuple(row[c] for c in ('file','size','encoder','ss','nominal_q')))
+                    for name in required_artifacts:
+                        value=row[name];artifact=root/value
+                        expected_suffix='.jpg' if name=='jpeg_artifact' else ('.butter-f32le.zst' if name.endswith('_butter_map') else '.rgb8.zst')
+                        if not artifact.name.endswith(expected_suffix):raise ValueError('artifact kind mismatch')
+                        if value not in verified and value not in pending:
+                            pending[value]=pool.submit(inspect_artifact,artifact)
+                for row in batch:
+                    dims=(int(row['width']),int(row['height']))
+                    for name in required_artifacts:
+                        value=row[name];artifact=root/value
+                        if value not in verified:verified[value]=pending.pop(value).result()
+                        info=verified[value]
+                        # Shared byte verification never bypasses any row's shape
+                        # or chroma-sampling contract.
+                        if name=='jpeg_artifact':
+                            if info['dimensions']!=dims:raise ValueError(f'independent decoder dimensions differ: {artifact}')
+                            if info['ss']!=row['ss']:raise ValueError(f'independent decoder subsampling differs: {artifact}')
+                        else:
+                            bytes_per_pixel=4 if name.endswith('_butter_map') else 3
+                            if info['bytes']!=dims[0]*dims[1]*bytes_per_pixel:
+                                raise ValueError(f'pixel/map size mismatch: {artifact}')
+                    count+=1
+                progress('verifying')
+        if planned!=covered:raise ValueError(f'grid mismatch: missing {len(planned-covered)}, unexpected {len(covered-planned)}')
+        if digest(Path(__file__))!=audit_source:raise ValueError('auditor source changed during run')
+        if digest(root/'COVERAGE.tsv')!=coverage_hash:raise ValueError('coverage changed during audit')
+        import PIL
+        from PIL import features
+        write_record(root/'AUDITED.json',dict(cells=count,artifacts=len(verified),cells_sha256=cell_hash.hexdigest(),
+            audit_source_sha256=audit_source,coverage_sha256=coverage_hash,artifact_workers=workers,
+            zstd_binary_sha256=digest(Path(zstd_program())),independent_jpeg_decoder='Pillow/libjpeg',
+            pillow_version=PIL.__version__,libjpeg_version=features.version('jpg')))
+        progress('complete')
+    except BaseException as error:
+        progress('failed',f'{type(error).__name__}: {error}')
+        raise
     print(f'{count} unique cells; {len(verified)} artifacts hashed, decompressed and shape-checked; JPEGs read independently')
 
 

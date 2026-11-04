@@ -286,6 +286,27 @@ class PublicationIntegrity(unittest.TestCase):
             with patch.object(cells,'inspect_artifact',side_effect=ValueError('artifact hash mismatch')):
                 with self.assertRaisesRegex(ValueError,'artifact hash mismatch'):cells.audit(root,workers=4)
             self.assertFalse((root/'AUDITED.json').exists())
+            failed=json.loads((root/'AUDIT_PROGRESS.json').read_text())
+            self.assertEqual(failed['stage'],'failed')
+            self.assertIn('artifact hash mismatch',failed['error'])
+            self.assertEqual(failed['required_cells'],2)
+            # A subsequent successful audit must replace the failure record
+            # only after every row and the final coverage gate pass.
+            row['width']='8';row['height']='16'
+            with (root/'cells'/'1.tsv').open('w') as f:
+                writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
+            binary=root/'fixture-zstd';binary.write_bytes(b'fixture')
+            with patch.object(cells,'inspect_artifact',side_effect=inspect),patch.object(cells,'zstd_program',return_value=str(binary)):
+                cells.audit(root,workers=4)
+            complete=json.loads((root/'AUDIT_PROGRESS.json').read_text())
+            result=json.loads((root/'AUDITED.json').read_text())
+            self.assertEqual(complete['stage'],'complete')
+            self.assertIsNone(complete['error'])
+            self.assertEqual(complete['checked_cells'],2)
+            self.assertEqual(result['cells'],2)
+            self.assertEqual(result['artifacts'],3)
+            self.assertEqual(result['coverage_sha256'],cells.digest(root/'COVERAGE.tsv'))
+            self.assertEqual(list(root.glob('.*.partial')),[])
 
 
 if __name__=='__main__':unittest.main()

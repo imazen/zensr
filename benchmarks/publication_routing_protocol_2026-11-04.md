@@ -339,3 +339,10 @@ trial did not start because the primary scope failed to freeze; the scope was
 thawed and primary progress verified. Exact profiled sources, commands, syscall
 summary and logs are retained in `audit-profile-v1` under the study root.
 Complete the remaining audit timing checks after the primary run releases compute.
+
+The auditor atomically updates `AUDIT_PROGRESS.json` after each bounded batch,
+recording completed/required cells, verified artifacts, worker count, PID, source
+and coverage hashes, and terminal success or failure. `AUDITED.json` is also
+atomically published only after all checks pass. Source or coverage changes during
+the audit fail the run. Progress records support supervision; the completed audit
+record remains the analysis admission gate.
