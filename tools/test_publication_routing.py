@@ -180,7 +180,7 @@ class PublicationIntegrity(unittest.TestCase):
             digest=hashlib.sha256()
             for path in sorted((folder/'cells').glob('*.tsv')):
                 digest.update(path.name.encode());digest.update(path.read_bytes())
-            (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest(),
+            (folder/'AUDITED.json').write_text(json.dumps({'cells':count*len(sizes),'cells_sha256':digest.hexdigest(),
                 'audit_source_sha256':study.sha(Path(study.__file__).with_name('publication_routing_cells.py')),
                 'coverage_sha256':study.sha(folder/'COVERAGE.tsv')}))
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
@@ -194,6 +194,15 @@ class PublicationIntegrity(unittest.TestCase):
         ledger.write_bytes(original_ledger+b'\n')
         with self.assertRaisesRegex(ValueError,'coverage changed after artifact audit'):study.read_cells(reserved,'locked_test')
         ledger.write_bytes(original_ledger)
+        from publication_routing_tables import pack
+        snapshot=root/'dev-snapshot';pack(development,snapshot)
+        self.assertEqual(study.read_cells(snapshot,'router_development'),study.read_cells(development,'router_development'))
+        archive=snapshot/'cells.tar.zst';archive_bytes=archive.read_bytes();archive.write_bytes(archive_bytes+b'changed')
+        with self.assertRaisesRegex(ValueError,'snapshot archive changed'):study.read_cells(snapshot,'router_development')
+        archive.write_bytes(archive_bytes)
+        marker=snapshot/'COVERAGE.tsv';original_marker=marker.read_bytes();marker.write_bytes(original_marker+b'\n')
+        with self.assertRaisesRegex(ValueError,'snapshot metadata changed'):study.read_cells(snapshot,'router_development')
+        marker.write_bytes(original_marker)
         dense=dataset('dev-sizes','router_development',20,study.STUDY_SIZES,'dev')
         primary_rows,primary_digest=study.read_cells(development,'router_development')
         dense_rows,dense_digest=study.read_cells(dense,'router_development')

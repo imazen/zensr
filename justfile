@@ -229,3 +229,6 @@ publication-routing-resource-pilot source output edge *args:
 
 publication-routing-audit-image output base:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_audit_image.py "{{output}}" --base "{{base}}"
+
+publication-routing-table-snapshot source output:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_tables.py "{{source}}" "{{output}}"

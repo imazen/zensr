@@ -56,3 +56,18 @@ same cell hash as the client-side audits. Eight workers under a four-CPU cap
 took 4.86 seconds; GNU time reported maximum RSS 86,744 KiB. These are operational
 pilot observations with uncontrolled cache state, not a full-grid speedup claim.
 The study's artifact pointer locates the image identity, byte manifest and logs.
+
+## Immutable analysis tables
+
+After the full artifact audit, create a separate compressed table snapshot near
+storage with `just publication-routing-table-snapshot SOURCE OUTPUT`. The packer
+requires the current audit identity, verifies the exact cell and coverage digests,
+and retains the contract metadata. It never replaces the original artifacts.
+Copy this small snapshot root to the analysis host instead of repeatedly reading
+individual cell files over the network. Analysis accepts either root format.
+
+The reader checks the archive hash, metadata hashes, canonical cell ordering,
+cell count and cell digest. It refuses an ambiguous root containing both a
+snapshot and a live `cells/` directory. A snapshot is an explicit frozen input;
+it does not track subsequent changes to the original run. Fitted model contracts
+also record the snapshot reader's source identity.

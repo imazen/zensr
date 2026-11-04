@@ -312,9 +312,9 @@ This is full pipeline resource evidence including encoding, restoration, metrics
 and retained artifacts; it is not a runtime-latency benchmark or a measurement
 at square 4096×4096. Artifacts are in `resource-4096-v1`; the manifest and selector
 identities are in `resource-4096-references.json` under the study root. The 12-worker
-512 configuration is not presumed safe for the dense-size grid. Begin that grid
-with one worker under the existing cap; any concurrency increase needs its own
-measurement at the sizes actually processed.
+512 configuration is not presumed safe for the dense-size grid. The subsequent
+two- and four-worker pilots below supply the separate large-image concurrency
+evidence; the dense grid starts with four workers under the existing cap.
 
 ## Bounded artifact-audit execution
 
@@ -338,7 +338,8 @@ uncontrolled: these observations are not a confirmed speedup. A reverse-order
 trial did not start because the primary scope failed to freeze; the scope was
 thawed and primary progress verified. Exact profiled sources, commands, syscall
 summary and logs are retained in `audit-profile-v1` under the study root.
-Complete the remaining audit timing checks after the primary run releases compute.
+Later client-side and storage-local pilot checks are recorded below. No isolated
+parallel-speedup claim is made from these cache-uncontrolled runs.
 
 The auditor atomically updates `AUDIT_PROGRESS.json` after each bounded batch,
 recording completed/required cells, verified artifacts, worker count, PID, source
@@ -382,9 +383,11 @@ Generation completion alone does not admit the cells to model fitting.
 
 Native 4096-edge eligibility in the frozen audited manifest is concentrated in
 nature photographs (4 development references, 6 reserved references) and brochures
-(11 development references, 7 reserved references). Every brochure reference in
-both roles reaches that edge, so the planned per-content representatives retain
-large inputs. Other content classes have no native 4096-edge references. This is
+(11 of 19 development references across 5 of 11 origins; 7 of 12 reserved
+references across 4 of 7 origins). The eligible nature references represent
+3 development origins and 6 reserved origins. The earlier statement that every
+brochure reference reached 4096 confused reference counts with origin counts.
+Other content classes have no native 4096-edge references. This is
 an input-coverage fact, not a measured large-image quality result; do not generalize
 a 4K result from those classes to all content.
 
@@ -435,3 +438,27 @@ Both used the frozen study executable and a 16 GiB cap. The dense development
 run will start with four workers under that cap, based on this measured workload.
 These measurements include encoding, restoration, metrics and artifact writes;
 they are not isolated restoration latency or square-4096 memory measurements.
+
+## Compressed primary analysis tables
+
+An explicit immutable snapshot retains all 235,224 primary cell tables and the
+six audit/contract metadata files. The archive is 172,706,671 bytes, SHA-256
+`0ff5a241849430ecad22b9bc911c94d15ed8d10d7844482b80d194d1b4fd4bfb`.
+Its canonical cell digest remains
+`915744b1966b885ab88c8018d1d480de16f9b6911dd0c5d9804564fbfea389ef`.
+The canonical snapshot is `table-snapshots/primary-v1` under the study root;
+bulk artifact bytes remain in the original run. Packaging ran beside storage,
+taking 4:57.70 with GNU time maximum RSS 348,784 KiB. The surrounding SSH client's
+wrapper recorded `rc=0 301s | peak-RSS 0.01GiB | min-avail 22438MiB | peak-load 3.34`;
+that RSS describes only the client.
+
+Replaying the original representative selection from a local compressed copy
+produced byte-identical `references.tsv` and `selection.json`. The local replay
+recorded `rc=0 11s | peak-RSS 3.11GiB | min-avail 19520MiB | peak-load 1.58`,
+versus the earlier individual-file selection's
+`rc=0 633s | peak-RSS 3.17GiB | min-avail 19578MiB | peak-load 5.04`.
+These are observed analysis runs, not controlled storage benchmarks. The original
+selection has 31 references/origins, 8 references eligible for 2048 and only one
+for 4096. This exposes a native-resolution coverage limitation before any model
+fit; it does not support broad 4K conclusions. The 17 routing integrity tests pass,
+including snapshot/live-table equality and rejection of changed archive/metadata.

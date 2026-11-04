@@ -27,6 +27,7 @@ from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from publication_routing_cells import required_coverage
+from publication_routing_tables import cell_bytes
 
 STUDY_SIZES=(32,40,48,64,80,96,128,160,192,256,320,384,512,640,768,1024,1280,1536,2048,4096)
 BUDGETS=(0.,.005,.01,.02,.05)
@@ -94,10 +95,10 @@ def checkpoint_predictions(path,calculate):
 def read_cells(root, expected_role):
     if not (root/'COMPLETE').is_file():raise ValueError(f'incomplete run {root}')
     rows=[];h=hashlib.sha256();keys=set()
-    for path in sorted((root/'cells').glob('*.tsv')):
-        data=path.read_bytes();h.update(path.name.encode());h.update(data)
+    for name,data in cell_bytes(root):
+        h.update(name.encode());h.update(data)
         cell=list(csv.DictReader(data.decode().splitlines(),delimiter='\t'))
-        if len(cell)!=1:raise ValueError(f'incomplete cell {path}')
+        if len(cell)!=1:raise ValueError(f'incomplete cell {root}: {name}')
         r=cell[0]
         if r['role']!=expected_role:raise ValueError('unexpected dataset role')
         key=tuple(r[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
@@ -375,6 +376,7 @@ def fit(root,out,size_root):
     fit_contract=dict(cells_sha256=identity,development_sources=development_sources,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
         audit_source_sha256=sha(Path(__file__).with_name('publication_routing_cells.py')),
+        table_snapshot_source_sha256=sha(Path(__file__).with_name('publication_routing_tables.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
         features=FEATURES,configs=CONFIGS,budgets=BUDGETS)
     # JSON normalization makes tuples compare identically after a restart.
@@ -509,6 +511,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
     if sha(Path(__file__).with_name('publication_routing_cells.py'))!=fit_contract['audit_source_sha256']:raise ValueError('audit source changed after selection')
     if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')
+    if sha(Path(__file__).with_name('publication_routing_tables.py'))!=fit_contract['table_snapshot_source_sha256']:raise ValueError('table snapshot reader changed after fitting')
     actual_contract=study_contract(root)
     expected_contract=json.loads(json.dumps(frozen['study_contract']))
     primary=None
