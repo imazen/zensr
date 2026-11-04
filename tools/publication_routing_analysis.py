@@ -15,6 +15,7 @@ from pathlib import Path
 import platform
 import re
 import time
+import warnings
 
 import joblib
 import numpy as np
@@ -22,6 +23,7 @@ import sklearn
 from scipy.stats import binomtest
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
@@ -206,6 +208,13 @@ class OriginScaler(StandardScaler):
 
 
 def fit_model(x,gain,harm,groups,config,n_numeric):
+    with warnings.catch_warnings():
+        warnings.simplefilter('error',ConvergenceWarning)
+        warnings.simplefilter('error',RuntimeWarning)
+        return _fit_model(x,gain,harm,groups,config,n_numeric)
+
+
+def _fit_model(x,gain,harm,groups,config,n_numeric):
     kind,param=config
     numeric=list(range(n_numeric));categorical=list(range(n_numeric,x.shape[1]))
     transform=ColumnTransformer([

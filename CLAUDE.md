@@ -73,3 +73,8 @@
   measures were only cell-weighted despite origin-balanced gain/risk selection.
   An unequal-origin regression verifies the distinct denominators and skip-all
   behavior. No real fit or reserved report existed when this was corrected.
+
+- Publication fitting now rejects estimator non-convergence and numerical
+  runtime warnings, rather than merely logging them. A controlled estimator
+  warning is covered by regression. This is a pre-fit integrity correction;
+  no real router fit had run or emitted such a warning.

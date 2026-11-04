@@ -333,6 +333,16 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(result['origin_mean'],.5)
         self.assertEqual(result['origin_harm'],.5)
 
+    def test_unconverged_estimator_cannot_enter_selection(self):
+        import warnings
+        from sklearn.exceptions import ConvergenceWarning
+        x=np.array([[0.,'a'],[1.,'a'],[2.,'b']],dtype=object)
+        def unconverged(*args,**kwargs):warnings.warn('forced convergence warning',ConvergenceWarning)
+        with patch.object(study.LogisticRegression,'fit',side_effect=unconverged):
+            with self.assertRaisesRegex(ConvergenceWarning,'forced convergence warning'):
+                fit_model(x,np.array([0.,1.,2.]),np.array([False,True,False]),
+                          np.array(['a','b','c']),('linear',1.),1)
+
     def test_numeric_scaling_uses_origin_weights(self):
         x=np.array([[0.,'a'],[0.,'a'],[0.,'a'],[10.,'b']],dtype=object)
         groups=np.array(['first','first','first','second'])

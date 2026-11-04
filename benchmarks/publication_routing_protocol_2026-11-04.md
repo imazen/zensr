@@ -695,3 +695,8 @@ mass; it is not the unweighted mean of per-origin conditional rates. Empty
 restoration sets report null conditional harm. Lower gain quantiles remain
 cell-weighted. An unequal-origin fixture verifies that these denominators differ;
 all 33 integrity tests pass. No selection objective or runtime policy changed.
+
+Fitting treats estimator non-convergence and numerical runtime warnings as
+errors. A controlled logistic-regression warning verifies that an unconverged
+fit cannot enter model selection. This was established before any real router
+fit; all 34 integrity tests pass. Model grids and selection budgets are unchanged.
