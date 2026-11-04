@@ -97,6 +97,13 @@ jobs:
         run: |
           python3 -m unittest discover -s tools -p 'test_*canon4*.py'
           python3 -m unittest discover -s tools -p 'test_routing_frontier.py'
+      - name: Publication routing analysis integrity
+        run: |
+          mkdir -p "$HOME/tmp/publication-routing-ci"
+          export TMPDIR="$HOME/tmp/publication-routing-ci"
+          python3 -m venv .venv-routing-ci
+          .venv-routing-ci/bin/python -m pip install -r tools/publication-routing-requirements.txt
+          .venv-routing-ci/bin/python -m unittest discover -s tools -p 'test_publication_routing.py'
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
