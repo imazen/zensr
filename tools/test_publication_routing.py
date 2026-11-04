@@ -153,7 +153,8 @@ class PublicationIntegrity(unittest.TestCase):
             for path in sorted((folder/'cells').glob('*.tsv')):
                 digest.update(path.name.encode());digest.update(path.read_bytes())
             (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest(),
-                'audit_source_sha256':study.sha(Path(study.__file__).with_name('publication_routing_cells.py'))}))
+                'audit_source_sha256':study.sha(Path(study.__file__).with_name('publication_routing_cells.py')),
+                'coverage_sha256':study.sha(folder/'COVERAGE.tsv')}))
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
             (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\nsizes\t{",".join(map(str,sizes))}\nmanifest_sha256\tsynthetic-{"subset" if len(sizes)>1 else "full"}\n')
             (folder/'FEATURES.tsv').write_text('synthetic feature identities\n')
@@ -161,6 +162,10 @@ class PublicationIntegrity(unittest.TestCase):
             return folder
         development=dataset('dev','router_development',80)
         reserved=dataset('test','locked_test',20)
+        ledger=reserved/'COVERAGE.tsv';original_ledger=ledger.read_bytes()
+        ledger.write_bytes(original_ledger+b'\n')
+        with self.assertRaisesRegex(ValueError,'coverage changed after artifact audit'):study.read_cells(reserved,'locked_test')
+        ledger.write_bytes(original_ledger)
         dense=dataset('dev-sizes','router_development',20,study.STUDY_SIZES,'dev')
         primary_rows,primary_digest=study.read_cells(development,'router_development')
         dense_rows,dense_digest=study.read_cells(dense,'router_development')
@@ -272,11 +277,14 @@ class PublicationIntegrity(unittest.TestCase):
             def inspect(path):
                 return dict(dimensions=(8,16),ss='420') if path.suffix=='.jpg' else dict(bytes=512 if 'butter' in path.name else 384)
             with patch.object(cells,'inspect_artifact',side_effect=inspect) as inspection:
-                with self.assertRaisesRegex(ValueError,'decoder dimensions differ'):cells.audit(root)
+                with self.assertRaisesRegex(ValueError,'decoder dimensions differ'):cells.audit(root,workers=4)
                 self.assertEqual(inspection.call_count,3)
             self.assertFalse((root/'AUDITED.json').exists())
             with patch.object(cells,'inspect_artifact',return_value=dict(dimensions=(8,16),ss='444')):
-                with self.assertRaisesRegex(ValueError,'subsampling differs'):cells.audit(root)
+                with self.assertRaisesRegex(ValueError,'subsampling differs'):cells.audit(root,workers=4)
+            self.assertFalse((root/'AUDITED.json').exists())
+            with patch.object(cells,'inspect_artifact',side_effect=ValueError('artifact hash mismatch')):
+                with self.assertRaisesRegex(ValueError,'artifact hash mismatch'):cells.audit(root,workers=4)
             self.assertFalse((root/'AUDITED.json').exists())
 
 

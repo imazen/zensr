@@ -28,3 +28,7 @@
   held-out size tests did not supply size-dense training evidence. Fitting now
   requires audited 20-size development representatives in addition to the full
   primary cohort, with origin-grouped splits and exact replay deduplication.
+- Publication audit records now bind the complete coverage-ledger bytes as well
+  as cell bytes and tool identity. A ledger change invalidates the audit even if
+  it leaves the parsed required-cell set unchanged. Bounded parallel artifact
+  checks preserve each row's dimensions/sampling checks and propagate failures.

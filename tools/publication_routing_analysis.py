@@ -110,6 +110,7 @@ def read_cells(root, expected_role):
     if not audit.is_file():raise ValueError('artifact audit required before fitting or reporting')
     audited=json.loads(audit.read_text())
     if audited['cells_sha256']!=h.hexdigest():raise ValueError('cells changed after artifact audit')
+    if audited.get('coverage_sha256')!=sha(root/'COVERAGE.tsv'):raise ValueError('coverage changed after artifact audit')
     if audited.get('audit_source_sha256')!=sha(Path(__file__).with_name('publication_routing_cells.py')):raise ValueError('audit tool changed; reaudit artifacts')
     return rows,h.hexdigest()
 

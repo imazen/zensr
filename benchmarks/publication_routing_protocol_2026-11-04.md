@@ -313,3 +313,27 @@ identities are in `resource-4096-references.json` under the study root. The 12-w
 512 configuration is not presumed safe for the dense-size grid. Begin that grid
 with one worker under the existing cap; any concurrency increase needs its own
 measurement at the sizes actually processed.
+
+## Bounded artifact-audit execution
+
+The audit accepts explicit `--workers` (default one), with at most 128 cells'
+artifact checks queued per batch. Every row still verifies dimensions and chroma
+sampling, even when another row shares verified bytes. The coverage ledger is
+hashed into the audit record; fitting rejects a changed ledger as well as changed
+cells or auditor source. Regressions cover parallel-worker failures, cached shape
+and sampling mismatches, and a changed ledger with unchanged parsed coverage.
+
+A syscall profile of the 380-cell pilot recorded 1,466 waits for decompression
+processes; wait4 and futex accounted for 38.95% and 36.43% of traced syscall time.
+The implementation resolves the decompressor path once and permits bounded
+parallel verification. One-worker and eight-worker runs both verified all 380
+cells / 1,846 artifacts with identical cell digest
+`eae49fae3a5bb0d6be0a81fde2ec451ee811935623ae0ef74866e7c5546e7b41`.
+Run-heavy recorded 20 s / peak RSS 0.04 GiB / minimum available 22,056 MiB /
+peak load 16.37 for one worker, and integer-rounded 0 s / peak RSS 0.08 GiB /
+minimum available 22,261 MiB / peak load 12.25 for eight. Filesystem caching was
+uncontrolled: these observations are not a confirmed speedup. A reverse-order
+trial did not start because the primary scope failed to freeze; the scope was
+thawed and primary progress verified. Exact profiled sources, commands, syscall
+summary and logs are retained in `audit-profile-v1` under the study root.
+Complete the remaining audit timing checks after the primary run releases compute.
