@@ -37,7 +37,14 @@ enough = "0.4.4"
 rgb = "0.8.52"
 zensim = "0.2.7"
 rayon = "1.11.1"
+zenbench = { version = "0.1.11", default-features = false, optional = true }
 
 [features]
 default = ["avx512"]
 avx512 = ["zensr-micro/avx512"]
+routing-cost = ["dep:zenbench"]
+
+[[bin]]
+name = "routing_cost"
+path = "src/bin/routing_cost.rs"
+required-features = ["routing-cost"]

@@ -177,6 +177,17 @@ publication-routing-manifest *args:
 publication-routing-build:
     cargo build --release -p zensr-bench --bin routing_study --bin zjtool
 
+publication-routing-cost-build:
+    cargo build --release -p zensr-bench --features routing-cost --bin routing_cost
+
+publication-routing-cost manifest *args:
+    ZENSR_COST_MANIFEST="{{manifest}}" ./target/release/routing_cost {{args}}
+
+# Invoke under run-heavy. A system scope supplies a real cpuset boundary on
+# hybrid CPUs; retain the same memory/no-swap cap inside that boundary.
+publication-routing-cost-pinned manifest cpus pin *args:
+    sudo systemd-run --scope --quiet -p AllowedCPUs="{{cpus}}" -p MemoryMax=16G -p MemorySwapMax=0 sudo -u "$(id -un)" env TMPDIR="{{env_var('TMPDIR')}}" RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 ZENBENCH_PIN="{{pin}}" ZENBENCH_DATA_DIR="{{env_var('ZENBENCH_DATA_DIR')}}" ZENSR_COST_MANIFEST="{{manifest}}" nice -n19 ionice -c3 ./target/release/routing_cost --cpu-set="{{cpus}}" --cpu-policy=performance {{args}}
+
 publication-routing-run manifest output role sizes qualities encoders jobs="6" exclusions="":
     ./target/release/routing_study "{{manifest}}" "{{output}}" "{{role}}" "{{sizes}}" "{{qualities}}" "{{encoders}}" "{{jobs}}" "{{exclusions}}"
 
