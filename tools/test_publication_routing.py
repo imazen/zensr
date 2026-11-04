@@ -48,6 +48,27 @@ class PublicationIntegrity(unittest.TestCase):
         for row in rows:row['restored_ssim2']='-100'
         self.assertEqual((selected,clusters),native_representatives(rows,references,2))
 
+    def test_resume_quarantines_only_unreferenced_corruption(self):
+        from publication_routing_resume import verify
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as folder:
+            root=Path(folder);(root/'cells').mkdir();(root/'artifacts'/'aa').mkdir(parents=True)
+            valid=root/'artifacts'/'aa'/(hashlib.sha256(b'valid').hexdigest()+'.jpg');valid.write_bytes(b'valid')
+            bad=root/'artifacts'/'aa'/('0'*64+'.jpg');bad.write_bytes(b'interrupted')
+            columns=('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact','identity_butter_map','restored_butter_map')
+            with (root/'cells'/'cell.tsv').open('w') as f:
+                writer=csv.DictWriter(f,fieldnames=columns,delimiter='\t');writer.writeheader()
+                writer.writerow({key:str(valid.relative_to(root)) for key in columns})
+            with self.assertRaisesRegex(ValueError,'artifact hash mismatch'):verify(root)
+            self.assertTrue(bad.exists())
+            record=verify(root,True)
+            self.assertFalse(bad.exists());self.assertEqual(valid.read_bytes(),b'valid')
+            self.assertEqual((root/record['quarantined'][0]).read_bytes(),b'interrupted')
+            valid.write_bytes(b'corrupt referenced bytes');bad.write_bytes(b'another interrupted file')
+            with self.assertRaisesRegex(ValueError,'artifact hash mismatch'):verify(root,True)
+            self.assertEqual(valid.read_bytes(),b'corrupt referenced bytes')
+            self.assertTrue(bad.exists())
+
     def test_reference_columns_cannot_enter_inference(self):
         row=dict(width='32',probe_family='Mozjpeg',probe_scale='MozjpegQuality',ss='420',identity_ssim2='70')
         before=inputs([row],('width',))

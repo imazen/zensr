@@ -232,3 +232,6 @@ publication-routing-audit-image output base:
 
 publication-routing-table-snapshot source output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_tables.py "{{source}}" "{{output}}"
+
+publication-routing-resume-check root *args:
+    python3 tools/publication_routing_resume.py "{{root}}" {{args}}

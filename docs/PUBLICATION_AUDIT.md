@@ -76,3 +76,13 @@ When a run has `selection.json`, the snapshot also retains and hashes it. The
 reader rejects modified selection metadata and an added selection record that
 was not bound during packing. This lets dense-development and reserved-size
 inputs carry their representative provenance into local analysis unchanged.
+
+## Interrupted-writer diagnostics
+
+`just publication-routing-resume-check ROOT` is an optional diagnostic for a
+stopped run. It checks committed cell records, referenced artifact presence,
+and stored artifact hashes. It is not a substitute for the complete audit and
+never creates `AUDITED.json`. `--quarantine-unreferenced` may move corrupt files
+that no completed cell references into timestamped `resume-history` storage;
+it never deletes their bytes. Any referenced corruption prevents quarantine
+and fails the check. Synthetic tests exercise both cases.

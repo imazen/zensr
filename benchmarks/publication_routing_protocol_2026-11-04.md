@@ -492,3 +492,18 @@ source manifest, selected manifest and exact reference membership. The report
 retains the selection-record digest. A synthetic replay passes; changing the
 size inventory or source-selection digest is rejected. This closes an evaluation
 admission gap before any real router fit or reserved-set opening.
+
+A six-worker resource pilot used six development references selected by native
+geometry only, at edge 4096, turbo q50, both subsampling modes (12 cells).
+The frozen executable completed successfully under the 16 GiB cap:
+`rc=0 65s | peak-RSS 11.65GiB | min-avail 10601MiB | peak-load 9.92`.
+The dense sweep was frozen during this serialized pilot. This is full generation
+pipeline resource evidence, not an isolated restoration-latency benchmark. The
+four-worker dense segment was then stopped recoverably to resume with six
+workers and a shorter executable-search path; scientific inputs are unchanged.
+The six-worker pilot's complete audit verified 12 cells and 66 artifacts.
+A broad pre-resume diagnostic of the interrupted dense segment was attempted,
+then stopped while still reading old cell files on the busy array. It did not
+complete and supplies no integrity claim. The harness resumed using its existing
+identity, committed-cell schema and byte-equality checks; the full final artifact
+audit is still required before fitting. Both diagnostic attempt logs are retained.
