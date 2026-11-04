@@ -11,6 +11,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Publication model integrity: matched origin-balanced coverage and severity
+  (d00746e7), rejection of unconverged estimators (7bcbb23e), numerical-runtime
+  identity checks (d3bac492), and portable scaler serialization (0ec26cd7).
+
 - Publication-study storage safeguards: hash-verified bounded staging and
   ended-writer final draining (3379bc05, 944a33b9), plus strict validation of
   resumed routing predictions (635771c9). The study remains incomplete;

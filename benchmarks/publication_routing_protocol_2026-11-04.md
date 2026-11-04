@@ -716,3 +716,16 @@ reproduced before the move. A separate producer/consumer regression now verifies
 portable loading and unchanged numerical transforms, and evaluation rejects a
 changed scaler module. All 36 integrity tests pass; no real model artifact needed
 migration because fitting has not started.
+
+The first completed 4,096-group native drain moved 17,875 artifacts /
+30,950,242,334 bytes, leaving zero payload files and 18,738 archive links in
+staging. Earlier interrupted attempts account for the other links and remain
+preserved separately. The client wrapper recorded
+`rc=0 2928s | peak-RSS 0.02GiB | min-avail 21277MiB | peak-load 6.55`;
+the storage process recorded 48:46.68 elapsed and 79,380 KiB maximum RSS via
+GNU time. These are this storage operation's observations, not restoration
+runtime or a controlled storage comparison. Five deterministic client-side
+archive-link reads matched their content hashes. The guard verified fresh usage
+and helper identities before the unchanged six-worker generator resumed;
+new artifact writes were observed afterward. Final full-study auditing remains
+required before fitting.
