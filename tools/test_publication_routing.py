@@ -13,6 +13,20 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_origin_balanced_coverage_conditional_harm_and_severity(self):
+        gain=np.array([-1.,2.,0.,3.]);harm=np.array([True,False,False,False])
+        groups=np.array(['a','a','a','b']);decision=np.array([True,False,False,True])
+        result=summary(gain,harm,np.full(4,.5),decision,groups)
+        self.assertEqual(result['coverage'],.5)
+        self.assertAlmostEqual(result['origin_coverage'],2/3)
+        self.assertEqual(result['harm_among_restored'],.5)
+        self.assertAlmostEqual(result['origin_harm_among_restored'],.25)
+        self.assertAlmostEqual(result['origin_mean_loss'],1/6)
+        self.assertAlmostEqual(result['origin_excess_loss'],1/12)
+        skipped=summary(gain,harm,np.full(4,.5),np.zeros(4,bool),groups)
+        self.assertEqual(skipped['origin_coverage'],0.)
+        self.assertIsNone(skipped['origin_harm_among_restored'])
+
     def test_native_batch_size_validation_and_grouping(self):
         import publication_routing_native_stage as native
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

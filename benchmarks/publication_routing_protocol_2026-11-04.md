@@ -687,3 +687,11 @@ filesystem-wide barriers while retaining all source files until each archive
 barrier succeeds. All 32 tests pass, including batch-size bounds and grouping.
 The 66-artifact pilot's storage process recorded 29,372 KiB maximum RSS via
 GNU time; the wrapper RSS above measures the client process tree only.
+
+Reports retain both origin-balanced and cell-weighted restore coverage,
+harm among restored cases, mean loss and excess loss. Origin-balanced conditional
+harm is the ratio of origin-balanced harmed-case mass to origin-balanced restored
+mass; it is not the unweighted mean of per-origin conditional rates. Empty
+restoration sets report null conditional harm. Lower gain quantiles remain
+cell-weighted. An unequal-origin fixture verifies that these denominators differ;
+all 33 integrity tests pass. No selection objective or runtime policy changed.

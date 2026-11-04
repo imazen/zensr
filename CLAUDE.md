@@ -67,3 +67,9 @@
   probability bounds, matching vector shapes and boolean domain masks. Previously,
   a non-finite cached risk could silently suppress decisions. Regression coverage
   rejects these corrupt checkpoints before model selection; no real fit existed.
+
+- Publication reporting now retains origin-balanced coverage, conditional harm
+  and loss severity alongside cell-weighted values. Previously these supporting
+  measures were only cell-weighted despite origin-balanced gain/risk selection.
+  An unequal-origin regression verifies the distinct denominators and skip-all
+  behavior. No real fit or reserved report existed when this was corrected.

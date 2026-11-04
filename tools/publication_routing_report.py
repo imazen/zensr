@@ -18,7 +18,8 @@ def render(source, output):
     data=json.loads(source.read_text());policies=data['policies']
     output.mkdir(parents=True)
     fields=['policy','origins','n','origin_mean','origin_harm','coverage','worst',
-            'harm_among_restored','harmed_origins','excess_loss','content_macro_gain',
+            'harm_among_restored','origin_harm_among_restored','origin_coverage',
+            'mean','harm','mean_loss','origin_mean_loss','harmed_origins','excess_loss','origin_excess_loss','content_macro_gain',
             'content_macro_harm','flat01_harm','flat05_harm','gain_low','gain_high',
             'harm_low','harm_high','gain_difference_vs_conservative',
             'gain_difference_vs_conservative_low','gain_difference_vs_conservative_high','router_artifact_bytes',
@@ -84,6 +85,7 @@ def render(source, output):
     for name,p in policies.items():
         text.append(f'| {name} | {p["origin_mean"]:.4f} | {100*p["origin_harm"]:.3f} | {100*p["coverage"]:.2f} | {p["worst"]:.4f} |')
     text += ['', 'Gain and harm are origin-balanced. Restore coverage is cell-weighted.',
+             'The CSV retains both origin-balanced and cell-weighted gain, harm, coverage, harm among restored cases, and loss severity.',
              'The CSV also reports any-harm origin incidence with a pointwise exact binomial interval. This distinct estimand counts an origin once if any tested variant is harmed; its independent, identically sampled origin assumption does not establish deployment-population coverage.',
              'The oracle uses reference outcomes and is not deployable.',
              'Post-inference policies pay restoration cost even when rejecting output.',

@@ -256,14 +256,17 @@ def in_domain(model,x):
 
 def summary(gain,harm,limits,decision,groups):
     w=origin_weights(groups);w=w/w.sum();realized=gain*decision
-    harmed=harm&decision;nrest=int(decision.sum())
+    harmed=harm&decision;nrest=int(decision.sum());origin_restored=float(w@decision)
     values=dict(n=len(gain),origins=len(set(groups)),mean=float(realized.mean()),
-        origin_mean=float(w@realized),coverage=float(decision.mean()),
+        origin_mean=float(w@realized),coverage=float(decision.mean()),origin_coverage=origin_restored,
         harm=float(harmed.mean()),origin_harm=float(w@harmed),harm_count=int(harmed.sum()),
         harm_among_restored=float(harmed.sum()/nrest) if nrest else None,
+        origin_harm_among_restored=float(w@harmed)/origin_restored if origin_restored else None,
         harmed_origins=len(set(groups[harmed])),worst=float(realized.min()),
         mean_loss=float(-np.minimum(realized,0.).mean()),
+        origin_mean_loss=float(w@(-np.minimum(realized,0.))),
         excess_loss=float(np.maximum(-realized-limits,0.).mean()),
+        origin_excess_loss=float(w@np.maximum(-realized-limits,0.)),
         quantiles=dict(zip(('p01','p05','p25','p50','p75','p95'),map(float,np.quantile(realized,[.01,.05,.25,.5,.75,.95])))))
     return values
 
