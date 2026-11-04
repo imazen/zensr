@@ -212,3 +212,19 @@ XYB, 4:2:2/4:4:0, grayscale, other decoder upsampling/strictness settings,
 multigeneration inputs and separate Cargo-feature builds remain outside this
 quality study. Existing correctness tests for those geometries do not establish
 their restoration quality. Publication claims must retain these domain limits.
+
+## Training-range abstention control
+
+Before any new router fitting, add guarded and unguarded operating points for
+each learned model. The guard rejects a row if any numeric feature lies outside
+that fit's observed minimum/maximum, or any categorical value was unseen. Bounds
+are learned only from the training origins of each cross-fit fold (and from the
+full development cohort for the final model). Threshold and risk-penalty selection
+compares both variants under the same budgets. This is an axis-aligned range
+check, not a validated distribution-shift detector or a harm guarantee. In
+particular, a policy trained only at 512 pixels may abstain at larger sizes.
+
+Retain every development candidate and all out-of-fold predictions. The reserved
+report evaluates the operating points selected at the five fixed budgets plus
+fixed baselines. These are sampled gain/risk operating points, not an exhaustive
+continuous frontier and not a deployment selection.

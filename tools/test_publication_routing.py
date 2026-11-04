@@ -88,6 +88,17 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertTrue(np.isfinite(gain).all())
         np.testing.assert_array_equal(risk,np.zeros(40))
 
+    def test_training_range_guard_rejects_extrapolation_and_unknown_categories(self):
+        x=np.array([[float(i),'Mozjpeg','MozjpegQuality','420'] for i in range(40)],dtype=object)
+        model=fit_model(x,np.arange(40,dtype=float),np.zeros(40,bool),np.arange(40),('linear',1.),1)
+        query=x[:4].copy();query[0,0]=-1.;query[1,0]=39.;query[2,1]='unseen-family'
+        domain=study.in_domain(model,query)
+        np.testing.assert_array_equal(domain,[False,True,False,True])
+        choice=dict(skip=False,penalty=0.,threshold=0.,domain_guard=True)
+        np.testing.assert_array_equal(study.decisions(np.ones(4),np.zeros(4),choice,domain),domain)
+        with self.assertRaisesRegex(ValueError,'missing fitted-domain'):
+            study.decisions(np.ones(4),np.zeros(4),choice)
+
     def test_selection_freeze_and_reserved_evaluation_roundtrip(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         root=Path(tempfile.mkdtemp(prefix='synthetic-roundtrip-',dir=base))

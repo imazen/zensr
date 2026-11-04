@@ -80,12 +80,12 @@ def atomic_json(path,value):
 def checkpoint_predictions(path,calculate):
     if path.exists():
         with np.load(path,allow_pickle=False) as data:
-            return data['gain'],data['risk']
-    gain,risk=calculate()
+            return data['gain'],data['risk'],data['in_domain']
+    gain,risk,domain=calculate()
     temporary=path.with_suffix('.partial')
-    with temporary.open('wb') as f:np.savez_compressed(f,gain=gain,risk=risk)
+    with temporary.open('wb') as f:np.savez_compressed(f,gain=gain,risk=risk,in_domain=domain)
     temporary.replace(path)
-    return gain,risk
+    return gain,risk,domain
 
 
 def read_cells(root, expected_role):
@@ -164,15 +164,25 @@ def fit_model(x,gain,harm,groups,config,n_numeric):
     if len(np.unique(harm))==1:
         risk_model=float(harm[0])
     else:risk_model.fit(xt,harm,sample_weight=weights)
-    return transform,gain_model,risk_model
+    numbers=x[:,:n_numeric].astype(float)
+    domain=(numbers.min(axis=0),numbers.max(axis=0),
+            [tuple(sorted(set(x[:,j]))) for j in range(n_numeric,x.shape[1])])
+    return transform,gain_model,risk_model,domain
 
 
 def predict(model,x):
-    transform,gain_model,risk_model=model;xt=transform.transform(x)
+    transform,gain_model,risk_model,_=model;xt=transform.transform(x)
     pg=gain_model.predict(xt)
     pr=np.full(len(x),risk_model) if isinstance(risk_model,float) else risk_model.predict_proba(xt)[:,1]
     if not (np.isfinite(pg).all() and np.isfinite(pr).all()):raise ValueError('non-finite prediction')
     return pg,pr
+
+
+def in_domain(model,x):
+    low,high,categories=model[3];n=len(low);numbers=x[:,:n].astype(float)
+    valid=((numbers>=low)&(numbers<=high)).all(axis=1)
+    for j,known in enumerate(categories,start=n):valid &= np.asarray([v in known for v in x[:,j]])
+    return valid
 
 
 def summary(gain,harm,limits,decision,groups):
@@ -207,8 +217,12 @@ def choose(candidates,budget):
     return max(eligible,key=lambda c:(c['mean'],-c['harm'],-c['coverage']))
 
 
-def decisions(pg,pr,choice):
-    return np.zeros(len(pg),dtype=bool) if choice['skip'] else pg-choice['penalty']*pr>=choice['threshold']
+def decisions(pg,pr,choice,domain=None):
+    decision=np.zeros(len(pg),dtype=bool) if choice['skip'] else pg-choice['penalty']*pr>=choice['threshold']
+    if choice.get('domain_guard',False):
+        if domain is None:raise ValueError('missing fitted-domain decision')
+        decision &= domain
+    return decision
 
 
 def runtime_gates():
@@ -279,31 +293,34 @@ def fit(root,out):
     folds=list(GroupKFold(n_splits=5,shuffle=True,random_state=20261104).split(np.zeros(len(rows)),gain,groups))
     gates=runtime_gates()
     threshold_selection=threshold_frontier(rows,gain,harm,groups,gates)
-    all_models={};selection={};progress=[]
+    all_models={};selection={};progress=[];all_candidates={}
     for family,numeric in FEATURES.items():
         x=inputs(rows,numeric);candidates=[]
         for kind,param in CONFIGS:
-            key=f'{family}-{kind}-{param:g}';pg=np.full(len(rows),np.nan);pr=pg.copy()
+            key=f'{family}-{kind}-{param:g}';pg=np.full(len(rows),np.nan);pr=pg.copy();domain=np.zeros(len(rows),bool)
             for fold,(train,valid) in enumerate(folds):
                 assert not set(groups[train])&set(groups[valid])
                 def calculate():
                     model=fit_model(x[train],gain[train],harm[train],groups[train],(kind,param),len(numeric))
-                    return predict(model,x[valid])
-                fg,fr=checkpoint_predictions(out/f'{key}.fold-{fold}.npz',calculate)
-                if fg.shape!=(len(valid),) or fr.shape!=(len(valid),):raise ValueError('invalid fold checkpoint')
-                pg[valid],pr[valid]=fg,fr
+                    return (*predict(model,x[valid]),in_domain(model,x[valid]))
+                fg,fr,fd=checkpoint_predictions(out/f'{key}.fold-{fold}.npz',calculate)
+                if any(v.shape!=(len(valid),) for v in (fg,fr,fd)):raise ValueError('invalid fold checkpoint')
+                pg[valid],pr[valid],domain[valid]=fg,fr,fd
                 event=dict(model=key,fold=fold,train_origins=len(set(groups[train])),valid_origins=len(set(groups[valid])))
                 progress.append(event);(out/'progress.json').write_text(json.dumps(progress,indent=2)+'\n')
                 print(json.dumps(event),flush=True)
             if not np.isfinite(pg).all():raise ValueError('missing OOF predictions')
-            np.savez_compressed(out/f'{key}.oof.npz',gain=pg,risk=pr)
-            for c in threshold_choices(pg,pr,gain,harm,groups):candidates.append(dict(c,model=key))
+            np.savez_compressed(out/f'{key}.oof.npz',gain=pg,risk=pr,in_domain=domain)
+            for guard in (False,True):
+                for c in threshold_choices(pg,pr,gain,harm,groups,domain if guard else None):candidates.append(dict(c,model=key,domain_guard=guard))
             all_models[key]=dict(family=family,config=[kind,param],features=list(numeric))
         selected=[]
         for budget in BUDGETS:
             choice=choose(candidates,budget);choice=dict(choice,budget=budget)
             selected.append(choice)
         selection[family]=selected
+        all_candidates[family]=candidates
+        atomic_json(out/'development-candidates.json',all_candidates)
     # Fit only models needed by some frontier point, then freeze their hashes.
     chosen=sorted({c['model'] for choices in selection.values() for c in choices if not c['skip']})
     for key in chosen:
@@ -334,16 +351,18 @@ def fit(root,out):
             spec=all_models[key];x=inputs(rows,spec['features'])
             model=fit_model(x[train],gain[train],harm[train],groups[train],spec['config'],len(spec['features']))
             cg,cr=predict(model,x[cal]);ag,ar=predict(model,x[audit])
-            candidates=threshold_choices(cg,cr,gain[cal],harm[cal],groups[cal])
+            candidates=[]
+            for guard in (False,True):
+                candidates.extend(dict(c,domain_guard=guard) for c in threshold_choices(cg,cr,gain[cal],harm[cal],groups[cal],in_domain(model,x[cal]) if guard else None))
             for budget in BUDGETS:
-                choice=choose(candidates,budget);d=decisions(ag,ar,choice)
+                choice=choose(candidates,budget);d=decisions(ag,ar,choice,in_domain(model,x[audit]))
                 repetition_results.append(dict(repetition=repetition,model=key,budget=budget,
                     calibration=choice,audit=summary(gain[audit],harm[audit],limits[audit],d,groups[audit])))
         atomic_json(checkpoint,repetition_results)
         stability.extend(repetition_results)
         print('completed grouped stability split',repetition+1,'/20',flush=True)
     atomic_json(out/'stability.json',stability)
-    frozen=dict(fit_contract_sha256=sha(out/'fit.contract.json'),development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
+    frozen=dict(fit_contract_sha256=sha(out/'fit.contract.json'),development_candidates_sha256=sha(out/'development-candidates.json'),development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
                 selection=selection,threshold_selection=threshold_selection,runtime_gates=gates,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
                 numpy=np.__version__,sklearn=sklearn.__version__,
                 harm_curve='0.5 - 0.04*clamp(identity_ssim2-90,0,10)',
@@ -419,12 +438,13 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
     result['training_provenance']='Reserved origins are excluded against the documented canonical model-source policy. Historical training pairs lack source-image IDs and a complete generation snapshot; per-pair training provenance is not reconstructed.'
-    predicted={}
+    predicted={};domains={}
     for key,spec in frozen['models'].items():
         if 'sha256' not in spec:continue
         path=selection/f'{key}.joblib'
         if sha(path)!=spec['sha256']:raise ValueError('model artifact changed')
-        predicted[key]=predict(joblib.load(path),inputs(rows,spec['features']))
+        model=joblib.load(path);x=inputs(rows,spec['features'])
+        predicted[key]=predict(model,x);domains[key]=in_domain(model,x)
     choices={}
     base=np.asarray([float(r['estimated_gain']) for r in rows])
     gate=np.asarray([r['gate']=='true' for r in rows]);cons=np.asarray([r['conservative_gate']=='true' for r in rows])
@@ -437,7 +457,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     for family,frontier in frozen['selection'].items():
         for c in frontier:
             pg,pr=predicted[c['model']] if not c['skip'] else (np.zeros(len(rows)),np.zeros(len(rows)))
-            choices[f'{family}/budget-{c["budget"]:g}']=decisions(pg,pr,c)
+            choices[f'{family}/budget-{c["budget"]:g}']=decisions(pg,pr,c,domains.get(c['model'],np.zeros(len(rows),bool)))
     for name,d in choices.items():
         entry=summary(gain,harm,limits,d,groups);entry.update(bootstrap(gain,harm,d,groups))
         weights=origin_weights(groups);weights/=weights.sum()
