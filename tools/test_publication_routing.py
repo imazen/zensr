@@ -131,6 +131,8 @@ class PublicationIntegrity(unittest.TestCase):
                     identity_ssim2='80',restored_ssim2=str(79+2*feature),coef_zero_ac_blocks=str(feature))
                 for artifact in ('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact','identity_butter_map','restored_butter_map'):
                     row[artifact]='synthetic-'+artifact
+                for arm in ('identity','restored'):
+                    for channel in ('r','g','b'):row[f'{arm}_sse_{channel}']='1'
                 for metric in ('psnr','butter_max','butter_pnorm3'):
                     row['identity_'+metric]='1';row['restored_'+metric]='1'
                 with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
@@ -197,6 +199,26 @@ class PublicationIntegrity(unittest.TestCase):
         (reserved/'FEATURES.tsv').write_text('changed feature identities\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):
             study.evaluate(reserved,root/'selection',root/'changed-report.json')
+
+    def test_psnr_exact_match_transitions_do_not_use_99_sentinel(self):
+        rows=[]
+        for before,after in ((4,1),(0,1),(1,0),(0,0)):
+            row={'identity_psnr':'99','restored_psnr':'99'}
+            for arm,value in (('identity',before),('restored',after)):
+                for c in ('r','g','b'):row[f'{arm}_sse_{c}']=str(value)
+            rows.append(row)
+        groups=np.asarray(['a','b','c','d'])
+        result=study.psnr_changes(rows,np.ones(4,dtype=bool),groups)
+        self.assertIsNone(result['origin_mean_improvement'])
+        self.assertEqual(result['negative_infinite_change_count'],1)
+        self.assertEqual(result['positive_infinite_change_count'],1)
+        self.assertEqual(result['exact_to_exact_count'],1)
+        self.assertAlmostEqual(result['origin_weighted_mean_finite_change'],5*np.log10(4))
+        self.assertEqual(result['origin_fraction_worse'],.25)
+        self.assertEqual(result['worst_kind'],'negative_infinity')
+        unchanged=study.psnr_changes(rows,np.zeros(4,dtype=bool),groups)
+        self.assertEqual(unchanged['origin_mean_improvement'],0.)
+        self.assertEqual(unchanged['origin_fraction_worse'],0.)
 
     def test_missing_complete_marker_fails(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

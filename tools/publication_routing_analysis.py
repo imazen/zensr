@@ -201,6 +201,30 @@ def summary(gain,harm,limits,decision,groups):
 
 
 
+
+def psnr_changes(rows,decision,groups):
+    # The historical measurement helper encodes exact matches as PSNR=99.
+    # Use retained SSE to avoid treating that sentinel as a finite score.
+    errors=[]
+    for arm in ('identity','restored'):
+        values=np.asarray([sum(float(r[f'{arm}_sse_{c}']) for c in ('r','g','b')) for r in rows])
+        if not np.isfinite(values).all() or (values<0).any():raise ValueError('invalid squared-error sum')
+        errors.append(values)
+    before,restored=errors;after=np.where(decision,restored,before)
+    both_positive=(before>0)&(after>0);both_exact=(before==0)&(after==0)
+    finite=both_positive|both_exact
+    change=np.zeros(len(rows));change[both_positive]=10*np.log10(before[both_positive]/after[both_positive])
+    positive=(before>0)&(after==0);negative=(before==0)&(after>0)
+    w=origin_weights(groups);w/=w.sum();mass=float(w@finite)
+    worst_kind='negative_infinity' if negative.any() else ('finite' if finite.any() else 'positive_infinity')
+    return dict(origin_mean_improvement=float(w@change) if finite.all() else None,
+        origin_weighted_mean_finite_change=float(w@change/mass) if mass else None,
+        finite_change_origin_weight_mass=mass,finite_change_count=int(finite.sum()),
+        positive_infinite_change_count=int(positive.sum()),negative_infinite_change_count=int(negative.sum()),
+        exact_to_exact_count=int(both_exact.sum()),origin_fraction_worse=float(w@(after>before)),
+        worst_kind=worst_kind,worst_improvement=float(change[finite].min()) if worst_kind=='finite' else None,
+        convention='Equal exact reconstructions have zero change. Exact/nonexact transitions have infinite PSNR change; a full mean containing them is not reported. Finite conditional means retain original origin weights and renormalize their finite mass.')
+
 def worst_cases(rows,gain,harm,decision,limit=10):
     """Trace losses to retained artifacts, with one worst cell per origin."""
     order=sorted(np.flatnonzero(decision & (gain<0)),key=lambda i:(gain[i],rows[i]['origin'],rows[i]['file'],rows[i]['encoder'],rows[i]['ss'],rows[i]['nominal_q']))
@@ -486,8 +510,8 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     for name,d in choices.items():
         entry=summary(gain,harm,limits,d,groups);entry.update(bootstrap(gain,harm,d,groups))
         weights=origin_weights(groups);weights/=weights.sum()
-        secondary={}
-        for metric,sign in (('psnr',1.),('butter_max',-1.),('butter_pnorm3',-1.)):
+        secondary={'psnr':psnr_changes(rows,d,groups)}
+        for metric,sign in (('butter_max',-1.),('butter_pnorm3',-1.)):
             delta=sign*np.asarray([float(r['restored_'+metric])-float(r['identity_'+metric]) for r in rows])*d
             if not np.isfinite(delta).all():raise ValueError('non-finite secondary metric')
             secondary[metric]=dict(origin_mean_improvement=float(weights@delta),

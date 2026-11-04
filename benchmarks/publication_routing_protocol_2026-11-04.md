@@ -256,3 +256,14 @@ abstention flag, feature list, model configuration and serialized router artifac
 size. Joblib bytes include Python model/transform serialization; they are not
 Rust binary sizes or resident-memory measurements. The restoration model weights
 are separate. Skip-all points do not require loading a fitted router.
+
+## Secondary PSNR exact-match convention
+
+The frozen harness's historical PSNR helper stores 99 for exact matches. Analysis
+therefore derives PSNR changes from retained RGB squared-error sums, rather than
+subtracting those sentinel scores. Equal exact reconstructions have zero change;
+exact/nonexact transitions are counted as positive or negative infinite changes.
+If any occur, the full mean is left undefined. A separately labeled conditional
+finite mean renormalizes the original origin weights over finite-change cases,
+with its count and retained weight mass reported. SSIM2 selection labels and the
+primary harm curve do not depend on this secondary-metric correction.

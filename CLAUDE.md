@@ -19,3 +19,8 @@
   an atomic non-overwriting hard link. Existing conflicting bytes are preserved.
   The ongoing frozen study executable retains the earlier fail-fast writer;
   full artifact auditing remains mandatory before fitting.
+- Publication analysis derives PSNR changes from retained per-channel SSE. The
+  shared measurement helper uses 99 for exact matches, so subtracting its PSNR
+  fields could misreport an exact/nonexact transition. Exact transitions are now
+  counted separately; infinite changes are not replaced with finite numbers.
+  Regression coverage includes both transition directions and unchanged output.
