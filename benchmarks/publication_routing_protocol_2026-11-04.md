@@ -708,3 +708,11 @@ require the same numerical configuration; use the same resource-wrapper job limi
 A live four-job probe resolved four threads for both BLAS libraries and OpenMP.
 Regression checks detect changed thread counts and library bytes without storing
 host-specific library paths in the contract. All 35 integrity tests pass.
+
+The weighted scaler now lives in an importable module whose source hash is part
+of the fit contract. A CLI-defined scaler previously serialized as `__main__`;
+a saved model then failed to load in a fresh consumer process. That failure was
+reproduced before the move. A separate producer/consumer regression now verifies
+portable loading and unchanged numerical transforms, and evaluation rejects a
+changed scaler module. All 36 integrity tests pass; no real model artifact needed
+migration because fitting has not started.

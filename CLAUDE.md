@@ -84,3 +84,9 @@
   Previously a changed wrapper job limit could pass the environment check.
   Thread-count and library-byte changes are covered by regression; no real fit
   existed when the contract was strengthened.
+
+- Fixed publication model portability before fitting: the weighted scaler was
+  defined in the CLI module, so CLI-produced joblib artifacts referenced
+  `__main__.OriginScaler` and failed in a fresh consumer. The failure was
+  reproduced; the scaler now has a stable importable module and frozen source
+  hash. Cross-process serialization and changed-source rejection pass.

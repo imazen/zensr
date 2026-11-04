@@ -28,7 +28,8 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder
+from publication_routing_scaler import OriginScaler
 from publication_routing_cells import required_coverage
 from publication_routing_tables import cell_bytes
 
@@ -206,14 +207,6 @@ def inputs(rows,numeric):
     return x
 
 
-class OriginScaler(StandardScaler):
-    """Translate before moment accumulation so constant features have zero variance."""
-    def fit(self,x,y=None,sample_weight=None):
-        values=np.asarray(x,dtype=float)
-        offset=values[0].copy()
-        super().fit(values-offset,y,sample_weight=sample_weight)
-        self.mean_+=offset
-        return self
 
 
 def fit_model(x,gain,harm,groups,config,n_numeric):
@@ -408,6 +401,7 @@ def fit(root,out,size_root):
     fit_contract=dict(cells_sha256=identity,development_sources=development_sources,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
         selector_source_sha256=sha(Path(__file__).with_name('publication_routing_sizes.py')),
+        scaler_source_sha256=sha(Path(__file__).with_name('publication_routing_scaler.py')),
         audit_source_sha256=sha(Path(__file__).with_name('publication_routing_cells.py')),
         table_snapshot_source_sha256=sha(Path(__file__).with_name('publication_routing_tables.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
@@ -542,6 +536,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     fit_contract=json.loads((selection/'fit.contract.json').read_text())
     if sha(selection/'fit.contract.json')!=frozen['fit_contract_sha256']:raise ValueError('fit contract changed after selection')
     if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
+    if sha(Path(__file__).with_name('publication_routing_scaler.py'))!=fit_contract['scaler_source_sha256']:raise ValueError('scaler source changed after selection')
     if sha(Path(__file__).with_name('publication_routing_cells.py'))!=fit_contract['audit_source_sha256']:raise ValueError('audit source changed after selection')
     if sha(Path(__file__).with_name('publication_routing_sizes.py'))!=fit_contract['selector_source_sha256']:raise ValueError('representative selector changed after fitting')
     if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')

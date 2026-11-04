@@ -333,6 +333,16 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(result['origin_mean'],.5)
         self.assertEqual(result['origin_harm'],.5)
 
+    def test_scaler_serialization_loads_in_a_fresh_consumer(self):
+        import subprocess,sys,os
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='portable-scaler-',dir=base));artifact=root/'scaler.joblib'
+        env=dict(os.environ,PYTHONPATH=str(Path(study.__file__).parent))
+        producer="import runpy,sys,joblib,numpy as np; namespace=runpy.run_path(sys.argv[1],run_name='cli_fixture'); model=namespace['OriginScaler']().fit(np.array([[1.],[3.]])); joblib.dump(model,sys.argv[2])"
+        subprocess.run([sys.executable,'-c',producer,study.__file__,str(artifact)],env=env,check=True)
+        consumer="import sys,joblib,numpy as np; model=joblib.load(sys.argv[1]); np.testing.assert_array_equal(model.transform([[1.],[3.]]),[[-1.],[1.]])"
+        subprocess.run([sys.executable,'-c',consumer,str(artifact)],env=env,check=True)
+
     def test_environment_binds_effective_thread_count_and_library_bytes(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         root=Path(tempfile.mkdtemp(prefix='numerical-environment-',dir=base))
@@ -548,6 +558,9 @@ class PublicationIntegrity(unittest.TestCase):
         with patch.object(study,'sha',side_effect=lambda p:'changed-selector' if Path(p).name=='publication_routing_sizes.py' else real_sha(p)):
             with self.assertRaisesRegex(ValueError,'selector changed after fitting'):
                 study.evaluate(reserved,root/'selection',root/'changed-selector-report.json')
+        with patch.object(study,'sha',side_effect=lambda p:'changed-scaler' if Path(p).name=='publication_routing_scaler.py' else real_sha(p)):
+            with self.assertRaisesRegex(ValueError,'scaler source changed'):
+                study.evaluate(reserved,root/'selection',root/'changed-scaler-report.json')
         study.evaluate(reserved,root/'selection',root/'report.json')
         report=json.loads((root/'report.json').read_text())
         self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)
