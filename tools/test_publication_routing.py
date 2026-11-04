@@ -112,7 +112,7 @@ class PublicationIntegrity(unittest.TestCase):
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
             (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\n')
             (folder/'FEATURES.tsv').write_text('synthetic feature identities\n')
-            (folder/'ENCODERS.tsv').write_text('synthetic encoder identities\n')
+            (folder/'ENCODERS.tsv').write_text('synthetic-encoder\tsynthetic-sha\n')
             return folder
         development=dataset('dev','router_development',80)
         reserved=dataset('test','locked_test',20)
@@ -143,6 +143,12 @@ class PublicationIntegrity(unittest.TestCase):
             study.evaluate(reserved,root/'selection',root/'wrong-primary-report.json')
         study.evaluate(reserved,root/'selection',root/'size-report.json',root/'report.json')
         self.assertEqual(json.loads((root/'size-report.json').read_text())['evaluation_scope'],'size_generalization')
+        (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nencoders\t'+','.join(study.MODE_ENCODERS)+'\nmanifest_sha256\tsynthetic-subset\nencoder_dependencies_sha256\tsynthetic-subset\nexclusions\t\n')
+        study.evaluate(reserved,root/'selection',root/'mode-report.json',mode_report=root/'report.json')
+        self.assertEqual(json.loads((root/'mode-report.json').read_text())['evaluation_scope'],'mode_generalization')
+        (reserved/'ENCODERS.tsv').write_text('synthetic-encoder\tchanged-binary\n')
+        with self.assertRaisesRegex(ValueError,'encoder binaries'):
+            study.evaluate(reserved,root/'selection',root/'changed-mode-report.json',mode_report=root/'report.json')
         (reserved/'FEATURES.tsv').write_text('changed feature identities\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):
             study.evaluate(reserved,root/'selection',root/'changed-report.json')

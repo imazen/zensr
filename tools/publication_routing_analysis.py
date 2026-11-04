@@ -43,6 +43,9 @@ FEATURES={
     'post':BASE+COEF+PIXELS+POST,
 }
 CONFIGS=(('linear',1.),('linear',10.),('hist',2),('hist',3))
+MODE_ENCODERS=('zenjpeg',)+tuple('zenjpeg:'+name for name in (
+    'baseline','progressive','auto','hybrid','hybridmax','mozbase','mozprog',
+    'trellis','trellisdc','noaq','nodering','noaq_nodering','blur'))
 
 
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -64,7 +67,8 @@ def study_contract(root):
     # Roles intentionally differ; every other primary-grid input must agree.
     identity.pop('role')
     return dict(identity=identity,features_sha256=sha(root/'FEATURES.tsv'),
-                encoders_sha256=sha(root/'ENCODERS.tsv'))
+                encoders_sha256=sha(root/'ENCODERS.tsv'),
+                encoder_files=dict(line.split('\t',1) for line in (root/'ENCODERS.tsv').read_text().splitlines()))
 
 
 def atomic_json(path,value):
@@ -370,7 +374,8 @@ def paired_interval(gain,harm,decision,baseline,groups,iters=2000):
                 harm_difference_95=list(map(float,np.quantile(risks[indices].mean(axis=1),[.025,.975]))))
 
 
-def evaluate(root,selection,out,primary_report=None):
+def evaluate(root,selection,out,primary_report=None,mode_report=None):
+    if primary_report is not None and mode_report is not None:raise ValueError('choose one generalization axis')
     if out.exists():raise ValueError('refusing to overwrite reserved-test report')
     freeze=selection/'selection.freeze.json';frozen=json.loads(freeze.read_text())
     fit_contract=json.loads((selection/'fit.contract.json').read_text())
@@ -380,13 +385,25 @@ def evaluate(root,selection,out,primary_report=None):
     actual_contract=study_contract(root)
     expected_contract=json.loads(json.dumps(frozen['study_contract']))
     primary=None
-    if primary_report is not None:
-        primary=json.loads(primary_report.read_text())
+    generalization_report=primary_report or mode_report
+    if generalization_report is not None:
+        primary=json.loads(generalization_report.read_text())
         if primary['selection_sha256']!=sha(freeze) or primary['evaluation_scope']!='primary':raise ValueError('size audit requires this selection primary report')
         # Explicit size-generalization mode changes only image-size inventory
         # and the representative subset; codecs/features/model stay identical.
+        changed_fields=('sizes','manifest_sha256') if primary_report is not None else ('encoders','encoder_dependencies_sha256','manifest_sha256')
+        if mode_report is not None:
+            encoders=actual_contract['identity'].get('encoders','').split(',')
+            if encoders!=list(MODE_ENCODERS):raise ValueError('mode audit encoder inventory differs from fixed protocol')
+            expected_exclusions=','.join(e for e in expected_contract['identity'].get('exclusions','').split(',') if e and e.split('=')[0] in encoders)
+            if actual_contract['identity'].get('exclusions','')!=expected_exclusions:raise ValueError('mode audit has unexpected exclusions')
+            actual_contract['identity']['exclusions']=expected_contract['identity'].get('exclusions','')
+            expected_contract['identity'].setdefault('exclusions','')
+            if not actual_contract['encoder_files'] or any(expected_contract['encoder_files'].get(p)!=h for p,h in actual_contract['encoder_files'].items()):
+                raise ValueError('mode audit changed encoder binaries or libraries')
+            for field in ('encoder_files','encoders_sha256'):actual_contract[field]=expected_contract[field]
         for c in (actual_contract,expected_contract):
-            for field in ('sizes','manifest_sha256'):c['identity'].pop(field,None)
+            for field in changed_fields:c['identity'].pop(field,None)
     if actual_contract!=expected_contract:raise ValueError('reserved inputs differ from frozen study contract')
     rows,identity=read_cells(root,'locked_test');groups=np.asarray([r['origin'] for r in rows])
     if primary is not None and not {r['reference_sha256'] for r in rows}<=set(primary['test_reference_sha256s']):raise ValueError('size audit reference outside primary reserved cohort')
@@ -396,8 +413,8 @@ def evaluate(root,selection,out,primary_report=None):
         quality=float(row['identity_ssim2'])
         row['identity_quality_band']='below90' if quality<90 else ('90to95' if quality<95 else '95plus')
     result=dict(test_cells_sha256=identity,selection_sha256=sha(freeze),policies={},
-                evaluation_scope='size_generalization' if primary is not None else 'primary',
-                primary_report_sha256=sha(primary_report) if primary_report is not None else None,
+                evaluation_scope='size_generalization' if primary_report is not None else ('mode_generalization' if mode_report is not None else 'primary'),
+                primary_report_sha256=sha(generalization_report) if generalization_report is not None else None,
                 test_reference_sha256s=sorted({r['reference_sha256'] for r in rows}),
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
@@ -450,8 +467,9 @@ def main():
     p=sub.add_parser('fit');p.add_argument('root',type=Path);p.add_argument('output',type=Path)
     p=sub.add_parser('evaluate');p.add_argument('root',type=Path);p.add_argument('selection',type=Path);p.add_argument('output',type=Path)
     p.add_argument('--size-generalization-of',type=Path)
+    p.add_argument('--mode-generalization-of',type=Path)
     a=ap.parse_args()
     if a.command=='fit':fit(a.root,a.output)
-    else:evaluate(a.root,a.selection,a.output,a.size_generalization_of)
+    else:evaluate(a.root,a.selection,a.output,a.size_generalization_of,a.mode_generalization_of)
 
 if __name__=='__main__':main()

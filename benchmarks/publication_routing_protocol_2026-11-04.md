@@ -185,3 +185,20 @@ must belong to the primary reserved cohort. Executables, encoders, quality grid,
 features and weights must still match. It is an extrapolation audit of policies
 fitted at 512 pixels, not evidence that those policies were trained size-densely.
 Any deployment claim must state that distinction and its measured failures.
+
+## Encoder-mode generalization
+
+On the same feature-selected reserved representatives, test the 14 existing
+`zjtool` configurations at size 512: default, baseline, progressive, auto,
+hybrid, hybridmax, mozbase, mozprog, trellis, trellisdc, noaq, nodering,
+noaq_nodering and blur. Preserve the full 61-quality grid and both chroma modes.
+The list is fixed in `MODE_ENCODERS`; first check boundary support on the old
+pilot references. This is a separate generalization audit, not additional fitting.
+Encoder executable/shared-library hashes must be a verified subset of those in
+the primary run. A different encoder binary is not admitted as a knob change.
+
+This covers the knobs exposed by the frozen harness, not every JPEG mode.
+XYB, 4:2:2/4:4:0, grayscale, other decoder upsampling/strictness settings,
+multigeneration inputs and separate Cargo-feature builds remain outside this
+quality study. Existing correctness tests for those geometries do not establish
+their restoration quality. Publication claims must retain these domain limits.
