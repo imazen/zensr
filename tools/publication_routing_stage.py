@@ -31,7 +31,7 @@ def sync_directory(path):
     finally:os.close(fd)
 
 
-def transfer(source,destination,keep_alias=False):
+def transfer(source,destination,keep_alias=False,alias_target=None):
     """Preserve conflicting/corrupt bytes; release source only after verification."""
     expected=source.name.split('.')[0]
     if not re.fullmatch('[0-9a-f]{64}',expected):raise ValueError('not a content-addressed artifact')
@@ -61,7 +61,7 @@ def transfer(source,destination,keep_alias=False):
         # Keep lookup atomic across resume, including the legacy writer's
         # create-new / already-exists / read-existing sequence.
         alias=source.parent/('.archive-alias-'+uuid.uuid4().hex)
-        alias.symlink_to(destination.absolute())
+        alias.symlink_to(alias_target or destination.absolute())
         os.replace(alias,source)
     else:
         source.unlink()

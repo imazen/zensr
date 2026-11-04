@@ -210,6 +210,9 @@ publication-routing-tests:
 publication-routing-stage *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_stage.py {{args}}
 
+publication-routing-remote-stage config logs:
+    python3 tools/publication_routing_remote_stage.py "{{config}}" "{{logs}}"
+
 publication-routing-report source output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_report.py "{{source}}" "{{output}}"
 

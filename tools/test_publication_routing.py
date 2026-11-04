@@ -13,6 +13,38 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_native_transfer_requires_frozen_request_and_retains_open_files(self):
+        import publication_routing_native_stage as native
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='native-stage-',dir=base))
+        source=root/'source';destination=root/'archive';destination.mkdir()
+        paths=[]
+        for data in (b'closed artifact',b'open artifact'):
+            h=hashlib.sha256(data).hexdigest();path=source/h[:2]/(h+'.zst')
+            path.parent.mkdir(parents=True);path.write_bytes(data);paths.append(path)
+        request=dict(version='zensr-frozen-native-stage-v1',nonce='a'*32,writer_frozen=False,
+            alias_root=str(destination),excluded=[paths[1].relative_to(source).as_posix()],tools=native.identities())
+        with self.assertRaisesRegex(ValueError,'frozen writer'):native.drain(source,destination,request)
+        self.assertTrue(all(not p.is_symlink() for p in paths))
+        request['writer_frozen']=True
+        result=native.drain(source,destination,request)
+        self.assertEqual((result['transferred'],result['open_files_retained']),(1,1))
+        self.assertTrue(paths[0].is_symlink());self.assertEqual(paths[0].read_bytes(),b'closed artifact')
+        self.assertFalse(paths[1].is_symlink());self.assertEqual(paths[1].read_bytes(),b'open artifact')
+        self.assertEqual(native.drain(source,destination,request)['transferred'],0)
+        self.assertEqual(native.usage(source)['payload_bytes'],len(b'open artifact'))
+
+    def test_remote_staging_observation_failure_freezes_writer(self):
+        import publication_routing_remote_stage as remote
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='remote-stage-failure-',dir=base))
+        config=dict(trigger_bytes=72,approved_limit_bytes=80,free_floor_bytes=520,approved_free_floor_bytes=500)
+        with patch.object(remote,'writer_group',return_value=Path('/synthetic')), \
+             patch.object(remote,'observation',side_effect=OSError('monitor unavailable')), \
+             patch.object(remote,'control') as control:
+            with self.assertRaisesRegex(OSError,'monitor unavailable'):remote.watch(config,root)
+        control.assert_called_once_with(config,'freeze')
+
     def test_live_transfer_keeps_pending_path_lookup_valid(self):
         from publication_routing_stage import transfer
         import os

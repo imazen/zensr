@@ -618,3 +618,17 @@ All 23 integrity tests pass. A synchronous-archive pilot transferred 66 artifact
 (29,467,539 bytes), its repeated drain transferred zero, all 66 links remained
 readable with matching hashes, and the full 12-cell audit passed. The transfer
 wrapper reported `rc=0 21s | peak-RSS 0.03GiB | min-avail 22192MiB | peak-load 5.16`.
+
+
+The approved NVMe staging path uses storage-local usage checks and transfers,
+coordinated by the compute host that owns the writer scope. The coordinator
+freezes the writer, records open artifact paths and a unique request nonce,
+and accepts only matching transfer acknowledgements and tool hashes before
+resuming. Missing observations or failed transfers leave the writer frozen.
+Native transfers preserve client-visible archive links and verify/sync bytes
+beside storage. The operational triggers are 72 GiB staged or 520 GiB free,
+providing margin inside the approved 80 GiB / 500 GiB limits; these polling
+triggers are not filesystem quotas. Private execution configuration carries
+host paths and command arrays. All 25 integrity tests pass, including excluded
+open files, repeated native drains and monitor-failure freezing. A real native
+transfer pilot remains required before switching the running sweep.
