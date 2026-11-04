@@ -45,13 +45,44 @@ def representatives(rows,k):
     return selected,clusters
 
 
+
+NATIVE_RULE=dict(cluster_floor=2048,all_origins_floor=4096)
+
+
+def native_representatives(rows,references,k):
+    """Supplement the feature sample using native geometry, never quality labels."""
+    selected,clusters=representatives(rows,k)
+    for cluster in clusters:cluster['native_floor']=0
+    geometry={r['reference_sha256']:max(int(r['width']),int(r['height'])) for r in references}
+    if any(r['reference_sha256'] not in geometry for r in rows):
+        raise ValueError('missing native reference geometry')
+    eligible=[r for r in rows if geometry[r['reference_sha256']]>=NATIVE_RULE['cluster_floor']]
+    if eligible:
+        extra,groups=representatives(eligible,k)
+        selected.extend(extra)
+        for group in groups:group['native_floor']=NATIVE_RULE['cluster_floor']
+        clusters.extend(groups)
+    # Choose an eligible canonical file, not the origin's possibly smaller file.
+    large={}
+    for r in sorted(rows,key=lambda r:r['file']):
+        if (r['encoder'],r['ss'],r['nominal_q'],r['size'])!=('turbo','420','50','512'):continue
+        if geometry[r['reference_sha256']]>=NATIVE_RULE['all_origins_floor']:
+            large.setdefault(r['origin'],r)
+    for origin,r in sorted(large.items()):
+        selected.append(r['reference_sha256'])
+        clusters.append(dict(content=r['content'],cluster=0,origins=1,
+            native_floor=NATIVE_RULE['all_origins_floor'],
+            representative_sha256=r['reference_sha256'],members=[origin]))
+    return list(dict.fromkeys(selected)),clusters
+
+
 def prepare(root,manifest,output,role,k):
     if output.exists():raise ValueError('refusing to overwrite representative selection')
     if k<1:raise ValueError('clusters per content must be positive')
     rows,digest=read_cells(root,role)
-    selected,clusters=representatives(rows,k)
     with manifest.open() as f:
         reader=csv.DictReader(f,delimiter='\t');fields=reader.fieldnames;references=list(reader)
+    selected,clusters=native_representatives(rows,references,k)
     subset=[r for r in references if r['reference_sha256'] in selected]
     if len(subset)!=len(selected) or any(r['role']!=role for r in subset):raise ValueError('manifest membership mismatch')
     output.mkdir(parents=True)
@@ -60,8 +91,9 @@ def prepare(root,manifest,output,role,k):
         writer=csv.DictWriter(f,fieldnames=fields,delimiter='\t');writer.writeheader();writer.writerows(subset)
     record=dict(selector_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),input_cells_sha256=digest,source_manifest_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest(),
         selected_manifest_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
-        rule='One canonical file per origin; per-content standardized decoded features at turbo 420 q50, 512 max edge; centroid-nearest representative of every cluster, including singleton clusters.',
-        clusters_per_content=k,seed=20261104,features=list(BASE+COEF+PIXELS),clusters=clusters,sizes=list(SIZES),
+        rule='Preserve per-content feature representatives; add per-content representatives among native-edge >=2048 files; include every native-edge >=4096 origin. Canonical eligible file per origin within each stratum; standardized turbo 420 q50 512 features; centroid-nearest including singleton clusters.',
+        native_rule=NATIVE_RULE,clusters_per_content=k,seed=20261104,features=list(BASE+COEF+PIXELS),clusters=clusters,sizes=list(SIZES),
+        native_origin_coverage={str(size):len({r['origin'] for r in subset if max(int(r['width']),int(r['height']))>=size}) for size in SIZES},
         native_size_coverage={str(size):sum(max(int(r['width']),int(r['height']))>=size for r in subset) for size in SIZES},
         limitation='Purposeful feature-cluster sample, not a random population sample; report size results separately from the complete primary cohort.')
     (output/'selection.json').write_text(json.dumps(record,indent=2)+'\n')

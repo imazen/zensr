@@ -462,3 +462,15 @@ selection has 31 references/origins, 8 references eligible for 2048 and only one
 for 4096. This exposes a native-resolution coverage limitation before any model
 fit; it does not support broad 4K conclusions. The 17 routing integrity tests pass,
 including snapshot/live-table equality and rejection of changed archive/metadata.
+
+Before fitting, native-size selection now preserves the original per-content
+feature representatives and supplements them with two feature clusters per
+content among references whose native edge reaches 2048. It also includes one
+canonical eligible reference for every origin reaching 4096. Each stratum chooses
+an eligible file before deduplicating origins, so a smaller canonical file cannot
+hide an origin's larger reference. The selected union is deduplicated by reference
+hash; reports retain both reference and origin counts. Selection uses geometry
+and decoded features only, never restoration outcomes. All 18 integrity tests
+pass, including preservation of the original sample, all eligible large origins,
+and invariance to changed restoration scores. Fitting requires this selector
+identity and native-resolution rule.

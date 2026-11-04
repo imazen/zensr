@@ -135,6 +135,8 @@ def development_cells(root,size_root):
     if selection['selected_manifest_sha256']!=size_contract['identity']['manifest_sha256']:raise ValueError('dense representative manifest changed')
     if selection['selector_sha256']!=sha(Path(__file__).with_name('publication_routing_sizes.py')):raise ValueError('dense representative selector changed')
     if selection['sizes']!=list(STUDY_SIZES) or selection['clusters_per_content']!=2 or selection['seed']!=20261104:raise ValueError('dense representative protocol differs')
+    from publication_routing_sizes import NATIVE_RULE
+    if selection.get('native_rule')!=NATIVE_RULE:raise ValueError('dense native-resolution protocol differs')
     selected={c['representative_sha256'] for c in selection['clusters']}
     references={r['reference_sha256']:tuple(r[k] for k in ('file','origin','content','ref_kind')) for r in rows}
     if {r['reference_sha256'] for r in extra}!=selected:raise ValueError('dense representative membership differs')

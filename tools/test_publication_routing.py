@@ -28,6 +28,26 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertIn('ref-8',before[0])
         self.assertEqual(sum(c['origins'] for c in before[1]),9)
 
+    def test_native_supplement_retains_large_origins_and_eligible_files(self):
+        from publication_routing_sizes import representatives,native_representatives
+        rows=[];references=[]
+        for i in range(8):
+            row={name:str(i+1) for name in study.BASE+study.COEF+study.PIXELS}
+            row.update(file=f'{i:03}',origin=f'origin-{i//2}',reference_sha256=f'ref-{i}',
+                content='photo',encoder='turbo',ss='420',nominal_q='50',size='512',
+                identity_ssim2='80',restored_ssim2='81')
+            rows.append(row)
+            references.append(dict(reference_sha256=f'ref-{i}',width=4096 if i%2 else 1024,height=512))
+        base,_=representatives(rows,2)
+        selected,clusters=native_representatives(rows,references,2)
+        self.assertTrue(set(base)<=set(selected))
+        self.assertTrue({'ref-1','ref-3','ref-5','ref-7'}<=set(selected))
+        self.assertEqual(len(selected),len(set(selected)))
+        self.assertEqual({c['members'][0] for c in clusters if c['native_floor']==4096},
+                         {f'origin-{i}' for i in range(4)})
+        for row in rows:row['restored_ssim2']='-100'
+        self.assertEqual((selected,clusters),native_representatives(rows,references,2))
+
     def test_reference_columns_cannot_enter_inference(self):
         row=dict(width='32',probe_family='Mozjpeg',probe_scale='MozjpegQuality',ss='420',identity_ssim2='70')
         before=inputs([row],('width',))
@@ -210,6 +230,7 @@ class PublicationIntegrity(unittest.TestCase):
             source_manifest_sha256='synthetic-full',features=list(study.BASE+study.COEF+study.PIXELS),
             selector_sha256=study.sha(Path(study.__file__).with_name('publication_routing_sizes.py')),
             sizes=list(study.STUDY_SIZES),clusters_per_content=2,seed=20261104,
+            native_rule=dict(cluster_floor=2048,all_origins_floor=4096),
             clusters=[dict(representative_sha256=sha) for sha in sorted({r['reference_sha256'] for r in dense_rows})])
         (dense/'selection.json').write_text(json.dumps(dense_selection))
         combined,_,provenance=study.development_cells(development,dense)
