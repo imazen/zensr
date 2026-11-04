@@ -70,3 +70,10 @@ returns pixel-identical decode above it. No existing test was removed or weakene
 `just canon4-lint` passes formatting and clippy. Test log: `routing-tests.log`
 under the artifact directory; run-heavy: 79 s, peak RSS 0.21 GiB, minimum
 available 23,086 MiB, peak load 7.25.
+
+Cross-platform verification: commit `48dde917b3a3820b55001715e85cd778323eb8c3`
+passed [CI run 41806729979](https://github.com/imazen/zensr/actions/runs/41806729979):
+Linux x86-64/ARM64, Windows x86-64/ARM64, macOS ARM64, i686 through cross,
+and formatting/clippy/Python calibration integrity. This record is a docs-only
+follow-up. Recomputing from exact decimal differences also reproduced the
+frozen gain curves, gate thresholds and AQ deltas exactly.
