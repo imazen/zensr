@@ -1,0 +1,101 @@
+import tempfile
+import csv
+import hashlib
+import json
+from unittest.mock import patch
+import publication_routing_analysis as study
+from pathlib import Path
+import unittest
+import numpy as np
+from sklearn.model_selection import GroupKFold
+from publication_routing_analysis import (inputs, labels, origin_weights, summary,
+    threshold_choices, choose, fit_model, predict, read_cells)
+
+
+class PublicationIntegrity(unittest.TestCase):
+    def test_reference_columns_cannot_enter_inference(self):
+        row=dict(width='32',probe_family='Mozjpeg',probe_scale='MozjpegQuality',ss='420',identity_ssim2='70')
+        before=inputs([row],('width',))
+        row['identity_ssim2']='99'
+        np.testing.assert_array_equal(before,inputs([row],('width',)))
+        with self.assertRaises(ValueError):inputs([row],('identity_ssim2',))
+        with self.assertRaises(ValueError):inputs([row],('nominal_q',))
+
+    def test_exact_harm_curve_boundaries(self):
+        rows=[dict(identity_ssim2='89.000',restored_ssim2='88.500'),
+              dict(identity_ssim2='95.000',restored_ssim2='94.700'),
+              dict(identity_ssim2='100.000',restored_ssim2='99.899')]
+        gain,harm,limits=labels(rows)
+        np.testing.assert_array_equal(harm,[False,False,True])
+        np.testing.assert_array_equal(limits,[.5,.3,.1])
+
+    def test_repeated_cells_do_not_multiply_origin_weight(self):
+        w=origin_weights(np.array(['a','a','b']))
+        self.assertEqual(w[:2].sum(),w[2])
+        gain=np.array([2.,2.,-1.]);harm=np.array([False,False,True]);d=np.ones(3,bool)
+        result=summary(gain,harm,np.full(3,.5),d,np.array(['a','a','b']))
+        self.assertEqual(result['origin_mean'],.5)
+        self.assertEqual(result['origin_harm'],.5)
+
+    def test_folds_keep_all_variants_of_origin_together(self):
+        groups=np.repeat(np.arange(25),8)
+        folds=GroupKFold(n_splits=5,shuffle=True,random_state=7)
+        visited=[]
+        for train,valid in folds.split(np.zeros((200,1)),groups=groups):
+            self.assertFalse(set(groups[train]) & set(groups[valid]))
+            visited.extend(valid)
+        self.assertEqual(sorted(visited),list(range(200)))
+
+    def test_zero_budget_has_a_true_skip_all_candidate(self):
+        gain=np.array([1.,-1.]);harm=np.array([False,True]);groups=np.array(['a','b'])
+        candidates=threshold_choices(np.ones(2),np.zeros(2),gain,harm,groups)
+        best=choose(candidates,0.)
+        self.assertEqual(best['harm'],0.)
+        self.assertEqual(best['coverage'],0.)
+
+    def test_single_class_risk_fit_is_explicit_constant(self):
+        x=np.array([[float(i),'Mozjpeg','MozjpegQuality','420'] for i in range(40)],dtype=object)
+        model=fit_model(x,np.arange(40,dtype=float),np.zeros(40,bool),np.arange(40),('linear',1.),1)
+        gain,risk=predict(model,x)
+        self.assertTrue(np.isfinite(gain).all())
+        np.testing.assert_array_equal(risk,np.zeros(40))
+
+    def test_selection_freeze_and_reserved_evaluation_roundtrip(self):
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='synthetic-roundtrip-',dir=base))
+        def dataset(name,role,count):
+            folder=root/name;(folder/'cells').mkdir(parents=True)
+            for i in range(count):
+                feature=(i%11)/10
+                row=dict(file=f'{name}-{i}.png',content='synthetic',origin=f'{name}-{i//2}',
+                    role=role,ref_kind='synthetic',reference_sha256=hashlib.sha256(f'{name}-{i}'.encode()).hexdigest(),
+                    width='32',height='32',size='32',encoder='fixture',ss='420',nominal_q='50',
+                    probe_family='ImageMagick',probe_scale='IjgQuality',probe_value='50',
+                    estimated_gain='.5',bpp='1',gate='false',conservative_gate='false',
+                    identity_ssim2='80',restored_ssim2=str(79+2*feature),coef_zero_ac_blocks=str(feature))
+                with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
+                    writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
+            digest=hashlib.sha256()
+            for path in sorted((folder/'cells').glob('*.tsv')):
+                digest.update(path.name.encode());digest.update(path.read_bytes())
+            (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest()}))
+            (folder/'COMPLETE').write_text('synthetic test fixture\n')
+            return folder
+        development=dataset('dev','router_development',80)
+        reserved=dataset('test','locked_test',20)
+        with patch.object(study,'FEATURES',{'coefficient':study.BASE+('coef_zero_ac_blocks',)}), patch.object(study,'CONFIGS',(('linear',1.),)):
+            study.fit(development,root/'selection')
+        self.assertTrue((root/'selection'/'selection.freeze.json').is_file())
+        study.evaluate(reserved,root/'selection',root/'report.json')
+        report=json.loads((root/'report.json').read_text())
+        self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)
+        self.assertEqual(report['policies']['oracle_positive']['harm_count'],0)
+        self.assertIn('paired_vs_fidelity',report['policies']['coefficient/budget-0'])
+
+    def test_missing_complete_marker_fails(self):
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            with self.assertRaises(ValueError):read_cells(Path(directory),'router_development')
+
+
+if __name__=='__main__':unittest.main()

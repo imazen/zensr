@@ -111,3 +111,42 @@ can collide. No restoration scores were used. The original manifest is retained;
 `references-audited.tsv` owns the updated membership. It also fingerprints decoded
 HEIC references, avoiding the old audit's inability to open HEIC originals.
 The threshold is inherited from the existing leakage audit, not tuned on outcomes.
+
+## Frozen analysis grid
+
+The primary quality list is the union of q0–100 step 2 and q0–100 step 5 (61
+values), so aggressive compression is sampled at least as densely as the upper
+range. cjpegli q0 is explicitly excluded: the boundary pilot demonstrated that
+this binary rejects it. A coverage ledger distinguishes that exclusion from a
+missing result. Primary geometry is full-image aspect-preserving resize with a
+512-pixel longest edge, Mitchell filtering, and no upscaling; this differs from
+the earlier center-crop study and its mean scores must not be compared directly.
+Size-generalization evidence remains a separate required section.
+
+Candidate families are continuous coefficients, chooser probability, decoded
+edge slope, the combined decoded feature set, and combined post-inference
+signals. Each compares ridge/logistic regularization 1 and 10 against histogram
+boosting of depth 2 and 3 (100 iterations, learning rate 0.08, L2 10, minimum
+leaf 100 cells). Early stopping is disabled to prevent hidden row-wise splits.
+Five shuffled origin-grouped folds use seed 20261104. Threshold selection uses
+out-of-fold predictions, gain cutoffs {0,0.1,0.25,0.5,0.75,1,1.5,2,3,4,6,10}
+and predicted-risk penalties {0,1,2,4,8,16,32,64}, with an explicit skip-all
+candidate. This is selection evidence, not an unbiased test estimate. Selected
+model configurations also undergo 20 grouped train/calibration/audit splits as
+a development stability check. Only after these records are frozen may the
+reserved test run begin.
+
+Budgets constrain origin-balanced empirical harm; report cell-weighted rates
+alongside them. Both are grid-dependent observations, not estimates of an
+unspecified production traffic mixture. Report content-macro averages and
+reference-SSIM2 bands as well as per-content rows. Paired bootstrap comparisons
+against both current intents resample origins, with 2,000 replicates and seed
+20261104. No policy is chosen for deployment by this study.
+
+Pilot evidence: 380/380 supported cells across five sizes, four encoders and
+five boundary qualities; 1,846 artifacts hashed, decompressed and shape-checked,
+with JPEGs independently read by Pillow/libjpeg. Runtime 76 s, run-heavy peak
+RSS 0.53 GiB, minimum available 22,149 MiB, peak load 3.15. Artifact/oracle audit
+6 s, peak RSS 0.04 GiB, minimum available 23,024 MiB, peak load 3.72. A separate
+four-cell replay produced byte-identical result rows after the shared-helper
+refactor and array-chunk maintenance.

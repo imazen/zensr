@@ -73,12 +73,34 @@ def audit(root):
     print(f'{count} unique cells; {len(verified)} artifacts hashed, decompressed and shape-checked; JPEGs read independently')
 
 
+def status(root):
+    import datetime,json
+    cells=sum(1 for _ in (root/'cells').glob('*.tsv')) if (root/'cells').exists() else 0
+    required=None
+    if (root/'COVERAGE.tsv').exists():
+        with (root/'COVERAGE.tsv').open() as f:
+            required=sum(r['status']=='required' for r in csv.DictReader(f,delimiter='\t'))
+    pids=[]
+    found=subprocess.run(['pgrep','-x','routing_study'],capture_output=True,text=True)
+    for value in found.stdout.split():
+        cmd=subprocess.run(['ps','-p',value,'-o','args='],capture_output=True,text=True).stdout.strip()
+        if str(root) in cmd:pids.append(dict(pid=int(value),command=cmd))
+    record=dict(checked=datetime.datetime.now(datetime.timezone.utc).isoformat(),root=str(root),
+        completed_cells=cells,required_cells=required,live_processes=pids,
+        complete_marker=(root/'COMPLETE').exists(),artifact_audited=(root/'AUDITED.json').exists())
+    if (root/'IDENTITY.tsv').exists():record['identity']=(root/'IDENTITY.tsv').read_text()
+    (root/'PROGRESS.json').write_text(json.dumps(record,indent=2)+'\n')
+    print(json.dumps(record,indent=2))
+
+
 def main():
     ap=argparse.ArgumentParser();sub=ap.add_subparsers(dest='command',required=True)
     p=sub.add_parser('pilot');p.add_argument('source',type=Path);p.add_argument('output',type=Path)
     p=sub.add_parser('audit');p.add_argument('root',type=Path)
+    p=sub.add_parser('status');p.add_argument('root',type=Path)
     a=ap.parse_args()
     if a.command=='pilot':pilot(a.source,a.output)
-    else:audit(a.root)
+    elif a.command=='audit':audit(a.root)
+    else:status(a.root)
 
 if __name__=='__main__':main()
