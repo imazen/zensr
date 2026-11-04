@@ -388,3 +388,12 @@ both roles reaches that edge, so the planned per-content representatives retain
 large inputs. Other content classes have no native 4096-edge references. This is
 an input-coverage fact, not a measured large-image quality result; do not generalize
 a 4K result from those classes to all content.
+
+A separate four-reference resource manifest uses an explicit router-development
+role, geometry-only selection, and no outcomes. All four selected references are
+nature images with 4:3 or 3:4 aspect ratios, reaching 4096×3072 or 3072×4096 without
+upscaling. Manifest SHA-256:
+`12558dadc7ab2978487e601eae8f98c049efaf06a05e5a433491cd5c21173572`.
+The selector rejects the reserved role. These resource cells are not additional
+training observations; the audited representative-grid contract still controls
+fitting membership. The pilot has not run yet.
