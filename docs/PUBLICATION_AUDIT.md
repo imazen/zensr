@@ -71,3 +71,8 @@ cell count and cell digest. It refuses an ambiguous root containing both a
 snapshot and a live `cells/` directory. A snapshot is an explicit frozen input;
 it does not track subsequent changes to the original run. Fitted model contracts
 also record the snapshot reader's source identity.
+
+When a run has `selection.json`, the snapshot also retains and hashes it. The
+reader rejects modified selection metadata and an added selection record that
+was not bound during packing. This lets dense-development and reserved-size
+inputs carry their representative provenance into local analysis unchanged.

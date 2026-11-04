@@ -223,6 +223,18 @@ class PublicationIntegrity(unittest.TestCase):
         marker=snapshot/'COVERAGE.tsv';original_marker=marker.read_bytes();marker.write_bytes(original_marker+b'\n')
         with self.assertRaisesRegex(ValueError,'snapshot metadata changed'):study.read_cells(snapshot,'router_development')
         marker.write_bytes(original_marker)
+        from publication_routing_tables import pack
+        (development/'selection.json').write_text('{"fixture": "selection provenance"}\n')
+        selected_snapshot=root/'snapshot-with-selection'
+        pack(development,selected_snapshot)
+        self.assertEqual((selected_snapshot/'selection.json').read_bytes(),(development/'selection.json').read_bytes())
+        self.assertEqual(study.read_cells(selected_snapshot,'router_development'),study.read_cells(development,'router_development'))
+        (selected_snapshot/'selection.json').write_text('changed')
+        with self.assertRaisesRegex(ValueError,'snapshot metadata changed'):
+            study.read_cells(selected_snapshot,'router_development')
+        (snapshot/'selection.json').write_text('unbound')
+        with self.assertRaisesRegex(ValueError,'unbound snapshot selection'):
+            study.read_cells(snapshot,'router_development')
         dense=dataset('dev-sizes','router_development',20,study.STUDY_SIZES,'dev')
         primary_rows,primary_digest=study.read_cells(development,'router_development')
         dense_rows,dense_digest=study.read_cells(dense,'router_development')

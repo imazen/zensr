@@ -15,12 +15,14 @@ import tarfile
 from publication_routing_cells import digest, zstd_program
 
 METADATA=('COMPLETE','COVERAGE.tsv','AUDITED.json','IDENTITY.tsv','FEATURES.tsv','ENCODERS.tsv')
+OPTIONAL_METADATA=('selection.json',)
 FORMAT='zensr-audited-tables-v1'
 
 
 def pack(root,output):
     if output.exists():raise ValueError('refusing to replace a table snapshot')
-    metadata={name:(root/name).read_bytes() for name in METADATA}
+    names=METADATA+tuple(name for name in OPTIONAL_METADATA if (root/name).is_file())
+    metadata={name:(root/name).read_bytes() for name in names}
     audit=json.loads(metadata['AUDITED.json'])
     if audit['coverage_sha256']!=hashlib.sha256(metadata['COVERAGE.tsv']).hexdigest():
         raise ValueError('coverage changed after audit')
@@ -65,7 +67,12 @@ def cell_bytes(root):
     if (root/'cells').exists():raise ValueError('ambiguous live cells and immutable snapshot')
     record=json.loads(marker.read_text())
     if record['format']!=FORMAT:raise ValueError('unknown table snapshot format')
-    for name in METADATA:
+    names=set(record['metadata_sha256'])
+    if not set(METADATA)<=names or not names<=set(METADATA+OPTIONAL_METADATA):
+        raise ValueError('unexpected snapshot metadata inventory')
+    if any((root/name).exists() and name not in names for name in OPTIONAL_METADATA):
+        raise ValueError('unbound snapshot selection metadata')
+    for name in names:
         if digest(root/name)!=record['metadata_sha256'][name]:raise ValueError('snapshot metadata changed')
     archive=root/'cells.tar.zst'
     if digest(archive)!=record['archive_sha256']:raise ValueError('table snapshot archive changed')
