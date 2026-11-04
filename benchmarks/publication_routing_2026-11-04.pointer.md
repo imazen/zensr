@@ -1,6 +1,7 @@
 # Routing publication study artifacts
 
-Status: development sweep in progress; no new measured routing frontier yet.
+Status: primary development generation complete (235,224 required cells); full
+artifact audit in progress. No new measured routing frontier yet.
 The [protocol](publication_routing_protocol_2026-11-04.md) owns the scientific
 design. Runtime defaults remain unchanged; deployment selection follows review.
 

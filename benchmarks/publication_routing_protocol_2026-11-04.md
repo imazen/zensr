@@ -371,3 +371,12 @@ separate estimand: an origin counts once regardless of the number of harmful
 variants. Its independent, identically sampled origin model does not correct
 purposeful corpus selection or establish deployment-population coverage. It does
 not replace the primary harm interval or enter policy selection.
+
+## Primary generation completion
+
+The frozen executable completed all 235,224 required primary-development cells
+on 2026-11-04. The resumed segment's resource wrapper recorded:
+`run-heavy: done rc=0 11281s | peak-RSS 1.06GiB | min-avail 19796MiB | peak-load 19.92`.
+This segment includes deliberate suspensions for serialized verification work;
+its elapsed time is not a runtime benchmark. The full artifact audit is running.
+Generation completion alone does not admit the cells to model fitting.
