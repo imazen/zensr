@@ -82,8 +82,9 @@ def encode(ppm, jpg, enc, q, ss):
             env={"LD_LIBRARY_PATH": MOZ_LIB})
     elif enc == "jpegli":
         run(["cjpegli", ppm, jpg, "-q", str(q), f"--chroma_subsampling={ss}"])
-    else:  # zenjpeg
-        run([ZJTOOL, "enc", ppm, jpg, str(q), ss])
+    else:  # zenjpeg, or zenjpeg:<variant> (knob settings in zjtool.rs)
+        variant = enc.split(":", 1)[1] if ":" in enc else "default"
+        run([ZJTOOL, "enc", ppm, jpg, str(q), ss, variant])
 
 
 def make_pair(args):

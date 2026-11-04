@@ -160,10 +160,28 @@ fn main() {
         "probe" => {
             let data = std::fs::read(&a[1]).expect("read jpg");
             match zenjpeg::detect::probe(&data) {
-                Ok(p) => println!(
-                    "{:?}\t{:.1}\t{:?}\t{:?}\t{:?}",
-                    p.encoder, p.quality.value, p.quality.scale, p.subsampling, p.mode
-                ),
+                Ok(p) => {
+                    // 6th column: the APP10 encode record when verified —
+                    // "<table_source>:<dial_scale>=<dial>:aq=<0|1>:gens=<n>" — else "-".
+                    let rec = p
+                        .record
+                        .as_ref()
+                        .and_then(|r| r.current().map(|e| (r.generations(), e)))
+                        .map(|(g, e)| {
+                            format!(
+                                "{:?}:{:?}={}:aq={}:gens={g}",
+                                e.table_source,
+                                e.quality_scale,
+                                e.quality,
+                                e.flags.has(zenjpeg::detect::record::EncodeFlags::AQ) as u8
+                            )
+                        })
+                        .unwrap_or_else(|| "-".into());
+                    println!(
+                        "{:?}\t{:.1}\t{:?}\t{:?}\t{:?}\t{rec}",
+                        p.encoder, p.quality.value, p.quality.scale, p.subsampling, p.mode
+                    )
+                }
                 Err(e) => println!("ERR\t{e:?}"),
             }
         }

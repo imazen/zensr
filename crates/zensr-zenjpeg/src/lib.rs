@@ -15,6 +15,7 @@ pub mod chooser;
 pub mod jpegli_params;
 pub mod qtables;
 mod qtables_data;
+mod record;
 
 use zensr_micro::consist::{
     project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,
@@ -359,8 +360,16 @@ pub fn restore_jpeg(
     let mut report = RestoreReport::default();
 
     // 1. fingerprint + deblock policy
-    let probe = zenjpeg::detect::probe(data).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
-    report.encoder_family = format!("{:?}", probe.encoder);
+    let mut probe =
+        zenjpeg::detect::probe(data).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
+    // A verified encode record overrides the fingerprint (record.rs); the
+    // report says so, since every policy below then runs on exact inputs.
+    let recorded = record::apply_record(&mut probe);
+    report.encoder_family = if recorded {
+        format!("{:?} (recorded)", probe.encoder)
+    } else {
+        format!("{:?}", probe.encoder)
+    };
     report.est_quality = probe.quality.value;
     report.quality_scale = format!("{:?}", probe.quality.scale);
     // Debug-string match for the reason documented on `policy_wants_auto`:

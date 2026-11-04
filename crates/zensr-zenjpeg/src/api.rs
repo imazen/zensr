@@ -584,7 +584,9 @@ pub(crate) fn estimate_gain_for(
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
     if scale == "ButteraugliDistance" {
-        return gain_at_distance(full, probe.quality.value, content);
+        // The AQ term is zero without a verified record (record.rs).
+        return gain_at_distance(full, probe.quality.value, content)
+            + crate::record::aq_off_gain_delta(probe);
     }
     let q = probe.quality.value;
     match content {
@@ -609,7 +611,7 @@ fn gain_at_distance(full: bool, d: f32, content: Option<Content>) -> f32 {
 }
 
 /// Linear interpolation over an ascending table, clamped at both ends.
-fn lerp(pts: &[(f32, f32)], x: f32) -> f32 {
+pub(crate) fn lerp(pts: &[(f32, f32)], x: f32) -> f32 {
     if x <= pts[0].0 {
         return pts[0].1;
     }
@@ -820,8 +822,9 @@ impl<'a> Request<'a> {
 
         // Routing decides before any model work. The probe is cheap (header
         // only), so a skip here costs a decode and nothing more.
-        let probe_for_routing =
+        let mut probe_for_routing =
             zenjpeg::detect::probe(self.jpeg).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
+        crate::record::apply_record(&mut probe_for_routing);
         // Content class comes from the file's own luma coefficients, and is
         // worth ~+0.15 ssim2 of realized routing quality — the largest lever
         // after quality itself. It costs a coefficient parse (~0.29 ms on a

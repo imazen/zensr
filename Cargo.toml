@@ -32,3 +32,11 @@ codegen-units = 1
 [patch.crates-io]
 zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+# zenjpeg 24b6d3fb (PR #253, the APP10 encode record) needs the zencodec 0.2
+# family and a zenpixels rev that are not on crates.io yet; this mirrors
+# zenjpeg's own patch table (dependency patches do not propagate). Drop when
+# those publish. zenanalyze keeps crates.io zencodec 0.1 — different major.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
