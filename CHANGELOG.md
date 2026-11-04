@@ -11,6 +11,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Publication storage observation timeouts freeze generation before one retry;
+  recovery preserves pre-existing freezes and unchanged capacity limits
+  (65d8d8ab, 5a962cf7).
+
 - Publication model integrity: matched origin-balanced coverage and severity
   (d00746e7), rejection of unconverged estimators (7bcbb23e), numerical-runtime
   identity checks (d3bac492), and portable scaler serialization (0ec26cd7).

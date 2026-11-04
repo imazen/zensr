@@ -739,3 +739,5 @@ retries, changed identities and failed transfers leave generation stopped.
 The polling deadline and storage limits are unchanged. Regression checks cover
 successful recovery, pre-existing freezes, repeated timeouts, identity failures
 and a failed drain after a low-capacity observation.
+All 37 publication integrity tests pass. Their resource wrapper recorded
+`rc=0 3s | peak-RSS 0.16GiB | min-avail 21538MiB | peak-load 7.99`.
