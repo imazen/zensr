@@ -21,7 +21,7 @@ def render(source, output):
             'harm_among_restored','harmed_origins','excess_loss','content_macro_gain',
             'content_macro_harm','flat01_harm','flat05_harm','gain_low','gain_high',
             'harm_low','harm_high','gain_difference_vs_conservative',
-            'gain_difference_vs_conservative_low','gain_difference_vs_conservative_high']
+            'gain_difference_vs_conservative_low','gain_difference_vs_conservative_high','router_artifact_bytes']
     with (output/'policies.csv').open('w') as f:
         writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader()
         for name,p in policies.items():
@@ -33,7 +33,9 @@ def render(source, output):
                        gain_difference_vs_conservative=p['paired_vs_conservative']['mean_gain_difference'],
                        gain_difference_vs_conservative_low=p['paired_vs_conservative']['gain_difference_95'][0],
                        gain_difference_vs_conservative_high=p['paired_vs_conservative']['gain_difference_95'][1])
+            row['router_artifact_bytes']=(p.get('operating_point') or {}).get('router_artifact_bytes')
             writer.writerow(row)
+    (output/'operating-points.json').write_text(json.dumps({name:p.get('operating_point') for name,p in policies.items()},indent=2)+'\n')
     worst={name:p['worst_origin_cases'] for name,p in policies.items()}
     (output/'worst-cases.json').write_text(json.dumps(worst,indent=2)+'\n')
     families=sorted({name.split('/')[0] for name in policies if '/' in name})
@@ -73,9 +75,10 @@ def render(source, output):
     text += ['', 'Gain and harm are origin-balanced. Restore coverage is cell-weighted.',
              'The oracle uses reference outcomes and is not deployable.',
              'Post-inference policies pay restoration cost even when rejecting output.',
-             data.get('uncertainty',''),data.get('legacy_chooser',''),data.get('training_provenance',''),
+             data.get('uncertainty',''),data.get('legacy_chooser',''),data.get('training_provenance',''),data.get('router_size_scope',''),
              'Size generalization, encoder mode coverage and runtime cost require their own evidence; this table alone does not establish publication readiness.',
-             '', '[Detailed policies and intervals](policies.csv). [Frontier figure](frontier.svg).',
+             '', '[Frozen configurations, feature lists and router artifact sizes](operating-points.json).',
+             '[Detailed policies and intervals](policies.csv). [Frontier figure](frontier.svg).',
              '[Worst losses by origin, with retained artifact paths](worst-cases.json). Cases are diagnostics, not inputs to policy selection.', '']
     (output/'report.md').write_text('\n'.join(text))
     provenance=dict(report_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),

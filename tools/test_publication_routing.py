@@ -178,6 +178,11 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual([c['gain'] for c in cases],sorted(c['gain'] for c in cases))
         self.assertTrue(all(c['jpeg_artifact']=='synthetic-jpeg_artifact' for c in cases))
         self.assertIn('paired_vs_fidelity',report['policies']['coefficient/budget-0'])
+        for policy in report['policies'].values():
+            point=policy['operating_point']
+            if point and 'model_config' in point:
+                expected=None if point['selection']['skip'] else (root/'selection'/f"{point['selection']['model']}.joblib").stat().st_size
+                self.assertEqual(point['router_artifact_bytes'],expected)
         (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t64\nmanifest_sha256\tsynthetic-subset\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):
             study.evaluate(reserved,root/'selection',root/'wrong-primary-report.json')

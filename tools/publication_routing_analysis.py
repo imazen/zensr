@@ -456,6 +456,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
                 test_reference_sha256s=sorted({r['reference_sha256'] for r in rows}),
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
+    result['router_size_scope']='Serialized Python joblib artifacts include fitted transforms and gain/risk heads; these are not measured Rust deployment binary or resident-memory sizes. Restoration weights are separate.'
     result['training_provenance']='Reserved origins are excluded against the documented canonical model-source policy. Historical training pairs lack source-image IDs and a complete generation snapshot; per-pair training provenance is not reconstructed.'
     predicted={};domains={}
     for key,spec in frozen['models'].items():
@@ -464,7 +465,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
         if sha(path)!=spec['sha256']:raise ValueError('model artifact changed')
         model=joblib.load(path);x=inputs(rows,spec['features'])
         predicted[key]=predict(model,x);domains[key]=in_domain(model,x)
-    choices={}
+    choices={};operating_points={}
     base=np.asarray([float(r['estimated_gain']) for r in rows])
     gate=np.asarray([r['gate']=='true' for r in rows]);cons=np.asarray([r['conservative_gate']=='true' for r in rows])
     choices['unchanged']=np.zeros(len(rows),bool);choices['ungated']=np.ones(len(rows),bool)
@@ -472,11 +473,16 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     choices['current_conservative']=(base>=.25)&~cons
     choices['oracle_positive']=gain>0
     for c in frozen['threshold_selection']:
-        choices[f'threshold/budget-{c["budget"]:g}']=threshold_decisions(rows,c,frozen['runtime_gates'])
+        name=f'threshold/budget-{c["budget"]:g}'
+        choices[name]=threshold_decisions(rows,c,frozen['runtime_gates'])
+        operating_points[name]=dict(selection=c,router_artifact_bytes=None,features=None)
     for family,frontier in frozen['selection'].items():
         for c in frontier:
             pg,pr=predicted[c['model']] if not c['skip'] else (np.zeros(len(rows)),np.zeros(len(rows)))
-            choices[f'{family}/budget-{c["budget"]:g}']=decisions(pg,pr,c,domains.get(c['model'],np.zeros(len(rows),bool)))
+            name=f'{family}/budget-{c["budget"]:g}'
+            choices[name]=decisions(pg,pr,c,domains.get(c['model'],np.zeros(len(rows),bool)))
+            spec=frozen['models'][c['model']]
+            operating_points[name]=dict(selection=c,router_artifact_bytes=spec.get('serialized_bytes') if not c['skip'] else None,features=spec['features'],model_config=spec['config'])
     for name,d in choices.items():
         entry=summary(gain,harm,limits,d,groups);entry.update(bootstrap(gain,harm,d,groups))
         weights=origin_weights(groups);weights/=weights.sum()
@@ -486,6 +492,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
             if not np.isfinite(delta).all():raise ValueError('non-finite secondary metric')
             secondary[metric]=dict(origin_mean_improvement=float(weights@delta),
                 origin_fraction_worse=float(weights@(delta<0)),worst_improvement=float(delta.min()))
+        entry['operating_point']=operating_points.get(name)
         entry['secondary_metrics']=secondary
         entry['worst_origin_cases']=worst_cases(rows,gain,harm,d)
         entry['paired_vs_fidelity']=paired_interval(gain,harm,d,choices['current_fidelity'],groups)

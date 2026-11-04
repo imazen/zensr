@@ -250,3 +250,9 @@ reference, decoded, restored and difference-map paths. Empty lists mean no
 negative realized gains in that evaluated grid. These are post-freeze diagnostic
 cases, never reserved-set examples for retuning the policies. Synthetic tests
 check ordering, origin deduplication, and the empty reference-oracle case.
+
+Each operating point also exports its frozen threshold/risk penalty, domain
+abstention flag, feature list, model configuration and serialized router artifact
+size. Joblib bytes include Python model/transform serialization; they are not
+Rust binary sizes or resident-memory measurements. The restoration model weights
+are separate. Skip-all points do not require loading a fitted router.
