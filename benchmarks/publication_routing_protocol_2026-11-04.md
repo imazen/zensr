@@ -630,5 +630,15 @@ beside storage. The operational triggers are 72 GiB staged or 520 GiB free,
 providing margin inside the approved 80 GiB / 500 GiB limits; these polling
 triggers are not filesystem quotas. Private execution configuration carries
 host paths and command arrays. All 25 integrity tests pass, including excluded
-open files, repeated native drains and monitor-failure freezing. A real native
-transfer pilot remains required before switching the running sweep.
+open files, repeated native drains and monitor-failure freezing. The real native-transfer pilot described below passed before switching the sweep.
+
+
+The NVMe/native-transfer pilot generated the same 12 cell tables as the prior
+frozen replay, transferred 66 artifacts / 29,467,539 bytes, and checked every
+client-visible archive link. It then preserved the first cell directory and
+regenerated all 12 cells through those links: all cell bytes matched again, a
+second drain transferred zero artifacts, and the full archive audit passed.
+The entire pilot wrapper reported
+`rc=0 56s | peak-RSS 0.45GiB | min-avail 21310MiB | peak-load 7.93`.
+This combined generation/transfer/replay/audit measurement is not a restoration
+runtime benchmark or a controlled storage-speed comparison.
