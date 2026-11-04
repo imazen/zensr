@@ -6,8 +6,9 @@
 //! Policy (measured, SYSTEMS.md "S6-v2"): `DeblockMode::Auto` (Knusperli)
 //! only for Annex-K-family files at probe-estimated q <= 9.5 — the regime where
 //! coefficient-domain correction beats pixel-exact decode; AQ-family
-//! (Cjpegli*/zenjpeg) never. The model runs on every image; the projection
-//! (S10) guarantees the output re-encodes to the file's own coefficients.
+//! (Cjpegli*/zenjpeg) never. Routing can skip model execution. Projection
+//! constrains coefficients using family-calibrated slack; it guarantees neither
+//! exact coefficient re-encoding nor improved perceptual quality.
 
 pub mod api;
 mod calibration;

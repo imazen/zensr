@@ -127,13 +127,13 @@ it is not a model A/B comparison and does not credit the old skip defect.
 
 | policy | mean SSIM2 gain | restored | harmed (>0.1 loss) |
 |---|---:|---:|---:|
-| old rules, repaired skip | +1.3340 | 30.42% | 1.11% |
-| canon4 Auto, Fidelity | +1.6261 | 68.65% | 6.68% |
-| canon4 Auto, Conservative (existing margin 6) | +1.0409 | 25.50% | 1.06% |
+| old rules, repaired skip | +1.3340 | 30.42% | 1.06% |
+| canon4 Auto, Fidelity | +1.6261 | 68.65% | 6.63% |
+| canon4 Auto, Conservative (existing margin 6) | +1.0409 | 25.50% | 1.01% |
 
 Default routing buys additional gain at the cost of more per-image regressions.
 The primary four-encoder subset gives +1.7744 mean gain, 69.27% restored and
-5.90% harmed. These sample results are not a never-worse promise. Near-pristine
+5.87% harmed. These sample results are not a never-worse promise. Near-pristine
 420 medians can differ in sign between calibration and validation; the tail
 is not a universal physical crossover. The score grid starts at q15; q5–14
 and multi-generation inputs were not recalibrated here. Existing low-q decode
@@ -199,3 +199,7 @@ Linux x86-64 and ARM64, Windows x86-64 and ARM64, macOS ARM64, and
 `i686-unknown-linux-gnu` through cross, plus formatting and clippy. The five
 native platform jobs include default, no-default, internals, px, and chooser
 configurations. This verification record is a documentation-only follow-up.
+
+The harm counts above were corrected for exact decimal boundaries. A subsequent
+[quality-dependent harm study](routing_harm_curve_2026-11-04.md) uses the revised
+loss definition and compares coefficient-aware and quality-only risk budgets.

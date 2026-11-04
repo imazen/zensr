@@ -72,8 +72,8 @@ zero-AC fraction. The canon4 identity gates are q96 for IJG, q100/q96 for
 mozjpeg 420/444, and distance 0.46/0.28 for distance-scale 420/444. Auto's
 minimum estimated gain remains 0.25 SSIM2; the content threshold is 0.20.
 The held-out default restores 68.65% of image-cells with 1.6261 mean SSIM2 gain
-and 6.68% harmed by more than 0.1 SSIM2. Conservative intent restores 25.50%,
-gains 1.0409, and harms 1.06%. These are dataset observations, not individual
+and 6.63% harmed by more than 0.1 SSIM2. Conservative intent restores 25.50%,
+gains 1.0409, and harms 1.01%. These are dataset observations, not individual
 image guarantees. See the calibration report for sampling and limitations.
 
 Ship format is f16. Goldens are generated through the f16 roundtrip and tested
@@ -304,3 +304,6 @@ selection is pinned to the held-out split (now
 binaries, and every row records `gt_src` so reference provenance can be audited
 after the fact. The shared helpers live in `zensr_bench`; any new eval binary
 must use them.
+
+See the [quality-dependent harm comparison](benchmarks/routing_harm_curve_2026-11-04.md)
+for routing tradeoffs under a 0.5-loss threshold below SSIM2 90 and a taper above it.

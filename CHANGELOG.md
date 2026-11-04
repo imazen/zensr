@@ -11,6 +11,15 @@ None queued by the canon4 update.
 
 ### Added
 
+- Coefficient-routing comparisons under quality-dependent harm budgets,
+  including quality-only ablation and calibration/audit separation (112c2a92).
+  [Results and curve definition](benchmarks/routing_harm_curve_2026-11-04.md).
+- Actual-model routing boundary regression and 1,451,520 checked runtime
+  threshold/gate decisions; Python calibration integrity tests run in CI
+  (73af230b).
+- Exact decimal score differences prevent losses equal to the harm threshold
+  being counted as strictly greater (3d1bedfc).
+
 - `tools/exactness/`: a real-model matrix (`just exact-matrix`) requiring the
   same raw output from whole-image and tiled runs at threads 1/4/8 on tiers
   auto/v3/scalar, and a `restore_jpeg` probe (`just exact-product`) requiring
