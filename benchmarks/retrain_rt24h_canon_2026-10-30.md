@@ -1,4 +1,8 @@
-# Retrain of the realtime dejpeg tier on the canonical corpus — IN PROGRESS 2026-10-30
+# Retrain of the realtime dejpeg tier on the canonical corpus — 2026-10-30
+
+Superseded by the four-encoder `dejpeg_rt24i_canon4` retrain. See
+[the shipping calibration](ship_rt24i_canon4_2026-11-04.md). The following is
+the historical two-encoder run record.
 
 Handoff step 3 (`docs/CORPUS-REPOINT-HANDOFF.md`): first retrain of the shipped
 `dejpeg_rt24g` recipe against the canonical imazen-26 (github.com/imazen/imazen-26,

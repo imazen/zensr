@@ -1402,3 +1402,14 @@ BEFORE the treatment arm finished, as was the scope bound. That mattered here
 — arm B ended with WORSE teacher-fidelity than arm A (34.51 vs 34.86) while
 being better on clean references at low q. Choosing the metric afterwards
 would have inverted the conclusion.
+
+### Canon4 realtime tier — 2026-11-04
+
+The current realtime tool defaults use `dejpeg_rt24i_canon4`: 43,203 parameters,
+86,406 f16 bytes, with f16-roundtrip goldens checked in and tested by the runtime.
+The older rt24g artifact remains for historical reproduction. Current routing
+is calibrated for canon4; historical rt24g figures above do not describe it.
+The fit uses record-corrected probes and an image-separated 33/30 split.
+Default routing has greater held-out mean gain and also greater harm frequency;
+see the [complete calibration and tradeoffs](benchmarks/ship_rt24i_canon4_2026-11-04.md).
+[Dependency/distribution constraints](docs/PRODUCTION_DEPENDENCIES.md) remain.

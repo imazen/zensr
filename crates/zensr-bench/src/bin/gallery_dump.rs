@@ -82,7 +82,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let root = PathBuf::from(args.next().expect("root"));
     let outdir = PathBuf::from(args.next().expect("outdir"));
-    let model_name = args.next().unwrap_or_else(|| "dejpeg_rt24g".into());
+    let model_name = args.next().unwrap_or_else(|| "dejpeg_rt24i_canon4".into());
     let crop: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(192);
     let model = load_adopted(&model_name).expect("model");
     std::fs::create_dir_all(&outdir).unwrap();

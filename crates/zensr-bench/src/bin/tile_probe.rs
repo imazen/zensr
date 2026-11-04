@@ -7,7 +7,7 @@
 //! conv3x3 TLB cliff (see benchmarks/realtime_kernels_x86_2026-09-08.md), which
 //! channel blocking removed. This measures whether that trade now pays.
 //!
-//! Usage: tile_probe [model=dejpeg_rt24g] [size=1024] [threads=12] [reps=3]
+//! Usage: tile_probe [model=dejpeg_rt24i_canon4] [size=1024] [threads=12] [reps=3]
 //!
 //! `size` is `N` for a square image or `WxH` for a rectangle. Non-square is not
 //! a curiosity: the tile is SQUARE, so it cannot divide both axes evenly, and a
@@ -18,7 +18,7 @@ use zensr_bench::*;
 
 fn main() {
     let mut a = std::env::args().skip(1);
-    let model = a.next().unwrap_or_else(|| "dejpeg_rt24g".into());
+    let model = a.next().unwrap_or_else(|| "dejpeg_rt24i_canon4".into());
     let size = a.next().unwrap_or_else(|| "1024".into());
     let (w, h) = match size.split_once('x') {
         Some((a, b)) => (

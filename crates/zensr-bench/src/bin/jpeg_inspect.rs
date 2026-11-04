@@ -123,11 +123,11 @@ fn main() {
     // but "how much does restoration change this file" is measurable and is
     // what decides whether these inputs are worth processing at all.
     if std::env::args().any(|a| a == "--restore") {
-        let Some(model) = load_adopted("dejpeg_rt24g") else {
-            eprintln!("--restore needs models/adopted/dejpeg_rt24g");
+        let Some(model) = load_adopted("dejpeg_rt24i_canon4") else {
+            eprintln!("--restore needs models/adopted/dejpeg_rt24i_canon4");
             return;
         };
-        println!("\n# --restore: change vs the plain decode, dejpeg_rt24g + projection");
+        println!("\n# --restore: change vs the plain decode, dejpeg_rt24i_canon4 + projection");
         println!("file\tmean_abs_delta\tmax_abs_delta\tpx_changed_pct\tskipped_high_q");
         for f in &files {
             let Ok(bytes) = std::fs::read(f) else {

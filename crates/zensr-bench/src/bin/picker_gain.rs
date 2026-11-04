@@ -45,7 +45,7 @@ fn main() {
     let refs = PathBuf::from(args.next().expect("refs dir"));
     let vars = PathBuf::from(args.next().expect("variants dir"));
     let out = PathBuf::from(args.next().expect("out tsv"));
-    let model_dir = args.next().unwrap_or_else(|| "dejpeg_rt24g".into());
+    let model_dir = args.next().unwrap_or_else(|| "dejpeg_rt24i_canon4".into());
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(8);
     let tol: f64 = std::env::var("ZENSR_IDENTITY_TOL")
         .ok()

@@ -79,7 +79,7 @@ fn main() {
     let out_path = PathBuf::from(args.next().expect("out tsv"));
     let per_sub: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(3);
     let threads: usize = args.next().map(|s| s.parse().unwrap()).unwrap_or(12);
-    let model = load_adopted("dejpeg_rt24g").expect("model");
+    let model = load_adopted("dejpeg_rt24i_canon4").expect("model");
     let td = PathBuf::from(std::env::var("HOME").unwrap())
         .join("tmp")
         .join(format!("zensr-pp-{}", std::process::id()));

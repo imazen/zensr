@@ -5,6 +5,10 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+None queued by the canon4 update.
+
 ### Added
 
 - `tools/exactness/`: a real-model matrix (`just exact-matrix`) requiring the
@@ -23,6 +27,14 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
   [the probe record](benchmarks/coz_runtime_2026-10-18.pointer.md).
 
 ### Changed
+
+- Realtime tool defaults select the four-encoder `dejpeg_rt24i_canon4` model
+  (86,406 f16 bytes). Refit routing curves, AQ correction, content threshold
+  and family-aware identity gates using an image-separated calibration.
+  Default routing restores more images and gains more mean SSIM2, with a
+  higher harm fraction; see [the measured tradeoff](benchmarks/ship_rt24i_canon4_2026-11-04.md).
+  The library continues to accept caller-loaded models; no public signatures
+  changed. The old artifact remains available.
 
 - **zenjpeg git pin e277e9c9 → b88f02e3 (2026-10-12), so the graph resolves one
   zenanalyze.**
