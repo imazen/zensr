@@ -741,3 +741,10 @@ successful recovery, pre-existing freezes, repeated timeouts, identity failures
 and a failed drain after a low-capacity observation.
 All 37 publication integrity tests pass. Their resource wrapper recorded
 `rc=0 3s | peak-RSS 0.16GiB | min-avail 21538MiB | peak-load 7.99`.
+
+Read-only supervision uses `just publication-routing-live CONFIG WATCH_LOG GUARD_PID`.
+It checks the recorded writer's process identity and cgroup, verifies the guard
+PID's command arguments, and reports the latest observation timestamp and usage.
+It does not enumerate active cell files. The deployed recovery subsequently
+handled a real timeout: generation froze, a fresh observation verified helper
+identities and capacity, and the writer resumed with new artifact writes.

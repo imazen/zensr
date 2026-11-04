@@ -46,6 +46,25 @@ def observation(config):
     return value
 
 
+def live_status(config,config_path,watch_log,guard_pid):
+    """Read-only supervision; never scan the active cell directory over NFS."""
+    group=writer_group(config)
+    state='ended' if group is None else ('frozen' if 'frozen 1' in
+        (group/'cgroup.events').read_text().splitlines() else 'running')
+    try:arguments=Path(f'/proc/{guard_pid}/cmdline').read_bytes().split(b'\0')
+    except FileNotFoundError:arguments=[]
+    guard_alive=(str(config_path).encode() in arguments and
+        any(Path(a.decode()).name==Path(__file__).name for a in arguments if a))
+    records=[json.loads(line) for line in watch_log.read_text().splitlines() if line.startswith('{')]
+    if not records:raise ValueError('no guard observation recorded')
+    last=records[-1]
+    result=dict(checked=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        writer_alive=group is not None,guard_alive=guard_alive,state=state,
+        phase=last['phase'],observation=last['checked'])
+    for key in ('payload_bytes','files','free_bytes'):result[key]=last.get(key)
+    return result
+
+
 def frozen_request(config):
     group=writer_group(config)
     if group is None or 'frozen 1' not in (group/'cgroup.events').read_text().splitlines():
@@ -156,8 +175,13 @@ if __name__=='__main__':
     mode=parser.add_mutually_exclusive_group()
     mode.add_argument('--final',action='store_true')
     mode.add_argument('--once',action='store_true',help='drain an already frozen writer without resuming it')
+    mode.add_argument('--status',action='store_true',help='read-only status; logs argument is the watch log file')
+    parser.add_argument('--guard-pid',type=int)
     args=parser.parse_args();config=json.loads(args.config.read_text())
-    if args.final or args.once:
+    if args.status:
+        if args.guard_pid is None:parser.error('--status requires --guard-pid')
+        print(json.dumps(live_status(config,args.config,args.logs,args.guard_pid)),flush=True)
+    elif args.final or args.once:
         args.logs.mkdir(parents=True,exist_ok=True)
         transfer_batch(config,args.logs,final=args.final)
     else:watch(config,args.logs)
