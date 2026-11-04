@@ -2,6 +2,12 @@
 
 ## Known Bugs
 
+- Publication monitor recovery: a live usage observation exceeded its 15-second
+  deadline and correctly froze generation; an independent retry succeeded.
+  The monitor now permits one retry while frozen. Only a valid identity and
+  capacity observation can resume a previously running writer; a failed retry,
+  changed tool identity or failed drain leaves it frozen. Limits are unchanged.
+
 - Fixed by `3d1bedfc`: binary float subtraction of decimal TSV scores could count
   an exact 0.100 SSIM2 loss as greater than 0.1. Calibration analysis now subtracts
   decimal values before float conversion, with a boundary regression test.

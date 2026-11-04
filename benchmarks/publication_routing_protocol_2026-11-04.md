@@ -729,3 +729,13 @@ archive-link reads matched their content hashes. The guard verified fresh usage
 and helper identities before the unchanged six-worker generator resumed;
 new artifact writes were observed afterward. Final full-study auditing remains
 required before fitting.
+
+A live storage-usage observation later exceeded its 15-second deadline and
+froze the writer as designed. A separate retry returned valid helper identities
+and capacity in 3.800687149 seconds. The monitor now allows one retry while the
+writer is frozen; a valid observation must pass the same capacity gates before
+resumption. A writer already frozen before that timeout remains frozen. Failed
+retries, changed identities and failed transfers leave generation stopped.
+The polling deadline and storage limits are unchanged. Regression checks cover
+successful recovery, pre-existing freezes, repeated timeouts, identity failures
+and a failed drain after a low-capacity observation.

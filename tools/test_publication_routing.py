@@ -170,6 +170,40 @@ class PublicationIntegrity(unittest.TestCase):
             with self.assertRaisesRegex(OSError,'monitor unavailable'):remote.watch(config,root)
         control.assert_called_once_with(config,'freeze')
 
+    def test_remote_timeout_retry_stays_frozen_until_valid_capacity(self):
+        import publication_routing_remote_stage as remote
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='remote-timeout-',dir=base))
+        group=root/'group';group.mkdir()
+        config=dict(trigger_bytes=72,approved_limit_bytes=80,free_floor_bytes=520,approved_free_floor_bytes=500,poll_seconds=0)
+        valid=dict(allocated_bytes=4,free_bytes=570)
+        timeout=remote.subprocess.TimeoutExpired('usage',15)
+        for initially_frozen in (False,True):
+            (group/'cgroup.events').write_text(f'frozen {int(initially_frozen)}\n')
+            events=[]
+            def observe(_config):
+                events.append('observe')
+                if events.count('observe')==1:raise timeout
+                self.assertEqual(events[-2],'freeze')
+                return valid
+            with patch.object(remote,'writer_group',side_effect=[group,None]), \
+                 patch.object(remote,'observation',side_effect=observe), \
+                 patch.object(remote,'control',side_effect=lambda c,a:events.append(a)):
+                remote.watch(config,root)
+            self.assertEqual(events,['observe','freeze','observe']+([] if initially_frozen else ['thaw']))
+        for failure in (timeout,ValueError('storage monitor tools changed')):
+            with patch.object(remote,'writer_group',return_value=group), \
+                 patch.object(remote,'observation',side_effect=[timeout,failure]), \
+                 patch.object(remote,'control') as control:
+                with self.assertRaises(type(failure)):remote.watch(config,root)
+            self.assertTrue(all(call.args[1]=='freeze' for call in control.call_args_list))
+        with patch.object(remote,'writer_group',return_value=group), \
+             patch.object(remote,'observation',side_effect=[timeout,dict(valid,free_bytes=510)]), \
+             patch.object(remote,'transfer_batch',side_effect=OSError('archive unavailable')), \
+             patch.object(remote,'control') as control:
+            with self.assertRaisesRegex(OSError,'archive unavailable'):remote.watch(config,root)
+        self.assertTrue(all(call.args[1]=='freeze' for call in control.call_args_list))
+
     def test_live_transfer_keeps_pending_path_lookup_valid(self):
         from publication_routing_stage import transfer
         import os

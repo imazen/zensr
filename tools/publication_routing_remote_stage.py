@@ -2,8 +2,9 @@
 """Bounded NVMe staging with storage-local transfers and fail-closed control.
 
 Command arrays and host-specific paths live in a private execution config.
-Thresholds are polling guards, not filesystem quotas. A missing observation,
-tool mismatch or transfer failure freezes the writer and raises an error.
+Thresholds are polling guards, not filesystem quotas. An observation timeout
+freezes the writer before one retry; failed retries, identity mismatches and
+transfer failures leave it frozen and raise an error.
 """
 import argparse
 import datetime
@@ -109,8 +110,19 @@ def watch(config,log_root):
     if config['free_floor_bytes']<config['approved_free_floor_bytes']:
         raise ValueError('free-space trigger is below approved floor')
     try:
-        while writer_group(config) is not None:
-            value=observation(config)
+        while (group:=writer_group(config)) is not None:
+            resume_after_observation=False
+            try:
+                value=observation(config)
+            except subprocess.TimeoutExpired:
+                # Retry only while stopped. Do not turn a pre-existing frozen
+                # state into permission to resume, or retry identity failures.
+                resume_after_observation='frozen 0' in (group/'cgroup.events').read_text().splitlines()
+                control(config,'freeze')
+                event(phase='observation-timeout-writer-frozen')
+                time.sleep(config.get('poll_seconds',5))
+                value=observation(config)
+                event(phase='observation-recovered')
             event(phase='usage',**value)
             if value['allocated_bytes']>=config['trigger_bytes'] or value['free_bytes']<=config['free_floor_bytes']:
                 control(config,'freeze')
@@ -122,6 +134,9 @@ def watch(config,log_root):
                     raise ValueError('staging remains above trigger; writer left frozen')
                 control(config,'thaw')
                 event(phase='writer-resumed')
+            elif resume_after_observation:
+                control(config,'thaw')
+                event(phase='writer-resumed-after-observation')
             time.sleep(config.get('poll_seconds',5))
         event(phase='writer-ended',final_drain_required=True)
     except BaseException:
