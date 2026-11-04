@@ -43,6 +43,9 @@ just publication-routing-cells status "$root/development-primary"
 ```
 
 This checks actual cell files and matching live PIDs and writes `PROGRESS.json`.
+Run it only when generation has stopped if the directory is accessed over NFS:
+a live directory scan was observed blocking worker cell renames. During generation,
+count entries beside storage and verify the local writer PID/scope separately.
 A stale record or absent PID is not evidence of progress. `COMPLETE` is the
 harness's grid-completion marker; `AUDITED.json` is the subsequent hash,
 decompression, shape and independent JPEG-read audit. Fitting requires both,
