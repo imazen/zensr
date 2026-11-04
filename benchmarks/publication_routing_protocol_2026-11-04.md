@@ -484,3 +484,11 @@ the supplemented selection occupies `development-size`. Selection recorded
 `rc=0 11s | peak-RSS 3.11GiB | min-avail 19566MiB | peak-load 2.73`.
 This is selection evidence only: the dense grid has not yet been generated or
 used to fit a router, and the reserved cohort has not been evaluated.
+
+Reserved-size evaluation now enforces the same fixed 20-size inventory and
+representative-selection protocol as development. It binds the selector source,
+native-size rule, feature list, seed, cluster count, primary audited-cell digest,
+source manifest, selected manifest and exact reference membership. The report
+retains the selection-record digest. A synthetic replay passes; changing the
+size inventory or source-selection digest is rejected. This closes an evaluation
+admission gap before any real router fit or reserved-set opening.

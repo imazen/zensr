@@ -37,3 +37,7 @@
   calculation. Translating features before moment accumulation makes constant
   columns exactly zero during fitting while preserving weighted means and scales.
   All routing tests pass with numerical runtime warnings promoted to errors.
+- Publication reserved-size evaluation now requires the full size inventory and
+  feature-only representative-selection provenance, including the audited primary
+  cell digest and exact selected membership. Merely changing a run's size or
+  subset identity no longer admits it as protocol-compliant generalization data.

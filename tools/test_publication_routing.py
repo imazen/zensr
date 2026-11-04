@@ -279,8 +279,19 @@ class PublicationIntegrity(unittest.TestCase):
         (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t64\nmanifest_sha256\tsynthetic-subset\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):
             study.evaluate(reserved,root/'selection',root/'wrong-primary-report.json')
-        study.evaluate(reserved,root/'selection',root/'size-report.json',root/'report.json')
+        with self.assertRaisesRegex(ValueError,'reserved size inventory'):
+            study.evaluate(reserved,root/'selection',root/'wrong-size-report.json',root/'report.json')
+        reserved_sizes=dataset('test-sizes','locked_test',10,study.STUDY_SIZES,'test')
+        size_rows,_=study.read_cells(reserved_sizes,'locked_test')
+        reserved_selection=dict(dense_selection,input_cells_sha256=report['test_cells_sha256'],
+            clusters=[dict(representative_sha256=h) for h in sorted({r['reference_sha256'] for r in size_rows})])
+        (reserved_sizes/'selection.json').write_text(json.dumps(reserved_selection))
+        study.evaluate(reserved_sizes,root/'selection',root/'size-report.json',root/'report.json')
         self.assertEqual(json.loads((root/'size-report.json').read_text())['evaluation_scope'],'size_generalization')
+        reserved_selection['input_cells_sha256']='different-primary'
+        (reserved_sizes/'selection.json').write_text(json.dumps(reserved_selection))
+        with self.assertRaisesRegex(ValueError,'reserved representative selection'):
+            study.evaluate(reserved_sizes,root/'selection',root/'wrong-selection-report.json',root/'report.json')
         (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t512\nencoders\t'+','.join(study.MODE_ENCODERS)+'\nmanifest_sha256\tsynthetic-subset\nencoder_dependencies_sha256\tsynthetic-subset\nexclusions\t\n')
         study.evaluate(reserved,root/'selection',root/'mode-report.json',mode_report=root/'report.json')
         self.assertEqual(json.loads((root/'mode-report.json').read_text())['evaluation_scope'],'mode_generalization')
