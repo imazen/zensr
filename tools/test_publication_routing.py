@@ -21,6 +21,11 @@ class PublicationIntegrity(unittest.TestCase):
         data=b'pending legacy writer read';name=hashlib.sha256(data).hexdigest()+'.zst'
         source=root/'stage'/name;source.parent.mkdir();source.write_bytes(data)
         destination=root/'archive'/name
+        control=root/'unlink-control'/name;control.parent.mkdir();control.write_bytes(data)
+        with self.assertRaises(FileExistsError):
+            os.open(control,os.O_WRONLY|os.O_CREAT|os.O_EXCL)
+        transfer(control,root/'control-archive'/name)
+        with self.assertRaises(FileNotFoundError):control.read_bytes()
         with self.assertRaises(FileExistsError):
             os.open(source,os.O_WRONLY|os.O_CREAT|os.O_EXCL)
         with source.open('rb') as opened_before_transfer:
