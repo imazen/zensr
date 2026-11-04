@@ -378,7 +378,7 @@ The frozen executable completed all 235,224 required primary-development cells
 on 2026-11-04. The resumed segment's resource wrapper recorded:
 `run-heavy: done rc=0 11281s | peak-RSS 1.06GiB | min-avail 19796MiB | peak-load 19.92`.
 This segment includes deliberate suspensions for serialized verification work;
-its elapsed time is not a runtime benchmark. The full artifact audit is running.
+its elapsed time is not a runtime benchmark. The full artifact audit subsequently passed (record below).
 Generation completion alone does not admit the cells to model fitting.
 
 Native 4096-edge eligibility in the frozen audited manifest is concentrated in
@@ -412,3 +412,14 @@ The client-side four-worker pilot reported
 Cache state and CPU allocations differed, so these do not establish a full-grid
 speedup. The partially completed full audit was retained and resumed after each
 short serialized test.
+
+## Primary artifact audit completion
+
+The full audit passed all 235,224 required cells and 1,167,767 unique artifacts.
+It verified compressed-byte hashes, decompression, buffer sizes, independent JPEG
+dimensions/sampling, exact coverage and unchanged source/coverage identities.
+Cell digest: `915744b1966b885ab88c8018d1d480de16f9b6911dd0c5d9804564fbfea389ef`.
+Resource wrapper:
+`rc=0 4466s | peak-RSS 1.08GiB | min-avail 21586MiB | peak-load 13.08`.
+Elapsed time includes serialized locality experiments; it is not an isolated
+throughput benchmark. The dense development input remains required before fitting.

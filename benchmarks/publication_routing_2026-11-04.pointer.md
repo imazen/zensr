@@ -1,7 +1,7 @@
 # Routing publication study artifacts
 
-Status: primary development generation complete (235,224 required cells); full
-artifact audit in progress. No new measured routing frontier yet.
+Status: primary development generation and full artifact audit complete:
+235,224 cells and 1,167,767 unique artifacts. No new measured routing frontier yet.
 The [protocol](publication_routing_protocol_2026-11-04.md) owns the scientific
 design. Runtime defaults remain unchanged; deployment selection follows review.
 
@@ -122,5 +122,12 @@ The context manifest SHA-256 is
 `e3ffadc3bb5e13ae2f6d9177ebabc53782252f32b9b5f7a462730c81867f745d`.
 Captured dependencies, build/pilot logs and the packager source are retained
 alongside it. [Audit purpose and execution](../docs/PUBLICATION_AUDIT.md) describes
-concurrency, ownership and resource limits. The original full audit continues;
+concurrency, ownership and resource limits. The original full audit completed successfully;
 it was not restarted or replaced by the small pilot.
+
+The completed primary cell digest is
+`915744b1966b885ab88c8018d1d480de16f9b6911dd0c5d9804564fbfea389ef`;
+coverage digest is
+`de7b72e19315fd3caef4cdcba844a95a4018d90c6ebb716ff82e0316e5459f89`.
+`development-primary/AUDITED.json` records the tool/dependency identity and
+`development-primary/audit.log` retains the resource record.
