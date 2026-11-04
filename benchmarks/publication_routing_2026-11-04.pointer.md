@@ -97,3 +97,13 @@ no completed cell or recorded numerical result was changed by this repair.
 Debug tests and clippy were serialized with the sweep by temporarily freezing
 its own systemd scope, then thawing it. Those interruptions invalidate any use
 of sweep wall time as a runtime benchmark.
+
+## Retained encoder dependencies
+
+`encoder-provenance/manifest.json` maps every path in the primary run's
+`ENCODERS.tsv` to retained content-addressed bytes. Capture verified every copied
+file against its frozen SHA256 before publishing its artifact name. This includes
+encoder executables and shared libraries. It is a byte snapshot, not a relocatable
+execution environment: paths, dynamic-loader search paths and permissions still
+need explicit reconstruction. The capture tool is
+`tools/publication_routing_provenance.py` (`just publication-routing-capture`).

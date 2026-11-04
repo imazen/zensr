@@ -220,3 +220,6 @@ publication-routing-storage-portable:
     mkdir -p "{{env_var('TMPDIR')}}"
     rustc --edition 2024 --test tools/test_routing_storage.rs -o "{{env_var('TMPDIR')}}/routing-storage-tests.exe"
     "{{env_var('TMPDIR')}}/routing-storage-tests.exe"
+
+publication-routing-capture identity output:
+    python3 tools/publication_routing_provenance.py "{{identity}}" "{{output}}"
