@@ -17,7 +17,9 @@ weights, JPEG dependency revisions, decoder, guards and projection stay frozen.
 Compare unchanged decode, ungated restoration, current Auto Fidelity and
 Conservative, calibrated threshold-only policies, coefficient gain/risk
 predictors, decoded-feature gain/risk predictors, and post-inference variants.
-Include an explicitly reference-dependent oracle as an upper bound only.
+The action space is unchanged decode or this fixed restoration. The reference-dependent
+oracle chooses the better of those two outputs per cell; its upper bound applies
+to that action space.
 Use regularized linear/logistic and shallow tree models, with fixed small
 hyperparameter grids and grouped validation; do not infer superiority from a
 training score. No reference-image features, nominal encoder dial, directory
