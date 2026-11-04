@@ -65,6 +65,14 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(result['origin_mean'],.5)
         self.assertEqual(result['origin_harm'],.5)
 
+    def test_numeric_scaling_uses_origin_weights(self):
+        x=np.array([[0.,'a'],[0.,'a'],[0.,'a'],[10.,'b']],dtype=object)
+        groups=np.array(['first','first','first','second'])
+        model=fit_model(x,np.array([0.,0.,0.,1.]),np.zeros(4,dtype=bool),groups,('linear',1.),1)
+        scaler=model[0].named_transformers_['numeric']
+        self.assertAlmostEqual(scaler.mean_[0],5.)
+        self.assertAlmostEqual(scaler.var_[0],25.)
+
     def test_folds_keep_all_variants_of_origin_together(self):
         groups=np.repeat(np.arange(25),8)
         folds=GroupKFold(n_splits=5,shuffle=True,random_state=7)

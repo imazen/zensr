@@ -187,8 +187,13 @@ def fit_model(x,gain,harm,groups,config,n_numeric):
     transform=ColumnTransformer([
         ('numeric',StandardScaler(),numeric),
         ('categorical',OneHotEncoder(handle_unknown='ignore',sparse_output=False),categorical)])
-    xt=transform.fit_transform(x)
     weights=origin_weights(groups)
+    transform.fit(x)
+    # Keep dense-size origins from dominating the numeric scaling statistics.
+    # Category presence is unchanged; only the fitted numeric transformer is
+    # refit with the same origin-balanced weights used by the predictors.
+    transform.named_transformers_['numeric'].fit(x[:,numeric].astype(float),sample_weight=weights)
+    xt=transform.transform(x)
     if kind=='linear':
         gain_model=Ridge(alpha=param)
         risk_model=LogisticRegression(C=1./param,max_iter=3000,random_state=20261104)

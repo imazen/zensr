@@ -198,7 +198,9 @@ cohort, with unchanged origin/content identity, features, weights and encoder
 binaries. Preserve both input audits, selector identity and source digests.
 
 All variants of an origin stay together in every split. Each origin retains equal
-total weight across its available primary and dense-size cells. Thus representative
+total weight across its available primary and dense-size cells. Numeric scaling
+and both fitted predictors use the same origin-balanced weights (normalized to
+mean one for estimator fitting). Thus representative
 origins distribute their weight across sizes while other origins contribute at
 512 pixels; the resulting objective is explicitly this designed mixture. Report
 primary and size-reserved outcomes separately rather than presenting that mixture
