@@ -326,6 +326,10 @@ class PublicationIntegrity(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'already frozen'):
                 study.fit(development,root/'selection',dense)
         self.assertTrue((root/'selection'/'selection.freeze.json').is_file())
+        real_sha=study.sha
+        with patch.object(study,'sha',side_effect=lambda p:'changed-selector' if Path(p).name=='publication_routing_sizes.py' else real_sha(p)):
+            with self.assertRaisesRegex(ValueError,'selector changed after fitting'):
+                study.evaluate(reserved,root/'selection',root/'changed-selector-report.json')
         study.evaluate(reserved,root/'selection',root/'report.json')
         report=json.loads((root/'report.json').read_text())
         self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)

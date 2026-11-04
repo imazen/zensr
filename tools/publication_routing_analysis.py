@@ -377,6 +377,7 @@ def fit(root,out,size_root):
     contract=study_contract(root)
     fit_contract=dict(cells_sha256=identity,development_sources=development_sources,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
+        selector_source_sha256=sha(Path(__file__).with_name('publication_routing_sizes.py')),
         audit_source_sha256=sha(Path(__file__).with_name('publication_routing_cells.py')),
         table_snapshot_source_sha256=sha(Path(__file__).with_name('publication_routing_tables.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
@@ -512,6 +513,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     if sha(selection/'fit.contract.json')!=frozen['fit_contract_sha256']:raise ValueError('fit contract changed after selection')
     if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
     if sha(Path(__file__).with_name('publication_routing_cells.py'))!=fit_contract['audit_source_sha256']:raise ValueError('audit source changed after selection')
+    if sha(Path(__file__).with_name('publication_routing_sizes.py'))!=fit_contract['selector_source_sha256']:raise ValueError('representative selector changed after fitting')
     if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')
     if sha(Path(__file__).with_name('publication_routing_tables.py'))!=fit_contract['table_snapshot_source_sha256']:raise ValueError('table snapshot reader changed after fitting')
     actual_contract=study_contract(root)

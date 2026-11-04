@@ -234,6 +234,9 @@ its primary-cell digest, manifests, selector source, fixed parameters and exact
 reference membership must match. Missing provenance or altered membership fails
 before policy scoring. The reserved size and mode reports retain the selection
 record digest. The synthetic selection/evaluation roundtrip covers both failures.
+The fit contract also freezes the representative-selector source hash; evaluation
+rejects a selector change after fitting, even if newly generated selection records
+refer to the changed source. This rejection is covered by the roundtrip test.
 
 This covers the knobs exposed by the frozen harness, not every JPEG mode.
 XYB, 4:2:2/4:4:0, grayscale, other decoder upsampling/strictness settings,
