@@ -18,7 +18,7 @@ models/adopted/dejpeg_rt24g/*
 !models/adopted/dejpeg_rt24g/gold_out_40x36.raw
 !models/adopted/dejpeg_rt24g/meta.json
 !models/adopted/dejpeg_rt24g/repro.sh
-# Candidate artifact retained alongside the current realtime model.
+# Canon4 realtime artifact; retain rt24g above for historical reproduction.
 !models/adopted/dejpeg_rt24i_canon4/
 models/adopted/dejpeg_rt24i_canon4/*
 !models/adopted/dejpeg_rt24i_canon4/weights_f16.raw

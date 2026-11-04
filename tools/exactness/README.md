@@ -27,8 +27,9 @@ python3 tools/exactness/matrix.py --bin tools/coz-profile/target/release/zensr-c
   a baseline build) and reports, per configuration, whether it gives the same
   bytes. This is informative and does not change the exit status.
 
-Models are read from `models/adopted/<dir>/weights_f16.raw`. Only
-`dejpeg_rt24g` is tracked in git; the others are local adoption dumps, and a
+Models are read from `models/adopted/<dir>/weights_f16.raw`. The realtime
+artifacts `dejpeg_rt24g` and `dejpeg_rt24i_canon4` are tracked in git; other
+models are local adoption dumps, and a
 missing one is an error, not a skip (choose with `--models`).
 
 ## Shipped pipeline — `product.py` and `product/`
