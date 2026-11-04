@@ -45,3 +45,8 @@
 - Publication encoder-mode evaluation now enforces the same representative-selection
   provenance as the size study; an arbitrary subset of reserved references is no
   longer admitted merely because it belongs to the primary reserved cohort.
+
+- Publication orchestration: scanning the active cell directory over NFS can
+  block cell renames across all generator workers. Use storage-local counts and
+  separate live PID/scope checks; reserve the full status scan for stopped runs.
+  The observed scan was terminated and worker activity recovered.

@@ -577,3 +577,16 @@ unchanged bytes. The transfer wrapper reported
 This small replay is a correctness check, not evidence of a throughput gain.
 Destination parent directories are synchronized before source release as well.
 All 22 integrity tests pass, including concurrent identical publication.
+
+
+The first live staging cycle moved 10,444 artifacts / 8,699,738,814 bytes,
+retained zero open files, and automatically resumed the writer. Its log is
+`publication-local-stage-watch-v3.log` in the execution record. The four-worker
+successor is `publication-local-stage-watch-v4.log`. This verifies one complete
+live storage cycle; it does not complete the dense study or its final audit.
+
+Do not scan the live cell directory through NFS for progress. During the dense
+run, such a scan left all six writer threads waiting in `start_renaming`;
+terminating the read-only scan restored worker activity. Count directory entries
+beside storage instead, and check the writer PID/scope separately. Use the full
+`publication-routing-cells status` command after generation has stopped.
