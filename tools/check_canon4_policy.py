@@ -4,6 +4,7 @@ import argparse
 import json
 from fit_canon4 import load, gated
 from gate_recalibrate import interp
+from routing_frontier import MIN_GAINS
 
 
 def main():
@@ -21,14 +22,19 @@ def main():
         actual=float(r['estimated_gain']); error=abs(actual-predicted)
         max_error=max(max_error,error)
         if error>1e-4:raise ValueError(f'estimate mismatch: {r["file"]} {r["encoder"]} {r["ss"]} {r["q"]}: {actual} vs {predicted}')
-        for margin,col in [(0.,'gate'),(6.,'conservative_gate')]:
+        checks = [(0., r['gate']), (6., r['conservative_gate'])]
+        if 'margin_gates' in r:
+            checks.extend((float(m), value) for m, value in
+                          (entry.split(':') for entry in r['margin_gates'].split(',')))
+        for margin,gate_value in checks:
             gates={k:v+(margin if k.startswith('distance') else -margin) for k,v in fit['gates'].items()}
             expected_gate=gated(r,gates)
-            actual_gate=r[col]=='true'
+            actual_gate=gate_value=='true'
             if expected_gate!=actual_gate:raise ValueError(f'gate mismatch: {r} margin={margin}')
-            if (predicted>=.25 and not expected_gate)!=(actual>=.25 and not actual_gate):
-                raise ValueError(f'decision mismatch: {r}')
-            decisions+=1
+            for min_gain in MIN_GAINS:
+                if (predicted>=min_gain and not expected_gate)!=(actual>=min_gain and not actual_gate):
+                    raise ValueError(f'decision mismatch: {r} min_gain={min_gain}')
+                decisions+=1
     print(f'{len(data)} identity/probe joins verified; {decisions} routing decisions agree; max estimate error {max_error:.9g}')
 
 

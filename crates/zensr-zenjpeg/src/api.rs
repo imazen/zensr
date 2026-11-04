@@ -692,6 +692,51 @@ mod tests {
         }
     }
 
+    /// Exercise the real request path at the gain boundary, not a copy of its
+    /// comparison. A rejected request must preserve decoded pixels exactly.
+    #[test]
+    fn auto_gain_boundary_controls_actual_model_execution() {
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model = zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let restorer = Restorer::new().with_tier(Budget::Quality, model);
+        let jpg = jpeg_at(55.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let probe = zenjpeg::detect::probe(&jpg).unwrap();
+        assert!(!crate::policy_high_q_identity(&probe));
+        let run = |min_gain| {
+            restorer
+                .restore(&jpg)
+                .budget(Budget::Quality)
+                .routing(Routing::Auto { min_gain })
+                .run()
+                .unwrap()
+        };
+        let skipped = run(f32::INFINITY);
+        let predicted = match skipped {
+            Outcome::Unchanged {
+                why: SkipReason::NotWorthIt { estimated_gain },
+                ..
+            } => estimated_gain,
+            _ => panic!("infinite threshold must skip"),
+        };
+        assert!(predicted.is_finite());
+        assert!(matches!(run(predicted), Outcome::Restored { .. }));
+        let rejected = run(predicted + 0.001);
+        assert!(matches!(
+            rejected,
+            Outcome::Unchanged {
+                why: SkipReason::NotWorthIt { .. },
+                ..
+            }
+        ));
+        let decoded = zenjpeg::decoder::Decoder::new()
+            .deblock(zenjpeg::decoder::DeblockMode::Off)
+            .decode(&jpg, enough::Unstoppable)
+            .unwrap();
+        assert_eq!(rejected.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+    }
+
     #[test]
     fn unsupported_chroma_cannot_claim_full_consistency() {
         let weights = zensr_micro::decode_all_f16(include_bytes!(

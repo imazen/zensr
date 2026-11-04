@@ -93,6 +93,10 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Routing calibration integrity
+        run: |
+          python3 -m unittest discover -s tools -p 'test_*canon4*.py'
+          python3 -m unittest discover -s tools -p 'test_routing_frontier.py'
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy

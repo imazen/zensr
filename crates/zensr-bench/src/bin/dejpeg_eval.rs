@@ -317,7 +317,7 @@ fn main() {
         "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
     if metadata_restorer.is_some() {
-        tsv = "sub\tfile\tencoder\tss\tq\tprobe_family\tprobe_q\trouting_family\trouting_scale\trouting_q\tzero_ac_frac\tidentity_ssim2\testimated_gain\tgate\tconservative_gate\n".into();
+        tsv = "sub\tfile\tencoder\tss\tq\tprobe_family\tprobe_q\trouting_family\trouting_scale\trouting_q\tzero_ac_frac\tidentity_ssim2\testimated_gain\tgate\tconservative_gate\tmargin_gates\n".into();
     }
     for c in &chunks {
         tsv.push_str(c);
@@ -433,6 +433,17 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                     let gate = zensr_zenjpeg::policy_high_q_identity(&probe);
                     let conservative_gate =
                         zensr_zenjpeg::policy_high_q_identity_with_margin(&probe, 6.0);
+                    // Audit every candidate margin using the real record-corrected gate.
+                    let margin_gates = [0.0_f32, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+                        .into_iter()
+                        .map(|margin| {
+                            format!(
+                                "{margin}:{}",
+                                zensr_zenjpeg::policy_high_q_identity_with_margin(&probe, margin)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",");
                     let report = outcome.report();
                     let coeffs = zenjpeg::decoder::Decoder::new()
                         .decode_coefficients(&data, enough::Unstoppable)
@@ -447,7 +458,7 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                     let identity = score(&t.hr, &d_off);
                     writeln!(
                         rows,
-                        "{}\t{}\t{enc}\t{ss}\t{q}\t{pf}\t{pq}\t{}\t{}\t{:.8}\t{frac:.8}\t{:.3}\t{estimated:.8}\t{gate}\t{conservative_gate}",
+                        "{}\t{}\t{enc}\t{ss}\t{q}\t{pf}\t{pq}\t{}\t{}\t{:.8}\t{frac:.8}\t{:.3}\t{estimated:.8}\t{gate}\t{conservative_gate}\t{margin_gates}",
                         t.sub,
                         t.fname,
                         report.encoder_family,
