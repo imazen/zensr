@@ -13,6 +13,29 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_stage_migration_preserves_original_and_pending_paths(self):
+        import publication_routing_stage_migrate as migration
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='stage-migration-',dir=base))
+        source=root/'source';destination=root/'destination';backup=root/'backup'
+        data=b'pending lookup';h=hashlib.sha256(data).hexdigest()
+        relative=Path(h[:2])/(h+'.zst')
+        (source/relative).parent.mkdir(parents=True);(source/relative).write_bytes(data)
+        with patch.object(migration,'frozen_request',return_value=dict(excluded=[])):
+            migration.migrate(dict(alias_root=str(root/'archive')),source,destination,backup)
+        self.assertTrue(source.is_symlink())
+        self.assertEqual((source/relative).read_bytes(),data)
+        self.assertEqual((backup/relative).read_bytes(),data)
+        self.assertEqual(len(list(destination.iterdir())),256)
+
+    def test_stage_migration_rejects_open_artifact_before_copy(self):
+        import publication_routing_stage_migrate as migration
+        with patch.object(migration,'frozen_request',return_value=dict(excluded=['open'])), \
+             patch.object(migration.subprocess,'run') as run:
+            with self.assertRaisesRegex(ValueError,'open artifact'):
+                migration.migrate({},Path('source'),Path('destination'),Path('backup'))
+            run.assert_not_called()
+
     def test_native_transfer_requires_frozen_request_and_retains_open_files(self):
         import publication_routing_native_stage as native
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

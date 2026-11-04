@@ -533,9 +533,9 @@ A matching small replay on NVMe-backed storage recorded
 `rc=0 1s | peak-RSS 0.45GiB | min-avail 22065MiB | peak-load 13.05`;
 all 12 cell tables were again identical. These are small operational observations
 with uncontrolled cache state, not a full-grid or restoration-latency speedup.
-The 34 MiB array replay and both logs remain with the study artifacts. Bulk
-staging on NVMe has been proposed to the owner; the dense grid continues on the
-array pending that decision.
+The 34 MiB array replay and both logs remain with the study artifacts. The owner subsequently approved bounded NVMe staging, with generation stopped
+during verified transfers to the array. The native-transfer pilot below validates
+that path before the dense sweep switches to it.
 
 Ten-second syscall traces found mean `execve` duration of 95,492 microseconds
 on direct NFS and 181 microseconds through bindfs. Explicit `fsync` then dominated
@@ -642,3 +642,13 @@ The entire pilot wrapper reported
 `rc=0 56s | peak-RSS 0.45GiB | min-avail 21310MiB | peak-load 7.93`.
 This combined generation/transfer/replay/audit measurement is not a restoration
 runtime benchmark or a controlled storage-speed comparison.
+
+
+The live dense stage migrated 5,932 artifacts (8,429,265,763 payload bytes)
+while generation was frozen. Both source and destination were content-hash
+verified; the original directory remains retained. All 256 hash-prefix
+directories exist before resumption to preserve pending pathname operations.
+The migration wrapper recorded `rc=0 433s | peak-RSS 0.03GiB | min-avail 21569MiB | peak-load 6.27`.
+The native usage guard verified its tool identities and available space before
+the same six-worker generator resumed. All 27 integrity tests pass, including
+migration preservation and rejection of open artifacts before copying.
