@@ -1,10 +1,15 @@
 """Calibration integrity tests: held-out files cannot change fitted rules."""
 import copy
 import unittest
-from fit_canon4 import fit, fit_gates, isotonic
+from fit_canon4 import fit, fit_gates, isotonic, score_delta
 
 
 class CalibrationIntegrity(unittest.TestCase):
+    def test_decimal_harm_boundary_is_not_rounded_into_failure(self):
+        self.assertEqual(score_delta('89.900', '90.000'), -.1)
+        self.assertFalse(score_delta('89.900', '90.000') < -.1)
+        self.assertTrue(score_delta('89.899', '90.000') < -.1)
+
     def test_validation_gains_cannot_change_fit(self):
         rows=[]
         for axis,encoder in [('quality','turbo'),('distance','jpegli')]:

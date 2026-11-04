@@ -6,6 +6,7 @@ Validation files score the frozen choice. No encoder's nominal dial substitutes
 for the probe value consumed by the runtime. Outputs JSON for review/codegen.
 """
 import argparse
+from decimal import Decimal
 import collections
 import csv
 import json
@@ -13,6 +14,11 @@ import statistics as st
 import subprocess
 import re
 from gate_recalibrate import hash_stem, interp
+
+
+def score_delta(restored, identity):
+    """Preserve TSV decimal boundaries before converting to binary float."""
+    return float(Decimal(restored) - Decimal(identity))
 
 
 def key(r):
@@ -47,8 +53,8 @@ def load(scores, metadata):
         d = dict(m)
         d.update(x=round(float(m['routing_q']),6), z=float(m['zero_ac_frac']),
                  cal=hash_stem(k[0]) % 2 == 0,
-                 raw=float(a['model_off']['ssim2'])-float(base['ssim2']),
-                 gain=float(a['model_proj']['ssim2'])-float(base['ssim2']))
+                 raw=score_delta(a['model_off']['ssim2'], base['ssim2']),
+                 gain=score_delta(a['model_proj']['ssim2'], base['ssim2']))
         d['axis'] = 'distance' if m['routing_scale']=='ButteraugliDistance' else 'quality'
         out.append(d)
     return out
