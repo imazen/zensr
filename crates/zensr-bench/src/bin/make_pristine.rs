@@ -32,8 +32,8 @@
 //!   source q92:  1x -0.36   2x -0.12   3x -0.11
 //!
 //! Policy: **3x for sources below q90, 2x for q90+**, holding residual bias at
-//! ~0.1-0.2 ssim2 — below our metric floor and a twentieth of the effects we
-//! measure. Source quality comes from zenjpeg's own probe, so the decision is
+//! ~0.1-0.2 ssim2 in that probe. This residual is not a universal bound or
+//! proof of perceptual equivalence. Source quality comes from zenjpeg's own probe, so the decision is
 //! per-file rather than assumed.
 //!
 //! Never overwrites the input corpus.

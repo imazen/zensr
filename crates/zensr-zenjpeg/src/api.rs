@@ -479,8 +479,8 @@ impl<'a> Request<'a> {
     }
 
     /// When to spend cycles at all. Defaults to [`Routing::Auto`] at 0.25,
-    /// which held-out measurement shows skips ~72% of files while *improving*
-    /// average quality — skipping avoids more harm than the gain it forgoes.
+    /// The restore fraction and quality tradeoff depend on the model, corpus
+    /// and harm definition; see the dated canon4 calibration report.
     #[must_use]
     pub fn routing(mut self, r: Routing) -> Self {
         self.routing = r;

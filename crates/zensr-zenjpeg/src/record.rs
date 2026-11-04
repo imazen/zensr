@@ -11,8 +11,8 @@
 //! the probe's family and quality from the dial the encoder was actually
 //! given, so no policy needs to know the record exists.
 //!
-//! The one knob the record carries that the tables cannot show and that moves
-//! restoration above the metric floor is adaptive quantization:
+//! Adaptive quantization is a record-carried knob whose restoration effect
+//! cannot be inferred from the quantization tables alone:
 //! [`aq_off_gain_delta`] is the measured extra model gain on AQ-off encodes
 //! at equal dial (canon4, paired per file on the 33 calibration images).
 //!
