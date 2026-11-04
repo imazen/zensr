@@ -50,3 +50,9 @@
   block cell renames across all generator workers. Use storage-local counts and
   separate live PID/scope checks; reserve the full status scan for stopped runs.
   The observed scan was terminated and worker activity recovered.
+
+- Publication storage correction: the temporary NFS export used async semantics,
+  so client fsync alone did not establish the intended disk durability before
+  releasing staged copies. The study-only export now uses sync; a storage-side
+  syncfs completed successfully before generation/transfer resumed. Verify
+  server-side synchronization semantics before using staged-copy release.

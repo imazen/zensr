@@ -590,3 +590,17 @@ run, such a scan left all six writer threads waiting in `start_renaming`;
 terminating the read-only scan restored worker activity. Count directory entries
 beside storage instead, and check the writer PID/scope separately. Use the full
 `publication-routing-cells status` command after generation has stopped.
+
+
+### Archive durability correction
+
+Staged transfer requires storage that honors synchronization requests. The
+study's temporary NFS export initially used `async`; client `fsync` calls alone
+therefore did not establish the intended disk durability. Generation and transfer
+were frozen, that study-only export was changed to `sync` and verified, and a
+storage-side filesystem `syncfs` completed with return 0 / errno 0 before both
+workers resumed. Other exports were unchanged. No artifact-loss evidence was
+observed; the earlier byte-verification checks remain distinct from durability.
+The small transfer timings above precede this correction and must not be used
+as synchronous-archive performance evidence. All retained artifacts still
+require the final study audit before fitting.
