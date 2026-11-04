@@ -173,3 +173,25 @@ canon4-routing-tests:
 
 publication-routing-manifest *args:
     python3 tools/publication_routing_manifest.py {{args}}
+
+publication-routing-build:
+    cargo build --release -p zensr-bench --bin routing_study --bin zjtool
+
+publication-routing-run manifest output role sizes qualities encoders jobs="6" exclusions="":
+    ./target/release/routing_study "{{manifest}}" "{{output}}" "{{role}}" "{{sizes}}" "{{qualities}}" "{{encoders}}" "{{jobs}}" "{{exclusions}}"
+
+publication-routing-cells *args:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cells.py {{args}}
+
+publication-routing-leakage source output:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_leakage.py "{{source}}" "{{output}}"
+
+publication-routing-analysis *args:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_analysis.py {{args}}
+
+publication-routing-tests:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} -m unittest discover -s tools -p 'test_publication_routing.py'
+
+publication-routing-lint:
+    cargo fmt -p zensr-bench -- --check
+    cargo clippy -p zensr-bench --bin routing_study --bin coef_features --bin dejpeg_eval -- -D warnings
