@@ -223,3 +223,6 @@ publication-routing-storage-portable:
 
 publication-routing-capture identity output:
     python3 tools/publication_routing_provenance.py "{{identity}}" "{{output}}"
+
+publication-routing-resource-pilot source output edge:
+    python3 tools/publication_routing_resource_pilot.py "{{source}}" "{{output}}" --edge "{{edge}}"
