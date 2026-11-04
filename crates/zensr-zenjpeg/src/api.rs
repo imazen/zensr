@@ -506,11 +506,10 @@ impl<'a> Request<'a> {
         let mut probe_for_routing =
             zenjpeg::detect::probe(self.jpeg).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
         crate::record::apply_record(&mut probe_for_routing);
-        // Content class comes from the file's own luma coefficients, and is
-        // worth ~+0.15 ssim2 of realized routing quality — the largest lever
-        // after quality itself. It costs a coefficient parse (~0.29 ms on a
-        // 512 crop) even on files that then skip, which is why it is computed
-        // only when the decision can actually turn on it. `None` falls back to
+        // Content class selects the fitted curve using the file's own luma
+        // coefficients. It costs a coefficient parse even on files that then
+        // skip, so compute it only when the decision can depend on it. Measured
+        // quality and cost depend on the corpus and implementation. `None` falls back to
         // the pooled curve, so an unparseable file routes exactly as before.
         let content = match self.routing {
             Routing::Auto { .. } => classify_content(self.jpeg),
@@ -530,9 +529,9 @@ impl<'a> Request<'a> {
             .with_high_q_identity(true)
             .with_projection(Projection::Auto);
 
-        // Conservative gates earlier. That is the only mechanism measured to
-        // reduce per-file regressions; the margin is deliberately modest
-        // because harm_frac falls gradually rather than off a cliff.
+        // Conservative gates earlier, trading restoration coverage for fewer
+        // observed regressions on the calibration grid. It is not a per-file
+        // quality guarantee; alternative routing policies are evaluated separately.
         cfg = cfg.with_high_q_margin(match self.intent {
             Intent::Fidelity => 0.0,
             Intent::Conservative => 6.0,
