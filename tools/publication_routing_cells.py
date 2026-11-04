@@ -44,13 +44,15 @@ def required_coverage(root):
 
 def inspect_artifact(artifact):
     from PIL import Image
+    from PIL.JpegImagePlugin import get_sampling
     expected=artifact.name.split('.')[0]
     if digest(artifact)!=expected:raise ValueError(f'changed artifact {artifact}')
     if artifact.suffix=='.jpg':
         with Image.open(artifact) as image:
             image.load()
             if image.format!='JPEG':raise ValueError('non-JPEG encoded artifact')
-            return dict(dimensions=image.size)
+            sampling={0:'444',1:'422',2:'420'}.get(get_sampling(image),'unsupported')
+            return dict(dimensions=image.size,ss=sampling)
     if artifact.suffix!='.zst':raise ValueError('unknown artifact format')
     proc=subprocess.Popen(['zstd','-q','-d','-c',str(artifact)],stdout=subprocess.PIPE)
     size=0
@@ -90,6 +92,7 @@ def audit(root):
             # Deduplicate expensive I/O, never the shape contract of each row.
             if name=='jpeg_artifact':
                 if info['dimensions']!=dims:raise ValueError(f'independent decoder dimensions differ: {artifact}')
+                if info['ss']!=row['ss']:raise ValueError(f'independent decoder subsampling differs: {artifact}')
             else:
                 bytes_per_pixel=4 if name.endswith('_butter_map') else 3
                 if info['bytes']!=dims[0]*dims[1]*bytes_per_pixel:

@@ -267,3 +267,13 @@ If any occur, the full mean is left undefined. A separately labeled conditional
 finite mean renormalizes the original origin weights over finite-change cases,
 with its count and retained weight mass reported. SSIM2 selection labels and the
 primary harm curve do not depend on this secondary-metric correction.
+
+## Independent subsampling audit
+
+The JPEG oracle now checks actual chroma sampling against every row's 420/444
+label, including deduplicated references, using Pillow's parsed component sampling
+factors. The strengthened audit passes on both completed pilots: 280 mode cells /
+756 artifacts and 380 primary-encoder cells / 1,846 artifacts. Prior audit records
+are retained in each run's `audit-history`; the full development audit will use
+this strengthened tool before fitting. The sampling-mismatch regression fails
+explicitly instead of accepting a mislabeled cell.

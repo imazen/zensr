@@ -242,10 +242,13 @@ class PublicationIntegrity(unittest.TestCase):
                 writer=csv.DictWriter(f,fieldnames=list(coverage[0]),delimiter='\t');writer.writeheader();writer.writerows(coverage)
             (root/'COMPLETE').write_text('synthetic fixture\n')
             def inspect(path):
-                return dict(dimensions=(8,16)) if path.suffix=='.jpg' else dict(bytes=512 if 'butter' in path.name else 384)
+                return dict(dimensions=(8,16),ss='420') if path.suffix=='.jpg' else dict(bytes=512 if 'butter' in path.name else 384)
             with patch.object(cells,'inspect_artifact',side_effect=inspect) as inspection:
                 with self.assertRaisesRegex(ValueError,'decoder dimensions differ'):cells.audit(root)
                 self.assertEqual(inspection.call_count,3)
+            self.assertFalse((root/'AUDITED.json').exists())
+            with patch.object(cells,'inspect_artifact',return_value=dict(dimensions=(8,16),ss='444')):
+                with self.assertRaisesRegex(ValueError,'subsampling differs'):cells.audit(root)
             self.assertFalse((root/'AUDITED.json').exists())
 
 
