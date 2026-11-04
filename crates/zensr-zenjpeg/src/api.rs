@@ -7,6 +7,7 @@
 //!
 //! Design and the measurements forcing each decision: `docs/API_DESIGN.md`.
 
+use crate::calibration::*;
 use crate::{Projection, RestoreConfig, RestoreError};
 
 /// What the caller is optimising for.
@@ -24,11 +25,9 @@ pub enum Intent {
     Fidelity,
     /// Prefer leaving a file alone when the expected gain is small.
     ///
-    /// This reduces regressions; it does **not** eliminate them, and it is not
-    /// named `DoNoHarm` for that reason. Measured across the band where the
-    /// median gain is still positive at 4:2:0, **30-45% of individual files
-    /// are made worse by more than 0.1 ssim2**. No configuration today is
-    /// never-worse. If you need that guarantee, do not restore.
+    /// Uses an earlier identity gate. This reduces restoration coverage and
+    /// measured harm, but also forgoes gains. It is not a never-worse promise;
+    /// see the canon4 calibration report for held-out results.
     Conservative,
 }
 
@@ -68,37 +67,15 @@ pub enum Provenance {
     // n -> slack_abs mapping is measured end to end (ROADMAP 1.9).
 }
 
-/// Compute budget. The library picks the model; callers should never name one.
-///
-/// `Adaptive` is deliberately absent in 0.1: it needs a damage estimator, and
-/// the obvious candidate — the probe's quality — is not one. A q83 file that
-/// was aggressively downscaled carries far more damage than a q83 native file,
-/// because downscaling packs content into the frequencies the quantiser
-/// coarsens.
-///
-/// **The tiers are far apart on damaged input and close together on clean
-/// input**, which is the opposite of how compute budgets usually behave.
-/// Measured per-file median gain on clean references, and the gap expressed
-/// in multiples of the ~0.3 ssim2 the metric can actually resolve:
-///
-/// | input quality | Quality | Realtime | gap | gap vs metric floor |
-/// |---|---|---|---|---|
-/// | q15 | +11.62 | +6.88 | 4.74 | **15.8x** |
-/// | q35 | +6.18 | +4.14 | 2.04 | 6.8x |
-/// | q55 | +4.02 | +3.06 | 0.96 | 3.2x |
-/// | q75 | +2.05 | +1.58 | 0.47 | **1.6x** |
-///
-/// So at q75 the 16x compute buys a difference only 1.6x the metric's own
-/// resolution — hard to justify. At q15 it buys nearly twice the gain. If you
-/// are choosing one tier for mixed traffic, `Realtime` is defensible above
-/// roughly q50 and `Quality` earns its cost below it.
+/// Select a caller-loaded model tier. The library does not load weights itself.
+/// Current routing calibration targets canon4; other model weights need their
+/// own quality measurements. Runtime cost depends on the selected model and host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Budget {
-    /// ~0.16 s/MP at 12 threads, 84 KB of weights.
+    /// Compact tier; canon4 uses 86,406 bytes of f16 weights.
     Realtime,
-    /// ~2.7 s/MP, 1.16 MB — 16x the compute. Worth it on heavily damaged
-    /// input, marginal above ~q75; see the table above.
+    /// The caller's quality-oriented model.
     Quality,
 }
 
@@ -107,8 +84,8 @@ pub enum Budget {
 #[non_exhaustive]
 pub enum SkipReason {
     /// The input is near-pristine for its chroma subsampling, where the model
-    /// is measured to lose. The threshold depends on subsampling, not quality
-    /// alone: 4:4:4 at q90 is as clean as 4:2:0 at q94.
+    /// is measured to lose frequently. Thresholds depend on the corrected
+    /// probe family, quality scale, and subsampling.
     NearPristine,
     /// Consistency was required but cannot be certified for this file's
     /// chroma geometry.
@@ -262,296 +239,29 @@ impl Pixels {
     }
 }
 
-/// Estimated benefit of restoring a file, in ssim2 points, from header
-/// information alone — no decode, no model run.
+/// Estimated projected restoration gain for the canon4 realtime model, in
+/// SSIM2 points. Uses the record-corrected header probe without model inference.
 ///
-/// Fitted on 4,096 per-file measurements across the clean corpus. Only two
-/// features are used because only two carry most of the signal: the probe's
-/// quality and the chroma subsampling. Subsampling matters as much as quality
-/// does, because 4:4:4 at q90 is as clean as 4:2:0 at q94 and the model loses
-/// on clean input.
-///
-/// This predicts a **median over files at that (quality, subsampling)**, not
-/// the outcome for one image. Per-file spread is wide; the estimate is for
-/// deciding whether to spend cycles, not for reporting quality.
-///
-/// **This is the quality-only estimate, and the library's own routing is
-/// better than it.** [`Routing::Auto`] additionally classifies the image as
-/// graphic or photographic from its coefficients, which is worth about +0.15
-/// ssim2 of realized routing quality. That signal needs the compressed bytes,
-/// not just a header probe, so it cannot be offered through this signature.
-/// Expect `Auto` to make decisions this function would not.
-/// Median restore gain by 4:2:0 quality, in ssim2 points.
-///
-/// Anchors are measured medians; between them the curve is smooth and monotone,
-/// so linear interpolation is honest.
-///
-/// Values at q<=90 come from the original calibration. Values at q>=94 were
-/// re-measured on 2026-08-03 against references that are 100% PNG
-/// (`benchmarks/clean_ladder_2026-08-03.md`); the originals had been fit partly
-/// against references that were themselves JPEGs, which flatters restoration
-/// and understated the loss badly up here — the old q100 anchor read -0.17
-/// where clean references measure -1.89.
-///
-/// The q<=90 anchors were re-checked against the same clean run and left alone:
-/// they agree to within 0.05 through q75 (5.70/5.66, 3.07/3.07, 1.80/1.75,
-/// 0.65/0.64). At q85-90 they read ~0.23 high, but a calibrate/validate split by
-/// image puts the uncertainty there at 0.23-0.64, so that gap is not resolvable
-/// at 64 images and re-fitting it scored WORSE on held-out images than leaving
-/// it. The tail is resolvable: the same split puts uncertainty at q94-100
-/// between 0.02 and 0.21.
-const G420: [(f32, f32); 10] = [
-    (15.0, 5.70),
-    (35.0, 3.07),
-    (55.0, 1.80),
-    (75.0, 0.65),
-    (85.0, 0.46),
-    (90.0, 0.26),
-    (94.0, -0.27),
-    (96.0, -0.48),
-    (98.0, -1.01),
-    (100.0, -1.89),
-];
-
-/// Same, for 4:4:4, measured directly from q90 up — the range where it matters
-/// and where it turns negative sooner than 4:2:0 does.
-const G444: [(f32, f32); 5] = [
-    (90.0, -0.24),
-    (94.0, -0.62),
-    (96.0, -1.10),
-    (98.0, -1.89),
-    (100.0, -3.10),
-];
-
-/// Median restore gain by butteraugli distance, for encoders that quantise on a
-/// distance scale (cjpegli and zenjpeg, which share a quant law).
-///
-/// This used to map distance onto the IJG quality axis with `100 - 12·d` and
-/// reuse [`G420`]/[`G444`]. That mapping is not what damage does: measured
-/// against clean references on 2026-08-03 it was optimistic in **39 of 40**
-/// cells, by a median of +0.68 and up to +4.72 ssim2, and it had the wrong sign
-/// in 9 — predicting gain from distance 0.3 to 1.3, where restoration actually
-/// costs quality. It breaks worst in the middle: distance 7.2 maps to "quality
-/// 13.6" and predicts +5.70 where the truth is +1.31, because a jpegli file at
-/// distance 7.2 is far less damaged than an IJG file at q14.
-///
-/// Held-out (30 calibrate / 34 validate images, split by image), against the
-/// mapping it replaces: same realized quality (+0.7940 vs +0.7998 ssim2, a gap
-/// an order of magnitude under the metric floor) for **half the work** (restores
-/// 30% of cells vs 60%) and **one sixth the harm** (3% of cells made worse vs
-/// 17%). Same quality, half the cycles, far less damage.
-///
-/// Distance ascends with damage, so gain ascends with distance — the opposite
-/// direction to the quality curves above.
-///
-/// Source: `benchmarks/clean_ladder_jpegli_2026-08-03.md`, n=64 per cell,
-/// cjpegli and zenjpeg pooled (they agree within 0.1 ssim2 below distance 5).
-const DIST420: [(f32, f32); 10] = [
-    (0.0, -1.77),
-    (0.3, -1.17),
-    (0.5, -0.71),
-    (0.7, -0.38),
-    (1.3, -0.11),
-    (1.8, 0.08),
-    (3.0, 0.19),
-    (5.2, 0.73),
-    (7.2, 1.08),
-    (14.2, 3.39),
-];
-
-/// Gain curves split by content class, IJG quality axis, measured 2026-08-03 on
-/// clean references (`benchmarks/content_routing_2026-08-03.md`). Same corpus,
-/// grid and method as [`G420`]/[`G444`], which are these two pooled together.
-///
-/// The split is worth roughly +0.15 ssim2 of realized routing quality on
-/// held-out images — an order of magnitude above the metric floor, and by far
-/// the largest lever found after quality itself. Graphic content stays worth
-/// restoring up to about q96; photographic content stops paying at about q75.
-/// Pooling them splits the difference and is wrong for both.
-// The q15 anchor is 6.28, a measured median that happens to land near tau.
-// Coincidence, not a constant — do not "fix" it by substituting one.
-#[allow(clippy::approx_constant)]
-const GRAPHIC420: [(f32, f32); 10] = [
-    (15.0, 6.28),
-    (35.0, 5.81),
-    (55.0, 4.75),
-    (75.0, 3.77),
-    (85.0, 2.58),
-    (90.0, 1.93),
-    (94.0, 0.94),
-    (96.0, 0.35),
-    (98.0, -0.15),
-    (100.0, -0.33),
-];
-
-const GRAPHIC444: [(f32, f32); 10] = [
-    (15.0, 6.10),
-    (35.0, 5.66),
-    (55.0, 4.74),
-    (75.0, 3.51),
-    (85.0, 2.44),
-    (90.0, 1.79),
-    (94.0, 0.86),
-    (96.0, 0.24),
-    (98.0, -0.24),
-    (100.0, -0.52),
-];
-
-const PHOTO420: [(f32, f32); 10] = [
-    (15.0, 3.69),
-    (35.0, 1.89),
-    (55.0, 0.88),
-    (75.0, 0.10),
-    (85.0, -0.21),
-    (90.0, -0.47),
-    (94.0, -0.60),
-    (96.0, -1.04),
-    (98.0, -1.58),
-    (100.0, -2.30),
-];
-
-const PHOTO444: [(f32, f32); 10] = [
-    (15.0, 4.08),
-    (35.0, 1.94),
-    (55.0, 0.85),
-    (75.0, -0.09),
-    (85.0, -0.43),
-    (90.0, -0.83),
-    (94.0, -1.24),
-    (96.0, -1.82),
-    (98.0, -2.62),
-    (100.0, -3.71),
-];
-
-/// The distance curves split by content class, measured 2026-08-03 on the same
-/// jpegli/zenjpeg ladder as [`DIST420`]/[`DIST444`], which are these pooled.
-///
-/// Validated over 20 random image splits rather than one: the split beats the
-/// pooled curve on **19 of 20**, mean +0.7941 against +0.7357 ssim2, capturing
-/// 72% of what perfect content labels would give (+0.8168). The single-split
-/// check that sufficed for the quality curves was not enough here — the effect
-/// is a quarter the size, so it needed the stronger evidence.
-///
-/// The gap between classes is large across the whole range (1.0–3.8 ssim2), but
-/// the *routing* headroom is small because the pooled curve already restores
-/// conservatively on this family — most of the grid sits near-pristine, where
-/// both classes agree to skip.
-///
-/// `GRAPHIC_ZERO_AC_THRESHOLD` transfers unchanged: on distance-quantised files
-/// it measures precision 0.63–0.89 and recall 0.55–0.88 across the range, so no
-/// separate threshold is needed.
-const GRAPHIC_DIST420: [(f32, f32); 10] = [
-    (0.0, -0.34),
-    (0.3, -0.26),
-    (0.5, -0.04),
-    (0.7, -0.02),
-    (1.3, 0.47),
-    (1.8, 1.35),
-    (3.0, 2.38),
-    (5.2, 3.73),
-    (7.2, 4.16),
-    (14.2, 5.25),
-];
-
-const GRAPHIC_DIST444: [(f32, f32); 10] = [
-    (0.0, -0.56),
-    (0.3, -0.31),
-    (0.5, -0.14),
-    (0.7, 0.00),
-    (1.3, 0.24),
-    (1.8, 0.77),
-    (3.0, 1.96),
-    (5.2, 3.24),
-    (7.2, 3.94),
-    (14.2, 5.27),
-];
-
-const PHOTO_DIST420: [(f32, f32); 10] = [
-    (0.0, -2.06),
-    (0.3, -1.50),
-    (0.5, -0.99),
-    (0.7, -0.66),
-    (1.3, -0.57),
-    (1.8, -0.35),
-    (3.0, -0.12),
-    (5.2, 0.16),
-    (7.2, 0.35),
-    (14.2, 2.06),
-];
-
-const PHOTO_DIST444: [(f32, f32); 10] = [
-    (0.0, -3.61),
-    (0.3, -2.21),
-    (0.5, -1.54),
-    (0.7, -1.16),
-    (1.3, -0.71),
-    (1.8, -0.50),
-    (3.0, -0.16),
-    (5.2, 0.17),
-    (7.2, 0.74),
-    (14.2, 2.59),
-];
-
-/// Same, for 4:4:4. Full chroma is cleaner at equal distance, so it turns
-/// negative sooner — the same ordering the quality curves show.
-const DIST444: [(f32, f32); 10] = [
-    (0.0, -3.00),
-    (0.3, -1.77),
-    (0.5, -1.09),
-    (0.7, -0.77),
-    (1.3, -0.26),
-    (1.8, -0.06),
-    (3.0, 0.23),
-    (5.2, 0.55),
-    (7.2, 1.54),
-    (14.2, 3.50),
-];
-
+/// Curves are monotone fits to calibration-image medians, not guarantees for
+/// individual files. Auto routing also measures the luma zero-AC fraction.
+/// See `benchmarks/ship_rt24i_canon4_2026-11-04.md` for held-out results and
+/// the quality/work/harm tradeoff. Other models require separate calibration.
 #[must_use]
 pub fn estimate_gain(probe: &zenjpeg::detect::JpegProbe) -> f32 {
-    estimate_gain_for(probe, None)
+    let mut corrected = probe.clone();
+    crate::record::apply_record(&mut corrected);
+    estimate_gain_for(&corrected, None)
 }
 
-/// Whether an image is synthetic (flat regions, sharp edges, limited palette)
-/// or photographic (stochastic detail, grain, stippling).
-///
-/// This is the single largest signal the router has after quality. Measured
-/// 2026-08-03 on clean references: at q75 the median restore gain is +3.77 on
-/// graphic content and +0.10 on photographic — a gap of nearly 4 ssim2 that a
-/// quality-only curve averages away, restoring photos it should skip and
-/// skipping graphics it should restore.
+/// Coefficient-domain content class used by the calibrated routing curves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Content {
     Graphic,
     Photographic,
 }
 
-/// Fraction of luma blocks with no AC coefficients, above which an image is
-/// treated as graphic.
-///
-/// Selected on the calibrate half of the pinned split by maximising realized
-/// ssim2, then reported on the held-out half — 0.25 sits in the middle of a
-/// flat 0.20–0.30 plateau, so it is not balanced on a peak. Deliberately NOT
-/// zenjpeg's `SCREENSHOT_ZERO_AC_THRESHOLD` (0.10): that one is calibrated for
-/// choosing a deblock strategy, a different decision with a different loss.
-pub(crate) const GRAPHIC_ZERO_AC_THRESHOLD: f32 = 0.25;
-
-/// Classify from the file's own luma coefficients.
-///
-/// Chosen over the pixel-domain chooser (`crate::chooser`) on measured value,
-/// not on accuracy — the chooser is slightly more accurate and **16x** more
-/// expensive. Held-out on the pinned split, as realized routing quality:
-///
-/// | router | ssim2 | share of oracle-label gain | marginal cost |
-/// |---|---|---|---|
-/// | quality only | +1.2969 | 0% | 0 |
-/// | this, threshold 0.25 | +1.4452 | 82% | **0.29 ms** |
-/// | chooser at t=0.75 | +1.4511 | 85% | 4.54 ms |
-/// | oracle labels | +1.4781 | 100% | — |
-///
-/// The 0.006 ssim2 the chooser buys is an order of magnitude below the metric
-/// floor, against 4.25 ms — about 11% of a 512-crop realtime restore. Full
-/// record: `benchmarks/content_routing_2026-08-03.md`.
+/// Classify from luma zero-AC fraction, with a threshold selected on the
+/// calibration images only. Missing coefficients fall back to pooled curves.
 pub(crate) fn classify_content(jpeg: &[u8]) -> Option<Content> {
     let coeffs = zenjpeg::decoder::Decoder::new()
         .decode_coefficients(jpeg, enough::Unstoppable)
@@ -589,11 +299,15 @@ pub(crate) fn estimate_gain_for(
         return gain_at_distance(full, probe.quality.value, content)
             + crate::record::aq_off_gain_delta(probe);
     }
+    if scale != "IjgQuality" && scale != "MozjpegQuality" {
+        // An uncalibrated scale is not an IJG quality dial.
+        return 0.0;
+    }
     let q = probe.quality.value;
     match content {
         None => gain_at(full, q),
-        Some(Content::Graphic) => lerp(if full { &GRAPHIC444 } else { &GRAPHIC420 }, q),
-        Some(Content::Photographic) => lerp(if full { &PHOTO444 } else { &PHOTO420 }, q),
+        Some(Content::Graphic) => lerp(if full { GRAPHIC444 } else { GRAPHIC420 }, q),
+        Some(Content::Photographic) => lerp(if full { PHOTO444 } else { PHOTO420 }, q),
     }
 }
 
@@ -601,12 +315,12 @@ pub(crate) fn estimate_gain_for(
 /// be tested at exact distances.
 fn gain_at_distance(full: bool, d: f32, content: Option<Content>) -> f32 {
     let pts = match (content, full) {
-        (Some(Content::Graphic), false) => &GRAPHIC_DIST420,
-        (Some(Content::Graphic), true) => &GRAPHIC_DIST444,
-        (Some(Content::Photographic), false) => &PHOTO_DIST420,
-        (Some(Content::Photographic), true) => &PHOTO_DIST444,
-        (None, false) => &DIST420,
-        (None, true) => &DIST444,
+        (Some(Content::Graphic), false) => GRAPHIC_DIST420,
+        (Some(Content::Graphic), true) => GRAPHIC_DIST444,
+        (Some(Content::Photographic), false) => PHOTO_DIST420,
+        (Some(Content::Photographic), true) => PHOTO_DIST444,
+        (None, false) => DIST420,
+        (None, true) => DIST444,
     };
     lerp(pts, d)
 }
@@ -634,22 +348,7 @@ pub(crate) fn lerp(pts: &[(f32, f32)], x: f32) -> f32 {
 /// that slack is indistinguishable from a mistyped anchor. Both are worth
 /// testing — this is the half that says what the calibration claims.
 fn gain_at(full: bool, q: f32) -> f32 {
-    if full && q >= 90.0 {
-        // Measured directly: this is where 4:4:4 turns negative.
-        lerp(&G444, q)
-    } else if full {
-        // Below q90 only 4:2:0 was measured. 4:4:4 at q is about as damaged as
-        // 4:2:0 at q+4 (measured: 4:4:4 q90 decodes as cleanly as 4:2:0 q94),
-        // so read the 4:2:0 curve 4 points higher. Shifting the anchors down
-        // by 4 is the same thing and keeps the table sorted.
-        let mut pts = G420;
-        for a in &mut pts {
-            a.0 -= 4.0;
-        }
-        lerp(&pts, q)
-    } else {
-        lerp(&G420, q)
-    }
+    lerp(if full { G444 } else { G420 }, q)
 }
 
 /// When to spend cycles on restoration.
@@ -660,33 +359,14 @@ pub enum Routing {
     Always,
     /// Never restore; decode and return. Useful for A/B and for kill switches.
     Never,
-    /// Restore only when [`estimate_gain`] reaches `min_gain` ssim2.
-    ///
-    /// Held-out measurement (predictor fitted on one half of the images,
-    /// evaluated on the other half), per-file averages over the whole set:
-    ///
-    /// | `min_gain` | files skipped | gain forgone | harm avoided | net |
-    /// |---|---|---|---|---|
-    /// | 0.00 | 25% | 0.043 | 0.342 | **+0.299** |
-    /// | 0.10 | 50% | 0.218 | 0.522 | **+0.304** |
-    /// | 0.25 | 72% | 0.348 | 0.655 | **+0.307** |
-    /// | 0.50 | 84% | 0.438 | 0.710 | +0.271 |
-    /// | 1.00 | 88% | 0.478 | 0.722 | +0.244 |
-    ///
-    /// Every threshold is **net positive on quality while also saving
-    /// cycles** — skipping avoids more harm than the gain it gives up. That is
-    /// not a tradeoff curve; it means restoring everything is worse than
-    /// restoring selectively on both axes at once.
-    ///
-    /// `0.25` skips roughly seven files in ten for the best measured net, and
-    /// drops the regression rate among the files still processed from 41% to
-    /// 23%. Above ~1.0 the net starts falling again as real gains are lost.
+    /// Restore when the content-aware estimate reaches `min_gain` SSIM2 and
+    /// the near-pristine gate permits it. Larger thresholds save work and
+    /// suppress some regressions, but also discard real gains.
     Auto { min_gain: f32 },
 }
 
 impl Default for Routing {
-    /// [`Routing::Auto`] at 0.25 — the best measured net, and it saves ~72%
-    /// of restoration cycles.
+    /// [`Routing::Auto`] at 0.25 SSIM2. See the canon4 calibration report.
     fn default() -> Self {
         Routing::Auto { min_gain: 0.25 }
     }
@@ -1130,18 +810,13 @@ mod tests {
         }
     }
 
-    /// Above q94 restoration LOSES quality against a clean reference, in both
-    /// subsamplings. Until 2026-08-03 the curve predicted a gain there (+0.15
-    /// at 4:2:0 q94, where clean references measure -0.27), because it had been
-    /// fit partly against references that were themselves JPEGs.
-    ///
-    /// That sign error survived the whole suite, so it is pinned here: a
-    /// prediction of gain on near-pristine input is the one error that makes
-    /// the library burn cycles to make an image worse.
+    /// Canon4 calibration is positive at 420 q94 and negative at q98/100.
+    /// The previous model's negative-q94 assumption no longer applies.
     #[test]
-    fn gain_curve_is_negative_on_near_pristine_input() {
+    fn gain_curve_matches_canon4_high_quality_crossover() {
+        assert!(gain_at(false, 94.0) > 0.0, "canon4 benefits at 420 q94");
         for full in [false, true] {
-            for q in [94.0f32, 96.0, 98.0, 100.0] {
+            for q in [98.0f32, 100.0] {
                 let g = gain_at(full, q);
                 assert!(
                     g < 0.0,
@@ -1175,12 +850,11 @@ mod tests {
         }
     }
 
-    /// 4:4:4 is cleaner than 4:2:0 at the same nominal quality, so it always
-    /// has less to gain from restoration. If this inverts, the two curves have
-    /// been swapped.
+    /// The measured ordering holds at q55 and above; at q15/q35 canon4
+    /// has slightly larger pooled gains at 444, so do not impose it there.
     #[test]
-    fn full_chroma_never_gains_more_than_subsampled() {
-        let mut qi = 10.0f32;
+    fn full_chroma_gains_less_in_the_high_quality_band() {
+        let mut qi = 55.0f32;
         while qi <= 100.0 {
             assert!(
                 gain_at(true, qi) <= gain_at(false, qi) + 1e-4,
@@ -1192,17 +866,12 @@ mod tests {
         }
     }
 
-    /// Distance-quantised encoders get their own curve, and it must not repeat
-    /// the sign errors the `100 - 12·d` mapping made. Measured against clean
-    /// references, restoration costs quality from distance 0.0 to about 1.3
-    /// (cjpegli -q 100 down to -q 90); the old mapping predicted gain there.
-    /// Graphic content is worth restoring further down the distance scale than
-    /// photographic, mirroring the quality curves. An inversion means the pairs
-    /// were swapped.
+    /// Graphic-class gain dominates at distance >=1.3. Canon4's measured
+    /// coefficient classes cross nearer pristine input; preserve that evidence.
     #[test]
-    fn graphic_distance_curve_dominates_photographic() {
+    fn graphic_distance_curve_dominates_in_damaged_band() {
         for full in [false, true] {
-            let mut d = 0.0f32;
+            let mut d = 1.3f32;
             while d <= 16.0 {
                 let (g, p) = (
                     gain_at_distance(full, d, Some(Content::Graphic)),
@@ -1254,17 +923,11 @@ mod tests {
     }
 
     #[test]
-    fn distance_curve_is_negative_on_near_pristine_input() {
-        for full in [false, true] {
-            for d in [0.0f32, 0.3, 0.5, 0.7, 1.3] {
-                let g = gain_at_distance(full, d, None);
-                assert!(
-                    g < 0.0,
-                    "full_chroma={full} distance {d} predicts {g:+.3} — near-pristine \
-                     jpegli input loses quality when restored"
-                );
-            }
-        }
+    fn distance_curve_matches_measured_crossover_band() {
+        assert!(gain_at_distance(false, 0.5, None) < 0.0);
+        assert!(gain_at_distance(false, 0.7, None) > 0.0);
+        assert!(gain_at_distance(true, 0.2, None) < 0.0);
+        assert!(gain_at_distance(true, 0.3, None) > 0.0);
     }
 
     // The monotonicity check that lived here is superseded by
@@ -1306,8 +969,8 @@ mod tests {
             let mut q = 10.0f32;
             while q <= 100.0 {
                 let (g, p) = (
-                    lerp(if full { &GRAPHIC444 } else { &GRAPHIC420 }, q),
-                    lerp(if full { &PHOTO444 } else { &PHOTO420 }, q),
+                    lerp(if full { GRAPHIC444 } else { GRAPHIC420 }, q),
+                    lerp(if full { PHOTO444 } else { PHOTO420 }, q),
                 );
                 assert!(
                     g > p,
@@ -1322,7 +985,7 @@ mod tests {
     /// pooled curve does: less damage leaves less to recover.
     #[test]
     fn content_curves_never_increase_with_quality() {
-        for pts in [&GRAPHIC420, &GRAPHIC444, &PHOTO420, &PHOTO444] {
+        for pts in [GRAPHIC420, GRAPHIC444, PHOTO420, PHOTO444] {
             let mut prev = f32::INFINITY;
             let mut q = 10.0f32;
             while q <= 100.0 {
@@ -1346,7 +1009,8 @@ mod tests {
         for ss in [Cs::None, Cs::Quarter] {
             for q in [20.0f32, 50.0, 75.0, 90.0, 100.0] {
                 let jpg = jpeg_at(q, ss);
-                let p = zenjpeg::detect::probe(&jpg).expect("probe");
+                let mut p = zenjpeg::detect::probe(&jpg).expect("probe");
+                crate::record::apply_record(&mut p);
                 assert_eq!(estimate_gain_for(&p, None), estimate_gain(&p));
             }
         }

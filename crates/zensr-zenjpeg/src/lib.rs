@@ -10,6 +10,7 @@
 //! (S10) guarantees the output re-encodes to the file's own coefficients.
 
 pub mod api;
+mod calibration;
 #[cfg(feature = "chooser")]
 pub mod chooser;
 pub mod jpegli_params;
@@ -112,36 +113,13 @@ pub fn slack_abs_for(probe: &zenjpeg::detect::JpegProbe) -> f32 {
     }
 }
 
-/// Measured high-q identity gate (2026-07-26, benchmarks/
-/// dejpeg_proj_highq_slackabs_2026-07-26.tsv): at q>=~95 the input is
-/// near-artifact-free and the x1 model LOSES to identity (policy arm
-/// -0.5..-1.1 ssim2 at q96 across all four families; the projection claws
-/// back +0.15..+0.81 but not all of it). Skipping the model there is the
-/// top-end analog of the measured low-q deblock policy. Thresholds from
-/// probe calibration on the eval grid: IJG/Mozjpeg quality scale reads
-/// exact q (q96 -> 96.0); Cjpegli-family Butteraugli distance reads
-/// 0.3-0.5 at q96 vs 0.7-1.0 at q93 (which stays modeled — positive with
-/// slack_abs).
-///
-/// **The threshold depends on chroma subsampling, not just quality**
-/// (pinned clean-reference ladders, 2026-08-02, n=64/cell, `ROADMAP.md` 1.1).
-/// The same nominal quality is a materially *less damaged* image at 4:4:4 —
-/// measured, 4:4:4 at q90 decodes as cleanly as 4:2:0 at q94 — so a threshold
-/// calibrated on 4:2:0 turns the model loose on inputs it should be skipping.
-/// Per-file median deltas cross zero at:
-///
-/// | family | 4:2:0 | 4:4:4 |
-/// |---|---|---|
-/// | turbo (IJG)   | q96 | q92 |
-/// | mozjpeg       | q99 | q90 |
-/// | cjpegli       | -   | q95 |
-/// | zenjpeg       | q95 | q88 |
-///
-/// zenjpeg and cjpegli both probe as `ButteraugliDistance`, so one threshold
-/// has to cover both; each arm takes the conservative (earlier-gating) of the
-/// pair. Left ungated, 4:4:4 reaches -1.5..-2.1 ssim2 by q100 with up to 91%
-/// of files harmed. 4:2:2 and 4:4:0 are untested and keep the 4:2:0 threshold,
-/// being chroma-subsampled and so closer to that case.
+/// Identity gate calibrated for canon4 on an image-separated split.
+/// A tail cell is harmful when at least half its calibration observations
+/// lose more than 0.1 SSIM2 after projection. Only a contiguous harmful tail
+/// sets a gate. Family distinctions use the probe after record correction;
+/// unknown quality-family encoders use the IJG fallback. Unmeasured chroma
+/// geometries retain the subsampled threshold. Evidence and held-out results:
+/// `benchmarks/ship_rt24i_canon4_2026-11-04.md`.
 pub fn policy_high_q_identity(probe: &zenjpeg::detect::JpegProbe) -> bool {
     policy_high_q_identity_with_margin(probe, 0.0)
 }
@@ -165,6 +143,9 @@ pub(crate) fn chroma_full_of(probe: &zenjpeg::detect::JpegProbe) -> Option<bool>
 /// "conservative" caller restore MORE, which is why it is one function rather
 /// than two call sites.
 pub fn policy_high_q_identity_with_margin(probe: &zenjpeg::detect::JpegProbe, margin: f32) -> bool {
+    let mut corrected = probe.clone();
+    record::apply_record(&mut corrected);
+    let probe = &corrected;
     // Debug-string match for the same reason as `policy_wants_auto`: the probe
     // enums are `#[non_exhaustive]` upstream and `zenjpeg::types` is not a
     // public path, so the name is the stable handle across the version range.
@@ -172,10 +153,22 @@ pub fn policy_high_q_identity_with_margin(probe: &zenjpeg::detect::JpegProbe, ma
     let scale = format!("{:?}", probe.quality.scale);
     match scale.as_str() {
         "IjgQuality" | "MozjpegQuality" => {
-            probe.quality.value >= (if full_chroma { 88.0 } else { 94.5 }) - margin
+            let mozjpeg = format!("{:?}", probe.encoder) == "Mozjpeg";
+            let threshold = match (mozjpeg, full_chroma) {
+                (false, false) => calibration::GATE_IJG_420,
+                (false, true) => calibration::GATE_IJG_444,
+                (true, false) => calibration::GATE_MOZJPEG_420,
+                (true, true) => calibration::GATE_MOZJPEG_444,
+            };
+            probe.quality.value >= threshold - margin
         }
         "ButteraugliDistance" => {
-            probe.quality.value <= (if full_chroma { 1.3 } else { 0.6 }) + margin
+            probe.quality.value
+                <= (if full_chroma {
+                    calibration::GATE_DISTANCE_444
+                } else {
+                    calibration::GATE_DISTANCE_420
+                }) + margin
         }
         _ => false,
     }
@@ -202,7 +195,7 @@ pub struct RestoreConfig {
     /// Apply the measured deblock policy (Auto at Annex-K q<=9). When false,
     /// decode is always pixel-exact (DeblockMode::Off).
     pub deblock_policy: bool,
-    /// Skip the model on near-pristine input (probe q >= ~95 / d <= 0.6) —
+    /// Skip the model on the calibrated harmful high-quality tail —
     /// measured: the model loses to identity there (`policy_high_q_identity`).
     pub high_q_identity: bool,
     /// Shifts the near-pristine gate earlier, in quality points (or, on the
@@ -386,7 +379,7 @@ pub(crate) fn restore_jpeg_routed(
     // the probe enums are non_exhaustive upstream and zenjpeg::types is not a
     // public path.
     report.chroma_full = chroma_full_of(&probe);
-    let want_auto = cfg.deblock_policy && policy_wants_auto(&probe);
+    let want_auto = !skip_model && cfg.deblock_policy && policy_wants_auto(&probe);
     report.used_deblock_auto = want_auto;
     let mode = if want_auto {
         zenjpeg::decoder::DeblockMode::Auto
@@ -587,37 +580,32 @@ mod tests {
     }
 
     #[test]
-    fn high_q_gate_is_stricter_at_444() {
+    fn high_q_gate_respects_family_and_subsampling() {
+        use zenjpeg::detect::{EncoderFamily, QualityScale};
         use zenjpeg::encoder::ChromaSubsampling;
         let rgb = synth_rgb(64, 64);
-        // zenjpeg reports the Butteraugli-distance scale, where LOWER is
-        // better, so a high `q` here is a small distance.
-        for q in [90.0f32, 92.0] {
-            let full = encode(64, 64, &rgb, q, ChromaSubsampling::None);
-            let quarter = encode(64, 64, &rgb, q, ChromaSubsampling::Quarter);
-            let (pf, pq) = (
-                zenjpeg::detect::probe(&full).unwrap(),
-                zenjpeg::detect::probe(&quarter).unwrap(),
-            );
-            assert_eq!(
-                format!("{:?}", pf.subsampling),
-                "S444",
-                "expected the ChromaSubsampling::None encode to probe as 4:4:4"
-            );
-            assert!(
-                policy_high_q_identity(&pf),
-                "4:4:4 at q{q} must gate (probe {:?} = {})",
-                pf.quality.scale,
-                pf.quality.value
-            );
-            // Same content and quality at 4:2:0 is more damaged, so the model
-            // still has something to do there.
-            assert!(
-                !policy_high_q_identity(&pq),
-                "4:2:0 at q{q} must NOT gate (probe {:?} = {})",
-                pq.quality.scale,
-                pq.quality.value
-            );
+        for (ss, full) in [
+            (ChromaSubsampling::None, true),
+            (ChromaSubsampling::Quarter, false),
+        ] {
+            let jpg = encode(64, 64, &rgb, 55.0, ss);
+            let mut p = zenjpeg::detect::probe(&jpg).unwrap();
+            p.record = None;
+            p.quality.scale = QualityScale::IjgQuality;
+            p.encoder = EncoderFamily::ImageMagick;
+            p.quality.value = 94.0;
+            assert!(!policy_high_q_identity(&p));
+            p.quality.value = 96.0;
+            assert!(policy_high_q_identity(&p));
+            p.encoder = EncoderFamily::Mozjpeg;
+            p.quality.scale = QualityScale::MozjpegQuality;
+            assert_eq!(policy_high_q_identity(&p), full);
+            p.quality.value = 100.0;
+            assert!(policy_high_q_identity(&p));
+            p.encoder = EncoderFamily::Unknown;
+            p.quality.scale = QualityScale::IjgQuality;
+            p.quality.value = 96.0;
+            assert!(policy_high_q_identity(&p), "unknown uses IJG fallback");
         }
     }
 
@@ -701,7 +689,7 @@ mod tests {
 
     #[test]
     fn high_q_identity_gate_fires_on_probe_scales() {
-        // turbo/moz q>=95 and jpegli-family d<=0.6 must gate; q93-band must not
+        // A verified record supplies the exact distance at the fitted boundary.
         let rgb = synth_rgb(64, 64);
         let jpg = encode(
             64,

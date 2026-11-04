@@ -660,6 +660,41 @@ impl AdoptedModel {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn canon4_f16_matches_torch_goldens() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../models/adopted/dejpeg_rt24i_canon4");
+        let weights = crate::decode_all_f16(&std::fs::read(root.join("weights_f16.raw")).unwrap());
+        let model = super::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let read = |name: String| -> Vec<f32> {
+            let bytes = std::fs::read(root.join(name)).unwrap();
+            assert_eq!(bytes.len() % 4, 0);
+            bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|v| f32::from_le_bytes(*v))
+                .collect()
+        };
+        for (h, w) in [(40, 36), (17, 13)] {
+            let input = read(format!("gold_in_{h}x{w}.raw"));
+            let golden = read(format!("gold_out_{h}x{w}.raw"));
+            assert_eq!(input.len(), 3 * h * w);
+            assert_eq!(golden.len(), input.len());
+            let mut whole = vec![0.0; input.len()];
+            model.forward(&input, h, w, &mut whole);
+            let tiled = model.upscale_tiled(&input, h, w, 2, 32);
+            assert_eq!(whole, tiled, "whole/tiled mismatch");
+            for (&actual, &expected) in whole.iter().zip(&golden) {
+                assert!(actual.is_finite() && expected.is_finite());
+                assert!(
+                    (actual - expected).abs() < 5e-4,
+                    "{h}x{w}: {actual} vs {expected}"
+                );
+            }
+        }
+    }
+
     use super::*;
 
     fn lcg_vec(n: usize, seed: u32, scale: f32) -> Vec<f32> {

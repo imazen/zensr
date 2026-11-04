@@ -14,7 +14,7 @@
 //! The one knob the record carries that the tables cannot show and that moves
 //! restoration above the metric floor is adaptive quantization:
 //! [`aq_off_gain_delta`] is the measured extra model gain on AQ-off encodes
-//! at equal dial (63 clean-reference files, paired per file, rt24g).
+//! at equal dial (canon4, paired per file on the 33 calibration images).
 //!
 //! Everything here is a no-op on files without a verified record.
 
@@ -72,27 +72,9 @@ pub(crate) fn apply_record(probe: &mut JpegProbe) -> bool {
     }
 }
 
-/// Measured 2026-10-30 (`benchmarks/zenjpeg_knobs_2026-10-30.md`, rt24g, 63
-/// files x 2 subsamplings, paired per file): median extra model gain, in
-/// ssim2, when the same dial was encoded WITHOUT adaptive quantization,
-/// indexed by the probe's butteraugli distance for that dial. AQ spends bits
-/// perceptually rather than on SSIM, so an AQ-off file is both more damaged
-/// by the metric and more restorable. Negative at the top: near-pristine
-/// AQ-off files gain slightly less.
-const AQ_OFF_DELTA_420: [(f32, f32); 5] = [
-    (1.3, -0.03),
-    (3.0, 0.13),
-    (5.2, 0.25),
-    (7.2, 0.35),
-    (14.2, 0.56),
-];
-const AQ_OFF_DELTA_444: [(f32, f32); 5] = [
-    (1.1, -0.10),
-    (2.3, 0.04),
-    (4.1, 0.17),
-    (6.0, 0.29),
-    (11.8, 0.36),
-];
+// Calibrated from paired canon4 projected gains on calibration images only.
+// Source: benchmarks/ship_rt24i_canon4_2026-11-04.md.
+use crate::calibration::{AQ_OFF_DELTA_420, AQ_OFF_DELTA_444};
 
 /// Adjustment to a predicted gain for a jpegli-lineage encode whose record
 /// says adaptive quantization was off. Zero without a verified record, when
@@ -111,9 +93,9 @@ pub(crate) fn aq_off_gain_delta(probe: &JpegProbe) -> f32 {
         return 0.0;
     }
     let pts: &[(f32, f32)] = if crate::chroma_full_of(probe) == Some(true) {
-        &AQ_OFF_DELTA_444
+        AQ_OFF_DELTA_444
     } else {
-        &AQ_OFF_DELTA_420
+        AQ_OFF_DELTA_420
     };
     crate::api::lerp(pts, probe.quality.value)
 }

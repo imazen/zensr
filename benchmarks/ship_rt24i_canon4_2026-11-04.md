@@ -1,116 +1,192 @@
-# canon4 realtime model: preparation and calibration blocker — 2026-11-04
+# Canon4 realtime restoration — 2026-11-04
 
-**Status: not shipped as the realtime default.** The f16 candidate and its
-four goldens are committed, but the old model references, routing curves, and
-identity gate remain in force. The requested complete refit conflicts with
-existing shape and gate expectations. Those expectations were not weakened.
+The realtime tool defaults now select `dejpeg_rt24i_canon4`. The library takes
+caller-loaded weights; its routing calibration is for this model, not arbitrary
+models. This is a source-tree update, not a crates.io release. The prior rt24g
+artifact remains available. See [dependencies](../docs/PRODUCTION_DEPENDENCIES.md).
 
-## Input and method
+## Evidence and image separation
 
-The production candidate TSV on i265 is
-`/home/lilith/data/zensr/benchmarks/prod_dejpeg_rt24i_canon4_nogate_2026-11-04.tsv`
-(SHA-256 `704e52b0f32bd526e01fcaa725f9fceb9be501ee85639e4c5326694e9c8ba5d1`).
-It contains 60,480 rows: 63 PNG references × 8 encoder legs × 2
-subsamplings × 10 qualities (15, 35, 55, 75, 85, 88, 90, 92, 94, 96) ×
-6 arms. Each arm has 10,080 rows. `tools/canon4_calibration.py` pairs each
-cell with `identity_off`, rejects duplicate and missing relevant arms, and
-reports both `model_off` and `model_proj` differences. It uses
-`gate_recalibrate.py`'s deterministic hash partition by filename: 33 images
-for calibration and 30 for validation. Run:
+The original two production TSVs remain untouched under
+`/home/lilith/data/zensr/benchmarks/` on i265:
+`prod_dejpeg_rt24g_nogate_2026-11-04.tsv` and
+`prod_dejpeg_rt24i_canon4_nogate_2026-11-04.tsv`.
+The candidate has SHA-256
+`704e52b0f32bd526e01fcaa725f9fceb9be501ee85639e4c5326694e9c8ba5d1`.
+Each has 63 images × 8 encoder legs × 420/444 × 10 qualities
+(15,35,55,75,85,88,90,92,94,96) × 6 arms = 60,480 rows.
+
+The current harness added q98/q100 on the same 63 files and all 8 encoder legs,
+gate disabled. `canon4-tail.tsv` contains the additional 12,096 score rows.
+The combined grid is 12,096 image-cells, each with six arms. References are PNG,
+from the canonical effective held-out split used by the original runs. The
+calibration/validation subdivision uses the existing `hash_stem(filename)%2`:
+33 calibration images and 30 validation images. All encoder/quality variants of
+one image stay in its half. Repeated encodes are not independent images.
+
+The original TSV records the pre-record probe, rounded to one decimal, and
+lacks coefficient statistics. The metadata-only harness reproduced every
+original identity SSIM2 score and probe field exactly, then recorded the real
+record-corrected family/scale/value and zero-AC fraction. The same join check
+covers the tail. No nominal quality was substituted for runtime probe quality.
+Notably, zenjpeg:mozbase changes from an Unknown fingerprint to a recorded
+Mozjpeg-family probe; turbo often fingerprints as ImageMagick.
+
+Additional artifacts are retained under
+`/home/lilith/tmp/handoff/canon4-ship/` on i265:
+
+- `probe-metadata.tsv`, `tail-metadata.tsv`, `canon4-tail.tsv`;
+- `fit-final.json`: all fitted points, calibration/validation summaries,
+  threshold search and per-encoder/ss/q raw/projected medians and harm counts;
+- `tail-binaries.sha256`, `tail-eval.log`, `tail-metadata.log`;
+- `runtime-policy.tsv`, `runtime-policy.log`: final Rust decision verification;
+- `final-tests.log`, `final-clippy-recheck.log`, `golden-check.log`.
+
+The 555-second tail run used run-heavy: peak RSS 0.48 GiB, minimum available
+22,359 MiB, peak load 11.15. Metadata for the original grid took 151 seconds:
+peak RSS 0.45 GiB, minimum available 22,746 MiB, peak load 8.29. No timing
+comparison between model weights is claimed.
+
+## Fit and skip policy
+
+`tools/fit_canon4.py` rejects duplicate/missing joins and any changed identity
+score or original probe. Curves use paired `model_proj - identity_off` gains.
+`model_off - identity_off` is also retained in the cell report; this is the
+unprojected guarded-model arm, not a pure network-only measurement.
+
+The four primary encoders (turbo, mozjpeg, jpegli, zenjpeg) fit the curves;
+additional zenjpeg variants do not multiply that encoder's weight in the curve
+fit. The runtime quality axes stay separate. Each subsampling and content class
+has its own measured curve. Weighted isotonic regression smooths per-cell
+medians into monotone curves, with cell sample count as the weight. Thus the
+values are monotone fitted medians, not claims that every sample median is
+monotone. Interpolation clamps beyond the measured range.
+
+The content class is the actual coefficient statistic, not a directory label.
+Thresholds 0.05 through 0.55 at increments of 0.05 are compared on calibration
+images only, including the fitted gate and AQ adjustment. Threshold **0.20**
+maximizes mean realized calibration gain at the existing min_gain=0.25.
+The held-out half does not choose the threshold or curves. Paired AQ-off minus
+AQ-on projected gains replace the rt24g AQ correction in `record.rs`.
+
+The high-quality gate uses the historical definition of harm (loss greater
+than 0.1 SSIM2). The earlier narrative did not specify a numeric fitting
+algorithm; this implementation makes it explicit: a sampled tail cell is
+harmful if at least half of its calibration observations are harmed. The
+boundary is the first sampled value of a contiguous harmful tail. It uses
+family/scale/subsampling, pooling records sharing those runtime inputs.
+This is a routing policy, not a guarantee that every gated image would lose.
+
+| gate | old 420 / 444 | canon4 420 / 444 |
+|---|---|---|
+| IJG quality, including Unknown-family fallback | 94.5 / 88 | 96 / 96 |
+| Mozjpeg quality | 94.5 / 88 | 100 / 96 |
+| Butteraugli distance (gate at or below) | 0.6 / 1.3 | 0.46 / 0.28 |
+
+Unknown quality **scales** are not treated as IJG quality by the estimator.
+Other chroma geometries retain the subsampled gate fallback; full consistency
+is not claimed for their unprojected chroma.
+
+## Constants before and after
+
+Full arrays and provenance comments live in `src/calibration.rs` inside
+zensr-zenjpeg and are generated from the frozen fit. Representative values
+below cover every curve; distance entries are interpolated at d=1.3.
+
+| curve | axis value | before | after |
+|---|---:|---:|---:|
+| G420 | 94 | -0.2700 | +0.4590 |
+| GRAPHIC420 | 75 | +3.7700 | +3.2715 |
+| PHOTO420 | 75 | +0.1000 | +0.6770 |
+| G444 | 94 | -0.6200 | +0.1050 |
+| GRAPHIC444 | 75 | +3.5100 | +2.7580 |
+| PHOTO444 | 75 | -0.0900 | +0.5910 |
+| DIST420 | 1.3 | -0.1100 | +0.6090 |
+| GRAPHIC_DIST420 | 1.3 | +0.4700 | +0.7060 |
+| PHOTO_DIST420 | 1.3 | -0.5700 | +0.4240 |
+| DIST444 | 1.3 | -0.2600 | +0.4635 |
+| GRAPHIC_DIST444 | 1.3 | +0.2400 | +0.7106 |
+| PHOTO_DIST444 | 1.3 | -0.7100 | +0.3194 |
+
+Zero-AC threshold: 0.25 → 0.20. The former low-q 444 approximation (420 shifted
+by four quality points) is removed; 444 is measured directly. Projection slack
+is retained (relative IJG 0.15, Mozjpeg 0.35, Cjpegli/Unknown 0.45; absolute
+Cjpegli 0.5, others 1.5). It describes encoder/decoder coefficient mismatch,
+not the restoration model. These score grids do not identify an optimal new
+slack, and the entire projected arm is measured with the retained values.
+This is **not** a fresh slack calibration or proof that its intervals contain
+the original coefficients for every file.
+
+## Held-out quality, work and harm
+
+30 images × 8 encoders × 2 subsamplings × 12 qualities = 5,760 observations.
+Harm fraction is over all observations, not just restored ones. Skipped cells
+receive zero gain. The old-policy comparison uses the same canon4 output
+measurements and the old estimator/gates, with the skip implementation repaired;
+it is not a model A/B comparison and does not credit the old skip defect.
+
+| policy | mean SSIM2 gain | restored | harmed (>0.1 loss) |
+|---|---:|---:|---:|
+| old rules, repaired skip | +1.3340 | 30.42% | 1.11% |
+| canon4 Auto, Fidelity | +1.6261 | 68.65% | 6.68% |
+| canon4 Auto, Conservative (existing margin 6) | +1.0409 | 25.50% | 1.06% |
+
+Default routing buys additional gain at the cost of more per-image regressions.
+The primary four-encoder subset gives +1.7744 mean gain, 69.27% restored and
+5.90% harmed. These sample results are not a never-worse promise. Near-pristine
+420 medians can differ in sign between calibration and validation; the tail
+is not a universal physical crossover. The score grid starts at q15; q5–14
+and multi-generation inputs were not recalibrated here. Existing low-q decode
+policy remains unchanged.
+
+## Runtime correctness and model verification
+
+The review found two defects independent of the fitted values:
+
+- Auto rejection and Routing::Never still ran the model while labeling its
+  output Unchanged. They now return before model inference; skipped requests
+  also bypass deblocking. Regression tests compare pixels with the decoder.
+- Luma-only projection on 422/440 could claim full consistency. Strict requests
+  now return decoded pixels, and non-strict requests report the missing chroma
+  projection. Projection with nonzero slack is not a bit-exact re-encode
+  guarantee; the API documentation now states this limit.
+
+Model weights are **86,406 bytes** (43,203 f16 values), SHA-256
+`c3db9373791270bbe5493d3ee98cd4f62296510fe6931073e2966f433e9a5cf4`.
+Both saved PyTorch goldens reproduced exactly from the f16-roundtripped
+weights. Rust whole/tiled maximum errors were 2.44e-5 and 2.00e-5 for 40×36
+and 17×13, with no non-finite values. A permanent runtime test loads the actual
+committed artifact, checks both goldens, and requires whole/tiled equality.
+The f32 export remains untracked; the original rt24g directory is retained.
+
+The user authorized updating model-dependent tests. The q94-negative
+assumption is replaced by positive 420 q94 and negative q98/q100 checks.
+The universal 444-below-420 and graphic-above-photo assumptions are restricted
+to their measured bands, with measured near-pristine crossings preserved.
+Monotonicity, pristine-negative endpoints, actual decoder equality, geometry,
+margin direction, and the artifact golden checks remain enforced.
+
+`cargo test -p zensr-zenjpeg -p zensr-micro` passed: 32 micro and 34 zenjpeg
+tests, plus doc tests. run-heavy: peak RSS 0.22 GiB, minimum available 23,119 MiB,
+peak load 5.22. Clippy with all targets and warnings denied passed. Calibration
+integrity tests prove held-out gain changes cannot change fitted curves/gates.
+
+Final runtime verification regenerated all 12,096 image-cells and checked
+24,192 Fidelity/Conservative gate and Auto decisions against the frozen fit:
+**zero decision mismatches**. All identity/probe joins matched. Maximum
+Python-versus-f32 estimate difference was 0.00005965 SSIM2. The 184-second
+verification used run-heavy: peak RSS 0.39 GiB, minimum available 22,764 MiB,
+peak load 9.01. `tools/check_canon4_policy.py` performs this check.
+
+## Reproduction
 
 ```sh
-just canon4-calibration /home/lilith/data/zensr/benchmarks/prod_dejpeg_rt24i_canon4_nogate_2026-11-04.tsv
+python3 tools/fit_canon4.py \
+  --scores /home/lilith/data/zensr/benchmarks/prod_dejpeg_rt24i_canon4_nogate_2026-11-04.tsv /home/lilith/tmp/handoff/canon4-ship/canon4-tail.tsv \
+  --metadata /home/lilith/tmp/handoff/canon4-ship/probe-metadata.tsv /home/lilith/tmp/handoff/canon4-ship/tail-metadata.tsv \
+  --out /home/lilith/tmp/handoff/canon4-ship/fit-final.json \
+  --rust-output crates/zensr-zenjpeg/src/calibration.rs
+python3 -m unittest discover -s tools -p test_fit_canon4.py
 ```
 
-The TSV stores the original probe family and a rounded probe value. It does
-not store the probe scale, the record-corrected probe, or the luma zero-AC
-fraction. At encoder q96, turbo probes as `ImageMagick`, mozjpeg as `Mozjpeg`,
-jpegli and most zenjpeg legs as `CjpegliYcbcr`, and zenjpeg:mozbase as
-`Unknown`. In the last case the original probe value is 93; the verified
-record may change family and quality in the actual restore path. Do not fit
-record-aware thresholds using the original probe columns as if they were the
-values after `record::apply_record`. The TSV also has no slack variants and
-no q98/q100 cells, so those quantities cannot be re-estimated from it alone.
-
-## Curve conflict
-
-The existing `api::tests::gain_curve_is_negative_on_near_pristine_input`
-requires a negative quality-only estimate for **both** subsamplings at q94,
-q96, q98 and q100. For the directly relevant IJG-family legs (turbo and
-mozjpeg), pooling the two encoders at q94 gives:
-
-| subsampling | arm minus identity | calibration median, 66 pairs | validation median, 60 pairs |
-|---|---|---:|---:|
-| 420 | model_off | +0.294 | +0.170 |
-| 420 | model_proj | +0.459 | +0.441 |
-| 444 | model_off | +0.058 | -0.0025 |
-| 444 | model_proj | +0.105 | +0.0065 |
-
-These are per-file paired deltas, pooled over the two encoders; the two
-observations for one file are correlated and are not 66 independent images.
-A median-fitted 420 q94 anchor would be positive in both halves, contradicting
-the established negative-sign test. The unmodified old curve at that point
-is -0.27. Fitting a negative value and describing it as this dataset's median
-would be false; changing the assertion would weaken a contract the brief
-explicitly preserves. This needs a decision on that contract before a faithful
-median refit can land.
-
-The gate also has a behavioral constraint: `high_q_gate_is_stricter_at_444`
-requires a zenjpeg 444 encode at q90 and q92 to gate. On this grid zenjpeg
-444's projected gain medians were +0.376/+0.264 at q90 and +0.186/+0.168 at
-q92 (calibration/validation respectively). Its original recorded probe values
-are 1.1 and 0.7; the gate currently fires on distance ≤1.3. Before fitting a
-replacement, capture the post-record probe for the measured files and decide
-how to reconcile those positive cells with the gate test.
-
-For comparison, turbo 444 q96 projected restoration harmed 29 of 33
-calibration images and 24 of 30 validation images, with medians -0.353 and
--0.3755 respectively. This is strong evidence for an identity gate at that
-cell, but does not identify an exact threshold between the sampled q94 and
-q96, or determine the behavior of the other families beyond q96.
-
-## Constants and gate
-
-No calibrated constants or gate thresholds were changed: the current 420/444
-IJG thresholds remain 94.5/88, and the distance thresholds remain 0.6/1.3.
-G420/G444, DIST420/DIST444, content-specific curves, zero-AC threshold, and
-projection slack remain the previous-model values. The existing gate and
-estimator can therefore miss gains from the candidate; the candidate must not
-be called the new default on this evidence.
-
-To complete the requested fit, recover or reproduce the corresponding encoded
-files and record the post-`apply_record` scale/family/value and zero-AC
-fraction for each image-cell, with provenance matching this TSV. Measure any
-slack choices and the unobserved high-q tail if those constants are to be
-refitted. Resolve the sign and gate contracts explicitly, then fit on the 33
-calibration images, score the selected rule on the 30 held-out images, rerun
-all shape and behavioral tests, and repoint the defaults and documentation.
-
-## Artifact verification
-
-`dejpeg_rt24i_canon4/weights_f16.raw` SHA-256 is
-`c3db9373791270bbe5493d3ee98cd4f62296510fe6931073e2966f433e9a5cf4`.
-The f16 bytes match conversion of the local f32 training export. Using
-`tools/verify_adopted_f16.py`, the saved 40×36 and 17×13 PyTorch outputs both
-match an f16-roundtripped forward exactly (max absolute error 0). The Rust
-`zensr-adopted-verify` checks both whole and tiled paths: maximum absolute
-errors versus these goldens were 2.44e-5 and 2.00e-5, respectively, with no
-non-finite outputs. The f32 export is not committed.
-
-Baseline `cargo test -p zensr-zenjpeg -p zensr-micro` passed with the original
-routing and gate intact: 31 micro and 32 zenjpeg unit tests passed, including
-the shape tests. The run used `run-heavy --mem 16G --jobs 6`: peak RSS 0.73
-GiB, minimum available 22,155 MiB, peak load 4.41. This verifies the existing
-code, not a refit or a completed model swap.
-
-## Continuation: metadata recovered (2026-11-04)
-
-The user authorized updating model-dependent tests. A metadata-only mode in
-`dejpeg_eval` now captures the real API report after record correction and the
-luma zero-AC fraction. The restored skip implementation avoids model inference.
-`just canon4-metadata` reproduced all 10,080 original cells with identical
-rounded identity SSIM2 and original probe fields. Metadata is retained at
-`/home/lilith/tmp/handoff/canon4-ship/probe-metadata.tsv` on i265. The 151-second
-run used run-heavy: peak RSS 0.45 GiB, minimum available 22,746 MiB, peak load
-8.29. These checks establish the join against the original production scores;
-the earlier missing-metadata blocker is resolved.
+Original production-decision context: [prod_models_2026-11-04.md](prod_models_2026-11-04.md).
