@@ -129,6 +129,8 @@ class PublicationIntegrity(unittest.TestCase):
                     probe_family='ImageMagick',probe_scale='IjgQuality',probe_value='50',
                     estimated_gain='.5',bpp='1',gate='false',conservative_gate='false',
                     identity_ssim2='80',restored_ssim2=str(79+2*feature),coef_zero_ac_blocks=str(feature))
+                for artifact in ('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact','identity_butter_map','restored_butter_map'):
+                    row[artifact]='synthetic-'+artifact
                 for metric in ('psnr','butter_max','butter_pnorm3'):
                     row['identity_'+metric]='1';row['restored_'+metric]='1'
                 with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
@@ -169,6 +171,12 @@ class PublicationIntegrity(unittest.TestCase):
         report=json.loads((root/'report.json').read_text())
         self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)
         self.assertEqual(report['policies']['oracle_positive']['harm_count'],0)
+        self.assertEqual(report['policies']['oracle_positive']['worst_origin_cases'],[])
+        cases=report['policies']['ungated']['worst_origin_cases']
+        self.assertEqual(cases[0]['gain'],-1.)
+        self.assertEqual(len(cases),len({c['origin'] for c in cases}))
+        self.assertEqual([c['gain'] for c in cases],sorted(c['gain'] for c in cases))
+        self.assertTrue(all(c['jpeg_artifact']=='synthetic-jpeg_artifact' for c in cases))
         self.assertIn('paired_vs_fidelity',report['policies']['coefficient/budget-0'])
         (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t64\nmanifest_sha256\tsynthetic-subset\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):

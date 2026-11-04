@@ -200,6 +200,22 @@ def summary(gain,harm,limits,decision,groups):
     return values
 
 
+
+def worst_cases(rows,gain,harm,decision,limit=10):
+    """Trace losses to retained artifacts, with one worst cell per origin."""
+    order=sorted(np.flatnonzero(decision & (gain<0)),key=lambda i:(gain[i],rows[i]['origin'],rows[i]['file'],rows[i]['encoder'],rows[i]['ss'],rows[i]['nominal_q']))
+    seen=set();cases=[]
+    columns=('file','origin','content','ref_kind','reference_sha256','size','width','height',
+             'encoder','ss','nominal_q','identity_ssim2','restored_ssim2',
+             'jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact',
+             'identity_butter_map','restored_butter_map')
+    for i in order:
+        if rows[i]['origin'] in seen:continue
+        seen.add(rows[i]['origin'])
+        cases.append(dict({c:rows[i][c] for c in columns},gain=float(gain[i]),harm=bool(harm[i])))
+        if len(cases)==limit:break
+    return cases
+
 def threshold_choices(pg,pr,gain,harm,groups,allowed=None):
     w=origin_weights(groups);w/=w.sum()
     allowed=np.ones(len(gain),dtype=bool) if allowed is None else allowed
@@ -471,6 +487,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
             secondary[metric]=dict(origin_mean_improvement=float(weights@delta),
                 origin_fraction_worse=float(weights@(delta<0)),worst_improvement=float(delta.min()))
         entry['secondary_metrics']=secondary
+        entry['worst_origin_cases']=worst_cases(rows,gain,harm,d)
         entry['paired_vs_fidelity']=paired_interval(gain,harm,d,choices['current_fidelity'],groups)
         entry['paired_vs_conservative']=paired_interval(gain,harm,d,choices['current_conservative'],groups)
         strata={}

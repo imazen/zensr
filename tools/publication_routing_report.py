@@ -34,6 +34,8 @@ def render(source, output):
                        gain_difference_vs_conservative_low=p['paired_vs_conservative']['gain_difference_95'][0],
                        gain_difference_vs_conservative_high=p['paired_vs_conservative']['gain_difference_95'][1])
             writer.writerow(row)
+    worst={name:p['worst_origin_cases'] for name,p in policies.items()}
+    (output/'worst-cases.json').write_text(json.dumps(worst,indent=2)+'\n')
     families=sorted({name.split('/')[0] for name in policies if '/' in name})
     baseline_names=['unchanged','current_fidelity','current_conservative','ungated']
     fig,axes=plt.subplots(math.ceil(len(families)/3),3,figsize=(13,3.8*math.ceil(len(families)/3)),squeeze=False,sharex=True,sharey=True,layout='constrained')
@@ -73,7 +75,8 @@ def render(source, output):
              'Post-inference policies pay restoration cost even when rejecting output.',
              data.get('uncertainty',''),data.get('legacy_chooser',''),data.get('training_provenance',''),
              'Size generalization, encoder mode coverage and runtime cost require their own evidence; this table alone does not establish publication readiness.',
-             '', '[Detailed policies and intervals](policies.csv). [Frontier figure](frontier.svg).', '']
+             '', '[Detailed policies and intervals](policies.csv). [Frontier figure](frontier.svg).',
+             '[Worst losses by origin, with retained artifact paths](worst-cases.json). Cases are diagnostics, not inputs to policy selection.', '']
     (output/'report.md').write_text('\n'.join(text))
     provenance=dict(report_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                     selection_sha256=data['selection_sha256'],test_cells_sha256=data['test_cells_sha256'],

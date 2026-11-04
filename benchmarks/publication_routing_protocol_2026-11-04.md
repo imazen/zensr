@@ -240,3 +240,13 @@ possible image. Sweep: run-heavy rc=0, 4 s, peak RSS 0.04 GiB, minimum available
 22,173 MiB, peak load 15.96. Audit: rc=0, 1 s, peak RSS 0.02 GiB, minimum
 available 22,299 MiB, peak load 15.10. Artifacts: `mode-pilot-v1` under the
 [study root](publication_routing_2026-11-04.pointer.md).
+
+## Severity inspection
+
+For every fixed operating point, retain the ten worst affected origins (one
+worst cell per origin), ordered by realized SSIM2 loss. Each diagnostic includes
+its quality scores, curve-harm flag, content/encoder/geometry, and retained JPEG,
+reference, decoded, restored and difference-map paths. Empty lists mean no
+negative realized gains in that evaluated grid. These are post-freeze diagnostic
+cases, never reserved-set examples for retuning the policies. Synthetic tests
+check ordering, origin deduplication, and the empty reference-oracle case.
