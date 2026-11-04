@@ -141,12 +141,16 @@ coverage digest is
 
 The supplemented 45-reference, 44-origin grid has 402,408 required cells across
 all 20 sizes, the same 61 quality values and four encoders/subsampling pairs.
-It writes directly to array storage, exposed on i265 at
+Its logical output is exposed on i265 at
 `/home/lilith/data/zensr-array/development-size` (verified 2026-11-04).
-This separate root avoids placing the bulk output in the storage cache pool.
+Artifact writes now use owner-approved bounded NVMe staging, with verified
+transfers to the canonical array while generation is frozen. Operational guards
+trigger at 72 GiB staged or 520 GiB free, inside the approved 80 GiB / 500 GiB
+limits; these are polling guards. The original local stage remains preserved.
+The metadata and cell tables continue to reside on the canonical array.
 The original primary artifact root is unchanged. The complete manifest and
 selection metadata are retained beside the dense run. `IDENTITY.tsv` retains
-the frozen executable and encoder dependencies. Four workers run under a 16 GiB
+the frozen executable and encoder dependencies. Six workers run under a 16 GiB
 cap. `first-cell-artifacts.json` records successful hash, decompression and JPEG
 inspection of the first sampled completed cell; a full audit remains mandatory.
 
