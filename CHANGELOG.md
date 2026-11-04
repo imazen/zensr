@@ -74,6 +74,11 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Fixed
 
+- Partial luma-only projection on 4:2:2/4:4:0 no longer reports full
+  consistency. Requests requiring consistency return decoded pixels; other
+  requests explicitly report unprojected chroma. Clarified that calibrated
+  projection slack does not guarantee bit-exact coefficient re-encoding.
+
 - Routing skips now return the deployment decode before model inference.
   Previously `Routing::Never` and an Auto rejection still ran restoration
   while labeling its output unchanged. A real-model regression test compares

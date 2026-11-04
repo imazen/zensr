@@ -136,9 +136,10 @@ pub enum NotCertified {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Consistency {
-    /// Every output coefficient lies inside the interval the file's own
-    /// quantisation tables certify, so re-encoding with those tables
-    /// reproduces the input's coefficients.
+    /// Projection was applied to all three YCbCr components using the
+    /// family-calibrated slack. This is not a bit-exact re-encoding guarantee:
+    /// slack expands the quantisation intervals, and RGB conversion and
+    /// rounding can move coefficients after projection.
     ///
     /// This is not only a safety property. The projection's measured
     /// contribution *grows* with quality — +0.39 to +1.31 ssim2 from q90 to
@@ -868,7 +869,24 @@ impl<'a> Request<'a> {
         if skip {
             cfg = cfg.with_projection(Projection::Off);
         }
-        let r = crate::restore_jpeg_routed(self.jpeg, model, &cfg, skip)?;
+        let geometry_unavailable = crate::chroma_full_of(&probe_for_routing).is_none();
+        let mut r = crate::restore_jpeg_routed(
+            self.jpeg,
+            model,
+            &cfg,
+            skip || (self.require_consistency && geometry_unavailable),
+        )?;
+        let consistency_unavailable = geometry_unavailable || r.report.projection.len() != 3;
+        if self.require_consistency
+            && consistency_unavailable
+            && !skip
+            && !r.report.skipped_model_high_q
+            && !geometry_unavailable
+        {
+            // A partial projection cannot satisfy the request. Return the
+            // decode, never restored pixels labeled Unchanged.
+            r = crate::restore_jpeg_routed(self.jpeg, model, &cfg, true)?;
+        }
         let chroma = match r.report.chroma_full {
             Some(true) => Chroma::Full,
             Some(false) => Chroma::HalfBoth,
@@ -903,7 +921,7 @@ impl<'a> Request<'a> {
                 report,
             });
         }
-        let consistency = if report.clamped_fraction.is_empty() {
+        let consistency = if consistency_unavailable {
             Consistency::NotEnforced(NotCertified::ChromaGeometry)
         } else {
             Consistency::Certified
@@ -991,6 +1009,54 @@ mod tests {
                 .unwrap();
             assert!(matches!(outcome, Outcome::Unchanged { .. }));
             assert_eq!(outcome.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+        }
+    }
+
+    #[test]
+    fn unsupported_chroma_cannot_claim_full_consistency() {
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model = zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let restorer = Restorer::new().with_tier(Budget::Quality, model);
+        for ss in [
+            zenjpeg::encoder::ChromaSubsampling::HalfHorizontal,
+            zenjpeg::encoder::ChromaSubsampling::HalfVertical,
+        ] {
+            let jpg = jpeg_at(55.0, ss);
+            let decoded = zenjpeg::decoder::Decoder::new()
+                .deblock(zenjpeg::decoder::DeblockMode::Off)
+                .decode(&jpg, enough::Unstoppable)
+                .unwrap();
+            let strict = restorer
+                .restore(&jpg)
+                .budget(Budget::Quality)
+                .routing(Routing::Always)
+                .require_consistency(true)
+                .run()
+                .unwrap();
+            assert!(matches!(
+                strict,
+                Outcome::Unchanged {
+                    why: SkipReason::ConsistencyUnavailable(NotCertified::ChromaGeometry),
+                    ..
+                }
+            ));
+            assert_eq!(strict.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+            let loose = restorer
+                .restore(&jpg)
+                .budget(Budget::Quality)
+                .routing(Routing::Always)
+                .require_consistency(false)
+                .run()
+                .unwrap();
+            assert!(matches!(
+                loose,
+                Outcome::Restored {
+                    consistency: Consistency::NotEnforced(NotCertified::ChromaGeometry),
+                    ..
+                }
+            ));
         }
     }
 
