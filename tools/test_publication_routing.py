@@ -86,6 +86,8 @@ class PublicationIntegrity(unittest.TestCase):
                     probe_family='ImageMagick',probe_scale='IjgQuality',probe_value='50',
                     estimated_gain='.5',bpp='1',gate='false',conservative_gate='false',
                     identity_ssim2='80',restored_ssim2=str(79+2*feature),coef_zero_ac_blocks=str(feature))
+                for metric in ('psnr','butter_max','butter_pnorm3'):
+                    row['identity_'+metric]='1';row['restored_'+metric]='1'
                 with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
                     writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
             digest=hashlib.sha256()

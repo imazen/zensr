@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Render frozen reserved-test results; never select a deployment policy."""
 import argparse
+import collections
 import csv
 import hashlib
 import json
@@ -35,12 +36,13 @@ def render(source, output):
             writer.writerow(row)
     families=sorted({name.split('/')[0] for name in policies if '/' in name})
     baseline_names=['unchanged','current_fidelity','current_conservative','ungated']
-    fig,axes=plt.subplots(math.ceil(len(families)/3),3,figsize=(13,3.8*math.ceil(len(families)/3)),squeeze=False,layout='constrained')
+    fig,axes=plt.subplots(math.ceil(len(families)/3),3,figsize=(13,3.8*math.ceil(len(families)/3)),squeeze=False,sharex=True,sharey=True,layout='constrained')
     for ax,family in zip(axes.flat,families):
-        for baseline in baseline_names:
+        for baseline,marker in zip(baseline_names,('x','+','s','D')):
             p=policies[baseline]
-            ax.scatter(100*p['origin_harm'],p['origin_mean'],marker='x',s=30,color='0.5')
+            ax.scatter(100*p['origin_harm'],p['origin_mean'],marker=marker,s=30,color='0.5',label=baseline)
         points=[(name,p) for name,p in policies.items() if name.startswith(family+'/')]
+        labels=collections.defaultdict(list)
         for name,p in points:
             x=100*p['origin_harm'];y=p['origin_mean']
             # Percentile bootstrap intervals need not bracket the point estimate.
@@ -49,10 +51,13 @@ def render(source, output):
             ax.plot([x,x],p['origin_gain_95'],color='C0',alpha=.5)
             ax.scatter(x,y,s=22,color='C0')
             budget=float(name.split('budget-')[1])
-            ax.annotate(f'{100*budget:g}%',(x,y),xytext=(3,3),textcoords='offset points',fontsize=8)
+            labels[(x,y)].append(f'{100*budget:g}%')
+        for point,budgets in labels.items():
+            ax.annotate(', '.join(budgets),point,xytext=(3,3),textcoords='offset points',fontsize=8)
         ax.set_title(family.replace('_',' '));ax.set_xlabel('Held-out origin-balanced harm (%)')
         ax.set_ylabel('Held-out mean SSIM2 gain');ax.grid(alpha=.2)
     for ax in list(axes.flat)[len(families):]:ax.set_visible(False)
+    axes.flat[0].legend(fontsize=7,loc='best')
     fig.suptitle('Frozen routing operating points — labels are development harm budgets\nBars: pointwise 95% origin-bootstrap intervals; gray crosses: fixed baselines',fontsize=12)
     fig.savefig(output/'frontier.svg');fig.savefig(output/'frontier.pdf')
     fig.savefig(output/'frontier.png',dpi=160);plt.close(fig)

@@ -202,19 +202,25 @@ def runtime_gates():
     return gates
 
 
+def threshold_inputs(rows,gates):
+    scale=np.asarray([r['probe_scale'] for r in rows])
+    distance=scale=='ButteraugliDistance'
+    quality=np.isin(scale,['IjgQuality','MozjpegQuality'])
+    names=[('DISTANCE' if d else ('MOZJPEG' if r['probe_family']=='Mozjpeg' else 'IJG'))+'_'+r['ss'] for r,d in zip(rows,distance)]
+    return (np.asarray([r['probe_value'] for r in rows],dtype=np.float32),
+            np.asarray([gates[name] for name in names],dtype=np.float32),distance,quality,
+            np.asarray([r['estimated_gain'] for r in rows],dtype=np.float32))
+
+
+def threshold_from_inputs(values,choice):
+    value,boundary,distance,quality,gain=values
+    if choice['skip']:return np.zeros(len(value),bool)
+    gated=(distance & (value<=boundary+np.float32(choice['distance_margin']))) | (quality & (value>=boundary-np.float32(choice['quality_margin'])))
+    return (gain>=np.float32(choice['min_gain'])) & ~gated
+
+
 def threshold_decisions(rows,choice,gates):
-    if choice['skip']:return np.zeros(len(rows),bool)
-    decision=[]
-    for r in rows:
-        scale=r['probe_scale'];value=np.float32(r['probe_value']);ss=r['ss']
-        if scale=='ButteraugliDistance':
-            gated=value<=np.float32(gates['DISTANCE_'+ss])+np.float32(choice['distance_margin'])
-        elif scale in ('IjgQuality','MozjpegQuality'):
-            family='MOZJPEG' if r['probe_family']=='Mozjpeg' else 'IJG'
-            gated=value>=np.float32(gates[family+'_'+ss])-np.float32(choice['quality_margin'])
-        else:gated=False  # Matches the runtime's unknown-scale gate behavior.
-        decision.append(float(r['estimated_gain'])>=choice['min_gain'] and not gated)
-    return np.asarray(decision)
+    return threshold_from_inputs(threshold_inputs(rows,gates),choice)
 
 
 def threshold_frontier(rows,gain,harm,groups,gates):
@@ -227,10 +233,11 @@ def threshold_frontier(rows,gain,harm,groups,gates):
         expected=np.asarray([r[column]=='false' for r in rows])
         if not np.array_equal(threshold_decisions(rows,control,gates),expected):
             raise ValueError(f'threshold baseline disagrees with recorded runtime {column}')
+    values=threshold_inputs(rows,gates)
     candidates=[dict(skip=True,min_gain=0.,quality_margin=0.,distance_margin=0.,mean=0.,harm=0.,coverage=0.)]
     for minimum,qmargin,dmargin in itertools.product(MIN_GAINS,QUALITY_MARGINS,DISTANCE_MARGINS):
         c=dict(skip=False,min_gain=minimum,quality_margin=qmargin,distance_margin=dmargin)
-        d=threshold_decisions(rows,c,gates)
+        d=threshold_from_inputs(values,c)
         candidates.append(dict(c,mean=float(weights@(gain*d)),harm=float(weights@(harm&d)),coverage=float(weights@d)))
     return [dict(choose(candidates,budget),budget=budget) for budget in BUDGETS]
 
@@ -302,6 +309,11 @@ def fit(root,out):
         inner_train,inner_cal=next(GroupShuffleSplit(n_splits=1,test_size=.25,random_state=20261104+repetition).split(np.zeros(len(outer_train)),groups=groups[outer_train]))
         train=outer_train[inner_train];cal=outer_train[inner_cal]
         assert not (set(groups[train])&set(groups[cal]) or set(groups[train])&set(groups[audit]) or set(groups[cal])&set(groups[audit]))
+        calibration_rows=[rows[i] for i in cal];audit_rows=[rows[i] for i in audit]
+        for choice in threshold_frontier(calibration_rows,gain[cal],harm[cal],groups[cal],gates):
+            d=threshold_decisions(audit_rows,choice,gates)
+            repetition_results.append(dict(repetition=repetition,model='threshold',budget=choice['budget'],
+                calibration=choice,audit=summary(gain[audit],harm[audit],limits[audit],d,groups[audit])))
         for key in chosen:
             spec=all_models[key];x=inputs(rows,spec['features'])
             model=fit_model(x[train],gain[train],harm[train],groups[train],spec['config'],len(spec['features']))
@@ -380,6 +392,14 @@ def evaluate(root,selection,out):
             choices[f'{family}/budget-{c["budget"]:g}']=decisions(pg,pr,c)
     for name,d in choices.items():
         entry=summary(gain,harm,limits,d,groups);entry.update(bootstrap(gain,harm,d,groups))
+        weights=origin_weights(groups);weights/=weights.sum()
+        secondary={}
+        for metric,sign in (('psnr',1.),('butter_max',-1.),('butter_pnorm3',-1.)):
+            delta=sign*np.asarray([float(r['restored_'+metric])-float(r['identity_'+metric]) for r in rows])*d
+            if not np.isfinite(delta).all():raise ValueError('non-finite secondary metric')
+            secondary[metric]=dict(origin_mean_improvement=float(weights@delta),
+                origin_fraction_worse=float(weights@(delta<0)),worst_improvement=float(delta.min()))
+        entry['secondary_metrics']=secondary
         entry['paired_vs_fidelity']=paired_interval(gain,harm,d,choices['current_fidelity'],groups)
         entry['paired_vs_conservative']=paired_interval(gain,harm,d,choices['current_conservative'],groups)
         strata={}
