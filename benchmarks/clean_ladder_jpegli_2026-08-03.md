@@ -58,8 +58,8 @@ Fitted on 30 calibrate images, validated on the 34 held out:
 | **measured distance curve** | **+0.7940** | **0.30** | **0.03** |
 | per-image oracle (ceiling) | +1.0795 | 0.51 | 0.00 |
 
-Realized quality is a tie — the 0.006 gap is an order of magnitude below the
-~0.3 ssim2 metric floor. The difference is everywhere else: the measured curve
+The measured mean quality gap is 0.006 SSIM2. This alone does not establish
+equivalence; 0.3 SSIM2 was a practical threshold, not a metric resolution limit. The difference is everywhere else: the measured curve
 does **half the work** and harms **one sixth as many images** (3% of cells vs
 17%).
 

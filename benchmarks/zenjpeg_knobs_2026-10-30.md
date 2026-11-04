@@ -48,8 +48,8 @@ Findings:
   more gain without AQ at q15-35 (80-92% of files), and AQ costs ~4 ssim2 of
   identity fidelity at the same dial (it spends bits perceptually, not on SSIM).
   Worth a field (on/off + strength class), and worth a q-band in training data.
-- **Trellis / hybrid presets**: +0.1-0.15, 60-70% win — at the metric floor
-  (ROADMAP §0.4: <0.3 is unresolved). Record it as a flag for recompression use,
+- **Trellis / hybrid presets**: +0.1-0.15, 60-70% win — below the historical 0.3 practical threshold. This does not establish
+  numerical equivalence or imperceptibility. Record it as a flag for recompression use,
   but it does not justify model routing. `auto_optimize` is trellis at q50+ only.
 - **Deringing: no effect on gain** (median 0.00). Not a restoration field.
 - **Pre-blur**: −0.2 gain and −3 identity. Worth a byte (σ in 1/16 units); it

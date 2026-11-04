@@ -22,7 +22,7 @@ Verdict rule (ROADMAP §0.2): `dejpeg_eval` on the clean refs
 (`~/data/zensr/imazen-26-clean-2026-10-30`), same grid as
 `zenjpeg_knobs_2026-10-30.md` plus the mozjpeg and jpegli legs, paired per
 file via `tools/knob_report.py`. The specialist ships only if it beats the
-generalist on the zenjpeg legs by more than the metric floor (0.3 ssim2) on
+generalist on the zenjpeg legs by more than the fixed practical threshold (0.3 SSIM2; not a metric resolution limit) on
 most files AND the routing signal (record `TableSource`/family, or probe
 `Cjpegli*`) is available on the files it would serve.
 

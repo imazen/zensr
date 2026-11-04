@@ -56,8 +56,8 @@ calibrate half, reported on the held-out half:
 | oracle labels | +1.4781 | 0.46 | 0.03 | 100% | — |
 | per-image oracle | +1.7049 | 0.58 | 0.00 | — | — |
 
-**The chooser's extra 0.006 ssim2 is an order of magnitude below the ~0.3
-metric floor, and costs 16x more.** On a 512-crop realtime restore (~42 ms at
+**The recorded chooser gain difference is 0.006 SSIM2, with 16x feature cost.**
+The small mean gap alone does not establish numerical or perceptual equivalence. On a 512-crop realtime restore (~42 ms at
 0.16 s/MP) that is 11% overhead versus 0.7%. The coefficient path ships.
 
 Threshold 0.25 was chosen by maximising realized quality on the calibrate half

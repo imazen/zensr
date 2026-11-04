@@ -58,8 +58,9 @@ produce a better image at a given q, so there is less damage left to repair.
 Above q90 the effect vanishes into the noise (p = 1.0, 0.31, 0.45) — both
 encoders are near-pristine there and neither leaves much to recover.
 
-Sign tests rather than magnitude comparisons because the differences at high q
-sit below the ~0.3 ssim2 metric floor.
+The historical analysis used sign tests at high q. A 0.3 SSIM2 practical
+threshold is not a metric resolution limit; paired magnitude intervals remain
+relevant even for smaller effects.
 
 ## 2. NEGATIVE — the per-encoder crossover point is not identifiable at n=64
 
@@ -129,8 +130,8 @@ Refitting per-encoder curves is actively harmful (+1.85, and it declines half
 the restores) for the §2 reason: unpaired cell medians are too noisy at this
 sample size. Folding the encoder effect in as a *paired* offset — the
 statistically sound form — costs 0.011 ssim2 and saves 4 points of work. That
-difference is an order of magnitude below the metric floor, so it is a wash,
-not an improvement.
+difference is below the historical 0.3 practical threshold; this alone does
+not establish equivalence or imperceptibility.
 
 ## Conclusions
 
