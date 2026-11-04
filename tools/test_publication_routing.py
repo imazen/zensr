@@ -13,6 +13,39 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_staging_guard_does_not_resume_after_transfer_failure(self):
+        import publication_routing_stage as staging
+        from types import SimpleNamespace
+        capacity=[SimpleNamespace(f_bavail=gib*1024**3,f_frsize=1) for gib in (24,24,24,15,15)]
+        with patch.object(staging.os,'statvfs',side_effect=capacity), \
+             patch.object(staging.subprocess,'check_output',return_value='active\n'), \
+             patch.object(staging.subprocess,'run') as control, \
+             patch.object(staging,'drain',side_effect=OSError('archive unavailable')):
+            with self.assertRaisesRegex(OSError,'archive unavailable'):
+                staging.watch(Path('source'),Path('destination'),'writer.scope')
+        control.assert_called_once_with(['systemctl','--user','freeze','writer.scope'],check=True)
+
+    def test_staging_transfer_preserves_conflicts_and_requires_durability(self):
+        import publication_routing_stage as staging
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='staging-transfer-',dir=base))
+        data=b'preserve these artifact bytes';name=hashlib.sha256(data).hexdigest()+'.rgb8.zst'
+        source=root/'source'/name;source.parent.mkdir();source.write_bytes(data)
+        destination=root/'destination'/name
+        with patch.object(staging,'sync_directory',side_effect=OSError('sync failed')):
+            with self.assertRaisesRegex(OSError,'sync failed'):staging.transfer(source,destination)
+        self.assertEqual(source.read_bytes(),data)
+        self.assertEqual(destination.read_bytes(),data)
+        self.assertEqual(staging.transfer(source,destination),len(data))
+        self.assertFalse(source.exists());self.assertEqual(destination.read_bytes(),data)
+        source.write_bytes(data);destination.write_bytes(b'conflicting bytes')
+        with self.assertRaisesRegex(ValueError,'conflicting destination'):staging.transfer(source,destination)
+        self.assertEqual(source.read_bytes(),data)
+        self.assertEqual(destination.read_bytes(),b'conflicting bytes')
+        source.write_bytes(b'incomplete')
+        with self.assertRaisesRegex(ValueError,'corrupt staged'):staging.transfer(source,destination)
+        self.assertEqual(source.read_bytes(),b'incomplete')
+
     def test_size_representatives_ignore_outcomes_and_keep_singletons(self):
         from publication_routing_sizes import representatives
         rows=[]

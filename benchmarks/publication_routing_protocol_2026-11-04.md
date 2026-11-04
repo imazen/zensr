@@ -542,3 +542,26 @@ can flush pending writes. [bindfs forwards explicit fsync](https://raw.githubuse
 and does not register a flush callback. The transport process has its own 2 GiB
 memory cap and idle I/O priority. Exact mount/export cleanup commands are retained
 in the private execution record; no scientific input or artifact path changed.
+
+
+## Local staging verification
+
+The same six-reference, 512-pixel turbo q50 replay produced 12 cell tables
+byte-identical to the earlier array replay. Local generation completed with
+`rc=0 1s | peak-RSS 0.45GiB | min-avail 21948MiB | peak-load 9.89`.
+The staged transfer retained 66 artifacts (29,467,539 bytes) on the array;
+the full artifact audit passed there. These small operational timings do not
+establish end-to-end study throughput.
+
+`publication_routing_stage.py` transfers content-addressed files only while the
+writer scope is frozen, retaining open files in staging. It validates source
+and destination hashes, syncs the destination and directory, then releases the
+source copy. Corrupt bytes and conflicting destinations are preserved and fail
+closed. The free-space guard requests a drain after 8 GiB of additional disk
+use, with a 10 GiB minimum-free threshold; this is polling, not a hard quota.
+Any transfer failure leaves the writer frozen. Final draining and the full
+study artifact audit remain required before fitting. The frozen generator,
+scientific inputs and committed cell records are unchanged.
+
+The 21 analysis integrity tests pass, including synchronization failure,
+conflicting destination, corrupt staged data and failure-without-resume cases.

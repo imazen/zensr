@@ -203,6 +203,9 @@ publication-routing-analysis *args:
 publication-routing-tests:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} -m unittest discover -s tools -p 'test_publication_routing.py'
 
+publication-routing-stage *args:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_stage.py {{args}}
+
 publication-routing-report source output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_report.py "{{source}}" "{{output}}"
 
