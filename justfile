@@ -170,3 +170,6 @@ canon4-frontier *args:
 canon4-routing-tests:
     python3 -m unittest discover -s tools -p 'test_*canon4*.py'
     python3 -m unittest discover -s tools -p 'test_routing_frontier.py'
+
+publication-routing-manifest *args:
+    python3 tools/publication_routing_manifest.py {{args}}
