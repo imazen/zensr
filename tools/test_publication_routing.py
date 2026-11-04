@@ -13,6 +13,20 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_final_drain_requires_ended_writer_and_completion_marker(self):
+        import os
+        import publication_routing_remote_stage as remote
+        config=dict(writer_pid=os.getpid(),writer_scope='synthetic',complete_file='/absent',
+                    alias_root='/archive',tools={})
+        with self.assertRaisesRegex(ValueError,'PID still exists'):remote.ended_request(config)
+        config['writer_pid']=-1
+        with patch.object(remote.subprocess,'check_output',return_value=''):
+            with self.assertRaisesRegex(ValueError,'marker missing'):remote.ended_request(config)
+            config['complete_file']=__file__
+            request=remote.ended_request(config)
+        self.assertEqual(request['version'],'zensr-ended-native-stage-v1')
+        self.assertEqual(request['excluded'],[])
+
     def test_resumed_predictions_reject_corrupt_risk_and_domain(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         root=Path(tempfile.mkdtemp(prefix='prediction-checkpoint-',dir=base))
@@ -68,6 +82,10 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertFalse(paths[1].is_symlink());self.assertEqual(paths[1].read_bytes(),b'open artifact')
         self.assertEqual(native.drain(source,destination,request)['transferred'],0)
         self.assertEqual(native.usage(source)['payload_bytes'],len(b'open artifact'))
+        request.update(version='zensr-ended-native-stage-v1',writer_ended=True,writer_frozen=False,excluded=[])
+        self.assertEqual(native.drain(source,destination,request)['transferred'],1)
+        self.assertEqual(native.usage(source)['payload_bytes'],0)
+        self.assertEqual(paths[1].read_bytes(),b'open artifact')
 
     def test_remote_staging_observation_failure_freezes_writer(self):
         import publication_routing_remote_stage as remote

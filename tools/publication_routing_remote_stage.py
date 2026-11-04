@@ -63,8 +63,26 @@ def frozen_request(config):
                 alias_root=config['alias_root'],excluded=sorted(excluded),tools=config['tools'])
 
 
-def transfer_batch(config,log_root):
-    request=frozen_request(config)
+def ended_request(config):
+    # A reused PID is an error too: do not infer completion from a different
+    # process occupying the old PID or from a vanished scope alone.
+    if Path(f"/proc/{config['writer_pid']}").exists():
+        raise ValueError('writer PID still exists; final drain refused')
+    group=subprocess.check_output(['systemctl','--user','show',config['writer_scope'],
+                                   '--value','-p','ControlGroup'],text=True).strip()
+    if group:
+        root=Path('/sys/fs/cgroup')/group.lstrip('/')
+        if any(p.read_text().split() for p in root.rglob('cgroup.procs')):
+            raise ValueError('writer scope still has processes')
+    if not Path(config['complete_file']).is_file():
+        raise ValueError('successful generation marker missing')
+    return dict(version='zensr-ended-native-stage-v1',nonce=uuid.uuid4().hex,
+                writer_ended=True,writer_pid=config['writer_pid'],writer_scope=config['writer_scope'],
+                alias_root=config['alias_root'],excluded=[],tools=config['tools'])
+
+
+def transfer_batch(config,log_root,final=False):
+    request=ended_request(config) if final else frozen_request(config)
     request_file=log_root/(request['nonce']+'.request.json')
     request_file.write_text(json.dumps(request,indent=2)+'\n')
     log=log_root/(request['nonce']+'.transfer.log')
@@ -114,5 +132,9 @@ def watch(config,log_root):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('config',type=Path)
-    parser.add_argument('logs',type=Path);args=parser.parse_args()
-    watch(json.loads(args.config.read_text()),args.logs)
+    parser.add_argument('logs',type=Path);parser.add_argument('--final',action='store_true')
+    args=parser.parse_args();config=json.loads(args.config.read_text())
+    if args.final:
+        args.logs.mkdir(parents=True,exist_ok=True)
+        transfer_batch(config,args.logs,final=True)
+    else:watch(config,args.logs)

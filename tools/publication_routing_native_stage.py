@@ -36,8 +36,11 @@ def usage(source):
 def drain(source,destination,request):
     # The coordinator owns systemctl on the compute host. The storage host
     # cannot independently observe that cgroup; bind its request and response.
-    if request.get('version')!='zensr-frozen-native-stage-v1' or request.get('writer_frozen') is not True:
-        raise ValueError('frozen writer request required')
+    frozen=(request.get('version')=='zensr-frozen-native-stage-v1' and request.get('writer_frozen') is True)
+    ended=(request.get('version')=='zensr-ended-native-stage-v1' and request.get('writer_ended') is True
+           and request.get('excluded')==[])
+    if not (frozen or ended):
+        raise ValueError('frozen writer or verified ended writer request required')
     if not re.fullmatch('[0-9a-f]{32}',request.get('nonce','')):raise ValueError('invalid request nonce')
     if request.get('tools')!=identities():raise ValueError('native stage tool identity changed')
     source=source.resolve();destination=destination.resolve()

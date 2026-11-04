@@ -652,3 +652,12 @@ The migration wrapper recorded `rc=0 433s | peak-RSS 0.03GiB | min-avail 21569Mi
 The native usage guard verified its tool identities and available space before
 the same six-worker generator resumed. All 27 integrity tests pass, including
 migration preservation and rejection of open artifacts before copying.
+
+Final native draining has a distinct ended-writer request: the recorded PID
+must be absent, its scope must contain no processes, and the successful-generation
+marker must exist. It does not pretend a departed writer is still frozen.
+The storage backend requires no excluded open paths for that request. The live
+watch keeps its immutable deployed helper identities; an updated helper snapshot
+is required before using the final-drain mode. All 29 integrity tests pass,
+including refusing a live PID and a missing completion marker and transferring
+an artifact that was excluded while the writer was active.
