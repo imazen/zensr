@@ -77,3 +77,32 @@ Linux x86-64/ARM64, Windows x86-64/ARM64, macOS ARM64, i686 through cross,
 and formatting/clippy/Python calibration integrity. This record is a docs-only
 follow-up. Recomputing from exact decimal differences also reproduced the
 frozen gain curves, gate thresholds and AQ deltas exactly.
+
+## Scope correction: richer policies were not compared
+
+This sweep is a threshold search around frozen binary zero-AC content routing,
+not an exhaustive search of routing algorithms. The repository also contains:
+
+- `crates/zensr-zenjpeg/src/chooser.rs`: a 21-feature zenanalyze logistic
+  photo/graphics classifier, behind `chooser`. `Request::run` in `api.rs`
+  still calls the coefficient classifier; enabling the feature does not wire
+  this classifier into Auto. Its model-specialist classification objective is
+  not a calibrated canon4 gain/harm predictor. Feature-version provenance is
+  also an explicitly documented gap in the chooser source.
+- `benchmarks/zenanalyze_routing_2026-08-04.md`: a continuous
+  `edge_slope_stdev` gain-routing experiment. The later
+  `docs/CORPUS-REPOINT-IMPACT.md` section 7 invalidates the old corpus evidence.
+  In addition, `source_features.rs` reads reference images and emits one
+  feature row shared across encodes; a deployment evaluation must instead
+  measure features on each decoded JPEG available at inference time.
+- `benchmarks/routing_features_2026-08-03.md` and `coef_features.rs`: richer
+  coefficient features, including surviving-AC magnitude and spatial damage
+  statistics. Historical failures to beat the binary classifier do not test
+  canon4 or the revised harm objective.
+
+These candidates need a clean, origin-separated comparison using the revised
+harm curve and inference-available inputs. The existing guards and projection
+are already included in the measured model outputs; their diagnostic values
+were not evaluated as a learned per-image accept/reject policy here. No claim
+that the threshold frontier is the best attainable policy is supported by this
+experiment.
