@@ -25,6 +25,7 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from publication_routing_cells import required_coverage
 
 BUDGETS=(0.,.005,.01,.02,.05)
 LAMBDAS=(0.,1.,2.,4.,8.,16.,32.,64.)
@@ -101,14 +102,14 @@ def read_cells(root, expected_role):
         if key in keys:raise ValueError('duplicate cell')
         keys.add(key);rows.append(r)
     if not rows:raise ValueError('empty study')
-    if (root/'COVERAGE.tsv').exists():
-        with (root/'COVERAGE.tsv').open() as f:
-            expected={(r['file'],r['size'],r['encoder'],r['ss'],r['q']) for r in csv.DictReader(f,delimiter='\t') if r['status']=='required'}
-        actual={tuple(r[c] for c in ('file','size','encoder','ss','nominal_q')) for r in rows}
-        if actual!=expected:raise ValueError('incomplete coverage')
+    expected=required_coverage(root)
+    actual={tuple(r[c] for c in ('file','size','encoder','ss','nominal_q')) for r in rows}
+    if actual!=expected:raise ValueError('incomplete coverage')
     audit=root/'AUDITED.json'
     if not audit.is_file():raise ValueError('artifact audit required before fitting or reporting')
-    if json.loads(audit.read_text())['cells_sha256']!=h.hexdigest():raise ValueError('cells changed after artifact audit')
+    audited=json.loads(audit.read_text())
+    if audited['cells_sha256']!=h.hexdigest():raise ValueError('cells changed after artifact audit')
+    if audited.get('audit_source_sha256')!=sha(Path(__file__).with_name('publication_routing_cells.py')):raise ValueError('audit tool changed; reaudit artifacts')
     return rows,h.hexdigest()
 
 
@@ -277,6 +278,7 @@ def fit(root,out):
     contract=study_contract(root)
     fit_contract=dict(cells_sha256=identity,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
+        audit_source_sha256=sha(Path(__file__).with_name('publication_routing_cells.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
         features=FEATURES,configs=CONFIGS,budgets=BUDGETS)
     # JSON normalization makes tuples compare identically after a restart.
@@ -400,6 +402,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     fit_contract=json.loads((selection/'fit.contract.json').read_text())
     if sha(selection/'fit.contract.json')!=frozen['fit_contract_sha256']:raise ValueError('fit contract changed after selection')
     if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
+    if sha(Path(__file__).with_name('publication_routing_cells.py'))!=fit_contract['audit_source_sha256']:raise ValueError('audit source changed after selection')
     if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')
     actual_contract=study_contract(root)
     expected_contract=json.loads(json.dumps(frozen['study_contract']))

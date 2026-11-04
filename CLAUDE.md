@@ -8,3 +8,8 @@
 - Quality-dependent routing risk measurements and limitations live in
   `benchmarks/routing_harm_curve_2026-11-04.md`. No routing policy guarantees
   never-worse perceptual quality.
+- Fixed during publication preparation: artifact deduplication in the new audit
+  could bypass a later row's dimension check. Every reference now checks shape,
+  even when byte verification is cached. Coverage is mandatory, audit-tool
+  identity is recorded, and previous audit records are retained on re-audit.
+  A cached-JPEG dimension regression and the four-cell real pilot pass.

@@ -28,48 +28,77 @@ def pilot(source, output):
     print(f'pilot: {len(selected)} references, sha256 {digest(output)}')
 
 
-def audit(root):
+def required_coverage(root):
+    with (root/'COVERAGE.tsv').open() as f:rows=list(csv.DictReader(f,delimiter='\t'))
+    seen=set();required=set()
+    allowed={'required','excluded_no_upscale','excluded_metric_aspect_domain','excluded_by_caller_unsupported'}
+    for r in rows:
+        key=tuple(r[c] for c in ('file','size','encoder','ss','q'))
+        if key in seen:raise ValueError('duplicate coverage entry')
+        if r['status'] not in allowed:raise ValueError('unknown coverage status')
+        seen.add(key)
+        if r['status']=='required':required.add(key)
+    if not required:raise ValueError('empty required coverage')
+    return required
+
+
+def inspect_artifact(artifact):
     from PIL import Image
-    seen=set();covered=set();count=0;verified=set();cell_hash=hashlib.sha256()
+    expected=artifact.name.split('.')[0]
+    if digest(artifact)!=expected:raise ValueError(f'changed artifact {artifact}')
+    if artifact.suffix=='.jpg':
+        with Image.open(artifact) as image:
+            image.load()
+            if image.format!='JPEG':raise ValueError('non-JPEG encoded artifact')
+            return dict(dimensions=image.size)
+    if artifact.suffix!='.zst':raise ValueError('unknown artifact format')
+    proc=subprocess.Popen(['zstd','-q','-d','-c',str(artifact)],stdout=subprocess.PIPE)
+    size=0
+    for chunk in iter(lambda:proc.stdout.read(1048576),b''):size+=len(chunk)
+    if proc.wait()!=0:raise ValueError(f'corrupt compressed artifact {artifact}')
+    return dict(bytes=size)
+
+
+def audit(root):
+    if not (root/'COMPLETE').is_file():raise ValueError('grid completion marker required')
+    planned=required_coverage(root)
+    if (root/'AUDITED.json').exists():
+        import time
+        history=root/'audit-history';history.mkdir(exist_ok=True)
+        (root/'AUDITED.json').rename(history/f'{time.time_ns()}.json')
+    seen=set();covered=set();count=0;verified={};cell_hash=hashlib.sha256()
     paths=sorted((root/'cells').glob('*.tsv'))
     if not paths:raise ValueError('no completed cells')
+    required_artifacts=('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact',
+                        'identity_butter_map','restored_butter_map')
     for path in paths:
         cell_hash.update(path.name.encode());cell_hash.update(path.read_bytes())
         with path.open() as f:rows=list(csv.DictReader(f,delimiter='\t'))
         if len(rows)!=1:raise ValueError(f'incomplete cell {path}')
         row=rows[0]
-        key=(row['reference_sha256'],row['size'],row['encoder'],row['ss'],row['nominal_q'])
+        key=tuple(row[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
         if key in seen:raise ValueError(f'duplicate {key}')
         seen.add(key)
-        covered.add((row['file'],row['size'],row['encoder'],row['ss'],row['nominal_q']))
-        for name,value in row.items():
-            if name.endswith('_artifact') or name.endswith('_butter_map'):
-                artifact=root/value
-                expected=artifact.name.split('.')[0]
-                if value in verified:continue
-                verified.add(value)
-                if digest(artifact)!=expected:raise ValueError(f'changed artifact {artifact}')
-                if artifact.suffix=='.jpg':
-                    with Image.open(artifact) as image:
-                        image.load()
-                        if image.size!=(int(row['width']),int(row['height'])):
-                            raise ValueError(f'independent decoder dimensions differ: {artifact}')
-                if artifact.suffix=='.zst':
-                    proc=subprocess.Popen(['zstd','-q','-d','-c',str(artifact)],stdout=subprocess.PIPE)
-                    size=0
-                    for chunk in iter(lambda:proc.stdout.read(1048576),b''):size+=len(chunk)
-                    if proc.wait()!=0:raise ValueError(f'corrupt compressed artifact {artifact}')
-                    channels=4 if '.butter-f32le.' in artifact.name else 3
-                    if size!=int(row['width'])*int(row['height'])*channels:
-                        raise ValueError(f'pixel/map size mismatch: {artifact}')
+        covered.add(tuple(row[c] for c in ('file','size','encoder','ss','nominal_q')))
+        dims=(int(row['width']),int(row['height']))
+        for name in required_artifacts:
+            value=row[name];artifact=root/value
+            expected_suffix='.jpg' if name=='jpeg_artifact' else ('.butter-f32le.zst' if name.endswith('_butter_map') else '.rgb8.zst')
+            if not artifact.name.endswith(expected_suffix):raise ValueError('artifact kind mismatch')
+            if value not in verified:verified[value]=inspect_artifact(artifact)
+            info=verified[value]
+            # Deduplicate expensive I/O, never the shape contract of each row.
+            if name=='jpeg_artifact':
+                if info['dimensions']!=dims:raise ValueError(f'independent decoder dimensions differ: {artifact}')
+            else:
+                bytes_per_pixel=4 if name.endswith('_butter_map') else 3
+                if info['bytes']!=dims[0]*dims[1]*bytes_per_pixel:
+                    raise ValueError(f'pixel/map size mismatch: {artifact}')
         count+=1
-    coverage=root/'COVERAGE.tsv'
-    if coverage.exists():
-        with coverage.open() as f:
-            planned={(r['file'],r['size'],r['encoder'],r['ss'],r['q']) for r in csv.DictReader(f,delimiter='\t') if r['status']=='required'}
-        if planned!=covered:raise ValueError(f'grid mismatch: missing {len(planned-covered)}, unexpected {len(covered-planned)}')
-    import json
-    (root/'AUDITED.json').write_text(json.dumps(dict(cells=count,artifacts=len(verified),cells_sha256=cell_hash.hexdigest(),independent_jpeg_decoder='Pillow/libjpeg'),indent=2)+'\n')
+    if planned!=covered:raise ValueError(f'grid mismatch: missing {len(planned-covered)}, unexpected {len(covered-planned)}')
+    import json,PIL
+    from PIL import features
+    (root/'AUDITED.json').write_text(json.dumps(dict(cells=count,artifacts=len(verified),cells_sha256=cell_hash.hexdigest(),audit_source_sha256=digest(Path(__file__)),independent_jpeg_decoder='Pillow/libjpeg',pillow_version=PIL.__version__,libjpeg_version=features.version('jpg')),indent=2)+'\n')
     print(f'{count} unique cells; {len(verified)} artifacts hashed, decompressed and shape-checked; JPEGs read independently')
 
 

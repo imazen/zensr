@@ -120,6 +120,7 @@ class PublicationIntegrity(unittest.TestCase):
         root=Path(tempfile.mkdtemp(prefix='synthetic-roundtrip-',dir=base))
         def dataset(name,role,count):
             folder=root/name;(folder/'cells').mkdir(parents=True)
+            coverage=[]
             for i in range(count):
                 feature=(i%11)/10
                 row=dict(file=f'{name}-{i}.png',content='synthetic',origin=f'{name}-{i//2}',
@@ -132,10 +133,14 @@ class PublicationIntegrity(unittest.TestCase):
                     row['identity_'+metric]='1';row['restored_'+metric]='1'
                 with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
                     writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
+                coverage.append(dict(file=row['file'],size=row['size'],encoder=row['encoder'],ss=row['ss'],q=row['nominal_q'],status='required'))
+            with (folder/'COVERAGE.tsv').open('w') as f:
+                writer=csv.DictWriter(f,fieldnames=list(coverage[0]),delimiter='\t');writer.writeheader();writer.writerows(coverage)
             digest=hashlib.sha256()
             for path in sorted((folder/'cells').glob('*.tsv')):
                 digest.update(path.name.encode());digest.update(path.read_bytes())
-            (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest()}))
+            (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest(),
+                'audit_source_sha256':study.sha(Path(study.__file__).with_name('publication_routing_cells.py'))}))
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
             (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\n')
             (folder/'FEATURES.tsv').write_text('synthetic feature identities\n')
@@ -184,6 +189,29 @@ class PublicationIntegrity(unittest.TestCase):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         with tempfile.TemporaryDirectory(dir=base) as directory:
             with self.assertRaises(ValueError):read_cells(Path(directory),'router_development')
+
+    def test_deduplicated_artifact_still_checks_each_rows_dimensions(self):
+        import publication_routing_cells as cells
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            root=Path(directory);(root/'cells').mkdir();coverage=[]
+            for i in range(2):
+                row=dict(file=str(i),reference_sha256=str(i),size='32',encoder='fixture',ss='420',nominal_q='50',
+                         width='8' if i==0 else '16',height='16' if i==0 else '8',jpeg_artifact='fake.jpg',
+                         reference_artifact='fake.rgb8.zst',decoded_artifact='fake.rgb8.zst',restored_artifact='fake.rgb8.zst',
+                         identity_butter_map='fake.butter-f32le.zst',restored_butter_map='fake.butter-f32le.zst')
+                with (root/'cells'/f'{i}.tsv').open('w') as f:
+                    writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
+                coverage.append(dict(file=str(i),size='32',encoder='fixture',ss='420',q='50',status='required'))
+            with (root/'COVERAGE.tsv').open('w') as f:
+                writer=csv.DictWriter(f,fieldnames=list(coverage[0]),delimiter='\t');writer.writeheader();writer.writerows(coverage)
+            (root/'COMPLETE').write_text('synthetic fixture\n')
+            def inspect(path):
+                return dict(dimensions=(8,16)) if path.suffix=='.jpg' else dict(bytes=512 if 'butter' in path.name else 384)
+            with patch.object(cells,'inspect_artifact',side_effect=inspect) as inspection:
+                with self.assertRaisesRegex(ValueError,'decoder dimensions differ'):cells.audit(root)
+                self.assertEqual(inspection.call_count,3)
+            self.assertFalse((root/'AUDITED.json').exists())
 
 
 if __name__=='__main__':unittest.main()
