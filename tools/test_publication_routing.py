@@ -93,6 +93,9 @@ class PublicationIntegrity(unittest.TestCase):
                 digest.update(path.name.encode());digest.update(path.read_bytes())
             (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest()}))
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
+            (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\n')
+            (folder/'FEATURES.tsv').write_text('synthetic feature identities\n')
+            (folder/'ENCODERS.tsv').write_text('synthetic encoder identities\n')
             return folder
         development=dataset('dev','router_development',80)
         reserved=dataset('test','locked_test',20)
@@ -104,6 +107,9 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)
         self.assertEqual(report['policies']['oracle_positive']['harm_count'],0)
         self.assertIn('paired_vs_fidelity',report['policies']['coefficient/budget-0'])
+        (reserved/'FEATURES.tsv').write_text('changed feature identities\n')
+        with self.assertRaisesRegex(ValueError,'frozen study contract'):
+            study.evaluate(reserved,root/'selection',root/'changed-report.json')
 
     def test_missing_complete_marker_fails(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

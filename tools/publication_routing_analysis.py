@@ -47,6 +47,14 @@ CONFIGS=(('linear',1.),('linear',10.),('hist',2),('hist',3))
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def study_contract(root):
+    identity=dict(line.split('\t',1) for line in (root/'IDENTITY.tsv').read_text().splitlines())
+    # Roles intentionally differ; every other primary-grid input must agree.
+    identity.pop('role')
+    return dict(identity=identity,features_sha256=sha(root/'FEATURES.tsv'),
+                encoders_sha256=sha(root/'ENCODERS.tsv'))
+
+
 def read_cells(root, expected_role):
     if not (root/'COMPLETE').is_file():raise ValueError(f'incomplete run {root}')
     rows=[];h=hashlib.sha256();keys=set()
@@ -208,6 +216,7 @@ def threshold_frontier(rows,gain,harm,groups,gates):
 def fit(root,out):
     if out.exists():raise ValueError('refusing to overwrite model selection')
     rows,identity=read_cells(root,'router_development')
+    contract=study_contract(root)
     out.mkdir(parents=True)
     groups=np.asarray([r['origin'] for r in rows]);gain,harm,limits=labels(rows)
     if len(set(groups))<20:raise ValueError('insufficient independent development origins')
@@ -260,7 +269,7 @@ def fit(root,out):
                     calibration=choice,audit=summary(gain[audit],harm[audit],limits[audit],d,groups[audit])))
         (out/'stability.json').write_text(json.dumps(stability,indent=2)+'\n')
         print('completed grouped stability split',repetition+1,'/20',flush=True)
-    frozen=dict(development_cells_sha256=identity,development_origins=sorted(set(groups)),
+    frozen=dict(development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
                 selection=selection,threshold_selection=threshold_selection,runtime_gates=gates,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
                 numpy=np.__version__,sklearn=sklearn.__version__,
                 harm_curve='0.5 - 0.04*clamp(identity_ssim2-90,0,10)',
@@ -294,13 +303,16 @@ def paired_interval(gain,harm,decision,baseline,groups,iters=2000):
 def evaluate(root,selection,out):
     if out.exists():raise ValueError('refusing to overwrite reserved-test report')
     freeze=selection/'selection.freeze.json';frozen=json.loads(freeze.read_text())
+    if study_contract(root)!=frozen['study_contract']:raise ValueError('reserved inputs differ from frozen study contract')
     rows,identity=read_cells(root,'locked_test');groups=np.asarray([r['origin'] for r in rows])
     if set(groups)&set(frozen['development_origins']):raise ValueError('origin leakage into reserved test')
     gain,harm,limits=labels(rows)
     for row in rows:
         quality=float(row['identity_ssim2'])
         row['identity_quality_band']='below90' if quality<90 else ('90to95' if quality<95 else '95plus')
-    result=dict(test_cells_sha256=identity,selection_sha256=sha(freeze),policies={})
+    result=dict(test_cells_sha256=identity,selection_sha256=sha(freeze),policies={},
+                uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
+                legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
     predicted={}
     for key,spec in frozen['models'].items():
         if 'sha256' not in spec:continue
