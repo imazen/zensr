@@ -112,9 +112,11 @@ def watch(config,log_root):
     try:
         while (group:=writer_group(config)) is not None:
             resume_after_observation=False
+            observation_retried=False
             try:
                 value=observation(config)
             except subprocess.TimeoutExpired:
+                observation_retried=True
                 # Retry only while stopped. Do not turn a pre-existing frozen
                 # state into permission to resume, or retry identity failures.
                 resume_after_observation='frozen 0' in (group/'cgroup.events').read_text().splitlines()
@@ -132,8 +134,9 @@ def watch(config,log_root):
                     raise ValueError('cache remains below free-space trigger; writer left frozen')
                 if value['allocated_bytes']>=config['trigger_bytes']:
                     raise ValueError('staging remains above trigger; writer left frozen')
-                control(config,'thaw')
-                event(phase='writer-resumed')
+                if not observation_retried or resume_after_observation:
+                    control(config,'thaw')
+                    event(phase='writer-resumed')
             elif resume_after_observation:
                 control(config,'thaw')
                 event(phase='writer-resumed-after-observation')

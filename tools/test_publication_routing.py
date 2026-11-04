@@ -197,6 +197,15 @@ class PublicationIntegrity(unittest.TestCase):
                  patch.object(remote,'control') as control:
                 with self.assertRaises(type(failure)):remote.watch(config,root)
             self.assertTrue(all(call.args[1]=='freeze' for call in control.call_args_list))
+        # A recovered observation that requires a drain must also preserve a
+        # pre-existing freeze, even when that drain succeeds.
+        with patch.object(remote,'writer_group',side_effect=[group,None]), \
+             patch.object(remote,'observation',side_effect=[timeout,dict(valid,free_bytes=510),valid]), \
+             patch.object(remote,'transfer_batch') as transfer, \
+             patch.object(remote,'control') as control:
+            remote.watch(config,root)
+        transfer.assert_called_once()
+        self.assertTrue(all(call.args[1]=='freeze' for call in control.call_args_list))
         with patch.object(remote,'writer_group',return_value=group), \
              patch.object(remote,'observation',side_effect=[timeout,dict(valid,free_bytes=510)]), \
              patch.object(remote,'transfer_batch',side_effect=OSError('archive unavailable')), \
