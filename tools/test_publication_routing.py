@@ -13,6 +13,18 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_resumed_predictions_reject_corrupt_risk_and_domain(self):
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='prediction-checkpoint-',dir=base))
+        path=root/'fold.npz'
+        for risk,domain in (([float('nan')],[True]),([1.1],[True]),([0.2],[1])):
+            with self.subTest(risk=risk,domain=domain):
+                np.savez(path,gain=np.array([1.]),risk=np.array(risk),in_domain=np.array(domain))
+                with self.assertRaises(ValueError):
+                    study.checkpoint_predictions(path,lambda:self.fail('cached file must be validated'))
+        np.savez(path,gain=np.array([1.]),risk=np.array([.2]),in_domain=np.array([True]))
+        self.assertEqual(study.checkpoint_predictions(path,lambda:self.fail('unexpected refit'))[1][0],.2)
+
     def test_stage_migration_preserves_original_and_pending_paths(self):
         import publication_routing_stage_migrate as migration
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)

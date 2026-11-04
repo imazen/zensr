@@ -62,3 +62,8 @@
   create_new/AlreadyExists and reading the existing artifact. Live transfers now
   atomically replace local copies with verified archive links. The filesystem
   regression and repeated-drain pilot pass; no run failure was observed.
+
+- Publication fitting now validates resumed prediction checkpoints for finite gain/risk,
+  probability bounds, matching vector shapes and boolean domain masks. Previously,
+  a non-finite cached risk could silently suppress decisions. Regression coverage
+  rejects these corrupt checkpoints before model selection; no real fit existed.

@@ -82,13 +82,22 @@ def atomic_json(path,value):
 
 
 def checkpoint_predictions(path,calculate):
-    if path.exists():
+    cached=path.exists()
+    if cached:
         with np.load(path,allow_pickle=False) as data:
-            return data['gain'],data['risk'],data['in_domain']
-    gain,risk,domain=calculate()
-    temporary=path.with_suffix('.partial')
-    with temporary.open('wb') as f:np.savez_compressed(f,gain=gain,risk=risk,in_domain=domain)
-    temporary.replace(path)
+            gain,risk,domain=data['gain'],data['risk'],data['in_domain']
+    else:
+        gain,risk,domain=calculate()
+    if (gain.ndim!=1 or risk.shape!=gain.shape or domain.shape!=gain.shape
+            or domain.dtype!=np.dtype(bool)):
+        raise ValueError('invalid prediction checkpoint shape or domain type')
+    if not (np.isfinite(gain).all() and np.isfinite(risk).all()):
+        raise ValueError('non-finite prediction checkpoint')
+    if ((risk<0)|(risk>1)).any():raise ValueError('checkpoint risk outside probability range')
+    if not cached:
+        temporary=path.with_suffix('.partial')
+        with temporary.open('wb') as f:np.savez_compressed(f,gain=gain,risk=risk,in_domain=domain)
+        temporary.replace(path)
     return gain,risk,domain
 
 
