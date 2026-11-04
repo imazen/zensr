@@ -474,3 +474,13 @@ and decoded features only, never restoration outcomes. All 18 integrity tests
 pass, including preservation of the original sample, all eligible large origins,
 and invariance to changed restoration scores. Fitting requires this selector
 identity and native-resolution rule.
+
+The supplemented development selection contains 45 references from 44 origins,
+with 22 references/origins reaching 2048 and all 8 eligible independent origins
+reaching 4096. Its manifest SHA-256 is
+`63d9097bde99c62b6a7c8ee21070a41361ae3ccf0a1021c156dfe45fa85a1094`.
+The original 31-reference selection remains in `development-size-feature-only-v1`;
+the supplemented selection occupies `development-size`. Selection recorded
+`rc=0 11s | peak-RSS 3.11GiB | min-avail 19566MiB | peak-load 2.73`.
+This is selection evidence only: the dense grid has not yet been generated or
+used to fit a router, and the reserved cohort has not been evaluated.
