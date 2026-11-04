@@ -134,3 +134,12 @@ exact-product out:
 # the effective split re-buckets ~180 files, so the train pool reads from all.
 fetch-corpus:
     for b in train validate test; do nice -n 19 python3 tools/fetch_corpus_bytes.py $b; done
+
+# Summarize paired raw/projected model gains with the image-level split.
+canon4-calibration tsv:
+    python3 tools/canon4_calibration.py "{{tsv}}"
+
+# The environment must provide numpy and torch; the model directory also needs
+# its local f32 training export, which is not checked in.
+verify-adopted-f16 model:
+    python3 tools/verify_adopted_f16.py "{{model}}"
