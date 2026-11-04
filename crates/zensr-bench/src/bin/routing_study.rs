@@ -3,7 +3,7 @@
 //! Usage: routing_study manifest output role sizes qualities encoders jobs
 //! Sizes are maximum edges; aspect ratio is preserved and inputs never upscaled.
 use rayon::prelude::*;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -13,6 +13,8 @@ use zensr_bench::*;
 mod coefficients;
 #[path = "dejpeg_eval/encoding.rs"]
 mod encoding;
+#[path = "routing_study/storage.rs"]
+mod storage;
 
 const COEF_NAMES: &[&str] = &[
     "zero_ac_blocks",
@@ -148,16 +150,7 @@ fn artifact(root: &Path, bytes: &[u8], suffix: &str) -> String {
     let dir = root.join("artifacts").join(&hash[..2]);
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join(format!("{hash}.{suffix}"));
-    match OpenOptions::new().write(true).create_new(true).open(&path) {
-        Ok(mut f) => {
-            f.write_all(bytes).unwrap();
-            f.sync_all().unwrap();
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            assert_eq!(fs::read(&path).unwrap(), bytes, "existing artifact changed");
-        }
-        Err(e) => panic!("artifact {}: {e}", path.display()),
-    }
+    storage::publish(&path, bytes);
     format!("artifacts/{}/{hash}.{suffix}", &hash[..2])
 }
 

@@ -13,3 +13,9 @@
   even when byte verification is cached. Coverage is mandatory, audit-tool
   identity is recorded, and previous audit records are retained on re-audit.
   A cached-JPEG dimension regression and the four-cell real pilot pass.
+- Fixed during publication preparation: concurrent writers of identical artifacts
+  could see an incomplete canonical file and abort. A deterministic paused-writer
+  regression reproduced it. The writer now syncs a staging file and publishes via
+  an atomic non-overwriting hard link. Existing conflicting bytes are preserved.
+  The ongoing frozen study executable retains the earlier fail-fast writer;
+  full artifact auditing remains mandatory before fitting.

@@ -85,3 +85,15 @@ plot directories are smoke tests only. They are not model-quality evidence.
 Still required: completed primary sweep and audit, frozen fitting, reserved
 evaluation, dense size generalization, encoder-mode coverage, and measured
 routing cost. Primary 512-pixel results alone cannot close the publication gates.
+
+## Artifact writer repair
+
+A deterministic paused-writer test reproduced a concurrent-publication abort in
+source matching the frozen executable. The repaired source writes and syncs a
+unique staging file, then publishes it through a non-overwriting hard link.
+The frozen study executable above was not rebuilt or replaced. Its existing
+byte-equality assertion and the mandatory full artifact audit remain in force;
+no completed cell or recorded numerical result was changed by this repair.
+Debug tests and clippy were serialized with the sweep by temporarily freezing
+its own systemd scope, then thawing it. Those interruptions invalidate any use
+of sweep wall time as a runtime benchmark.

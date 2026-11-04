@@ -212,3 +212,6 @@ publication-routing-sizes *args:
 publication-routing-lint:
     cargo fmt -p zensr-bench -- --check
     cargo clippy -p zensr-bench --bin routing_study --bin coef_features --bin dejpeg_eval -- -D warnings
+
+publication-routing-storage-tests:
+    cargo test -p zensr-bench --bin routing_study storage::tests -- --nocapture
