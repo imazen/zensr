@@ -100,7 +100,21 @@ class PublicationIntegrity(unittest.TestCase):
         development=dataset('dev','router_development',80)
         reserved=dataset('test','locked_test',20)
         with patch.object(study,'FEATURES',{'coefficient':study.BASE+('coef_zero_ac_blocks',)}), patch.object(study,'CONFIGS',(('linear',1.),)):
+            calls=0
+            def interrupted_predict(model,x):
+                nonlocal calls
+                calls+=1
+                if calls==2:raise RuntimeError('synthetic interruption')
+                return predict(model,x)
+            with patch.object(study,'predict',interrupted_predict):
+                with self.assertRaisesRegex(RuntimeError,'synthetic interruption'):
+                    study.fit(development,root/'selection')
+            checkpoint=root/'selection'/'coefficient-linear-1.fold-0.npz'
+            checkpoint_stat=checkpoint.stat()
             study.fit(development,root/'selection')
+            self.assertEqual(checkpoint.stat().st_mtime_ns,checkpoint_stat.st_mtime_ns)
+            with self.assertRaisesRegex(ValueError,'already frozen'):
+                study.fit(development,root/'selection')
         self.assertTrue((root/'selection'/'selection.freeze.json').is_file())
         study.evaluate(reserved,root/'selection',root/'report.json')
         report=json.loads((root/'report.json').read_text())

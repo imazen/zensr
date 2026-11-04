@@ -55,6 +55,23 @@ def study_contract(root):
                 encoders_sha256=sha(root/'ENCODERS.tsv'))
 
 
+def atomic_json(path,value):
+    temporary=path.with_suffix(path.suffix+'.partial')
+    temporary.write_text(json.dumps(value,indent=2)+'\n')
+    temporary.replace(path)
+
+
+def checkpoint_predictions(path,calculate):
+    if path.exists():
+        with np.load(path,allow_pickle=False) as data:
+            return data['gain'],data['risk']
+    gain,risk=calculate()
+    temporary=path.with_suffix('.partial')
+    with temporary.open('wb') as f:np.savez_compressed(f,gain=gain,risk=risk)
+    temporary.replace(path)
+    return gain,risk
+
+
 def read_cells(root, expected_role):
     if not (root/'COMPLETE').is_file():raise ValueError(f'incomplete run {root}')
     rows=[];h=hashlib.sha256();keys=set()
@@ -214,10 +231,21 @@ def threshold_frontier(rows,gain,harm,groups,gates):
 
 
 def fit(root,out):
-    if out.exists():raise ValueError('refusing to overwrite model selection')
     rows,identity=read_cells(root,'router_development')
     contract=study_contract(root)
-    out.mkdir(parents=True)
+    fit_contract=dict(cells_sha256=identity,study=contract,analysis_sha256=sha(__file__),
+        threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
+        requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
+        features=FEATURES,configs=CONFIGS,budgets=BUDGETS)
+    # JSON normalization makes tuples compare identically after a restart.
+    fit_contract=json.loads(json.dumps(fit_contract))
+    if out.exists():
+        if json.loads((out/'fit.contract.json').read_text())!=fit_contract:
+            raise ValueError('fit resume contract changed; preserve this run and use a new directory')
+        if (out/'selection.freeze.json').exists():raise ValueError('selection already frozen; do not refit')
+    else:
+        out.mkdir(parents=True)
+        atomic_json(out/'fit.contract.json',fit_contract)
     groups=np.asarray([r['origin'] for r in rows]);gain,harm,limits=labels(rows)
     if len(set(groups))<20:raise ValueError('insufficient independent development origins')
     folds=list(GroupKFold(n_splits=5,shuffle=True,random_state=20261104).split(np.zeros(len(rows)),gain,groups))
@@ -230,8 +258,12 @@ def fit(root,out):
             key=f'{family}-{kind}-{param:g}';pg=np.full(len(rows),np.nan);pr=pg.copy()
             for fold,(train,valid) in enumerate(folds):
                 assert not set(groups[train])&set(groups[valid])
-                model=fit_model(x[train],gain[train],harm[train],groups[train],(kind,param),len(numeric))
-                pg[valid],pr[valid]=predict(model,x[valid])
+                def calculate():
+                    model=fit_model(x[train],gain[train],harm[train],groups[train],(kind,param),len(numeric))
+                    return predict(model,x[valid])
+                fg,fr=checkpoint_predictions(out/f'{key}.fold-{fold}.npz',calculate)
+                if fg.shape!=(len(valid),) or fr.shape!=(len(valid),):raise ValueError('invalid fold checkpoint')
+                pg[valid],pr[valid]=fg,fr
                 event=dict(model=key,fold=fold,train_origins=len(set(groups[train])),valid_origins=len(set(groups[valid])))
                 progress.append(event);(out/'progress.json').write_text(json.dumps(progress,indent=2)+'\n')
                 print(json.dumps(event),flush=True)
@@ -249,12 +281,19 @@ def fit(root,out):
     for key in chosen:
         spec=all_models[key];numeric=spec['features'];x=inputs(rows,numeric)
         model=fit_model(x,gain,harm,groups,spec['config'],len(numeric))
-        joblib.dump(model,out/f'{key}.joblib')
+        joblib.dump(model,out/f'{key}.joblib.partial')
+        (out/f'{key}.joblib.partial').replace(out/f'{key}.joblib')
         spec['sha256']=sha(out/f'{key}.joblib')
+        spec['serialized_bytes']=(out/f'{key}.joblib').stat().st_size
     # Repeated grouped train/calibration/audit splits are a development stability
     # check. Hyperparameters were selected above, so this is not new confirmation.
     stability=[]
     for repetition,(outer_train,audit) in enumerate(GroupShuffleSplit(n_splits=20,test_size=.2,random_state=20261104).split(np.zeros(len(rows)),groups=groups)):
+        checkpoint=out/f'stability-{repetition:02}.json'
+        if checkpoint.exists():
+            stability.extend(json.loads(checkpoint.read_text()))
+            continue
+        repetition_results=[]
         inner_train,inner_cal=next(GroupShuffleSplit(n_splits=1,test_size=.25,random_state=20261104+repetition).split(np.zeros(len(outer_train)),groups=groups[outer_train]))
         train=outer_train[inner_train];cal=outer_train[inner_cal]
         assert not (set(groups[train])&set(groups[cal]) or set(groups[train])&set(groups[audit]) or set(groups[cal])&set(groups[audit]))
@@ -265,11 +304,13 @@ def fit(root,out):
             candidates=threshold_choices(cg,cr,gain[cal],harm[cal],groups[cal])
             for budget in BUDGETS:
                 choice=choose(candidates,budget);d=decisions(ag,ar,choice)
-                stability.append(dict(repetition=repetition,model=key,budget=budget,
+                repetition_results.append(dict(repetition=repetition,model=key,budget=budget,
                     calibration=choice,audit=summary(gain[audit],harm[audit],limits[audit],d,groups[audit])))
-        (out/'stability.json').write_text(json.dumps(stability,indent=2)+'\n')
+        atomic_json(checkpoint,repetition_results)
+        stability.extend(repetition_results)
         print('completed grouped stability split',repetition+1,'/20',flush=True)
-    frozen=dict(development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
+    atomic_json(out/'stability.json',stability)
+    frozen=dict(fit_contract_sha256=sha(out/'fit.contract.json'),development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
                 selection=selection,threshold_selection=threshold_selection,runtime_gates=gates,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
                 numpy=np.__version__,sklearn=sklearn.__version__,
                 harm_curve='0.5 - 0.04*clamp(identity_ssim2-90,0,10)',
