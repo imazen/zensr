@@ -182,11 +182,21 @@ def inputs(rows,numeric):
     return x
 
 
+class OriginScaler(StandardScaler):
+    """Translate before moment accumulation so constant features have zero variance."""
+    def fit(self,x,y=None,sample_weight=None):
+        values=np.asarray(x,dtype=float)
+        offset=values[0].copy()
+        super().fit(values-offset,y,sample_weight=sample_weight)
+        self.mean_+=offset
+        return self
+
+
 def fit_model(x,gain,harm,groups,config,n_numeric):
     kind,param=config
     numeric=list(range(n_numeric));categorical=list(range(n_numeric,x.shape[1]))
     transform=ColumnTransformer([
-        ('numeric',StandardScaler(),numeric),
+        ('numeric',OriginScaler(),numeric),
         ('categorical',OneHotEncoder(handle_unknown='ignore',sparse_output=False),categorical)])
     weights=origin_weights(groups)
     transform.fit(x)

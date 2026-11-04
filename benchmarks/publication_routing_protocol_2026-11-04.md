@@ -346,3 +346,9 @@ and coverage hashes, and terminal success or failure. `AUDITED.json` is also
 atomically published only after all checks pass. Source or coverage changes during
 the audit fail the run. Progress records support supervision; the completed audit
 record remains the analysis admission gate.
+
+Numeric scaling translates each feature by its first training value before
+weighted moment accumulation, then restores the fitted mean's offset. This avoids
+roundoff-generated negative variances for constant columns without changing origin
+weights or using validation data. A weighted analytic regression and the complete
+routing suite pass with numerical runtime warnings treated as errors.

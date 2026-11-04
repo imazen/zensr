@@ -73,6 +73,20 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertAlmostEqual(scaler.mean_[0],5.)
         self.assertAlmostEqual(scaler.var_[0],25.)
 
+    def test_weighted_constant_scaling_is_finite_without_warnings(self):
+        import warnings
+        values=np.column_stack((np.full(460,.5),np.full(460,50.),np.arange(460,dtype=float)+1e6))
+        weights=origin_weights(np.array(['dense']*400+[str(i) for i in range(60)]))
+        with warnings.catch_warnings():
+            warnings.simplefilter('error',RuntimeWarning)
+            scaler=study.OriginScaler().fit(values,sample_weight=weights)
+        np.testing.assert_array_equal(scaler.var_[:2],[0.,0.])
+        np.testing.assert_array_equal(scaler.transform(values)[:,:2],np.zeros((460,2)))
+        mean=np.average(values[:,2],weights=weights)
+        variance=np.average((values[:,2]-mean)**2,weights=weights)
+        self.assertAlmostEqual(scaler.mean_[2],mean)
+        self.assertAlmostEqual(scaler.var_[2],variance)
+
     def test_folds_keep_all_variants_of_origin_together(self):
         groups=np.repeat(np.arange(25),8)
         folds=GroupKFold(n_splits=5,shuffle=True,random_state=7)

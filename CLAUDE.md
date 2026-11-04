@@ -32,3 +32,8 @@
   as cell bytes and tool identity. A ledger change invalidates the audit even if
   it leaves the parsed required-cell set unchanged. Bounded parallel artifact
   checks preserve each row's dimensions/sampling checks and propagate failures.
+- Fixed during publication preparation: weighted scaling of constant numeric
+  features emitted invalid-square-root warnings from roundoff in the variance
+  calculation. Translating features before moment accumulation makes constant
+  columns exactly zero during fitting while preserving weighted means and scales.
+  All routing tests pass with numerical runtime warnings promoted to errors.
