@@ -58,11 +58,19 @@ def render(source, output):
             labels[(x,y)].append(f'{100*budget:g}%')
         for point,budgets in labels.items():
             ax.annotate(', '.join(budgets),point,xytext=(3,3),textcoords='offset points',fontsize=8)
-        ax.set_title(family.replace('_',' '));ax.set_xlabel('Held-out origin-balanced harm (%)')
-        ax.set_ylabel('Held-out mean SSIM2 gain');ax.grid(alpha=.2)
+        ax.set_title(family.replace('_',' '));ax.set_xlabel('Reserved-set origin-balanced harm (%)')
+        ax.set_ylabel('Reserved-set mean SSIM2 gain');ax.grid(alpha=.2)
     for ax in list(axes.flat)[len(families):]:ax.set_visible(False)
     axes.flat[0].legend(fontsize=7,loc='best')
-    fig.suptitle('Frozen routing operating points — labels are development harm budgets\nBars: pointwise 95% origin-bootstrap intervals; gray crosses: fixed baselines',fontsize=12)
+    scope=data.get('evaluation_scope','unspecified').replace('_',' ')
+    fig.suptitle(f'Frozen routing operating points ({scope}) — labels are development harm budgets\nBars: pointwise 95% origin-bootstrap intervals; gray markers: fixed baselines',fontsize=12)
+    footer=.8/fig.get_figheight()
+    fig.get_layout_engine().set(rect=(0,footer,1,1-footer))
+    fig.text(.02,.1/fig.get_figheight(),
+        'Harm curve: loss >0.5 at/below SSIM2 90, tapering linearly to 0.1 at 100; the taper is a proposal.\n'
+        'Origins are separated against documented model-source policy; historical per-pair training provenance is incomplete.\n'
+        'Legacy-chooser provenance remains unresolved. Intervals are pointwise; deployment selection remains open.',
+        fontsize=8,va='bottom')
     fig.savefig(output/'frontier.svg');fig.savefig(output/'frontier.pdf')
     fig.savefig(output/'frontier.png',dpi=160);plt.close(fig)
     text=['# Frozen routing operating points','',
