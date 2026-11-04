@@ -148,3 +148,17 @@ verify-adopted-f16 model:
 # identity scores against the original production TSV before joining results.
 canon4-metadata root out:
     ZENSR_EVAL_METADATA=1 ZENSR_EVAL_JOBS=6 ZENSR_EVAL_QS=15,35,55,75,85,88,90,92,94,96 ZENSR_EVAL_ENCODERS=turbo,mozjpeg,jpegli,zenjpeg,zenjpeg:auto,zenjpeg:hybrid,zenjpeg:mozbase,zenjpeg:noaq ./target/release/dejpeg_eval "{{root}}" "{{out}}" 3 1 dejpeg_rt24i_canon4 dejpeg_rt24i_canon4
+
+# Run inside the host's resource wrapper. Also exercises the committed model.
+canon4-test:
+    cargo test -p zensr-zenjpeg -p zensr-micro
+
+canon4-lint:
+    cargo fmt --all -- --check
+    cargo clippy -p zensr-zenjpeg -p zensr-micro --all-targets -- -D warnings
+
+canon4-fit *args:
+    python3 tools/fit_canon4.py {{args}}
+
+canon4-policy-check *args:
+    python3 tools/check_canon4_policy.py {{args}}

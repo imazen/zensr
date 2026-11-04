@@ -317,7 +317,7 @@ fn main() {
         "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
     if metadata_restorer.is_some() {
-        tsv = "sub\tfile\tencoder\tss\tq\tprobe_family\tprobe_q\trouting_family\trouting_scale\trouting_q\tzero_ac_frac\tidentity_ssim2\n".into();
+        tsv = "sub\tfile\tencoder\tss\tq\tprobe_family\tprobe_q\trouting_family\trouting_scale\trouting_q\tzero_ac_frac\tidentity_ssim2\testimated_gain\tgate\tconservative_gate\n".into();
     }
     for c in &chunks {
         tsv.push_str(c);
@@ -417,9 +417,22 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                     let outcome = restorer
                         .restore(&data)
                         .budget(zensr_zenjpeg::api::Budget::Quality)
-                        .routing(zensr_zenjpeg::api::Routing::Never)
+                        .routing(zensr_zenjpeg::api::Routing::Auto {
+                            min_gain: f32::INFINITY,
+                        })
                         .run()
                         .expect("routing metadata");
+                    let estimated = match &outcome {
+                        zensr_zenjpeg::api::Outcome::Unchanged {
+                            why: zensr_zenjpeg::api::SkipReason::NotWorthIt { estimated_gain },
+                            ..
+                        } => *estimated_gain,
+                        _ => panic!("metadata request must skip"),
+                    };
+                    let probe = zenjpeg::detect::probe(&data).unwrap();
+                    let gate = zensr_zenjpeg::policy_high_q_identity(&probe);
+                    let conservative_gate =
+                        zensr_zenjpeg::policy_high_q_identity_with_margin(&probe, 6.0);
                     let report = outcome.report();
                     let coeffs = zenjpeg::decoder::Decoder::new()
                         .decode_coefficients(&data, enough::Unstoppable)
@@ -434,7 +447,7 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                     let identity = score(&t.hr, &d_off);
                     writeln!(
                         rows,
-                        "{}\t{}\t{enc}\t{ss}\t{q}\t{pf}\t{pq}\t{}\t{}\t{:.8}\t{frac:.8}\t{:.3}",
+                        "{}\t{}\t{enc}\t{ss}\t{q}\t{pf}\t{pq}\t{}\t{}\t{:.8}\t{frac:.8}\t{:.3}\t{estimated:.8}\t{gate}\t{conservative_gate}",
                         t.sub,
                         t.fname,
                         report.encoder_family,
