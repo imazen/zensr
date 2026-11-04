@@ -507,3 +507,33 @@ then stopped while still reading old cell files on the busy array. It did not
 complete and supplies no integrity claim. The harness resumed using its existing
 identity, committed-cell schema and byte-equality checks; the full final artifact
 audit is still required before fitting. Both diagnostic attempt logs are retained.
+
+## Storage transport validation during dense generation
+
+A bindfs view of the direct-array NFS directory passed all three portable
+storage contract tests (conflict preservation, paused publication, concurrent
+identical publication). The test wrapper recorded
+`rc=0 3s | peak-RSS 0.13GiB | min-avail 22192MiB | peak-load 12.03`.
+A six-reference, 512-edge turbo-q50 replay through that view produced 12 cell
+tables byte-identical to the already-audited primary run. Its 66 artifacts passed
+the full hash/decompression/JPEG audit. The same process and frozen executable
+then continued the dense grid through the new view of the same files.
+
+The transport replay recorded
+`rc=0 29s | peak-RSS 0.38GiB | min-avail 21789MiB | peak-load 10.40`.
+A matching small replay on NVMe-backed storage recorded
+`rc=0 1s | peak-RSS 0.45GiB | min-avail 22065MiB | peak-load 13.05`;
+all 12 cell tables were again identical. These are small operational observations
+with uncontrolled cache state, not a full-grid or restoration-latency speedup.
+The 34 MiB array replay and both logs remain with the study artifacts. Bulk
+staging on NVMe has been proposed to the owner; the dense grid continues on the
+array pending that decision.
+
+Ten-second syscall traces found mean `execve` duration of 95,492 microseconds
+on direct NFS and 181 microseconds through bindfs. Explicit `fsync` then dominated
+the trace; no end-to-end speedup is inferred from these syscall samples.
+Linux's [NFS close path](https://raw.githubusercontent.com/torvalds/linux/master/fs/nfs/nfs4file.c)
+can flush pending writes. [bindfs forwards explicit fsync](https://raw.githubusercontent.com/mpartel/bindfs/master/src/bindfs.c)
+and does not register a flush callback. The transport process has its own 2 GiB
+memory cap and idle I/O priority. Exact mount/export cleanup commands are retained
+in the private execution record; no scientific input or artifact path changed.
