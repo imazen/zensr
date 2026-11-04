@@ -99,6 +99,22 @@ class PublicationIntegrity(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'missing fitted-domain'):
             study.decisions(np.ones(4),np.zeros(4),choice)
 
+    def test_shallow_tree_gain_risk_and_serialization(self):
+        import joblib
+        values=np.linspace(-3.,3.,2000)
+        x=np.array([[v,'Mozjpeg','MozjpegQuality','420'] for v in values],dtype=object)
+        gain=np.where(np.abs(values)<1.,2.,-1.);harm=gain<-.5
+        train=np.arange(0,len(x),2);valid=np.arange(1,len(x),2)
+        model=fit_model(x[train],gain[train],harm[train],train,('hist',3),1)
+        pg,pr=predict(model,x[valid])
+        self.assertGreater(np.mean((pg>0)==(gain[valid]>0)),.95)
+        self.assertGreater(np.mean((pr>.5)==harm[valid]),.95)
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as folder:
+            path=Path(folder)/'model.joblib';joblib.dump(model,path)
+            replay=predict(joblib.load(path),x[valid])
+            np.testing.assert_array_equal(pg,replay[0]);np.testing.assert_array_equal(pr,replay[1])
+
     def test_selection_freeze_and_reserved_evaluation_roundtrip(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         root=Path(tempfile.mkdtemp(prefix='synthetic-roundtrip-',dir=base))
