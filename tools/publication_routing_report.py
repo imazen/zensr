@@ -62,6 +62,7 @@ def render(source, output):
     fig.savefig(output/'frontier.svg');fig.savefig(output/'frontier.pdf')
     fig.savefig(output/'frontier.png',dpi=160);plt.close(fig)
     text=['# Frozen routing operating points','',
+          'Evaluation scope: '+data.get('evaluation_scope','unspecified')+'.',
           'No deployment policy has been selected. Budgets below are development targets; held-out harm may exceed them.',
           '', '| Policy | Mean gain | Harm % | Restore % | Worst SSIM2 change |',
           '|---|---:|---:|---:|---:|']
@@ -70,7 +71,7 @@ def render(source, output):
     text += ['', 'Gain and harm are origin-balanced. Restore coverage is cell-weighted.',
              'The oracle uses reference outcomes and is not deployable.',
              'Post-inference policies pay restoration cost even when rejecting output.',
-             data.get('uncertainty',''),data.get('legacy_chooser',''),
+             data.get('uncertainty',''),data.get('legacy_chooser',''),data.get('training_provenance',''),
              'Size generalization, encoder mode coverage and runtime cost require their own evidence; this table alone does not establish publication readiness.',
              '', '[Detailed policies and intervals](policies.csv). [Frontier figure](frontier.svg).', '']
     (output/'report.md').write_text('\n'.join(text))

@@ -418,6 +418,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
                 test_reference_sha256s=sorted({r['reference_sha256'] for r in rows}),
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
+    result['training_provenance']='Reserved origins are excluded against the documented canonical model-source policy. Historical training pairs lack source-image IDs and a complete generation snapshot; per-pair training provenance is not reconstructed.'
     predicted={}
     for key,spec in frozen['models'].items():
         if 'sha256' not in spec:continue

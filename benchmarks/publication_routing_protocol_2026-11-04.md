@@ -49,6 +49,16 @@ and cell-weighted results so repeated pages/encoder variants do not dominate.
 The final test is opened only after candidate parameters, thresholds and input
 hashes are frozen. Once inspected, it is an audit set, not fresh confirmation.
 
+Training-provenance limit: the adopted model metadata identifies trainer commit
+`4a33019`, the dataset directory, seed and source-class policy. The generator and
+split helpers at that commit match their current source and restrict the default
+pool to canonical training membership. However, historical `pairs.tsv` records
+encoder, quality and conditioning, not each pair's source-image ID, and the
+generation environment/corpus snapshot is not fully recorded. Separation here
+is verified against that documented source policy and the frozen current
+manifest; it is not a complete per-pair reconstruction of model-training inputs.
+Do not turn that provenance gap into an unconditional leakage-free claim.
+
 ## Coverage and limits
 
 The primary grid includes q0–100 at both step 2 and step 5, including the
