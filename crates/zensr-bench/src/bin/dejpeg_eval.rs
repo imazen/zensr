@@ -12,11 +12,11 @@
 //! below the core count. TSV row order is unchanged (sub, file, encoder, ss,
 //! q, arm) regardless of P.
 
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
-use rayon::prelude::*;
 use zensr_bench::*;
 use zensr_micro::guards::{guarded_merge, GuardConfig};
 
