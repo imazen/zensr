@@ -9,6 +9,7 @@ import collections
 import csv
 from decimal import Decimal
 import hashlib
+import importlib.metadata
 import json
 from pathlib import Path
 import platform
@@ -45,6 +46,17 @@ CONFIGS=(('linear',1.),('linear',10.),('hist',2),('hist',3))
 
 
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def environment_contract():
+    versions={}
+    for line in Path(__file__).with_name('publication-routing-requirements.txt').read_text().splitlines():
+        if not line or line.startswith('#'):continue
+        package,expected=line.split('==')
+        actual=importlib.metadata.version(package)
+        if actual!=expected:raise ValueError(f'{package}: expected {expected}, installed {actual}')
+        versions[package]=actual
+    return dict(python=platform.python_version(),packages=versions)
 
 
 def study_contract(root):
@@ -245,7 +257,7 @@ def threshold_frontier(rows,gain,harm,groups,gates):
 def fit(root,out):
     rows,identity=read_cells(root,'router_development')
     contract=study_contract(root)
-    fit_contract=dict(cells_sha256=identity,study=contract,analysis_sha256=sha(__file__),
+    fit_contract=dict(cells_sha256=identity,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
         features=FEATURES,configs=CONFIGS,budgets=BUDGETS)
@@ -361,6 +373,10 @@ def paired_interval(gain,harm,decision,baseline,groups,iters=2000):
 def evaluate(root,selection,out):
     if out.exists():raise ValueError('refusing to overwrite reserved-test report')
     freeze=selection/'selection.freeze.json';frozen=json.loads(freeze.read_text())
+    fit_contract=json.loads((selection/'fit.contract.json').read_text())
+    if sha(selection/'fit.contract.json')!=frozen['fit_contract_sha256']:raise ValueError('fit contract changed after selection')
+    if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
+    if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')
     if study_contract(root)!=frozen['study_contract']:raise ValueError('reserved inputs differ from frozen study contract')
     rows,identity=read_cells(root,'locked_test');groups=np.asarray([r['origin'] for r in rows])
     if set(groups)&set(frozen['development_origins']):raise ValueError('origin leakage into reserved test')
