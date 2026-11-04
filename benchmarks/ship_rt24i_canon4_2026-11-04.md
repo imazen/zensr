@@ -190,3 +190,12 @@ python3 -m unittest discover -s tools -p test_fit_canon4.py
 ```
 
 Original production-decision context: [prod_models_2026-11-04.md](prod_models_2026-11-04.md).
+
+## Final platform verification
+
+Commit `30253f381fc2b85c901c06ecf61b95378bd2ef5a` passed
+[CI run 41801610653](https://github.com/imazen/zensr/actions/runs/41801610653):
+Linux x86-64 and ARM64, Windows x86-64 and ARM64, macOS ARM64, and
+`i686-unknown-linux-gnu` through cross, plus formatting and clippy. The five
+native platform jobs include default, no-default, internals, px, and chooser
+configurations. This verification record is a documentation-only follow-up.
