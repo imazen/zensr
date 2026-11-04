@@ -380,3 +380,11 @@ on 2026-11-04. The resumed segment's resource wrapper recorded:
 This segment includes deliberate suspensions for serialized verification work;
 its elapsed time is not a runtime benchmark. The full artifact audit is running.
 Generation completion alone does not admit the cells to model fitting.
+
+Native 4096-edge eligibility in the frozen audited manifest is concentrated in
+nature photographs (4 development references, 6 reserved references) and brochures
+(11 development references, 7 reserved references). Every brochure reference in
+both roles reaches that edge, so the planned per-content representatives retain
+large inputs. Other content classes have no native 4096-edge references. This is
+an input-coverage fact, not a measured large-image quality result; do not generalize
+a 4K result from those classes to all content.
