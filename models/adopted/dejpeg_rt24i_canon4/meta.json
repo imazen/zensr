@@ -1,0 +1,80 @@
+{
+ "arch": "compact",
+ "scale": 1,
+ "nf": 24,
+ "nc": 8,
+ "space": "rgb",
+ "total_floats": 43203,
+ "source": "train_people (init=scratch)",
+ "repro": {
+  "argv": [
+   "tools/train_people.py",
+   "200000",
+   "48",
+   "3e-4"
+  ],
+  "env": {
+   "ZENSR_CKPT_EVERY": "5000",
+   "ZENSR_QBOOST": "3",
+   "ZENSR_SCALE": "1",
+   "ZENSR_OUT": "dejpeg_rt24i_canon4",
+   "ZENSR_NF": "24",
+   "ZENSR_DATA": "/home/lilith/tmp/zensr-dejpeg-v4-canon4",
+   "ZENSR_NC": "8"
+  },
+  "seed_torch": 7,
+  "seed_numpy": 11,
+  "trainer": "train_people.py",
+  "commit": "4a33019",
+  "host": "i265",
+  "torch": "2.15.0+cu132",
+  "device": "cuda",
+  "amp_dtype": "torch.bfloat16",
+  "init_sha256_16": null,
+  "dataset_dir": "/home/lilith/tmp/zensr-dejpeg-v4-canon4",
+  "dataset_meta": {
+   "n": 48000,
+   "val_tail": 512,
+   "seed": 20260728,
+   "crop": 128,
+   "task": "v4 conditioning ablation (policy-mix decode)",
+   "q": "U(5,96)+5% clean",
+   "encoders": [
+    "turbo",
+    "mozjpeg",
+    "jpegli",
+    "zenjpeg"
+   ],
+   "subs": [
+    "1000-lilith-photos-general",
+    "1200-lilith-interiors",
+    "1400-lilith-nature",
+    "1600-lilith-food",
+    "2000-unsplash-people",
+    "2200-unsplash-renders",
+    "2400-unsplash-textures",
+    "3000-art-institute-of-chicago-photos",
+    "3300-met-museum-photos",
+    "5000-national-park-service-brochures",
+    "5200-epa-climate-impact-2021-report",
+    "5300-noaa-hurricane-documents",
+    "6000-lilith-scans-public-patents",
+    "6600-ia-scans-manuscript-illustrations",
+    "6800-ia-scans-manuscript-text",
+    "7000-lilith-plots",
+    "8000-lilith-mobile-screenshots",
+    "8100-lilith-web-screenshots",
+    "9000-lilith-ai-clipart",
+    "9094-lilith-ai-illustrations",
+    "9226-lilith-ai-products"
+   ],
+   "gen2": 0.0,
+   "gen3": 0.0,
+   "cond": "scalar=probe severity; dmap=per-block erased-band Q^2/12 log-scaled",
+   "val_split": "image-level"
+  },
+  "weights_f16_sha256_16": "c3db9373791270bb"
+ },
+ "f16_goldens": true,
+ "weights_f16_sha256_16": "c3db9373791270bb"
+}

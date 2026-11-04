@@ -18,6 +18,16 @@ models/adopted/dejpeg_rt24g/*
 !models/adopted/dejpeg_rt24g/gold_out_40x36.raw
 !models/adopted/dejpeg_rt24g/meta.json
 !models/adopted/dejpeg_rt24g/repro.sh
+# Candidate artifact retained alongside the current realtime model.
+!models/adopted/dejpeg_rt24i_canon4/
+models/adopted/dejpeg_rt24i_canon4/*
+!models/adopted/dejpeg_rt24i_canon4/weights_f16.raw
+!models/adopted/dejpeg_rt24i_canon4/gold_in_17x13.raw
+!models/adopted/dejpeg_rt24i_canon4/gold_in_40x36.raw
+!models/adopted/dejpeg_rt24i_canon4/gold_out_17x13.raw
+!models/adopted/dejpeg_rt24i_canon4/gold_out_40x36.raw
+!models/adopted/dejpeg_rt24i_canon4/meta.json
+!models/adopted/dejpeg_rt24i_canon4/repro.sh
 *.onnx
 .cargo/
 .cargo/config.toml
