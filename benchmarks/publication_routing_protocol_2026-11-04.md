@@ -99,3 +99,15 @@ feature identities, model-selection records, held-out results, uncertainty,
 cost evidence, exclusions and regression tests. A crate release additionally
 requires the existing public API/dependency/README approval and release checks;
 this study does not publish or merge zenjpeg work.
+
+## Pre-fit near-duplicate audit
+
+The existing 16×16 luma fingerprint audit (`picker_leakage_audit.thumb`, mean
+absolute distance <3 on u8 values) found 61 cross-origin candidate pairs. Treating
+these conservatively as related groups leaves **484 development references / 404
+origins** and **291 reserved references / 270 origins**. This is a suspected-near-
+duplicate quarantine, not proof of semantic identity; white-background documents
+can collide. No restoration scores were used. The original manifest is retained;
+`references-audited.tsv` owns the updated membership. It also fingerprints decoded
+HEIC references, avoiding the old audit's inability to open HEIC originals.
+The threshold is inherited from the existing leakage audit, not tuned on outcomes.
