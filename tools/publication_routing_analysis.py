@@ -27,6 +27,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from publication_routing_cells import required_coverage
 
+STUDY_SIZES=(32,40,48,64,80,96,128,160,192,256,320,384,512,640,768,1024,1280,1536,2048,4096)
 BUDGETS=(0.,.005,.01,.02,.05)
 LAMBDAS=(0.,1.,2.,4.,8.,16.,32.,64.)
 THRESHOLDS=(0.,.1,.25,.5,.75,1.,1.5,2.,3.,4.,6.,10.)
@@ -112,6 +113,44 @@ def read_cells(root, expected_role):
     if audited.get('audit_source_sha256')!=sha(Path(__file__).with_name('publication_routing_cells.py')):raise ValueError('audit tool changed; reaudit artifacts')
     return rows,h.hexdigest()
 
+
+
+def development_cells(root,size_root):
+    """Join audited primary and size-dense data, without counting replays twice."""
+    rows,primary_digest=read_cells(root,'router_development');primary_contract=study_contract(root)
+    extra,size_digest=read_cells(size_root,'router_development');size_contract=study_contract(size_root)
+    if primary_contract['identity'].get('sizes')!='512':raise ValueError('primary development must use size 512')
+    if size_contract['identity'].get('sizes')!=','.join(map(str,STUDY_SIZES)):raise ValueError('dense development size inventory differs')
+    contracts=json.loads(json.dumps([primary_contract,size_contract]))
+    for contract in contracts:
+        for key in ('sizes','manifest_sha256'):contract['identity'].pop(key,None)
+    if contracts[0]!=contracts[1]:raise ValueError('dense development changed frozen scientific inputs')
+    selection_path=size_root/'selection.json';selection=json.loads(selection_path.read_text())
+    if selection['input_cells_sha256']!=primary_digest:raise ValueError('dense representatives were selected from different primary cells')
+    if selection['source_manifest_sha256']!=primary_contract['identity']['manifest_sha256']:raise ValueError('dense selector used a different source manifest')
+    if selection['features']!=list(BASE+COEF+PIXELS):raise ValueError('dense selector feature protocol differs')
+    if selection['selected_manifest_sha256']!=size_contract['identity']['manifest_sha256']:raise ValueError('dense representative manifest changed')
+    if selection['selector_sha256']!=sha(Path(__file__).with_name('publication_routing_sizes.py')):raise ValueError('dense representative selector changed')
+    if selection['sizes']!=list(STUDY_SIZES) or selection['clusters_per_content']!=2 or selection['seed']!=20261104:raise ValueError('dense representative protocol differs')
+    selected={c['representative_sha256'] for c in selection['clusters']}
+    references={r['reference_sha256']:tuple(r[k] for k in ('file','origin','content','ref_kind')) for r in rows}
+    if {r['reference_sha256'] for r in extra}!=selected:raise ValueError('dense representative membership differs')
+    def key(r):return tuple(r[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
+    joined={key(r):r for r in rows};replays=0
+    for r in extra:
+        if references.get(r['reference_sha256'])!=tuple(r[k] for k in ('file','origin','content','ref_kind')):
+            raise ValueError('dense reference outside primary development cohort')
+        k=key(r)
+        if k in joined:
+            if r!=joined[k]:raise ValueError('replayed development cell differs')
+            replays+=1
+        else:joined[k]=r
+    provenance=dict(primary_cells_sha256=primary_digest,size_cells_sha256=size_digest,
+        size_selection_sha256=sha(selection_path),size_study_contract=size_contract,
+        primary_cells=len(rows),size_cells=len(extra),identical_replays=replays,combined_cells=len(joined),
+        weighting='Equal total weight per origin across its observed primary and dense-size cells; repeated 512 cells counted once.')
+    identity=hashlib.sha256(json.dumps(provenance,sort_keys=True).encode()).hexdigest()
+    return list(joined.values()),identity,provenance
 
 def labels(rows):
     gain=np.asarray([float(Decimal(r['restored_ssim2'])-Decimal(r['identity_ssim2'])) for r in rows])
@@ -313,10 +352,10 @@ def threshold_frontier(rows,gain,harm,groups,gates):
     return [dict(choose(candidates,budget),budget=budget) for budget in BUDGETS]
 
 
-def fit(root,out):
-    rows,identity=read_cells(root,'router_development')
+def fit(root,out,size_root):
+    rows,identity,development_sources=development_cells(root,size_root)
     contract=study_contract(root)
-    fit_contract=dict(cells_sha256=identity,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
+    fit_contract=dict(cells_sha256=identity,development_sources=development_sources,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
         audit_source_sha256=sha(Path(__file__).with_name('publication_routing_cells.py')),
         requirements_sha256=sha(Path(__file__).with_name('publication-routing-requirements.txt')),
@@ -404,7 +443,7 @@ def fit(root,out):
         stability.extend(repetition_results)
         print('completed grouped stability split',repetition+1,'/20',flush=True)
     atomic_json(out/'stability.json',stability)
-    frozen=dict(fit_contract_sha256=sha(out/'fit.contract.json'),development_candidates_sha256=sha(out/'development-candidates.json'),development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,
+    frozen=dict(fit_contract_sha256=sha(out/'fit.contract.json'),development_candidates_sha256=sha(out/'development-candidates.json'),development_cells_sha256=identity,development_origins=sorted(set(groups)),study_contract=contract,development_sources=development_sources,
                 selection=selection,threshold_selection=threshold_selection,runtime_gates=gates,models=all_models,stability_sha256=sha(out/'stability.json'),python=platform.python_version(),
                 numpy=np.__version__,sklearn=sklearn.__version__,
                 harm_curve='0.5 - 0.04*clamp(identity_ssim2-90,0,10)',
@@ -480,6 +519,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
                 test_reference_sha256s=sorted({r['reference_sha256'] for r in rows}),
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
+    result['development_sources']=frozen['development_sources']
     result['router_size_scope']='Serialized Python joblib artifacts include fitted transforms and gain/risk heads; these are not measured Rust deployment binary or resident-memory sizes. Restoration weights are separate.'
     result['training_provenance']='Reserved origins are excluded against the documented canonical model-source policy. Historical training pairs lack source-image IDs and a complete generation snapshot; per-pair training provenance is not reconstructed.'
     predicted={};domains={}
@@ -537,11 +577,12 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
 def main():
     ap=argparse.ArgumentParser();sub=ap.add_subparsers(dest='command',required=True)
     p=sub.add_parser('fit');p.add_argument('root',type=Path);p.add_argument('output',type=Path)
+    p.add_argument('--size-development',type=Path,required=True)
     p=sub.add_parser('evaluate');p.add_argument('root',type=Path);p.add_argument('selection',type=Path);p.add_argument('output',type=Path)
     p.add_argument('--size-generalization-of',type=Path)
     p.add_argument('--mode-generalization-of',type=Path)
     a=ap.parse_args()
-    if a.command=='fit':fit(a.root,a.output)
+    if a.command=='fit':fit(a.root,a.output,a.size_development)
     else:evaluate(a.root,a.selection,a.output,a.size_generalization_of,a.mode_generalization_of)
 
 if __name__=='__main__':main()

@@ -24,3 +24,7 @@
   fields could misreport an exact/nonexact transition. Exact transitions are now
   counted separately; infinite changes are not replaced with finite numbers.
   Regression coverage includes both transition directions and unchanged output.
+- Publication study design correction before fitting: a 512-only router fit plus
+  held-out size tests did not supply size-dense training evidence. Fitting now
+  requires audited 20-size development representatives in addition to the full
+  primary cohort, with origin-grouped splits and exact replay deduplication.

@@ -118,14 +118,15 @@ class PublicationIntegrity(unittest.TestCase):
     def test_selection_freeze_and_reserved_evaluation_roundtrip(self):
         base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
         root=Path(tempfile.mkdtemp(prefix='synthetic-roundtrip-',dir=base))
-        def dataset(name,role,count):
+        def dataset(name,role,count,sizes=(512,),source_name=None):
             folder=root/name;(folder/'cells').mkdir(parents=True)
             coverage=[]
-            for i in range(count):
+            source_name=source_name or name
+            for i,size in ((i,size) for i in range(count) for size in sizes):
                 feature=(i%11)/10
-                row=dict(file=f'{name}-{i}.png',content='synthetic',origin=f'{name}-{i//2}',
-                    role=role,ref_kind='synthetic',reference_sha256=hashlib.sha256(f'{name}-{i}'.encode()).hexdigest(),
-                    width='32',height='32',size='32',encoder='fixture',ss='420',nominal_q='50',
+                row=dict(file=f'{source_name}-{i}.png',content='synthetic',origin=f'{source_name}-{i//2}',
+                    role=role,ref_kind='synthetic',reference_sha256=hashlib.sha256(f'{source_name}-{i}'.encode()).hexdigest(),
+                    width=str(size),height=str(size),size=str(size),encoder='fixture',ss='420',nominal_q='50',
                     probe_family='ImageMagick',probe_scale='IjgQuality',probe_value='50',
                     estimated_gain='.5',bpp='1',gate='false',conservative_gate='false',
                     identity_ssim2='80',restored_ssim2=str(79+2*feature),coef_zero_ac_blocks=str(feature))
@@ -135,7 +136,7 @@ class PublicationIntegrity(unittest.TestCase):
                     for channel in ('r','g','b'):row[f'{arm}_sse_{channel}']='1'
                 for metric in ('psnr','butter_max','butter_pnorm3'):
                     row['identity_'+metric]='1';row['restored_'+metric]='1'
-                with (folder/'cells'/f'{i:04}.tsv').open('w') as f:
+                with (folder/'cells'/f'{i:04}-{size}.tsv').open('w') as f:
                     writer=csv.DictWriter(f,fieldnames=list(row),delimiter='\t');writer.writeheader();writer.writerow(row)
                 coverage.append(dict(file=row['file'],size=row['size'],encoder=row['encoder'],ss=row['ss'],q=row['nominal_q'],status='required'))
             with (folder/'COVERAGE.tsv').open('w') as f:
@@ -146,12 +147,31 @@ class PublicationIntegrity(unittest.TestCase):
             (folder/'AUDITED.json').write_text(json.dumps({'cells_sha256':digest.hexdigest(),
                 'audit_source_sha256':study.sha(Path(study.__file__).with_name('publication_routing_cells.py'))}))
             (folder/'COMPLETE').write_text('synthetic test fixture\n')
-            (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\n')
+            (folder/'IDENTITY.tsv').write_text(f'role\t{role}\nbinary_sha256\tsynthetic\nsizes\t{",".join(map(str,sizes))}\nmanifest_sha256\tsynthetic-{"subset" if len(sizes)>1 else "full"}\n')
             (folder/'FEATURES.tsv').write_text('synthetic feature identities\n')
             (folder/'ENCODERS.tsv').write_text('synthetic-encoder\tsynthetic-sha\n')
             return folder
         development=dataset('dev','router_development',80)
         reserved=dataset('test','locked_test',20)
+        dense=dataset('dev-sizes','router_development',20,study.STUDY_SIZES,'dev')
+        primary_rows,primary_digest=study.read_cells(development,'router_development')
+        dense_rows,dense_digest=study.read_cells(dense,'router_development')
+        dense_selection=dict(input_cells_sha256=primary_digest,selected_manifest_sha256='synthetic-subset',
+            source_manifest_sha256='synthetic-full',features=list(study.BASE+study.COEF+study.PIXELS),
+            selector_sha256=study.sha(Path(study.__file__).with_name('publication_routing_sizes.py')),
+            sizes=list(study.STUDY_SIZES),clusters_per_content=2,seed=20261104,
+            clusters=[dict(representative_sha256=sha) for sha in sorted({r['reference_sha256'] for r in dense_rows})])
+        (dense/'selection.json').write_text(json.dumps(dense_selection))
+        combined,_,provenance=study.development_cells(development,dense)
+        self.assertEqual(len(combined),460)
+        self.assertEqual(provenance['identical_replays'],20)
+        outside=[dict(r,origin='outside') for r in dense_rows]
+        with patch.object(study,'read_cells',side_effect=[(primary_rows,primary_digest),(outside,dense_digest)]):
+            with self.assertRaisesRegex(ValueError,'outside primary development'):study.development_cells(development,dense)
+        replay=[dict(r,restored_ssim2='0') if r['size']=='512' else r for r in dense_rows]
+        with patch.object(study,'read_cells',side_effect=[(primary_rows,primary_digest),(replay,dense_digest)]):
+            with self.assertRaisesRegex(ValueError,'replayed development cell differs'):study.development_cells(development,dense)
+
         with patch.object(study,'FEATURES',{'coefficient':study.BASE+('coef_zero_ac_blocks',)}), patch.object(study,'CONFIGS',(('linear',1.),)):
             calls=0
             def interrupted_predict(model,x):
@@ -161,13 +181,13 @@ class PublicationIntegrity(unittest.TestCase):
                 return predict(model,x)
             with patch.object(study,'predict',interrupted_predict):
                 with self.assertRaisesRegex(RuntimeError,'synthetic interruption'):
-                    study.fit(development,root/'selection')
+                    study.fit(development,root/'selection',dense)
             checkpoint=root/'selection'/'coefficient-linear-1.fold-0.npz'
             checkpoint_stat=checkpoint.stat()
-            study.fit(development,root/'selection')
+            study.fit(development,root/'selection',dense)
             self.assertEqual(checkpoint.stat().st_mtime_ns,checkpoint_stat.st_mtime_ns)
             with self.assertRaisesRegex(ValueError,'already frozen'):
-                study.fit(development,root/'selection')
+                study.fit(development,root/'selection',dense)
         self.assertTrue((root/'selection'/'selection.freeze.json').is_file())
         study.evaluate(reserved,root/'selection',root/'report.json')
         report=json.loads((root/'report.json').read_text())
@@ -190,7 +210,7 @@ class PublicationIntegrity(unittest.TestCase):
             study.evaluate(reserved,root/'selection',root/'wrong-primary-report.json')
         study.evaluate(reserved,root/'selection',root/'size-report.json',root/'report.json')
         self.assertEqual(json.loads((root/'size-report.json').read_text())['evaluation_scope'],'size_generalization')
-        (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nencoders\t'+','.join(study.MODE_ENCODERS)+'\nmanifest_sha256\tsynthetic-subset\nencoder_dependencies_sha256\tsynthetic-subset\nexclusions\t\n')
+        (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t512\nencoders\t'+','.join(study.MODE_ENCODERS)+'\nmanifest_sha256\tsynthetic-subset\nencoder_dependencies_sha256\tsynthetic-subset\nexclusions\t\n')
         study.evaluate(reserved,root/'selection',root/'mode-report.json',mode_report=root/'report.json')
         self.assertEqual(json.loads((root/'mode-report.json').read_text())['evaluation_scope'],'mode_generalization')
         (reserved/'ENCODERS.tsv').write_text('synthetic-encoder\tchanged-binary\n')

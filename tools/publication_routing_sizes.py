@@ -10,9 +10,9 @@ from pathlib import Path
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from publication_routing_analysis import BASE, COEF, PIXELS, read_cells
+from publication_routing_analysis import BASE, COEF, PIXELS, STUDY_SIZES, read_cells
 
-SIZES=(32,40,48,64,80,96,128,160,192,256,320,384,512,640,768,1024,1280,1536,2048,4096)
+SIZES=STUDY_SIZES
 
 
 def representatives(rows,k):
@@ -58,7 +58,7 @@ def prepare(root,manifest,output,role,k):
     target=output/'references.tsv'
     with target.open('w') as f:
         writer=csv.DictWriter(f,fieldnames=fields,delimiter='\t');writer.writeheader();writer.writerows(subset)
-    record=dict(input_cells_sha256=digest,source_manifest_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest(),
+    record=dict(selector_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),input_cells_sha256=digest,source_manifest_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest(),
         selected_manifest_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
         rule='One canonical file per origin; per-content standardized decoded features at turbo 420 q50, 512 max edge; centroid-nearest representative of every cluster, including singleton clusters.',
         clusters_per_content=k,seed=20261104,features=list(BASE+COEF+PIXELS),clusters=clusters,sizes=list(SIZES),

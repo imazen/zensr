@@ -35,9 +35,9 @@ development; canonical test supplies reserved test, with any group touching
 validate moved entirely into development. No test score may choose features,
 hyperparameters, thresholds, harm budgets, or stopping criteria.
 
-The frozen manifest contains 487 new development references (418 origins),
-76 previously inspected/development-related references (48 origins), and
-314 reserved test references (289 origins). Another 1,228 references are
+The audited frozen manifest contains 484 new development references (404 origins),
+79 previously inspected/development-related references (48 origins), and
+291 reserved test references (270 origins). Another 1,251 references are
 excluded because their origin touches model training. This is stricter than
 page-level separation; it excludes all available pages in some document classes.
 Ref-kind strata distinguish native PNG, decoded HEIC and downscaled JPEG:
@@ -177,7 +177,7 @@ contribution; it must not inherit an unqualified independent-test claim. The
 coefficient-only and edge-only families likewise do not depend on that chooser.
 This separation was fixed before any new router fitting or reserved evaluation.
 
-## Size-generalization selection fixed before fitting
+## Size-dense development and reserved selection fixed before fitting
 
 Use the 20 sizes listed in `tools/publication_routing_sizes.py` (32 through
 4096, including 512), without upscaling. Choose two k-means clusters per content
@@ -189,12 +189,31 @@ No restoration outcome enters this selection. Record cluster memberships,
 representative hashes and native-size coverage. This purposeful subset is not a
 random sample of production images.
 
-The size audit reuses the frozen primary policies. Its separate evaluation mode
-permits only changed sizes and a representative manifest subset; all references
+Apply this same outcome-blind selection separately to development and reserved
+origins. Before fitting, run the full 20-size, 61-quality, four-encoder 420/444
+grid on the development representatives. Join it with the complete primary
+512-pixel cohort. Count an identical repeated cell only once and reject any
+conflicting replay. Dense references must belong to the primary development
+cohort, with unchanged origin/content identity, features, weights and encoder
+binaries. Preserve both input audits, selector identity and source digests.
+
+All variants of an origin stay together in every split. Each origin retains equal
+total weight across its available primary and dense-size cells. Thus representative
+origins distribute their weight across sizes while other origins contribute at
+512 pixels; the resulting objective is explicitly this designed mixture. Report
+primary and size-reserved outcomes separately rather than presenting that mixture
+as production traffic. Native-size and aspect-ratio exclusions remain visible.
+
+The reserved size audit reuses the frozen fitted policies. Its separate evaluation
+mode permits only changed sizes and a representative manifest subset; all references
 must belong to the primary reserved cohort. Executables, encoders, quality grid,
-features and weights must still match. It is an extrapolation audit of policies
-fitted at 512 pixels, not evidence that those policies were trained size-densely.
-Any deployment claim must state that distinction and its measured failures.
+features and weights must still match. The size audit tests new origins across the
+training size inventory, with any geometry outside observed training ranges labeled
+by the abstention control. It is not comprehensive coverage of every content class.
+
+This corrects the initial plan to fit only at 512 and use other sizes solely for
+extrapolation testing. The correction was made before any router fit or reserved
+outcome inspection; the primary sweep remains valid and is retained unchanged.
 
 ## Encoder-mode generalization
 
@@ -221,8 +240,8 @@ that fit's observed minimum/maximum, or any categorical value was unseen. Bounds
 are learned only from the training origins of each cross-fit fold (and from the
 full development cohort for the final model). Threshold and risk-penalty selection
 compares both variants under the same budgets. This is an axis-aligned range
-check, not a validated distribution-shift detector or a harm guarantee. In
-particular, a policy trained only at 512 pixels may abstain at larger sizes.
+check, not a validated distribution-shift detector or a harm guarantee. Geometries and feature combinations outside the observed training ranges may
+therefore abstain even when the nominal size belongs to the planned inventory.
 
 Retain every development candidate and all out-of-fold predictions. The reserved
 report evaluates the operating points selected at the five fixed budgets plus

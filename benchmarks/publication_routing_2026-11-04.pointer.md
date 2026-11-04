@@ -62,7 +62,11 @@ through the resource wrapper, serialized with the sweep:
 
 ```sh
 just publication-routing-cells audit "$root/development-primary"
-just publication-routing-analysis fit "$root/development-primary" "$root/selection"
+just publication-routing-sizes "$root/development-primary" "$root/references-audited.tsv" "$root/development-size" --role router_development
+# Run the frozen harness on development-size/references.tsv at the protocol's
+# full size/quality/encoder grid into development-size, then audit it.
+just publication-routing-cells audit "$root/development-size"
+just publication-routing-analysis fit "$root/development-primary" "$root/selection" --size-development "$root/development-size"
 ```
 
 Fitting checkpoints each grouped fold and stability split. Resuming requires the
@@ -82,7 +86,8 @@ just publication-routing-report "$root/reserved-report.json" "$root/report"
 The renderer writes CSV, Markdown, SVG, PDF and PNG, with source hashes. Synthetic
 plot directories are smoke tests only. They are not model-quality evidence.
 
-Still required: completed primary sweep and audit, frozen fitting, reserved
+Still required: completed primary and size-dense development sweeps and audits,
+frozen fitting, reserved
 evaluation, dense size generalization, encoder-mode coverage, and measured
 routing cost. Primary 512-pixel results alone cannot close the publication gates.
 
