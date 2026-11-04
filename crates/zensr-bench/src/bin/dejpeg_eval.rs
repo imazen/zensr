@@ -194,6 +194,13 @@ fn main() {
         .as_ref()
         .map(|d| load_adopted(d).expect("model policy"));
     assert!(m_off.scale == 1 && m_auto.scale == 1);
+    let metadata_restorer =
+        (std::env::var("ZENSR_EVAL_METADATA").as_deref() == Ok("1")).then(|| {
+            zensr_zenjpeg::api::Restorer::new().with_tier(
+                zensr_zenjpeg::api::Budget::Quality,
+                load_adopted(&m_off_dir).expect("metadata model"),
+            )
+        });
     let td = tmpdir();
 
     // Restricts every subcorpus to the held-out files — validate + test of
@@ -259,6 +266,7 @@ fn main() {
     }
 
     let sw = Sweep {
+        metadata_restorer: metadata_restorer.as_ref(),
         encoders: &encoders,
         subsamplings: &subsamplings,
         qs,
@@ -308,6 +316,9 @@ fn main() {
     let mut tsv = String::from(
         "sub\tfile\tencoder\tss\tq\tarm\tpsnr\tssim2\tbutter_n3\tprobe_family\tprobe_q\tgt_src\n",
     );
+    if metadata_restorer.is_some() {
+        tsv = "sub\tfile\tencoder\tss\tq\tprobe_family\tprobe_q\trouting_family\trouting_scale\trouting_q\tzero_ac_frac\tidentity_ssim2\n".into();
+    }
     for c in &chunks {
         tsv.push_str(c);
     }
@@ -330,6 +341,7 @@ struct Task {
 }
 
 struct Sweep<'a> {
+    metadata_restorer: Option<&'a zensr_zenjpeg::api::Restorer>,
     encoders: &'a [String],
     subsamplings: &'a [String],
     qs: &'a [u32],
@@ -372,6 +384,10 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                 let _ = std::fs::remove_file(&jpg);
                 write_ppm(&t.hr, &ppm); // fresh source each cell (gen chains rewrite it)
                 if !encode(&ppm, &jpg, enc, q, ss) {
+                    assert!(
+                        sw.metadata_restorer.is_none(),
+                        "metadata encode failed: {enc} {ss} {q}"
+                    );
                     eprintln!("ENCODE FAIL {enc} {ss} q{q} {}", t.fname);
                     continue;
                 }
@@ -397,6 +413,38 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
                 let data = std::fs::read(&jpg).unwrap();
                 let (pf, pq) = probe_cols(&data);
                 let d_off = zj_decode(&data, false);
+                if let Some(restorer) = sw.metadata_restorer {
+                    let outcome = restorer
+                        .restore(&data)
+                        .budget(zensr_zenjpeg::api::Budget::Quality)
+                        .routing(zensr_zenjpeg::api::Routing::Never)
+                        .run()
+                        .expect("routing metadata");
+                    let report = outcome.report();
+                    let coeffs = zenjpeg::decoder::Decoder::new()
+                        .decode_coefficients(&data, enough::Unstoppable)
+                        .expect("coefficients");
+                    let blocks = coeffs.components[0].coeffs.as_chunks::<64>().0;
+                    assert!(!blocks.is_empty());
+                    let frac = blocks
+                        .iter()
+                        .filter(|b| b[1..].iter().all(|&v| v == 0))
+                        .count() as f64
+                        / blocks.len() as f64;
+                    let identity = score(&t.hr, &d_off);
+                    writeln!(
+                        rows,
+                        "{}\t{}\t{enc}\t{ss}\t{q}\t{pf}\t{pq}\t{}\t{}\t{:.8}\t{frac:.8}\t{:.3}",
+                        t.sub,
+                        t.fname,
+                        report.encoder_family,
+                        report.quality_scale,
+                        report.quality,
+                        identity.ssim2
+                    )
+                    .unwrap();
+                    continue;
+                }
                 let d_auto = zj_decode(&data, true);
                 let srcs = [&d_off, &d_auto];
                 // (arm, src idx, model canon slot). Model arms pull from a
@@ -463,6 +511,8 @@ fn sweep_file(sw: &Sweep, t: &Task, idx: usize) -> String {
         }
     }
     eprintln!("done {}/{}", t.sub, t.fname);
-    let _ = std::fs::remove_dir_all(&td);
+    if sw.metadata_restorer.is_none() {
+        let _ = std::fs::remove_dir_all(&td);
+    }
     rows
 }

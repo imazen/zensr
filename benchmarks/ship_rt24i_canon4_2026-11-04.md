@@ -102,3 +102,15 @@ routing and gate intact: 31 micro and 32 zenjpeg unit tests passed, including
 the shape tests. The run used `run-heavy --mem 16G --jobs 6`: peak RSS 0.73
 GiB, minimum available 22,155 MiB, peak load 4.41. This verifies the existing
 code, not a refit or a completed model swap.
+
+## Continuation: metadata recovered (2026-11-04)
+
+The user authorized updating model-dependent tests. A metadata-only mode in
+`dejpeg_eval` now captures the real API report after record correction and the
+luma zero-AC fraction. The restored skip implementation avoids model inference.
+`just canon4-metadata` reproduced all 10,080 original cells with identical
+rounded identity SSIM2 and original probe fields. Metadata is retained at
+`/home/lilith/tmp/handoff/canon4-ship/probe-metadata.tsv` on i265. The 151-second
+run used run-heavy: peak RSS 0.45 GiB, minimum available 22,746 MiB, peak load
+8.29. These checks establish the join against the original production scores;
+the earlier missing-metadata blocker is resolved.

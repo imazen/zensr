@@ -143,3 +143,8 @@ canon4-calibration tsv:
 # its local f32 training export, which is not checked in.
 verify-adopted-f16 model:
     python3 tools/verify_adopted_f16.py "{{model}}"
+
+# Reproduce calibration inputs without running model inference. Validate the
+# identity scores against the original production TSV before joining results.
+canon4-metadata root out:
+    ZENSR_EVAL_METADATA=1 ZENSR_EVAL_JOBS=6 ZENSR_EVAL_QS=15,35,55,75,85,88,90,92,94,96 ZENSR_EVAL_ENCODERS=turbo,mozjpeg,jpegli,zenjpeg,zenjpeg:auto,zenjpeg:hybrid,zenjpeg:mozbase,zenjpeg:noaq ./target/release/dejpeg_eval "{{root}}" "{{out}}" 3 1 dejpeg_rt24i_canon4 dejpeg_rt24i_canon4
