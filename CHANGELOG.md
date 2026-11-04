@@ -11,6 +11,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Publication-study storage safeguards: hash-verified bounded staging and
+  ended-writer final draining (3379bc05, 944a33b9), plus strict validation of
+  resumed routing predictions (635771c9). The study remains incomplete;
+  these changes do not select or deploy a new routing policy.
+
 - Coefficient-routing comparisons under quality-dependent harm budgets,
   including quality-only ablation and calibration/audit separation (112c2a92).
   [Results and curve definition](benchmarks/routing_harm_curve_2026-11-04.md).
