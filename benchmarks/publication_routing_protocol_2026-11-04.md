@@ -397,3 +397,18 @@ upscaling. Manifest SHA-256:
 The selector rejects the reserved role. These resource cells are not additional
 training observations; the audited representative-grid contract still controls
 fitting membership. The pilot has not run yet.
+
+Storage-local verification was tested after finding that the client route used
+1 Gbit/s Ethernet and local disk had only 3.8 GiB free. A 15-second whole-interface
+sample received 1,349,277,362 bytes; that is not isolated audit throughput.
+The offline audit image retains Pillow 13.0.0 and the same auditor source.
+A four-worker/two-CPU storage-local pilot took 9.15 seconds; an eight-worker/four-CPU
+pilot took 4.86 seconds. Both verified the same 380 cells and 1,846 artifacts.
+The latter's GNU-time maximum RSS was 86,744 KiB. Its client-side wrapper reported
+`rc=0 6s | peak-RSS 0.01GiB | min-avail 22208MiB | peak-load 11.34`;
+that wrapper measures the SSH client, not the container's memory.
+The client-side four-worker pilot reported
+`rc=0 8s | peak-RSS 0.06GiB | min-avail 22105MiB | peak-load 10.05`.
+Cache state and CPU allocations differed, so these do not establish a full-grid
+speedup. The partially completed full audit was retained and resumed after each
+short serialized test.

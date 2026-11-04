@@ -113,3 +113,14 @@ encoder executables and shared libraries. It is a byte snapshot, not a relocatab
 execution environment: paths, dynamic-loader search paths and permissions still
 need explicit reconstruction. The capture tool is
 `tools/publication_routing_provenance.py` (`just publication-routing-capture`).
+
+## Storage-local audit environment
+
+`audit-runtime-v3/verification.json` identifies the tested offline-built image
+`sha256:4d66d2b87c4dc2d6d616fe0c4e3f20073069c25c89e2029eae308f325a4d38a4`.
+The context manifest SHA-256 is
+`e3ffadc3bb5e13ae2f6d9177ebabc53782252f32b9b5f7a462730c81867f745d`.
+Captured dependencies, build/pilot logs and the packager source are retained
+alongside it. [Audit purpose and execution](../docs/PUBLICATION_AUDIT.md) describes
+concurrency, ownership and resource limits. The original full audit continues;
+it was not restarted or replaced by the small pilot.

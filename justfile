@@ -226,3 +226,6 @@ publication-routing-capture identity output:
 
 publication-routing-resource-pilot source output edge *args:
     python3 tools/publication_routing_resource_pilot.py "{{source}}" "{{output}}" --edge "{{edge}}" {{args}}
+
+publication-routing-audit-image output base:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_audit_image.py "{{output}}" --base "{{base}}"
