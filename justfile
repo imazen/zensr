@@ -192,6 +192,9 @@ publication-routing-analysis *args:
 publication-routing-tests:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} -m unittest discover -s tools -p 'test_publication_routing.py'
 
+publication-routing-report source output:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_report.py "{{source}}" "{{output}}"
+
 publication-routing-lint:
     cargo fmt -p zensr-bench -- --check
     cargo clippy -p zensr-bench --bin routing_study --bin coef_features --bin dejpeg_eval -- -D warnings

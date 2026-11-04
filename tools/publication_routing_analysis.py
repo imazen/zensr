@@ -206,12 +206,12 @@ def threshold_decisions(rows,choice,gates):
     if choice['skip']:return np.zeros(len(rows),bool)
     decision=[]
     for r in rows:
-        scale=r['probe_scale'];value=float(r['probe_value']);ss=r['ss']
+        scale=r['probe_scale'];value=np.float32(r['probe_value']);ss=r['ss']
         if scale=='ButteraugliDistance':
-            gated=value<=gates['DISTANCE_'+ss]+choice['distance_margin']
+            gated=value<=np.float32(gates['DISTANCE_'+ss])+np.float32(choice['distance_margin'])
         elif scale in ('IjgQuality','MozjpegQuality'):
             family='MOZJPEG' if r['probe_family']=='Mozjpeg' else 'IJG'
-            gated=value>=gates[family+'_'+ss]-choice['quality_margin']
+            gated=value>=np.float32(gates[family+'_'+ss])-np.float32(choice['quality_margin'])
         else:gated=False  # Matches the runtime's unknown-scale gate behavior.
         decision.append(float(r['estimated_gain'])>=choice['min_gain'] and not gated)
     return np.asarray(decision)
@@ -222,6 +222,11 @@ def threshold_frontier(rows,gain,harm,groups,gates):
     from routing_frontier import MIN_GAINS, QUALITY_MARGINS, DISTANCE_MARGINS
     import itertools
     weights=origin_weights(groups);weights/=weights.sum()
+    for margin,column in ((0.,'gate'),(6.,'conservative_gate')):
+        control=dict(skip=False,min_gain=-float('inf'),quality_margin=margin,distance_margin=margin)
+        expected=np.asarray([r[column]=='false' for r in rows])
+        if not np.array_equal(threshold_decisions(rows,control,gates),expected):
+            raise ValueError(f'threshold baseline disagrees with recorded runtime {column}')
     candidates=[dict(skip=True,min_gain=0.,quality_margin=0.,distance_margin=0.,mean=0.,harm=0.,coverage=0.)]
     for minimum,qmargin,dmargin in itertools.product(MIN_GAINS,QUALITY_MARGINS,DISTANCE_MARGINS):
         c=dict(skip=False,min_gain=minimum,quality_margin=qmargin,distance_margin=dmargin)
