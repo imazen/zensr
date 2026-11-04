@@ -162,3 +162,11 @@ canon4-fit *args:
 
 canon4-policy-check *args:
     python3 tools/check_canon4_policy.py {{args}}
+
+# Empirical risk budgets are selected on calibration images, never audit images.
+canon4-frontier *args:
+    python3 tools/routing_frontier.py {{args}}
+
+canon4-routing-tests:
+    python3 -m unittest discover -s tools -p 'test_*canon4*.py'
+    python3 -m unittest discover -s tools -p 'test_routing_frontier.py'
