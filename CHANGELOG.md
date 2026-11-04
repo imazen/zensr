@@ -74,6 +74,11 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 ### Fixed
 
+- Routing skips now return the deployment decode before model inference.
+  Previously `Routing::Never` and an Auto rejection still ran restoration
+  while labeling its output unchanged. A real-model regression test compares
+  both skip modes against the decoder byte for byte.
+
 - **Threads, tiles and CPU tier no longer change the output.** The same JPEG
   restored with 2 threads differed from 1 thread, and AVX2 from AVX-512, by one
   RGB8 level (2026-10-18 counterexamples, dejpeg7_graphics on gb82 `girl` and

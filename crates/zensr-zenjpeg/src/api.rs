@@ -7,7 +7,7 @@
 //!
 //! Design and the measurements forcing each decision: `docs/API_DESIGN.md`.
 
-use crate::{restore_jpeg, Projection, RestoreConfig, RestoreError};
+use crate::{Projection, RestoreConfig, RestoreError};
 
 /// What the caller is optimising for.
 ///
@@ -868,7 +868,7 @@ impl<'a> Request<'a> {
         if skip {
             cfg = cfg.with_projection(Projection::Off);
         }
-        let r = restore_jpeg(self.jpeg, model, &cfg)?;
+        let r = crate::restore_jpeg_routed(self.jpeg, model, &cfg, skip)?;
         let chroma = match r.report.chroma_full {
             Some(true) => Chroma::Full,
             Some(false) => Chroma::HalfBoth,
@@ -962,6 +962,36 @@ mod tests {
             matches!(out, Err(RestoreError::TierNotLoaded)),
             "expected TierNotLoaded, got {out:?}"
         );
+    }
+
+    #[test]
+    fn routed_out_pixels_are_the_plain_decode() {
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model = zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1)
+            .expect("candidate model");
+        let restorer = Restorer::new().with_tier(Budget::Quality, model);
+        let jpg = jpeg_at(55.0, zenjpeg::encoder::ChromaSubsampling::Quarter);
+        let decoded = zenjpeg::decoder::Decoder::new()
+            .deblock(zenjpeg::decoder::DeblockMode::Off)
+            .decode(&jpg, enough::Unstoppable)
+            .unwrap();
+        for routing in [
+            Routing::Never,
+            Routing::Auto {
+                min_gain: f32::INFINITY,
+            },
+        ] {
+            let outcome = restorer
+                .restore(&jpg)
+                .budget(Budget::Quality)
+                .routing(routing)
+                .run()
+                .unwrap();
+            assert!(matches!(outcome, Outcome::Unchanged { .. }));
+            assert_eq!(outcome.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+        }
     }
 
     /// Intent must actually change behaviour. It was briefly accepted and

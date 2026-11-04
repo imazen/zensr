@@ -352,6 +352,16 @@ pub fn restore_jpeg(
     model: &AdoptedModel,
     cfg: &RestoreConfig,
 ) -> Result<Restored, RestoreError> {
+    restore_jpeg_routed(data, model, cfg, false)
+}
+
+/// Shared decode path; a routing skip returns before model inference.
+pub(crate) fn restore_jpeg_routed(
+    data: &[u8],
+    model: &AdoptedModel,
+    cfg: &RestoreConfig,
+    skip_model: bool,
+) -> Result<Restored, RestoreError> {
     if model.scale != 1 {
         return Err(RestoreError::UnsupportedModel(
             "restore_jpeg is the x1 pipeline",
@@ -408,8 +418,10 @@ pub fn restore_jpeg(
     // 2b. high-q identity gate: near-pristine input — the model can only
     // do harm here (measured; see policy_high_q_identity). The decode is
     // already consistent, so projection is a no-op too: return it.
-    if cfg.high_q_identity && policy_high_q_identity_with_margin(&probe, cfg.high_q_margin) {
-        report.skipped_model_high_q = true;
+    if skip_model
+        || (cfg.high_q_identity && policy_high_q_identity_with_margin(&probe, cfg.high_q_margin))
+    {
+        report.skipped_model_high_q = !skip_model;
         return Ok(Restored {
             planes,
             width: w,
