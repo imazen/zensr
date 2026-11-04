@@ -296,3 +296,18 @@ factors. The strengthened audit passes on both completed pilots: 280 mode cells 
 are retained in each run's `audit-history`; the full development audit will use
 this strengthened tool before fitting. The sampling-mismatch regression fails
 explicitly instead of accepting a mislabeled cell.
+
+## Large-image resource pilot
+
+A previously inspected document, selected by native geometry without outcomes,
+completed the frozen pipeline at 4096×2896, turbo q50, 420 and 444: two cells,
+11 verified artifacts. Run-heavy: rc=0, 44 s, peak RSS 2.45 GiB, minimum available
+19,982 MiB, peak load 16.23, one worker, 16 GiB cap. Independent artifact audit:
+rc=0, 3 s, peak RSS 0.07 GiB, minimum available 22,028 MiB, peak load 13.62.
+This is full pipeline resource evidence including encoding, restoration, metrics
+and retained artifacts; it is not a runtime-latency benchmark or a measurement
+at square 4096×4096. Artifacts are in `resource-4096-v1`; the manifest and selector
+identities are in `resource-4096-references.json` under the study root. The 12-worker
+512 configuration is not presumed safe for the dense-size grid. Begin that grid
+with one worker under the existing cap; any concurrency increase needs its own
+measurement at the sizes actually processed.
