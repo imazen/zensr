@@ -166,7 +166,7 @@ pub fn psnr_rgb8(a: &Rgb8Img, b: &Rgb8Img) -> f64 {
 pub fn ssim2(a: &Rgb8Img, b: &Rgb8Img) -> f64 {
     use imgref::Img;
     let conv = |i: &Rgb8Img| -> Img<Vec<[u8; 3]>> {
-        let v: Vec<[u8; 3]> = i.px.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+        let v: Vec<[u8; 3]> = i.px.as_chunks::<3>().0.to_vec();
         Img::new(v, i.w, i.h)
     };
     let (ra, rb) = (conv(a), conv(b));
@@ -471,7 +471,9 @@ pub fn score(hr: &Rgb8Img, out: &Rgb8Img) -> Scored {
 pub fn read_f32_file(p: &std::path::Path) -> Vec<f32> {
     std::fs::read(p)
         .unwrap()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect()
 }
