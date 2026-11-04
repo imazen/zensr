@@ -352,3 +352,10 @@ weighted moment accumulation, then restores the fitted mean's offset. This avoid
 roundoff-generated negative variances for constant columns without changing origin
 weights or using validation data. A weighted analytic regression and the complete
 routing suite pass with numerical runtime warnings treated as errors.
+
+The geometry-only resource selector accepts an explicit reference count for a
+concurrency pilot. The two-reference manifest contains the two previously inspected
+7016×4961 brochure pages (one origin); its SHA-256 is
+`0455e458131961689fde844ad472737be9bfee04469c4769115da7acc7345d5c`.
+This is a resource workload, not two independent statistical samples. Its run
+remains pending while the primary sweep owns compute.
