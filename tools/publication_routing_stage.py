@@ -6,6 +6,7 @@ No artifact is released until its destination is hashed and synced. This is a
 storage operation, not an artifact/coverage audit or permission to fit a study.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -52,6 +53,7 @@ def transfer(source,destination):
     # Sync pre-existing copies as well, then their directory, before release.
     with destination.open('rb') as f:os.fsync(f.fileno())
     sync_directory(destination.parent)
+    sync_directory(destination.parent.parent)
     size=source.stat().st_size
     source.unlink();sync_directory(source.parent)
     return size
@@ -75,13 +77,18 @@ def drain(source,destination,scope):
             try:
                 stat=fd.stat();opened.add((stat.st_dev,stat.st_ino))
             except FileNotFoundError:pass
-    count=total=skipped=0
+    if not destination.is_dir():raise ValueError('archive artifact directory must already exist')
+    ready=[];skipped=0
     for path in sorted(source.glob('*/*')):
         if not path.is_file():raise ValueError(f'unexpected staged entry: {path}')
         stat=path.stat()
         if (stat.st_dev,stat.st_ino) in opened:skipped+=1;continue
-        total+=transfer(path,destination/path.relative_to(source));count+=1
-    return dict(transferred=count,bytes=total,open_files_retained=skipped)
+        ready.append(path)
+    # The writer is frozen: bounded I/O concurrency does not overlap generation.
+    # An exception waits for other transfers and leaves the writer frozen.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        sizes=list(pool.map(lambda path:transfer(path,destination/path.relative_to(source)),ready))
+    return dict(transferred=len(sizes),bytes=sum(sizes),open_files_retained=skipped)
 
 
 def watch(source,destination,scope):

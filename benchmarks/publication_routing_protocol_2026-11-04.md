@@ -568,3 +568,12 @@ scientific inputs and committed cell records are unchanged.
 
 The 21 analysis integrity tests pass, including synchronization failure,
 conflicting destination, corrupt staged data and failure-without-resume cases.
+
+
+The staged transfer now uses four bounded workers while generation is frozen.
+A separate 12-cell / 66-artifact replay passed transfer and full audit with
+unchanged bytes. The transfer wrapper reported
+`rc=0 2s | peak-RSS 0.03GiB | min-avail 21934MiB | peak-load 2.88`.
+This small replay is a correctness check, not evidence of a throughput gain.
+Destination parent directories are synchronized before source release as well.
+All 22 integrity tests pass, including concurrent identical publication.

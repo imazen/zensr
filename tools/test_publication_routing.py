@@ -13,6 +13,21 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_concurrent_staging_transfers_publish_identical_bytes(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from publication_routing_stage import transfer
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='staging-concurrent-',dir=base))
+        data=b'identical artifact'*1000;name=hashlib.sha256(data).hexdigest()+'.zst'
+        destination=root/'archive'/name;sources=[]
+        for i in range(4):
+            source=root/str(i)/name;source.parent.mkdir();source.write_bytes(data);sources.append(source)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            sizes=list(pool.map(lambda source:transfer(source,destination),sources))
+        self.assertEqual(sizes,[len(data)]*4)
+        self.assertEqual(destination.read_bytes(),data)
+        self.assertTrue(all(not source.exists() for source in sources))
+
     def test_staging_guard_does_not_resume_after_transfer_failure(self):
         import publication_routing_stage as staging
         from types import SimpleNamespace
