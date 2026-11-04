@@ -370,21 +370,35 @@ def paired_interval(gain,harm,decision,baseline,groups,iters=2000):
                 harm_difference_95=list(map(float,np.quantile(risks[indices].mean(axis=1),[.025,.975]))))
 
 
-def evaluate(root,selection,out):
+def evaluate(root,selection,out,primary_report=None):
     if out.exists():raise ValueError('refusing to overwrite reserved-test report')
     freeze=selection/'selection.freeze.json';frozen=json.loads(freeze.read_text())
     fit_contract=json.loads((selection/'fit.contract.json').read_text())
     if sha(selection/'fit.contract.json')!=frozen['fit_contract_sha256']:raise ValueError('fit contract changed after selection')
     if sha(__file__)!=fit_contract['analysis_sha256']:raise ValueError('analysis source changed after selection')
     if environment_contract()!=fit_contract['environment']:raise ValueError('evaluation environment changed after fitting')
-    if study_contract(root)!=frozen['study_contract']:raise ValueError('reserved inputs differ from frozen study contract')
+    actual_contract=study_contract(root)
+    expected_contract=json.loads(json.dumps(frozen['study_contract']))
+    primary=None
+    if primary_report is not None:
+        primary=json.loads(primary_report.read_text())
+        if primary['selection_sha256']!=sha(freeze) or primary['evaluation_scope']!='primary':raise ValueError('size audit requires this selection primary report')
+        # Explicit size-generalization mode changes only image-size inventory
+        # and the representative subset; codecs/features/model stay identical.
+        for c in (actual_contract,expected_contract):
+            for field in ('sizes','manifest_sha256'):c['identity'].pop(field,None)
+    if actual_contract!=expected_contract:raise ValueError('reserved inputs differ from frozen study contract')
     rows,identity=read_cells(root,'locked_test');groups=np.asarray([r['origin'] for r in rows])
+    if primary is not None and not {r['reference_sha256'] for r in rows}<=set(primary['test_reference_sha256s']):raise ValueError('size audit reference outside primary reserved cohort')
     if set(groups)&set(frozen['development_origins']):raise ValueError('origin leakage into reserved test')
     gain,harm,limits=labels(rows)
     for row in rows:
         quality=float(row['identity_ssim2'])
         row['identity_quality_band']='below90' if quality<90 else ('90to95' if quality<95 else '95plus')
     result=dict(test_cells_sha256=identity,selection_sha256=sha(freeze),policies={},
+                evaluation_scope='size_generalization' if primary is not None else 'primary',
+                primary_report_sha256=sha(primary_report) if primary_report is not None else None,
+                test_reference_sha256s=sorted({r['reference_sha256'] for r in rows}),
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
     predicted={}
@@ -435,8 +449,9 @@ def main():
     ap=argparse.ArgumentParser();sub=ap.add_subparsers(dest='command',required=True)
     p=sub.add_parser('fit');p.add_argument('root',type=Path);p.add_argument('output',type=Path)
     p=sub.add_parser('evaluate');p.add_argument('root',type=Path);p.add_argument('selection',type=Path);p.add_argument('output',type=Path)
+    p.add_argument('--size-generalization-of',type=Path)
     a=ap.parse_args()
     if a.command=='fit':fit(a.root,a.output)
-    else:evaluate(a.root,a.selection,a.output)
+    else:evaluate(a.root,a.selection,a.output,a.size_generalization_of)
 
 if __name__=='__main__':main()

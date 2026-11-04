@@ -206,6 +206,9 @@ publication-routing-tests:
 publication-routing-report source output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_report.py "{{source}}" "{{output}}"
 
+publication-routing-sizes *args:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_sizes.py {{args}}
+
 publication-routing-lint:
     cargo fmt -p zensr-bench -- --check
     cargo clippy -p zensr-bench --bin routing_study --bin coef_features --bin dejpeg_eval -- -D warnings

@@ -13,6 +13,21 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_size_representatives_ignore_outcomes_and_keep_singletons(self):
+        from publication_routing_sizes import representatives
+        rows=[]
+        for i in range(9):
+            row={name:str(i+1) for name in study.BASE+study.COEF+study.PIXELS}
+            row.update(file=f'{i:03}',origin=f'origin-{i}',reference_sha256=f'ref-{i}',
+                content='photo' if i<8 else 'singleton',encoder='turbo',ss='420',nominal_q='50',size='512',
+                identity_ssim2='80',restored_ssim2='81')
+            rows.append(row)
+        before=representatives(rows,2)
+        for row in rows:row['restored_ssim2']='0'
+        self.assertEqual(before,representatives(rows,2))
+        self.assertIn('ref-8',before[0])
+        self.assertEqual(sum(c['origins'] for c in before[1]),9)
+
     def test_reference_columns_cannot_enter_inference(self):
         row=dict(width='32',probe_family='Mozjpeg',probe_scale='MozjpegQuality',ss='420',identity_ssim2='70')
         before=inputs([row],('width',))
@@ -123,6 +138,11 @@ class PublicationIntegrity(unittest.TestCase):
         self.assertEqual(report['policies']['unchanged']['origin_mean'],0.)
         self.assertEqual(report['policies']['oracle_positive']['harm_count'],0)
         self.assertIn('paired_vs_fidelity',report['policies']['coefficient/budget-0'])
+        (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t64\nmanifest_sha256\tsynthetic-subset\n')
+        with self.assertRaisesRegex(ValueError,'frozen study contract'):
+            study.evaluate(reserved,root/'selection',root/'wrong-primary-report.json')
+        study.evaluate(reserved,root/'selection',root/'size-report.json',root/'report.json')
+        self.assertEqual(json.loads((root/'size-report.json').read_text())['evaluation_scope'],'size_generalization')
         (reserved/'FEATURES.tsv').write_text('changed feature identities\n')
         with self.assertRaisesRegex(ValueError,'frozen study contract'):
             study.evaluate(reserved,root/'selection',root/'changed-report.json')

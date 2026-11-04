@@ -166,3 +166,22 @@ that probability. A separate `decoded_legacy_chooser` family measures its increm
 contribution; it must not inherit an unqualified independent-test claim. The
 coefficient-only and edge-only families likewise do not depend on that chooser.
 This separation was fixed before any new router fitting or reserved evaluation.
+
+## Size-generalization selection fixed before fitting
+
+Use the 20 sizes listed in `tools/publication_routing_sizes.py` (32 through
+4096, including 512), without upscaling. Choose two k-means clusters per content
+stratum, capped by available origins, using standardized inference features from
+turbo 420 q50 at the primary 512-pixel geometry. Choose one canonical file per
+origin before clustering and the centroid-nearest member from every cluster;
+singleton clusters remain represented. Seed is 20261104, with 10 initializations.
+No restoration outcome enters this selection. Record cluster memberships,
+representative hashes and native-size coverage. This purposeful subset is not a
+random sample of production images.
+
+The size audit reuses the frozen primary policies. Its separate evaluation mode
+permits only changed sizes and a representative manifest subset; all references
+must belong to the primary reserved cohort. Executables, encoders, quality grid,
+features and weights must still match. It is an extrapolation audit of policies
+fitted at 512 pixels, not evidence that those policies were trained size-densely.
+Any deployment claim must state that distinction and its measured failures.
