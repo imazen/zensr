@@ -326,7 +326,18 @@ class PublicationIntegrity(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'reserved representative selection'):
             study.evaluate(reserved_sizes,root/'selection',root/'wrong-selection-report.json',root/'report.json')
         (reserved/'IDENTITY.tsv').write_text('role\tlocked_test\nbinary_sha256\tsynthetic\nsizes\t512\nencoders\t'+','.join(study.MODE_ENCODERS)+'\nmanifest_sha256\tsynthetic-subset\nencoder_dependencies_sha256\tsynthetic-subset\nexclusions\t\n')
+        with self.assertRaises(FileNotFoundError):
+            study.evaluate(reserved,root/'selection',root/'missing-mode-selection.json',mode_report=root/'report.json')
+        reserved_selection['input_cells_sha256']=report['test_cells_sha256']
+        reserved_selection['clusters']=[dict(representative_sha256=h) for h in report['test_reference_sha256s']]
+        mode_selection=json.dumps(reserved_selection)
+        (reserved/'selection.json').write_text(json.dumps(reserved_selection))
         study.evaluate(reserved,root/'selection',root/'mode-report.json',mode_report=root/'report.json')
+        reserved_selection['clusters']=[]
+        (reserved/'selection.json').write_text(json.dumps(reserved_selection))
+        with self.assertRaisesRegex(ValueError,'representative membership'):
+            study.evaluate(reserved,root/'selection',root/'wrong-mode-members.json',mode_report=root/'report.json')
+        (reserved/'selection.json').write_text(mode_selection)
         self.assertEqual(json.loads((root/'mode-report.json').read_text())['evaluation_scope'],'mode_generalization')
         (reserved/'ENCODERS.tsv').write_text('synthetic-encoder\tchanged-binary\n')
         with self.assertRaisesRegex(ValueError,'encoder binaries'):

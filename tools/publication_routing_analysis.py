@@ -521,19 +521,19 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
     if generalization_report is not None:
         primary=json.loads(generalization_report.read_text())
         if primary['selection_sha256']!=sha(freeze) or primary['evaluation_scope']!='primary':raise ValueError('size audit requires this selection primary report')
+        from publication_routing_sizes import NATIVE_RULE
         if primary_report is not None:
-            from publication_routing_sizes import NATIVE_RULE
             if actual_contract['identity'].get('sizes')!=','.join(map(str,STUDY_SIZES)):
                 raise ValueError('reserved size inventory differs from fixed protocol')
-            size_selection=json.loads((root/'selection.json').read_text())
-            expected_selection=dict(input_cells_sha256=primary['test_cells_sha256'],
-                source_manifest_sha256=expected_contract['identity']['manifest_sha256'],
-                selected_manifest_sha256=actual_contract['identity']['manifest_sha256'],
-                selector_sha256=sha(Path(__file__).with_name('publication_routing_sizes.py')),
-                features=list(BASE+COEF+PIXELS),sizes=list(STUDY_SIZES),
-                clusters_per_content=2,seed=20261104,native_rule=NATIVE_RULE)
-            if any(size_selection.get(k)!=v for k,v in expected_selection.items()):
-                raise ValueError('reserved representative selection differs from fixed protocol')
+        size_selection=json.loads((root/'selection.json').read_text())
+        expected_selection=dict(input_cells_sha256=primary['test_cells_sha256'],
+            source_manifest_sha256=expected_contract['identity']['manifest_sha256'],
+            selected_manifest_sha256=actual_contract['identity']['manifest_sha256'],
+            selector_sha256=sha(Path(__file__).with_name('publication_routing_sizes.py')),
+            features=list(BASE+COEF+PIXELS),sizes=list(STUDY_SIZES),
+            clusters_per_content=2,seed=20261104,native_rule=NATIVE_RULE)
+        if any(size_selection.get(k)!=v for k,v in expected_selection.items()):
+            raise ValueError('reserved representative selection differs from fixed protocol')
         # Explicit size-generalization mode changes only image-size inventory
         # and the representative subset; codecs/features/model stay identical.
         changed_fields=('sizes','manifest_sha256') if primary_report is not None else ('encoders','encoder_dependencies_sha256','manifest_sha256')
@@ -566,6 +566,7 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
                 uncertainty='Pointwise paired origin-bootstrap intervals, not simultaneous policy-selection guarantees. Zero observed harm can give a degenerate interval and is not proof of zero population risk.',
                 legacy_chooser='Chooser-containing policies retain unresolved historical training/feature-version provenance.')
     result['development_sources']=frozen['development_sources']
+    result['representative_selection_sha256']=sha(root/'selection.json') if size_selection is not None else None
     result['size_selection_sha256']=sha(root/'selection.json') if size_selection is not None else None
     result['router_size_scope']='Serialized Python joblib artifacts include fitted transforms and gain/risk heads; these are not measured Rust deployment binary or resident-memory sizes. Restoration weights are separate.'
     result['training_provenance']='Reserved origins are excluded against the documented canonical model-source policy. Historical training pairs lack source-image IDs and a complete generation snapshot; per-pair training provenance is not reconstructed.'

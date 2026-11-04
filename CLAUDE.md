@@ -41,3 +41,7 @@
   feature-only representative-selection provenance, including the audited primary
   cell digest and exact selected membership. Merely changing a run's size or
   subset identity no longer admits it as protocol-compliant generalization data.
+
+- Publication encoder-mode evaluation now enforces the same representative-selection
+  provenance as the size study; an arbitrary subset of reserved references is no
+  longer admitted merely because it belongs to the primary reserved cohort.

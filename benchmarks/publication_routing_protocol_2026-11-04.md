@@ -229,6 +229,11 @@ The list is fixed in `MODE_ENCODERS`; first check boundary support on the old
 pilot references. This is a separate generalization audit, not additional fitting.
 Encoder executable/shared-library hashes must be a verified subset of those in
 the primary run. A different encoder binary is not admitted as a knob change.
+Mode evaluation also requires the feature-only representative selection record:
+its primary-cell digest, manifests, selector source, fixed parameters and exact
+reference membership must match. Missing provenance or altered membership fails
+before policy scoring. The reserved size and mode reports retain the selection
+record digest. The synthetic selection/evaluation roundtrip covers both failures.
 
 This covers the knobs exposed by the frozen harness, not every JPEG mode.
 XYB, 4:2:2/4:4:0, grayscale, other decoder upsampling/strictness settings,
