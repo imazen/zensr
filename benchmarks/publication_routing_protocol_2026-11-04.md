@@ -604,3 +604,17 @@ observed; the earlier byte-verification checks remain distinct from durability.
 The small transfer timings above precede this correction and must not be used
 as synchronous-archive performance evidence. All retained artifacts still
 require the final study audit before fitting.
+
+
+Live staged-copy release now atomically replaces the local pathname with a link
+to its verified archive copy. A frozen thread can be between `create_new` returning
+AlreadyExists and reading the path without holding an open descriptor; unlinking
+would make that resumed lookup fail. This race was identified in source review
+and reproduced by the filesystem regression, not observed as a generation failure.
+Open descriptors and pending path reads both retain identical bytes. Subsequent
+drains validate and skip the retained archive links.
+
+All 23 integrity tests pass. A synchronous-archive pilot transferred 66 artifacts
+(29,467,539 bytes), its repeated drain transferred zero, all 66 links remained
+readable with matching hashes, and the full 12-cell audit passed. The transfer
+wrapper reported `rc=0 21s | peak-RSS 0.03GiB | min-avail 22192MiB | peak-load 5.16`.

@@ -13,6 +13,23 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_live_transfer_keeps_pending_path_lookup_valid(self):
+        from publication_routing_stage import transfer
+        import os
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='staging-pending-read-',dir=base))
+        data=b'pending legacy writer read';name=hashlib.sha256(data).hexdigest()+'.zst'
+        source=root/'stage'/name;source.parent.mkdir();source.write_bytes(data)
+        destination=root/'archive'/name
+        with self.assertRaises(FileExistsError):
+            os.open(source,os.O_WRONLY|os.O_CREAT|os.O_EXCL)
+        with source.open('rb') as opened_before_transfer:
+            transfer(source,destination,keep_alias=True)
+            self.assertEqual(opened_before_transfer.read(),data)
+        self.assertTrue(source.is_symlink())
+        self.assertEqual(source.read_bytes(),data)
+        self.assertEqual(destination.read_bytes(),data)
+
     def test_concurrent_staging_transfers_publish_identical_bytes(self):
         from concurrent.futures import ThreadPoolExecutor
         from publication_routing_stage import transfer

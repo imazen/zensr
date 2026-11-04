@@ -15,6 +15,7 @@ import re
 import subprocess
 import tempfile
 import time
+import uuid
 
 
 def digest(path):
@@ -30,7 +31,7 @@ def sync_directory(path):
     finally:os.close(fd)
 
 
-def transfer(source,destination):
+def transfer(source,destination,keep_alias=False):
     """Preserve conflicting/corrupt bytes; release source only after verification."""
     expected=source.name.split('.')[0]
     if not re.fullmatch('[0-9a-f]{64}',expected):raise ValueError('not a content-addressed artifact')
@@ -55,7 +56,16 @@ def transfer(source,destination):
     sync_directory(destination.parent)
     sync_directory(destination.parent.parent)
     size=source.stat().st_size
-    source.unlink();sync_directory(source.parent)
+    if keep_alias:
+        # A frozen thread may have tested this pathname without holding an FD.
+        # Keep lookup atomic across resume, including the legacy writer's
+        # create-new / already-exists / read-existing sequence.
+        alias=source.parent/('.archive-alias-'+uuid.uuid4().hex)
+        alias.symlink_to(destination.absolute())
+        os.replace(alias,source)
+    else:
+        source.unlink()
+    sync_directory(source.parent)
     return size
 
 
@@ -80,6 +90,10 @@ def drain(source,destination,scope):
     if not destination.is_dir():raise ValueError('archive artifact directory must already exist')
     ready=[];skipped=0
     for path in sorted(source.glob('*/*')):
+        if path.is_symlink():
+            if os.readlink(path)!=str(destination/path.relative_to(source)):
+                raise ValueError(f'unexpected archive alias: {path}')
+            continue
         if not path.is_file():raise ValueError(f'unexpected staged entry: {path}')
         stat=path.stat()
         if (stat.st_dev,stat.st_ino) in opened:skipped+=1;continue
@@ -87,7 +101,7 @@ def drain(source,destination,scope):
     # The writer is frozen: bounded I/O concurrency does not overlap generation.
     # An exception waits for other transfers and leaves the writer frozen.
     with ThreadPoolExecutor(max_workers=4) as pool:
-        sizes=list(pool.map(lambda path:transfer(path,destination/path.relative_to(source)),ready))
+        sizes=list(pool.map(lambda path:transfer(path,destination/path.relative_to(source),keep_alias=True),ready))
     return dict(transferred=len(sizes),bytes=sum(sizes),open_files_retained=skipped)
 
 

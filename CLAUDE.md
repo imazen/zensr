@@ -56,3 +56,9 @@
   releasing staged copies. The study-only export now uses sync; a storage-side
   syncfs completed successfully before generation/transfer resumed. Verify
   server-side synchronization semantics before using staged-copy release.
+
+- Publication staging review found a pending-path-read race: freezing a writer
+  and checking open descriptors does not exclude a thread paused between
+  create_new/AlreadyExists and reading the existing artifact. Live transfers now
+  atomically replace local copies with verified archive links. The filesystem
+  regression and repeated-drain pilot pass; no run failure was observed.
