@@ -228,3 +228,15 @@ Retain every development candidate and all out-of-fold predictions. The reserved
 report evaluates the operating points selected at the five fixed budgets plus
 fixed baselines. These are sampled gain/risk operating points, not an exhaustive
 continuous frontier and not a deployment selection.
+
+## Encoder-mode boundary support measured before fitting
+
+The frozen executable completed all 280 pilot cells: two previously inspected
+references, size 32, q0/5/50/95/100, all 14 configurations above, and 420/444.
+The current artifact auditor verified 756 unique artifacts, including independent
+JPEG reads. No mode/quality exclusion was needed in this pilot. This verifies
+boundary support, not quality over the reserved cohort or support for every
+possible image. Sweep: run-heavy rc=0, 4 s, peak RSS 0.04 GiB, minimum available
+22,173 MiB, peak load 15.96. Audit: rc=0, 1 s, peak RSS 0.02 GiB, minimum
+available 22,299 MiB, peak load 15.10. Artifacts: `mode-pilot-v1` under the
+[study root](publication_routing_2026-11-04.pointer.md).
