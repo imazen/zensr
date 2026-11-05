@@ -197,6 +197,12 @@ publication-routing-cost-pinned manifest cpus pin *args:
 publication-routing-run manifest output role sizes qualities encoders jobs="6" exclusions="":
     ./target/release/routing_study "{{manifest}}" "{{output}}" "{{role}}" "{{sizes}}" "{{qualities}}" "{{encoders}}" "{{jobs}}" "{{exclusions}}"
 
+publication-routing-amend *args:
+    python3 tools/publication_routing_amend.py {{args}}
+
+publication-routing-amend-tests:
+    python3 -m unittest discover -s tools -p 'test_publication_routing_amend.py'
+
 publication-routing-cells *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cells.py {{args}}
 
