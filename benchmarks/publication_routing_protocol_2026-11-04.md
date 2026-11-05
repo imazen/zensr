@@ -848,3 +848,28 @@ SHA-256 `08a1b70c05e7ff8af6a9c83d05d1ea4e7863dd633fdf5ba357ad91bd1f59620e`.
 The larger wall budget resolved the missing-round problem, but confirmation
 remains blocked by the observed resource gate. A quiet-host measurement is
 required; descriptive timing and complete sampling are not substitutes for it.
+
+
+## NFS cache-option transport replay — 2026-11-05
+
+An isolated mount compared the live zero attribute-cache/lookup-cache setting
+with three-second attribute caching and positive-only lookup caching. The live
+mount was unchanged. Generation was frozen during both 12-cell replays of the
+existing six-plot, 512-edge, turbo q50 transport fixture. Both variants reproduced
+all 12 cell tables exactly and verified all 66 artifact hashes. Each generation
+wrapper reported 2 seconds and peak RSS 0.45 GiB (uncached: minimum available
+19,165 MiB, peak load 8.46; cached: 19,159 MiB, peak load 7.16).
+
+Both archives passed full 12-cell/66-artifact audits. The cached variant's
+post-drain regeneration also reproduced all 12 cells. Its drain moved 29,467,539
+bytes and took 17 seconds, longer than the three-second attribute lifetime:
+this does not prove behavior for still-fresh cached entries during replacement.
+An initial transfer failed because the new archive directory was created with
+root ownership; only that pilot directory's ownership was corrected before
+retry. The failed attempt remains in the retained logs.
+
+This small operational replay did not demonstrate a speed improvement and is
+not a full-grid throughput estimate. The live mount options remain unchanged;
+the isolated mount was removed and all pilot artifacts retained. Archive roots
+are `cache-options-none-v1` and `cache-options-pos3-v1` beside the dense study.
+Full logs and hashes are in `cache-option-execution-20261105` beside those roots.
