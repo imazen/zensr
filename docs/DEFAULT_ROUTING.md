@@ -38,7 +38,8 @@ image to 512 for routing would change that damage, so routing never resizes.
 
 For images fitting inside 512×512, the router analyzes the whole image. Larger
 images use up to five deduplicated windows: center and four corners, each at
-most 512×512. Starts align to the eight-pixel luma DCT grid. Coefficient
+most 512×512. Starts align to 16 pixels, preserving both luma DCT and 420 MCU
+phase. Coefficient
 statistics come from the corresponding native luma blocks; an axis spanning
 the whole image retains its MCU padding. Pixel features come from those same
 windows. The predictor receives window dimensions, locally estimated legacy
@@ -57,8 +58,7 @@ These checks establish execution and parity, not a quality frontier at new sizes
 longest edge before JPEG encoding. Native windows, small images and a minimum
 across multiple predictions change that distribution. Five positions can miss
 localized damage. Whole-file bits per pixel include metadata and need not
-represent each window. Eight-pixel alignment preserves luma phase but can start
-mid-MCU in 420. The high-quality identity gate remains disabled for learned
+represent each window. The high-quality identity gate remains disabled for learned
 routing at all sizes; its benefit or harm outside 512 is unmeasured. Neither the
 0.5490% observed harm nor +2.4260 mean gain is established at other sizes.
 The [VSR review](VSR_REVIEW.md) records independent critique and improvement

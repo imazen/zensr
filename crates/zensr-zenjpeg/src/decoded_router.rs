@@ -81,9 +81,9 @@ struct Window {
 
 fn windows(width: usize, height: usize) -> Vec<Window> {
     let (w, h) = (width.min(512), height.min(512));
-    // Align with native luma DCT blocks; never resample decoded pixels.
-    let (last_x, last_y) = (((width - w) / 8) * 8, ((height - h) / 8) * 8);
-    let (mid_x, mid_y) = (((width - w) / 16) * 8, ((height - h) / 16) * 8);
+    // Align with both 420 MCUs and luma DCT blocks; never resample pixels.
+    let (last_x, last_y) = (((width - w) / 16) * 16, ((height - h) / 16) * 16);
+    let (mid_x, mid_y) = (((width - w) / 32) * 16, ((height - h) / 32) * 16);
     let mut out = Vec::with_capacity(5);
     for (x, y) in [
         (mid_x, mid_y),
@@ -351,7 +351,7 @@ mod tests {
                 assert!(
                     r.width <= 512 && r.height <= 512 && r.x + r.width <= w && r.y + r.height <= h
                 );
-                assert_eq!((r.x % 8, r.y % 8), (0, 0));
+                assert_eq!((r.x % 16, r.y % 16), (0, 0));
                 assert!(!regions[..i].contains(r));
             }
             if w <= 512 && h <= 512 {

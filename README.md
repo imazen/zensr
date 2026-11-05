@@ -70,7 +70,8 @@ scheduling, Winograd F(2,3)). No GPU path yet (CubeCL spike queued).
 Default `api::Restorer` Fidelity requests use the owner-selected decoded-feature
 router for RGB 420/444 JPEGs at arbitrary resolutions (minimum dimension eight
 pixels). It analyzes native windows without resizing and restores the original
-dimensions. On 140,940 reserved **512-pixel** cells it gives **+2.426 mean SSIM2 and 0.549% harm**, both origin-balanced,
+dimensions. On 140,940 reserved **512-pixel** cells it gives **+2.426 mean SSIM2
+and 0.549% harm**, both origin-balanced,
 restoring 80.43% of cells. Harm uses the quality-dependent loss curve; the worst
 loss is 18.534 SSIM2. Pixel-artifact auditing was cancelled by the owner.
 [Measured frontier, scope and limitations](benchmarks/publication_primary_reserved_2026-11-05.md).
@@ -79,7 +80,8 @@ Explicit `Routing` overrides, Conservative intent, unsupported JPEG layouts and
 `--no-default-features` builds use the calibrated coefficient/quality routing.
 The `chooser` analysis dependency is now enabled by default for decoded routing;
 the older content-class classifier is not an input to the new linear router.
-Quality at other resolutions and runtime cost have not been established. Low-level `restore_jpeg` remains the configurable
+Quality at other resolutions and runtime cost have not been established.
+Low-level `restore_jpeg` remains the configurable
 restoration pipeline. [Default routing implementation](docs/DEFAULT_ROUTING.md).
 
 Ship format is f16. Goldens are generated through the f16 roundtrip and tested

@@ -59,7 +59,8 @@ unresolved quality limitations:
 - Global file bpp includes metadata and may not describe a particular window.
   Changing this feature only at runtime would break the frozen model contract;
   any replacement must be matched in development features and fitting.
-- Eight-pixel starts preserve luma DCT phase; 420 chroma has a 16-pixel MCU phase.
+- The reviewer identified that eight-pixel starts could change 420 chroma MCU
+  phase. Starts now align to 16 pixels for both 420 and 444.
 - Disabling the old high-quality gate preserves the measured 512 operating point,
   but its effect at other sizes has not been measured.
 - Analysis can repeat pixel decoding and coefficient parsing before restoration.

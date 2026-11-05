@@ -12,7 +12,7 @@ None queued by the canon4 update.
 ### Added
 
 - Arbitrary-resolution decoded routing through at most five native windows,
-  aligned to luma DCT blocks, with restoration at original dimensions. Includes
+  aligned to luma DCT blocks and 420 MCUs, with restoration at original dimensions. Includes
   strided crop, coefficient-padding, flat-image, wide/tall and selected-output
   checks. Quality estimates remain scoped to the 512-pixel cohort (0e88fa9d).
 
