@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Publication storage layout: moving retained artifacts to NVMe left encoder
+  scratch and per-cell records on the array. Four encoder children were observed
+  waiting in `folio_wait_bit_common`. Reserved generation now uses local disk
+  for scratch and cell records, preserving the original array data. The frozen
+  12-cell replay matches byte for byte and all 66 artifact hashes verify. Retained
+  pixel artifacts continue through bounded staging and verified archival.
+
 - Publication monitor recovery: a live usage observation exceeded its 15-second
   deadline and correctly froze generation; an independent retry succeeded.
   The monitor now permits one retry while frozen. Only a valid identity and

@@ -948,6 +948,25 @@ Full wrapper/count logs, the transfer request and storage-side log are retained
 in `third-drain-execution-20261105` beside the canonical dense archive, with
 `sha256.json`; copied bytes were hash-verified. Source baseline: `b9fb4dc8`.
 
+## Reserved working-file storage repair — 2026-11-05
+
+The first reserved segment was deliberately stopped after 4,433 committed cells.
+Moving retained artifacts to NVMe had left encoder scratch and cell bookkeeping
+on the array; four encoder children were observed waiting in
+`folio_wait_bit_common`. The integrity check verified 21,987 referenced artifacts
+with no mismatches or quarantine. All 4,435 working cell-directory files,
+including unfinished partial files, were copied and compared byte for byte.
+Original array data remains preserved.
+
+Scratch and cell records now use client-local disk. The same frozen 12-cell
+transport fixture reproduced all cell bytes, and all 66 retained artifact hashes
+verified. Its resource wrapper reported `rc=0 1s | peak-RSS 0.45GiB |
+min-avail 21832MiB | peak-load 0.93`; this small replay is not a sustained sweep
+throughput or deployment-cost claim. The unchanged reserved experiment resumed
+with six workers. The canonical reserved archive retains the repair logs and
+hash manifest under `local-work-repair`. Models, scientific inputs, grid and
+runtime routing remain unchanged.
+
 ## Primary selection frozen — 2026-11-05
 
 The explicitly primary-only fit completed all grouped folds and 20 development
