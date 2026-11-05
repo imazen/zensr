@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Reserved publication generation stopped on a reference decode panic with
+  139,482 completed cells. The pending set included a 16,320 × 7,612 PNG.
+  The owner approved excluding oversized inputs; the other three pending
+  references run through the unchanged frozen executable. The explicit
+  amendment preserves original coverage and measurements and still requires
+  the artifact audit. See `tools/publication_routing_amend.py`.
+
 - Publication storage layout: moving retained artifacts to NVMe left encoder
   scratch and per-cell records on the array. Four encoder children were observed
   waiting in `folio_wait_bit_common`. Reserved generation now uses local disk

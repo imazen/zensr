@@ -950,6 +950,24 @@ in `third-drain-execution-20261105` beside the canonical dense archive, with
 
 ## Reserved working-file storage repair — 2026-11-05
 
+### Owner-approved oversized-reference exclusion
+
+The original reserved run ended with a reference-decode panic after retaining
+139,482 cells. Four references had no completed cells; one is the 16,320 × 7,612
+(124,227,840-pixel) glacier landscape PNG. The owner explicitly authorized
+skipping large inputs. Excluding that reference removes 486 required cells and
+one origin: the amended cohort has 290 references, 269 origins and 140,940
+required cells. This is an operational exclusion, not a quality-outcome filter.
+The remaining three references use the frozen executable and the original
+encoder, weight and feature identities in a separate subset run.
+
+`publication-routing-amend` verifies matching scientific inputs, unchanged
+manifest rows and exact amended coverage before copying recovered measurements.
+It preserves the original coverage and both manifests, records the exclusion,
+and leaves the artifact audit mandatory. Its regression rejects changed
+scientific inputs and incomplete recovery before writing a completion marker.
+No models are refitted or thresholds reselected.
+
 The owner subsequently approved a combined 300 GiB staging budget and a 300 GiB
 free-space reserve. The reserved guard now triggers at 290 GiB allocated or
 320 GiB free, with its per-run upper bound deducting the frozen dense allocation
