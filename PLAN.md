@@ -402,7 +402,10 @@ repro.sh + full meta.repro; f16 baked into train_people.py export.
 - SiLU/gate store-fusion: 26× MIR-inline-cap regression; retry only via per-tier `#[rite]`.
 - Row-band tiling: 50–377 MB/thread scratch on wide images.
 - int8 weights-only PTQ on SPAN-class: 35 dB photo — broken; QAT or int8-first arch only.
-- Bicubic++ / AnimeJaNai / eSR / RAISR / EchoSR / SAFMN / OmniSR / ABPN: license-blocked.
+- Bicubic++ / AnimeJaNai / eSR / EchoSR / SAFMN / OmniSR / ABPN: license-blocked.
+- Intel RAISR implementation: BSD-3-Clause source license verified on 2026-11-05;
+  earlier grouping as license-blocked was inaccurate. No code or weights adopted.
+  See the [source review and proposed experiments](docs/VSR_REVIEW.md).
 - **Consistency-only goldens (torch-reimpl ↔ Rust)**: agreed on a broken SPAN graph
   (missing input norm + inplace-SiLU concat semantics → constant gray) for a full eval +
   a poisoned 14k-pair teacher run (2026-07-23). Goldens MUST be cross-checked against the

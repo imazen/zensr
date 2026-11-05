@@ -1,6 +1,6 @@
 # Reserved 512-pixel routing frontier — 2026-11-05
 
-The score-table comparison is complete. Pixel-artifact auditing was cancelled by the owner and remains incomplete. The owner subsequently selected `decoded/budget-0.005` as the default; its native implementation is scoped to the measured 512-pixel geometry. See the [default routing contract](../docs/DEFAULT_ROUTING.md).
+The score-table comparison is complete. Pixel-artifact auditing was cancelled by the owner and remains incomplete. The owner subsequently selected `decoded/budget-0.005` as the default; its native implementation now supports arbitrary resolutions through native analysis windows. The quality measurements below remain scoped to 512 pixels. See the [default routing contract](../docs/DEFAULT_ROUTING.md).
 
 ## Evidence and scope
 
@@ -25,7 +25,7 @@ Neither 0.5%-budget candidate met a 0.5% observed-harm target on this cohort. Bo
 
 The decoded 0.5%-budget router is a 5,660-byte serialized Python model; the coefficient equivalent is 255,788 bytes. These are not Rust deployment sizes or resident-memory measurements. Restoration weights are separate: 86,406 bytes. Feature extraction and deployment cost have not been confirmed by a valid runtime comparison.
 
-Full-resolution behavior, size-dense generalization and encoder-mode generalization remain unestablished. Corpus composition and incomplete historical training-pair provenance limit broader claims. Legacy-chooser policies are included in the full report with their unresolved provenance stated.
+Full-resolution routing quality, size-dense generalization and encoder-mode generalization remain unestablished; native-resolution execution support is not evidence of those quality claims. Corpus composition and incomplete historical training-pair provenance limit broader claims. Legacy-chooser policies are included in the full report with their unresolved provenance stated.
 
 ## Artifacts and verification
 

@@ -11,9 +11,14 @@ None queued by the canon4 update.
 
 ### Added
 
+- Arbitrary-resolution decoded routing through at most five native windows,
+  aligned to luma DCT blocks, with restoration at original dimensions. Includes
+  strided crop, coefficient-padding, flat-image, wide/tall and selected-output
+  checks. Quality estimates remain scoped to the 512-pixel cohort (0e88fa9d).
+
 - Native decoded-feature routing selected from the reserved 512-pixel frontier:
   default Fidelity requests use the frozen linear gain/risk policy, with explicit
-  routing overrides and other geometries retaining their existing rules.
+  routing overrides retaining their existing rules.
   Pixel features enable `chooser` by default. Includes sklearn goldens, complete
   numeric replay and retained-JPEG pixel parity (9f9dbe95, 79822605).
 
