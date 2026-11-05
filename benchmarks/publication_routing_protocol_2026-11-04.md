@@ -820,3 +820,31 @@ reproduced the former path incorrectly thawing an already frozen writer. The
 39-test integrity suite passes after correction, including normal running-writer
 resume, existing-freeze preservation, failed transfers and repeated timeouts.
 No threshold, frozen scientific input or production routing policy changed.
+
+
+## Larger-wall-budget cost attempt — 2026-11-05
+
+The same outcome-blind input was retained in `cost-4096-resource-v2` with the
+updated cost executable archived beside `selection.json`. The command used the
+same pinned recipe, `ZENSR_COST_MAX_WALL_SECONDS=900`, `--mode=confirm`,
+`--rounds=5 --processes=3 --timeout=1200 --format=json`, workload
+`publication-cost-4096-resource-v2` and scope `4096x3072-turbo420-q50`.
+Generation was frozen throughout the measurement.
+
+The first process completed all five rounds in the tool's reported 299.9 seconds,
+but every round failed its strict CPU-load gate: recorded fractions were
+0.05448569798469543, 0.095092036485672, 0.0967991271018982,
+0.08560521268844604 and 0.08198086524009704, against a 0.05 limit.
+The run is explicitly `unreliable=true`. It does **not** support confirmed
+latency comparisons. The second process was deliberately terminated after this
+failure was verified; only one of three required processes completed. Preserve
+all process records, including the partial second process. No gate was relaxed.
+The whole attempt's resource wrapper reported `rc=143 410s | peak-RSS 0.63GiB |
+min-avail 20515MiB | peak-load 6.52`; exit 143 is the deliberate stop.
+
+The completed process record is
+`cost-4096-resource-v2/measurements/processes/18e4fff7c193f784-369c08/0.json.gz`,
+SHA-256 `08a1b70c05e7ff8af6a9c83d05d1ea4e7863dd633fdf5ba357ad91bd1f59620e`.
+The larger wall budget resolved the missing-round problem, but confirmation
+remains blocked by the observed resource gate. A quiet-host measurement is
+required; descriptive timing and complete sampling are not substitutes for it.
