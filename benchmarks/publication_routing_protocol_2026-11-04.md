@@ -78,6 +78,36 @@ numbers or a 512-crop-only result. Keep exploratory, primary, size-generalizatio
 and unmeasured cases separate. A pilot measures resource use and artifact output
 before scaling; it does not choose quality thresholds from test outcomes.
 
+### Input membership by content class
+
+Counts below come only from the frozen audited reference manifest, before reserved outcomes are opened. Each pair is **references / distinct grouped origins**. They are input inventory, not completed-cell or quality evidence. Reproduce with `just publication-routing-inventory <references-audited.tsv>`; the retained JSON is `input-coverage-20261105.json` under the study root.
+
+| Content class (corpus code) | Development | Reserved |
+|---|---:|---:|
+| photos general (1000) | 18 / 17 | 15 / 14 |
+| interiors (1200) | 12 / 12 | 8 / 8 |
+| nature (1400) | 44 / 39 | 29 / 28 |
+| food (1600) | 9 / 9 | 8 / 8 |
+| unsplash people (2000) | 6 / 6 | 5 / 5 |
+| unsplash renders (2200) | 1 / 1 | 1 / 1 |
+| unsplash textures (2400) | 0 / 0 | 2 / 2 |
+| art institute of chicago photos (3000) | 2 / 2 | 1 / 1 |
+| met museum photos (3300) | 4 / 4 | 3 / 3 |
+| national park service brochures (5000) | 19 / 11 | 12 / 7 |
+| epa climate impact 2021 report (5200) | 0 / 0 | 0 / 0 |
+| noaa hurricane documents (5300) | 9 / 3 | 4 / 2 |
+| scans public patents (6000) | 0 / 0 | 0 / 0 |
+| ia scans manuscript illustrations (6600) | 0 / 0 | 0 / 0 |
+| ia scans manuscript text (6800) | 0 / 0 | 0 / 0 |
+| plots (7000) | 41 / 27 | 9 / 9 |
+| mobile screenshots (8000) | 7 / 7 | 6 / 6 |
+| web screenshots (8100) | 52 / 7 | 13 / 2 |
+| ai clipart (9000) | 24 / 24 | 16 / 16 |
+| ai illustrations (9094) | 21 / 21 | 13 / 13 |
+| ai products (9226) | 215 / 214 | 146 / 145 |
+
+AI-product images account for 214 of 404 development origins and 145 of 270 reserved origins. Origin-balanced aggregate estimates therefore retain this corpus composition; they are not content-balanced deployment estimates. Content-macro summaries and per-content strata are reported separately. Web screenshots have only two reserved origins, renders one, and the EPA-report, patent and manuscript classes have none in these new splits. These gaps preclude broad class-specific claims even after the grid is complete.
+
 ## Harm, uncertainty and cost
 
 For plain-decoded reference SSIM2 `s`, count harm when restoration loss exceeds

@@ -32,6 +32,21 @@ def digest(path):
     return h.hexdigest()
 
 
+def inventory(source):
+    """Count references and distinct grouped origins without reading outcomes."""
+    with source.open() as f:
+        rows=list(csv.DictReader(f,delimiter='\t'))
+    if not rows:raise ValueError('empty reference manifest')
+    roles=sorted({r['role'] for r in rows})
+    def count(selected):
+        return dict(references=len(selected),origins=len({r['origin'] for r in selected}))
+    return dict(manifest_sha256=digest(source),
+        roles={role:count([r for r in rows if r['role']==role]) for role in roles},
+        content={content:{role:count([r for r in rows if r['content']==content and r['role']==role])
+                          for role in roles} for content in sorted({r['content'] for r in rows})},
+        scope='Input membership only, not generated-cell completion or quality evidence. Origins are counted distinctly within each stratum; stratum counts need not sum to overall distinct origins.')
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--root', type=Path, required=True)

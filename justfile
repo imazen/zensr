@@ -174,6 +174,9 @@ canon4-routing-tests:
 publication-routing-manifest *args:
     python3 tools/publication_routing_manifest.py {{args}}
 
+publication-routing-inventory manifest:
+    python3 -c 'import json,sys; from pathlib import Path; sys.path.insert(0,"tools"); from publication_routing_manifest import inventory; print(json.dumps(inventory(Path(sys.argv[1])),indent=2))' "{{manifest}}"
+
 publication-routing-build:
     cargo build --release -p zensr-bench --bin routing_study --bin zjtool
 

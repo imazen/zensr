@@ -13,6 +13,22 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_input_inventory_counts_origins_and_retains_absent_strata(self):
+        from publication_routing_manifest import inventory
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='input-inventory-',dir=base))
+        source=root/'references.tsv'
+        source.write_text('role\tcontent\torigin\n'
+            'router_development\tphotos\ta\nrouter_development\tphotos\ta\n'
+            'router_development\tplots\tb\nlocked_test\tphotos\tc\n'
+            'exclude_model_training_origin\ttext\td\n')
+        result=inventory(source)
+        self.assertEqual(result['roles']['router_development'],dict(references=3,origins=2))
+        self.assertEqual(result['content']['photos']['router_development'],dict(references=2,origins=1))
+        self.assertEqual(result['content']['text']['locked_test'],dict(references=0,origins=0))
+        source.write_text('role\tcontent\torigin\n')
+        with self.assertRaisesRegex(ValueError,'empty reference manifest'):inventory(source)
+
     def test_cost_pilot_selection_ignores_outcomes_and_requires_cell(self):
         from publication_routing_cost_inputs import choose as cost_choice
         common=dict(size='4096',encoder='turbo',ss='420',nominal_q='50')
