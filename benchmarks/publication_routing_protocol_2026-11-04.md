@@ -903,3 +903,29 @@ not a full-grid throughput estimate. The live mount options remain unchanged;
 the isolated mount was removed and all pilot artifacts retained. Archive roots
 are `cache-options-none-v1` and `cache-options-pos3-v1` beside the dense study.
 Full logs and hashes are in `cache-option-execution-20261105` beside those roots.
+
+## Third completed staging drain — 2026-11-05
+
+The frozen development-size count was 77,898 of 402,408 required cells at
+02:45:51 UTC. This is a completion count, not a full artifact audit. No router
+fit or reserved evaluation had run.
+
+A deliberately held native drain transferred 77,291 artifacts, totaling
+73,766,582,743 bytes, with zero open artifacts retained. Its completion
+acknowledgement reported zero remaining staged payload files. The command was
+`just publication-routing-remote-stage CONFIG LOGS --once`, under
+`run-heavy --mem 1G --jobs 1`, using the same frozen native transfer tools.
+The client wrapper recorded `rc=0 8982s | peak-RSS 0.02GiB |
+min-avail 19015MiB | peak-load 7.26`. Storage-side GNU time recorded
+2:29:38 elapsed, maximum RSS 185,964 KiB and zero swaps. These are operational
+observations on shared storage, not controlled throughput comparisons.
+
+Generation stayed frozen throughout. No cost confirmation was started: a short
+frozen-host observation showed 8–10% aggregate CPU activity, while the strict
+benchmark noise gate remained unchanged. After successful transfer exit, a
+restarted guard verified fresh capacity and tool identities before generation
+resumed at 05:17:23 UTC. Scientific inputs and runtime policy are unchanged.
+
+Full wrapper/count logs, the transfer request and storage-side log are retained
+in `third-drain-execution-20261105` beside the canonical dense archive, with
+`sha256.json`; copied bytes were hash-verified. Source baseline: `b9fb4dc8`.
