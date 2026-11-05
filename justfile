@@ -189,7 +189,7 @@ publication-routing-cost-inputs *args:
 # Invoke under run-heavy. A system scope supplies a real cpuset boundary on
 # hybrid CPUs; retain the same memory/no-swap cap inside that boundary.
 publication-routing-cost-pinned manifest cpus pin *args:
-    sudo systemd-run --scope --quiet -p AllowedCPUs="{{cpus}}" -p MemoryMax=16G -p MemorySwapMax=0 sudo -u "$(id -un)" env TMPDIR="{{env_var('TMPDIR')}}" RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 ZENBENCH_PIN="{{pin}}" ZENBENCH_DATA_DIR="{{env_var('ZENBENCH_DATA_DIR')}}" ZENSR_COST_MANIFEST="{{manifest}}" nice -n19 ionice -c3 ./target/release/routing_cost --cpu-set="{{cpus}}" --cpu-policy=performance {{args}}
+    sudo systemd-run --scope --quiet -p AllowedCPUs="{{cpus}}" -p MemoryMax=16G -p MemorySwapMax=0 sudo -u "$(id -un)" env TMPDIR="{{env_var('TMPDIR')}}" RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 ZENBENCH_PIN="{{pin}}" ZENBENCH_DATA_DIR="{{env_var('ZENBENCH_DATA_DIR')}}" ZENSR_COST_MAX_WALL_SECONDS="{{env_var_or_default('ZENSR_COST_MAX_WALL_SECONDS', '120')}}" ZENSR_COST_MANIFEST="{{manifest}}" nice -n19 ionice -c3 ./target/release/routing_cost --cpu-set="{{cpus}}" --cpu-policy=performance {{args}}
 
 publication-routing-run manifest output role sizes qualities encoders jobs="6" exclusions="":
     ./target/release/routing_study "{{manifest}}" "{{output}}" "{{role}}" "{{sizes}}" "{{qualities}}" "{{encoders}}" "{{jobs}}" "{{exclusions}}"

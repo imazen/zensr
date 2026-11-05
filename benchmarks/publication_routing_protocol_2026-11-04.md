@@ -765,10 +765,41 @@ six-reference 4096-edge development resource pilot at turbo 420 q50. This rule
 uses no quality outcomes and selects a 4096×3072 JPEG. The input selector records
 the audited-cell digest, JPEG hash, benchmark binary, model weights and manifest
 hash; a regression checks outcome invariance and rejects missing requested cells.
-The initial cost run uses five exploratory rounds in one process, with generation
+The initial cost run requested five exploratory rounds in one process, with generation
 frozen and the existing performance-core cpuset/pinning recipe. It measures
 resource scale and prepares the later sampling plan, not population latency or
 confirmed performance. Full cost coverage and independent-process confirmation
 remain separate requirements. All 38 publication integrity tests pass.
 The dry-run exposed a five-round minimum in the frozen benchmark tool, so the
 initial three-round proposal was corrected before any timed callbacks ran.
+
+The timed pilot completed only **one of five requested rounds** before its
+120-second group wall budget expired. Its exploratory completion flags do not
+establish adequate sampling. No speed comparison or confidence interval from
+this run is accepted. The wrapper recorded `rc=0 130s | peak-RSS 0.63GiB |
+min-avail 19996MiB | peak-load 5.07`. This is whole-process resource evidence
+for one 4096×3072 input, not a per-policy memory measurement.
+
+Retained under the study root's `cost-4096-resource-v1/`:
+- JPEG SHA-256: `988b1dc88c87d488e15e2330bee94179066d94b872336a0074fbbf579a2d1a82`.
+- Input manifest: `86b81e9aaab9b776c21cbc2ac24c11a8e1a94808b080b7ec779c43ffdbb036ce`.
+- Archived executable: `routing_cost-6ae9ee6002ef4473a6cff8c19abc6f21ce0653027a299a764065008aaad28321` (filename contains its SHA-256).
+- Raw attempt: `measurements/attempts/18e4fe51fe8214a5-c4545-56bdefdcf3d60951.json.gz`.
+- Run pointer: `measurements/runs/18e4fe70176f5d72-c4545-98b99ac007c80846.json`,
+  SHA-256 `93226ce30b926dab0d4ca23f9ab0383b33e664974bafbdf23f4122c7367bc45b`.
+
+The command was `just publication-routing-cost-pinned <inputs.tsv> 0,1 0
+--workload-id=publication-cost-4096-resource-v1 --scope=4096x3072-turbo420-q50
+--mode=iterate --rounds=5 --format=json`, under the 16-GiB, one-job resource
+wrapper with generation frozen. The pinned recipe fixes numerical threads to
+one. CPU frequency was not verified as locked.
+
+The benchmark now accepts `ZENSR_COST_MAX_WALL_SECONDS` (positive integer;
+default remains 120), recorded in each group's configuration. A dry-run with
+900 seconds, confirmation mode, five rounds, three fresh processes and a
+1200-second child timeout verifies fixed sampling and CPU placement. These are
+budgets, not predicted durations or completed confirmation evidence. Invalid
+zero/noninteger budgets fail. Targeted clippy and release build pass; frozen
+quality-generator and encoder executable hashes remain unchanged. The updated
+cost executable SHA-256 is
+`4942c12409d07f1d616868034d17cbe1abe7e7eadfeb62e11d0fe9bbf1bba336`.

@@ -3,6 +3,7 @@
 //! classifier heads are not included in the feature-only arms.
 use std::fs;
 use std::sync::Arc;
+use std::time::Duration;
 use zenbench::prelude::*;
 use zensr_zenjpeg::api::{Budget, Intent, Restorer, Routing};
 
@@ -38,6 +39,17 @@ fn coefficient_features(data: &[u8]) -> [f64; 8] {
 }
 
 fn costs(suite: &mut Suite) {
+    // Large-image restoration can exceed the default group wall budget before
+    // enough rounds finish. Keep the default, but let the recorded study plan
+    // provide a larger budget; confirmation still requires every planned round.
+    let wall_seconds = std::env::var_os("ZENSR_COST_MAX_WALL_SECONDS")
+        .map(|v| {
+            v.to_string_lossy()
+                .parse::<u64>()
+                .expect("ZENSR_COST_MAX_WALL_SECONDS must be a positive integer")
+        })
+        .unwrap_or(120);
+    assert!(wall_seconds > 0, "cost wall budget must be positive");
     let manifest = fs::read_to_string(
         std::env::var("ZENSR_COST_MANIFEST").expect("ZENSR_COST_MANIFEST required"),
     )
@@ -57,6 +69,7 @@ fn costs(suite: &mut Suite) {
         let (_, w, h) = decode(&data);
         count += 1;
         suite.group(label, |g| {
+            g.config().max_wall_time(Duration::from_secs(wall_seconds));
             g.throughput(Throughput::Elements((w * h) as u64));
             let d = Arc::clone(&data);
             g.bench("plain-decode", move |b| b.iter(|| decode(&d)));
