@@ -19,8 +19,8 @@ use crate::{Projection, RestoreConfig, RestoreError};
 pub enum Intent {
     /// Maximise measured closeness to the pre-compression original.
     ///
-    /// Default requests use the decoded-feature policy at its calibrated
-    /// 512-pixel geometry, and the coefficient/quality policy elsewhere.
+    /// Default requests use decoded-feature routing over native-resolution
+    /// analysis windows. Explicit overrides retain coefficient/quality routing.
     /// Individual files can still come out worse; this is not a guarantee.
     Fidelity,
     /// Prefer leaving a file alone when the expected gain is small.
@@ -368,7 +368,7 @@ pub enum Routing {
 
 impl Default for Routing {
     /// Explicit legacy [`Routing::Auto`] at 0.25 SSIM2. Omitting a request's
-    /// routing override selects its geometry-specific default instead.
+    /// routing override selects the default request policy instead.
     fn default() -> Self {
         Routing::Auto { min_gain: 0.25 }
     }
@@ -481,10 +481,10 @@ impl<'a> Request<'a> {
     }
 
     /// Override the default policy. With default features, Fidelity requests
-    /// at a 512-pixel longest edge use the frozen decoded-feature router.
+    /// use the frozen decoded-feature router on native analysis windows.
     /// Explicit overrides retain their existing gain-threshold and gate rules.
-    /// Other geometries, Conservative intent and builds without `chooser` use
-    /// the calibrated Auto policy at 0.25. See the reserved routing report.
+    /// Conservative intent, unsupported analysis inputs and builds without
+    /// `chooser` use calibrated Auto at 0.25. See the reserved routing report.
     #[must_use]
     pub fn routing(mut self, r: Routing) -> Self {
         self.routing = Some(r);
@@ -680,65 +680,75 @@ mod tests {
             || zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
         let reference = model();
         let restorer = Restorer::new().with_tier(Budget::Realtime, model());
-        // Both profiles exercise the 512-pixel routing geometry. Optimized
-        // runs also exercise the full study-size restoration pipeline.
-        let height = if cfg!(debug_assertions) { 32 } else { 384 };
-        let rgb = synth(512, height);
-        for q in [10., 50., 98.] {
-            for ss in [
-                zenjpeg::encoder::ChromaSubsampling::Quarter,
-                zenjpeg::encoder::ChromaSubsampling::None,
-            ] {
-                let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
-                    .encode(
-                        bytemuck::cast_slice::<_, rgb::Rgb<u8>>(&rgb),
-                        512,
-                        height as u32,
-                    )
-                    .unwrap();
-                let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
-                let recorded = crate::record::apply_record(&mut probe);
-                let gain = estimate_gain_for(&probe, classify_content(&jpg));
-                let decision = crate::decoded_router::for_jpeg(&jpg, &probe, gain, recorded)
-                    .unwrap()
-                    .unwrap();
-                let decoded = zenjpeg::decoder::Decoder::new()
-                    .deblock(zenjpeg::decoder::DeblockMode::Off)
-                    .decode(&jpg, enough::Unstoppable)
-                    .unwrap();
-                let default = restorer.restore(&jpg).threads(1).run().unwrap();
-                assert_eq!(
-                    matches!(default, Outcome::Restored { .. }),
-                    decision.restore()
-                );
-                let expected = if decision.restore() {
-                    crate::restore_jpeg(
-                        &jpg,
-                        &reference,
-                        &RestoreConfig::default()
-                            .with_threads(1)
-                            .with_high_q_identity(false),
-                    )
-                    .unwrap()
-                    .to_rgb8()
-                } else {
-                    decoded.pixels_u8().unwrap().to_vec()
-                };
-                assert_eq!(default.pixels().to_rgb8(), expected);
-                for routing in [
-                    Routing::Never,
-                    Routing::Auto {
-                        min_gain: f32::INFINITY,
-                    },
+        // Keep debug inference bounded; release also exercises the full
+        // study geometry and a larger, odd-sized image.
+        let sizes = if cfg!(debug_assertions) {
+            [(127, 17), (512, 32), (513, 17)]
+        } else {
+            [(127, 17), (512, 384), (1025, 65)]
+        };
+        for (width, height) in sizes {
+            let rgb = synth(width, height);
+            for q in [10., 50., 98.] {
+                for ss in [
+                    zenjpeg::encoder::ChromaSubsampling::Quarter,
+                    zenjpeg::encoder::ChromaSubsampling::None,
                 ] {
-                    let result = restorer
-                        .restore(&jpg)
-                        .routing(routing)
-                        .threads(1)
-                        .run()
+                    let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
+                        .encode(
+                            bytemuck::cast_slice::<_, rgb::Rgb<u8>>(&rgb),
+                            width as u32,
+                            height as u32,
+                        )
                         .unwrap();
-                    assert!(matches!(result, Outcome::Unchanged { .. }));
-                    assert_eq!(result.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+                    let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
+                    let recorded = crate::record::apply_record(&mut probe);
+                    let gain = estimate_gain_for(&probe, classify_content(&jpg));
+                    let decision = crate::decoded_router::for_jpeg(&jpg, &probe, gain, recorded)
+                        .unwrap()
+                        .unwrap();
+                    let decoded = zenjpeg::decoder::Decoder::new()
+                        .deblock(zenjpeg::decoder::DeblockMode::Off)
+                        .decode(&jpg, enough::Unstoppable)
+                        .unwrap();
+                    let default = restorer.restore(&jpg).threads(1).run().unwrap();
+                    assert_eq!(
+                        matches!(default, Outcome::Restored { .. }),
+                        decision.restore()
+                    );
+                    let expected = if decision.restore() {
+                        crate::restore_jpeg(
+                            &jpg,
+                            &reference,
+                            &RestoreConfig::default()
+                                .with_threads(1)
+                                .with_high_q_identity(false),
+                        )
+                        .unwrap()
+                        .to_rgb8()
+                    } else {
+                        decoded.pixels_u8().unwrap().to_vec()
+                    };
+                    assert_eq!(default.pixels().to_rgb8(), expected);
+                    assert_eq!(
+                        (default.pixels().width, default.pixels().height),
+                        (width, height)
+                    );
+                    for routing in [
+                        Routing::Never,
+                        Routing::Auto {
+                            min_gain: f32::INFINITY,
+                        },
+                    ] {
+                        let result = restorer
+                            .restore(&jpg)
+                            .routing(routing)
+                            .threads(1)
+                            .run()
+                            .unwrap();
+                        assert!(matches!(result, Outcome::Unchanged { .. }));
+                        assert_eq!(result.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 //! Frozen decoded-linear-1 routing, selected by the owner on 2026-11-05.
-//! The measured geometry is a 512-pixel longest edge. Explicit caller routing
-//! and other geometries continue to use the calibrated legacy policy.
+//! Native analysis windows preserve JPEG artifact scale at arbitrary sizes.
+//! The 512-pixel measured path remains unchanged; larger images require all
+//! sampled windows to accept restoration. Explicit caller overrides stay intact.
 use crate::decoded_router_model as fitted;
 use crate::RestoreError;
 use std::sync::OnceLock;
@@ -70,14 +71,118 @@ fn definitions_match() -> bool {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Window {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+}
+
+fn windows(width: usize, height: usize) -> Vec<Window> {
+    let (w, h) = (width.min(512), height.min(512));
+    // Align with native luma DCT blocks; never resample decoded pixels.
+    let (last_x, last_y) = (((width - w) / 8) * 8, ((height - h) / 8) * 8);
+    let (mid_x, mid_y) = (((width - w) / 16) * 8, ((height - h) / 16) * 8);
+    let mut out = Vec::with_capacity(5);
+    for (x, y) in [
+        (mid_x, mid_y),
+        (0, 0),
+        (last_x, 0),
+        (0, last_y),
+        (last_x, last_y),
+    ] {
+        let window = Window {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
+        if !out.contains(&window) {
+            out.push(window);
+        }
+    }
+    out
+}
+
+fn crop_rgb(
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    window: Window,
+) -> Result<Vec<u8>, RestoreError> {
+    let row_bytes = width
+        .checked_mul(3)
+        .ok_or(RestoreError::UnsupportedPixels("router row size"))?;
+    let required = height
+        .checked_sub(1)
+        .and_then(|h| h.checked_mul(stride))
+        .and_then(|n| n.checked_add(row_bytes));
+    if stride < row_bytes
+        || required.is_none_or(|n| n > rgb.len())
+        || window.x + window.width > width
+        || window.y + window.height > height
+    {
+        return Err(RestoreError::UnsupportedPixels("router pixel geometry"));
+    }
+    let mut out = Vec::with_capacity(window.width * window.height * 3);
+    for y in window.y..window.y + window.height {
+        let start = y * stride + window.x * 3;
+        out.extend_from_slice(&rgb[start..start + window.width * 3]);
+    }
+    Ok(out)
+}
+
+fn coefficient_window(
+    coeffs: &[i16],
+    blocks_wide: usize,
+    width: usize,
+    height: usize,
+    window: Window,
+) -> Result<crate::router_coefficients::Feats, RestoreError> {
+    let error = || RestoreError::UnsupportedPixels("router coefficient geometry");
+    if blocks_wide == 0
+        || !coeffs.len().is_multiple_of(64)
+        || !(coeffs.len() / 64).is_multiple_of(blocks_wide)
+    {
+        return Err(error());
+    }
+    let blocks_high = coeffs.len() / 64 / blocks_wide;
+    // Preserve MCU padding exactly when the window spans a complete axis.
+    let bw = if window.width == width {
+        blocks_wide
+    } else {
+        window.width.div_ceil(8)
+    };
+    let bh = if window.height == height {
+        blocks_high
+    } else {
+        window.height.div_ceil(8)
+    };
+    let (x, y) = (window.x / 8, window.y / 8);
+    if x + bw > blocks_wide || y + bh > blocks_high {
+        return Err(error());
+    }
+    if x == 0 && y == 0 && bw == blocks_wide && bh == blocks_high {
+        return crate::router_coefficients::features(coeffs, coeffs.len() / 64, blocks_wide)
+            .ok_or_else(error);
+    }
+    let mut selected = Vec::with_capacity(bw * bh * 64);
+    for row in y..y + bh {
+        let start = (row * blocks_wide + x) * 64;
+        selected.extend_from_slice(&coeffs[start..start + bw * 64]);
+    }
+    crate::router_coefficients::features(&selected, bw * bh, bw).ok_or_else(error)
+}
+
 pub(crate) fn for_jpeg(
     data: &[u8],
     probe: &zenjpeg::detect::JpegProbe,
     legacy_gain: f32,
     recorded: bool,
 ) -> Result<Option<Prediction>, RestoreError> {
-    if probe.dimensions.width.max(probe.dimensions.height) != 512
-        || probe.dimensions.width.min(probe.dimensions.height) < 8
+    if probe.dimensions.width.min(probe.dimensions.height) < 8
         || probe.num_components != 3
         || crate::chroma_full_of(probe).is_none()
     {
@@ -96,10 +201,6 @@ pub(crate) fn for_jpeg(
     let rgb = decoded
         .pixels_u8()
         .ok_or(RestoreError::UnsupportedPixels("router requires RGB8"))?;
-    let (crop, cw, ch) = crate::chooser::center_crop_rgb8(rgb, w as usize, h as usize);
-    // Keep the same analysis request/tier activation as the frozen study.
-    let offer = zenanalyze::offer_for_request(&crop, cw, ch, &crate::chooser::chooser_request())
-        .map_err(|e| RestoreError::Decode(format!("router features: {e:?}")))?;
     let coefficients = zenjpeg::decoder::Decoder::new()
         .decode_coefficients(data, enough::Unstoppable)
         .map_err(|e| RestoreError::Decode(format!("{e:?}")))?;
@@ -107,53 +208,80 @@ pub(crate) fn for_jpeg(
         .components
         .first()
         .ok_or(RestoreError::UnsupportedPixels("missing luma"))?;
-    let c = crate::router_coefficients::features(
-        &plane.coeffs,
-        plane.coeffs.len() / 64,
-        plane.blocks_wide,
-    )
-    .ok_or(RestoreError::UnsupportedPixels("empty luma coefficients"))?;
-    let mut numeric = [0.; 37];
-    numeric[..13].copy_from_slice(&[
-        f64::from(w),
-        f64::from(h),
-        f64::from(probe.quality.value),
-        f64::from(legacy_gain),
-        data.len() as f64 * 8. / (f64::from(w) * f64::from(h)),
-        c.zero_ac_blocks,
-        c.zero_ac_coefs,
-        c.hf_survival,
-        c.mean_abs_ac,
-        c.dc_spread,
-        c.ac_count_spread,
-        c.gutted_block_frac,
-        c.gutted_clustering,
-    ]);
-    for (target, (name, _)) in numeric[13..].iter_mut().zip(fitted::PIXELS) {
-        *target = f64::from(
-            offer
-                .get(name)
-                .ok_or(RestoreError::UnsupportedModel("missing router feature"))?
-                .float(),
-        );
+    let (width, height) = (w as usize, h as usize);
+    let stride = width
+        .checked_mul(3)
+        .ok_or(RestoreError::UnsupportedPixels("router row size"))?;
+    let mut weakest: Option<Prediction> = None;
+    for window in windows(width, height) {
+        let crop = crop_rgb(rgb, width, height, stride, window)?;
+        let offer = zenanalyze::offer_for_request(
+            &crop,
+            window.width as u32,
+            window.height as u32,
+            &crate::chooser::chooser_request(),
+        )
+        .map_err(|e| RestoreError::Decode(format!("router features: {e:?}")))?;
+        let c = coefficient_window(&plane.coeffs, plane.blocks_wide, width, height, window)?;
+        let window_gain = if window.width == width && window.height == height {
+            legacy_gain
+        } else {
+            let content =
+                if c.zero_ac_blocks as f32 >= crate::calibration::GRAPHIC_ZERO_AC_THRESHOLD {
+                    crate::api::Content::Graphic
+                } else {
+                    crate::api::Content::Photographic
+                };
+            crate::api::estimate_gain_for(probe, Some(content))
+        };
+        let mut numeric = [0.; 37];
+        numeric[..13].copy_from_slice(&[
+            window.width as f64,
+            window.height as f64,
+            f64::from(probe.quality.value),
+            f64::from(window_gain),
+            data.len() as f64 * 8. / (f64::from(w) * f64::from(h)),
+            c.zero_ac_blocks,
+            c.zero_ac_coefs,
+            c.hf_survival,
+            c.mean_abs_ac,
+            c.dc_spread,
+            c.ac_count_spread,
+            c.gutted_block_frac,
+            c.gutted_clustering,
+        ]);
+        for (target, (name, _)) in numeric[13..].iter_mut().zip(fitted::PIXELS) {
+            *target = f64::from(
+                offer
+                    .get(name)
+                    .ok_or(RestoreError::UnsupportedModel("missing router feature"))?
+                    .float(),
+            );
+        }
+        numeric
+            .iter_mut()
+            .for_each(|value| *value = recorded_number(*value));
+        let family = if recorded {
+            format!("{:?} (recorded)", probe.encoder)
+        } else {
+            format!("{:?}", probe.encoder)
+        };
+        let scale = format!("{:?}", probe.quality.scale);
+        let ss = if crate::chroma_full_of(probe) == Some(true) {
+            "444"
+        } else {
+            "420"
+        };
+        let prediction = predict(&numeric, &[&family, &scale, ss])
+            .ok_or(RestoreError::UnsupportedModel("non-finite router input"))?;
+        if weakest
+            .as_ref()
+            .is_none_or(|previous| prediction.score() < previous.score())
+        {
+            weakest = Some(prediction);
+        }
     }
-    numeric
-        .iter_mut()
-        .for_each(|value| *value = recorded_number(*value));
-    let family = if recorded {
-        format!("{:?} (recorded)", probe.encoder)
-    } else {
-        format!("{:?}", probe.encoder)
-    };
-    let scale = format!("{:?}", probe.quality.scale);
-    let ss = if crate::chroma_full_of(probe) == Some(true) {
-        "444"
-    } else {
-        "420"
-    };
-    predict(&numeric, &[&family, &scale, ss])
-        .map(Some)
-        .ok_or(RestoreError::UnsupportedModel("non-finite router input"))
+    Ok(weakest)
 }
 
 #[cfg(test)]
@@ -203,6 +331,148 @@ mod tests {
     fn study_decimal_serialization_matches_halfway_values() {
         assert_eq!(recorded_number(0.0001220703125), 0.000122070312);
         assert_eq!(recorded_number(0.0003662109375), 0.000366210938);
+    }
+
+    #[test]
+    fn native_windows_are_bounded_aligned_and_deduplicated() {
+        for (w, h) in [
+            (8, 8),
+            (31, 17),
+            (256, 192),
+            (512, 384),
+            (513, 385),
+            (1024, 768),
+            (4096, 128),
+            (128, 4096),
+        ] {
+            let regions = windows(w, h);
+            assert!(!regions.is_empty() && regions.len() <= 5);
+            for (i, r) in regions.iter().enumerate() {
+                assert!(
+                    r.width <= 512 && r.height <= 512 && r.x + r.width <= w && r.y + r.height <= h
+                );
+                assert_eq!((r.x % 8, r.y % 8), (0, 0));
+                assert!(!regions[..i].contains(r));
+            }
+            if w <= 512 && h <= 512 {
+                assert_eq!(
+                    regions,
+                    vec![Window {
+                        x: 0,
+                        y: 0,
+                        width: w,
+                        height: h
+                    }]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn crop_handles_strided_rows_and_coefficient_windows_preserve_padding() {
+        let rgb = [1, 2, 3, 4, 5, 6, 99, 99, 7, 8, 9, 10, 11, 12];
+        let window = Window {
+            x: 1,
+            y: 0,
+            width: 1,
+            height: 2,
+        };
+        assert_eq!(
+            crop_rgb(&rgb, 2, 2, 8, window).unwrap(),
+            vec![4, 5, 6, 10, 11, 12]
+        );
+        let mut coeffs = vec![0i16; 4 * 4 * 64];
+        for (i, b) in coeffs.chunks_mut(64).enumerate() {
+            b[0] = i as i16;
+            b[1] = i as i16;
+        }
+        let whole = coefficient_window(
+            &coeffs,
+            4,
+            17,
+            17,
+            Window {
+                x: 0,
+                y: 0,
+                width: 17,
+                height: 17,
+            },
+        )
+        .unwrap();
+        let reference = crate::router_coefficients::features(&coeffs, 16, 4).unwrap();
+        assert_eq!(whole.mean_abs_ac, reference.mean_abs_ac);
+        assert_eq!(whole.zero_ac_blocks, reference.zero_ac_blocks);
+        let local = coefficient_window(
+            &coeffs,
+            4,
+            17,
+            17,
+            Window {
+                x: 8,
+                y: 8,
+                width: 8,
+                height: 8,
+            },
+        )
+        .unwrap();
+        assert_eq!(local.mean_abs_ac, 5.);
+        assert_eq!(local.dc_spread, 0.);
+    }
+
+    #[test]
+    fn jpeg_routing_supports_native_sizes_and_extreme_aspects() {
+        for (w, h) in [
+            (8, 8),
+            (31, 17),
+            (128, 96),
+            (511, 129),
+            (513, 65),
+            (1024, 64),
+            (2048, 32),
+            (32, 2048),
+            (4096, 2160),
+        ] {
+            let pixels: Vec<rgb::Rgb<u8>> = (0..w * h)
+                .map(|i| {
+                    rgb::Rgb::new(
+                        (i % 251) as u8,
+                        ((i / w) * 13 % 256) as u8,
+                        ((i * 7) % 256) as u8,
+                    )
+                })
+                .collect();
+            let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(
+                55.,
+                zenjpeg::encoder::ChromaSubsampling::Quarter,
+            )
+            .encode(&pixels, w as u32, h as u32)
+            .unwrap();
+            let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
+            let recorded = crate::record::apply_record(&mut probe);
+            let legacy = crate::api::estimate_gain_for(&probe, crate::api::classify_content(&jpg));
+            let result = for_jpeg(&jpg, &probe, legacy, recorded)
+                .unwrap()
+                .expect("native size must use learned router");
+            assert!(result.score().is_finite());
+        }
+    }
+
+    #[test]
+    fn valid_flat_jpegs_remain_supported() {
+        for (w, h) in [(8, 8), (64, 64), (512, 384), (1024, 768)] {
+            let pixels = vec![rgb::Rgb::new(128u8, 128, 128); w * h];
+            let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(
+                55.,
+                zenjpeg::encoder::ChromaSubsampling::Quarter,
+            )
+            .encode(&pixels, w as u32, h as u32)
+            .unwrap();
+            let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
+            let recorded = crate::record::apply_record(&mut probe);
+            let legacy = crate::api::estimate_gain_for(&probe, crate::api::classify_content(&jpg));
+            let p = for_jpeg(&jpg, &probe, legacy, recorded).unwrap().unwrap();
+            assert!(p.score().is_finite());
+        }
     }
 
     #[test]
