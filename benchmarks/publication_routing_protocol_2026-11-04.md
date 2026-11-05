@@ -950,6 +950,14 @@ in `third-drain-execution-20261105` beside the canonical dense archive, with
 
 ## Reserved working-file storage repair — 2026-11-05
 
+The owner subsequently approved a combined 300 GiB staging budget and a 300 GiB
+free-space reserve. The reserved guard now triggers at 290 GiB allocated or
+320 GiB free, with its per-run upper bound deducting the frozen dense allocation
+and 1 GiB headroom from the combined budget. The replacement guard was checked
+before thawing generation at 68,419 of 141,426 cells. This permits more retained
+work before archival; it does not guarantee the remaining grid fits. A verified
+74,729,178,827-byte transfer had already completed under the earlier limits.
+
 The first reserved segment was deliberately stopped after 4,433 committed cells.
 Moving retained artifacts to NVMe had left encoder scratch and cell bookkeeping
 on the array; four encoder children were observed waiting in
