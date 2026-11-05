@@ -224,6 +224,22 @@ class PublicationIntegrity(unittest.TestCase):
             with self.assertRaisesRegex(OSError,'archive unavailable'):remote.watch(config,root)
         self.assertTrue(all(call.args[1]=='freeze' for call in control.call_args_list))
 
+    def test_remote_capacity_drain_preserves_existing_freeze(self):
+        import publication_routing_remote_stage as remote
+        base=Path.home()/'tmp'/'zensr-publication-tests';base.mkdir(parents=True,exist_ok=True)
+        root=Path(tempfile.mkdtemp(prefix='remote-capacity-freeze-',dir=base))
+        group=root/'group';group.mkdir()
+        config=dict(trigger_bytes=72,approved_limit_bytes=80,free_floor_bytes=520,approved_free_floor_bytes=500,poll_seconds=0)
+        for frozen in (False,True):
+            (group/'cgroup.events').write_text(f'frozen {int(frozen)}\n')
+            with patch.object(remote,'writer_group',side_effect=[group,None]), \
+                 patch.object(remote,'observation',side_effect=[dict(allocated_bytes=73,free_bytes=570),dict(allocated_bytes=0,free_bytes=600)]), \
+                 patch.object(remote,'transfer_batch') as transfer, \
+                 patch.object(remote,'control') as control:
+                remote.watch(config,root)
+            transfer.assert_called_once()
+            self.assertEqual([c.args[1] for c in control.call_args_list],['freeze']+([] if frozen else ['thaw']))
+
     def test_live_transfer_keeps_pending_path_lookup_valid(self):
         from publication_routing_stage import transfer
         import os

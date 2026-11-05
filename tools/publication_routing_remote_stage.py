@@ -146,6 +146,8 @@ def watch(config,log_root):
                 event(phase='observation-recovered')
             event(phase='usage',**value)
             if value['allocated_bytes']>=config['trigger_bytes'] or value['free_bytes']<=config['free_floor_bytes']:
+                resume_after_transfer=(resume_after_observation if observation_retried else
+                    'frozen 0' in (group/'cgroup.events').read_text().splitlines())
                 control(config,'freeze')
                 transfer_batch(config,log_root)
                 value=observation(config)
@@ -153,7 +155,7 @@ def watch(config,log_root):
                     raise ValueError('cache remains below free-space trigger; writer left frozen')
                 if value['allocated_bytes']>=config['trigger_bytes']:
                     raise ValueError('staging remains above trigger; writer left frozen')
-                if not observation_retried or resume_after_observation:
+                if resume_after_transfer:
                     control(config,'thaw')
                     event(phase='writer-resumed')
             elif resume_after_observation:

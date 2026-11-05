@@ -812,3 +812,11 @@ were observed executing again. This is an operational observation, not an
 isolated throughput experiment. Future cell counts run only while generation is
 already frozen. Live monitoring uses writer identity/scope, worker activity and
 staging-guard artifact observations; the last completed count retains its timestamp.
+
+
+A pre-existing writer freeze is now preserved after an ordinary successful
+capacity drain as well as after observation-timeout recovery. A regression
+reproduced the former path incorrectly thawing an already frozen writer. The
+39-test integrity suite passes after correction, including normal running-writer
+resume, existing-freeze preservation, failed transfers and repeated timeouts.
+No threshold, frozen scientific input or production routing policy changed.
