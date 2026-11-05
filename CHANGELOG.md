@@ -14,6 +14,8 @@ None queued by the canon4 update.
 - Publication storage observation timeouts freeze generation before one retry;
   recovery preserves pre-existing freezes and unchanged capacity limits
   (65d8d8ab, 5a962cf7).
+- Read-only publication-run status checks verify writer and guard process
+  identities without scanning active cell files (de06aa35).
 
 - Publication model integrity: matched origin-balanced coverage and severity
   (d00746e7), rejection of unconverged estimators (7bcbb23e), numerical-runtime

@@ -748,3 +748,12 @@ PID's command arguments, and reports the latest observation timestamp and usage.
 It does not enumerate active cell files. The deployed recovery subsequently
 handled a real timeout: generation froze, a fresh observation verified helper
 identities and capacity, and the writer resumed with new artifact writes.
+
+The next capacity-triggered native drain completed on 2026-11-05, moving
+67,536 artifacts / 60,916,182,595 bytes. It retained one open artifact
+(8,756,293 bytes); that file matched its content hash after generation resumed.
+The acknowledgement bound the request nonce and helper hashes. A fresh capacity
+check preceded resumption of the same six-worker process, and new artifact
+writes were observed. The frozen grid contained 62,411 of 402,408 required cells
+at this pause. This is storage-cycle evidence; full generation and artifact
+auditing remain required before fitting.
