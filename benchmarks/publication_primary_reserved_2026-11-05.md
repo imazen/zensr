@@ -1,6 +1,6 @@
 # Reserved 512-pixel routing frontier — 2026-11-05
 
-The score-table comparison is complete. Pixel-artifact auditing was cancelled by the owner and remains incomplete. No production policy was changed.
+The score-table comparison is complete. Pixel-artifact auditing was cancelled by the owner and remains incomplete. The owner subsequently selected `decoded/budget-0.005` as the default; its native implementation is scoped to the measured 512-pixel geometry. See the [default routing contract](../docs/DEFAULT_ROUTING.md).
 
 ## Evidence and scope
 

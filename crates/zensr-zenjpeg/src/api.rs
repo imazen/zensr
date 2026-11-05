@@ -12,9 +12,8 @@ use crate::{Projection, RestoreConfig, RestoreError};
 
 /// What the caller is optimising for.
 ///
-/// There is deliberately no `Default`: the honest answer differs per product,
-/// and picking one for the caller is how a library ends up making a
-/// quality/safety tradeoff nobody chose.
+/// The enum has no `Default` implementation. Requests start with Fidelity and
+/// the routing policy selected for this crate; callers can override the intent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Intent {
@@ -91,9 +90,10 @@ pub enum SkipReason {
     /// Consistency was required but cannot be certified for this file's
     /// chroma geometry.
     ConsistencyUnavailable(NotCertified),
-    /// [`Routing::Auto`] estimated the benefit below the caller's threshold,
-    /// or [`Routing::Never`] was set. Carries the estimate so the decision is
-    /// auditable rather than opaque.
+    /// The default policy declined restoration, [`Routing::Auto`] estimated
+    /// benefit below the caller's threshold, or [`Routing::Never`] was set.
+    /// Carries the policy score: risk-adjusted gain for the decoded default,
+    /// or the legacy estimated gain for an explicit Auto override.
     NotWorthIt { estimated_gain: f32 },
     /// The colour model is not one restoration understands — 4-component
     /// (CMYK/YCCK) files are decoded and returned untouched.

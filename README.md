@@ -67,14 +67,20 @@ efficiency: realtime tier ~410 GFLOPS aggregate @12T (near practical peak);
 quality tier ~225 GFLOPS (cache-bound at nf=64 — open rungs: strip-fused layer
 scheduling, Winograd F(2,3)). No GPU path yet (CubeCL spike queued).
 
-Routing uses record-corrected family, quality scale, subsampling, and luma
-zero-AC fraction. The canon4 identity gates are q96 for IJG, q100/q96 for
-mozjpeg 420/444, and distance 0.46/0.28 for distance-scale 420/444. Auto's
-minimum estimated gain remains 0.25 SSIM2; the content threshold is 0.20.
-The held-out default restores 68.65% of image-cells with 1.6261 mean SSIM2 gain
-and 6.63% harmed by more than 0.1 SSIM2. Conservative intent restores 25.50%,
-gains 1.0409, and harms 1.01%. These are dataset observations, not individual
-image guarantees. See the calibration report for sampling and limitations.
+Default `api::Restorer` Fidelity requests use the owner-selected decoded-feature
+router for RGB 420/444 JPEGs with a 512-pixel longest edge. On 140,940 reserved
+cells it gives **+2.426 mean SSIM2 and 0.549% harm**, both origin-balanced,
+restoring 80.43% of cells. Harm uses the quality-dependent loss curve; the worst
+loss is 18.534 SSIM2. Pixel-artifact auditing was cancelled by the owner.
+[Measured frontier, scope and limitations](benchmarks/publication_primary_reserved_2026-11-05.md).
+
+Explicit `Routing` overrides, Conservative intent, other image geometries and
+`--no-default-features` builds use the calibrated coefficient/quality routing.
+The `chooser` analysis dependency is now enabled by default for decoded routing;
+the older content-class classifier is not an input to the new linear router.
+The new geometry-specific default does not establish full-resolution behavior
+or measured runtime cost. Low-level `restore_jpeg` remains the configurable
+restoration pipeline. [Default routing implementation](docs/DEFAULT_ROUTING.md).
 
 Ship format is f16. Goldens are generated through the f16 roundtrip and tested
 in Rust on whole and tiled paths. The library accepts caller-loaded models;

@@ -1,6 +1,6 @@
 # Restoration dependency chain
 
-Resolved from `Cargo.lock` on 2026-11-04. Reproduce with:
+Resolved from `Cargo.lock`, with default features checked on 2026-11-05. Reproduce with:
 
 ```sh
 cargo tree --locked -p zensr-zenjpeg -e normal --depth 3
@@ -12,6 +12,8 @@ cargo tree --locked -p zensr-micro-abi -e normal --depth 2
 application
 └── zensr-zenjpeg 0.1.0
     ├── enough 0.4.5
+    ├── zenanalyze 0.2.0 @ e676651e (default chooser feature)
+    ├── zenanalyze-api 0.1.1 @ e676651e (default chooser feature)
     ├── zensr-micro 0.0.1
     │   ├── archmage 0.9.30
     │   └── magetypes 0.9.30
@@ -32,9 +34,12 @@ PyTorch, ONNX, or GPU dependency. The f16 model weights are a separate artifact,
 loaded into the runtime; committing a model directory does not embed a default
 model into the public library.
 
-With `chooser`, `zensr-zenjpeg` additionally uses `zenanalyze 0.2.0` and
+With `chooser` (now enabled by default), `zensr-zenjpeg` additionally uses `zenanalyze 0.2.0` and
 `zenanalyze-api 0.1.1`, both resolved at `e676651e`. This feature is optional;
-the coefficient-based Auto router does not require it. The root patches for
+explicit coefficient-based Auto routing does not require it. The decoded-feature
+default uses it for feature extraction, with frozen feature-definition identities
+checked before inference. `--no-default-features` retains coefficient routing.
+The root patches for
 these two crates specify a git repository without a revision: the checked-in
 lockfile fixes this checkout, but consumers resolving a fresh lockfile can
 select a different commit. Use `--locked` for reproducible application builds.

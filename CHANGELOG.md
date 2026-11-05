@@ -11,6 +11,12 @@ None queued by the canon4 update.
 
 ### Added
 
+- Native decoded-feature routing selected from the reserved 512-pixel frontier:
+  default Fidelity requests use the frozen linear gain/risk policy, with explicit
+  routing overrides and other geometries retaining their existing rules.
+  Pixel features enable `chooser` by default. Includes sklearn goldens, complete
+  numeric replay and retained-JPEG pixel parity (9f9dbe95, 79822605).
+
 - Publication storage observation timeouts freeze generation before one retry;
   recovery preserves pre-existing freezes and unchanged capacity limits
   (65d8d8ab, 5a962cf7).
