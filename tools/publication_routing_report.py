@@ -70,6 +70,9 @@ def render(source, output):
     development=data.get('development_sources',{})
     training_scope=development.get('scope','unspecified')
     scope+='; training '+training_scope.replace('_',' ')
+    verification=data.get('artifact_verification',{})
+    audit_note='Pixel-artifact audit incomplete (cancelled by owner).' if verification.get('status')=='incomplete_owner_cancelled' else ''
+    if audit_note:scope+='; pixel audit incomplete'
     fig.suptitle(f'Frozen routing operating points ({scope}) — labels are development harm budgets\nBars: pointwise 95% origin-bootstrap intervals; gray markers: fixed baselines',fontsize=12)
     footer=.8/fig.get_figheight()
     fig.get_layout_engine().set(rect=(0,footer,1,1-footer))
@@ -81,6 +84,7 @@ def render(source, output):
     fig.savefig(output/'frontier.svg');fig.savefig(output/'frontier.pdf')
     fig.savefig(output/'frontier.png',dpi=160);plt.close(fig)
     text=['# Frozen routing operating points','',
+          audit_note,
           'Evaluation scope: '+data.get('evaluation_scope','unspecified')+'.',
           'Development scope: '+training_scope+'. '+development.get('limitation',''),
           'No deployment policy has been selected. Budgets below are development targets; held-out harm may exceed them.',
@@ -102,6 +106,7 @@ def render(source, output):
     provenance=dict(report_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                     selection_sha256=data['selection_sha256'],test_cells_sha256=data['test_cells_sha256'],
                     matplotlib=matplotlib.__version__,renderer_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+    if verification:provenance['artifact_verification']=verification
     (output/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 
 

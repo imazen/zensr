@@ -1,8 +1,28 @@
 # Publication routing study protocol — 2026-11-04
 
-Status: protocol and corpus audit, before fitting richer routers. No deployment
-policy is selected; report the gain/risk frontier. The four-encoder canon4
+Status: the primary development fit is frozen and reserved comparison is complete
+after the approved oversized-reference exclusion. The owner cancelled the pixel
+artifact audit; comparison uses complete score tables with that limitation
+explicit in the output. No deployment policy is selected. The four-encoder canon4
 weights, JPEG dependency revisions, decoder, guards and projection stay frozen.
+
+The [reserved score-table frontier](publication_primary_reserved_2026-11-05.md)
+contains the measured comparison, paired intervals, tail-loss finding and
+remaining production/publication limits.
+
+## Owner cancellation of the pixel-artifact audit — 2026-11-05
+
+The owner explicitly stopped the audit after 116,352 cells and 578,792 unique
+artifacts had been checked. Its partial record is retained, and no completed
+`AUDITED.json` is fabricated. The previous audit-gated automatic pipeline was
+cancelled. `publication-routing-scores-only --allow-unaudited-artifacts` uses
+the frozen evaluator with an explicit score-table loader: completion, roles,
+unique measurements and exact amended coverage are checked, while pixel
+decompression and JPEG rereads are omitted. Models, policy selection, labels,
+statistical calculations and frozen input/source checks stay intact. The
+comparison records the loader identity and incomplete artifact verification;
+figures and reports disclose the limitation. Existing audit-gated behavior
+and its regression tests remain unchanged.
 
 ## Approved pre-fit amendment — 2026-11-05
 

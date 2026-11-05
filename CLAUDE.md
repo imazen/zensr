@@ -2,6 +2,12 @@
 
 ## Known Bugs
 
+- The reserved 512-pixel score comparison found a worst 18.5344 SSIM2 loss
+  on a turbo 420 q6 line plot, retained by current routing and the 0.5%-budget
+  coefficient/decoded candidates. Lower mean harm frequency does not remove
+  this tail risk. The owner cancelled pixel-artifact auditing; that limitation
+  is explicit in the results. See `benchmarks/publication_primary_reserved_2026-11-05.md`.
+
 - Reserved publication generation stopped on a reference decode panic with
   139,482 completed cells. The pending set included a 16,320 × 7,612 PNG.
   The owner approved excluding oversized inputs; the other three pending
