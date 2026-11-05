@@ -53,9 +53,10 @@
   longer admitted merely because it belongs to the primary reserved cohort.
 
 - Publication orchestration: scanning the active cell directory over NFS can
-  block cell renames across all generator workers. Use storage-local counts and
-  separate live PID/scope checks; reserve the full status scan for stopped runs.
-  The observed scan was terminated and worker activity recovered.
+  block cell renames across all generator workers. Even a later storage-local directory count coincided with all six workers
+  waiting on filesystem operations; execution resumed after stopping that count.
+  Count cells only while generation is already frozen. Use live PID/scope checks
+  and guard artifact observations during generation; reserve full scans for stopped runs.
 
 - Publication storage correction: the temporary NFS export used async semantics,
   so client fsync alone did not establish the intended disk durability before

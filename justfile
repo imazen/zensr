@@ -197,7 +197,8 @@ publication-routing-run manifest output role sizes qualities encoders jobs="6" e
 publication-routing-cells *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cells.py {{args}}
 
-# Run beside storage, not through NFS against an active writer.
+# Run beside storage only while the writer is frozen or ended.
+# Even a storage-local directory scan can contend with active cell renames.
 publication-routing-storage-count root:
     python3 -c 'import datetime,json,os,sys; n=sum(e.name.endswith(".tsv") for e in os.scandir(os.path.join(sys.argv[1],"cells"))); print(json.dumps(dict(checked=datetime.datetime.now(datetime.timezone.utc).isoformat(),completed_cells=n)))' "{{root}}"
 

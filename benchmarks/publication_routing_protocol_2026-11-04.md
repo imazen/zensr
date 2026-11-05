@@ -803,3 +803,12 @@ zero/noninteger budgets fail. Targeted clippy and release build pass; frozen
 quality-generator and encoder executable hashes remain unchanged. The updated
 cost executable SHA-256 is
 `4942c12409d07f1d616868034d17cbe1abe7e7eadfeb62e11d0fe9bbf1bba336`.
+
+
+Live supervision correction: a storage-local count of the active cell directory
+was stopped without producing a count. During the scan all six worker threads
+were observed waiting in filesystem operations; after its termination workers
+were observed executing again. This is an operational observation, not an
+isolated throughput experiment. Future cell counts run only while generation is
+already frozen. Live monitoring uses writer identity/scope, worker activity and
+staging-guard artifact observations; the last completed count retains its timestamp.
