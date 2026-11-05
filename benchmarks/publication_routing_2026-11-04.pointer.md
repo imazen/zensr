@@ -1,7 +1,8 @@
 # Routing publication study artifacts
 
 Status: primary development generation and full artifact audit complete:
-235,224 cells and 1,167,767 unique artifacts. No new measured routing frontier yet.
+235,224 cells and 1,167,767 unique artifacts. The explicitly scoped primary-only
+fit is frozen; reserved evaluation is incomplete. No reserved routing frontier yet.
 The [protocol](publication_routing_protocol_2026-11-04.md) owns the scientific
 design. Runtime defaults remain unchanged; deployment selection follows review.
 
@@ -45,9 +46,10 @@ just publication-routing-cells status "$root/development-primary"
 This checks actual cell files and matching live PIDs and writes `PROGRESS.json`.
 Run it only when generation has stopped if the directory is accessed over NFS:
 a live directory scan was observed blocking worker cell renames. During generation,
-count entries beside storage and verify the local writer PID/scope separately.
+verify the local writer PID/scope and staging guard observations instead.
 `just publication-routing-storage-count <run-directory>` provides the count when
-run on the storage host; it deliberately makes no process-health or audit claim.
+run on the storage host while generation is stopped; it deliberately makes no
+process-health or audit claim.
 A stale record or absent PID is not evidence of progress. `COMPLETE` is the
 harness's grid-completion marker; `AUDITED.json` is the subsequent hash,
 decompression, shape and independent JPEG-read audit. Fitting requires both,
@@ -92,10 +94,13 @@ just publication-routing-report "$root/reserved-report.json" "$root/report"
 The renderer writes CSV, Markdown, SVG, PDF and PNG, with source hashes. Synthetic
 plot directories are smoke tests only. They are not model-quality evidence.
 
-Still required: the size-dense development sweep and audit,
-frozen fitting, reserved
-evaluation, dense size generalization, encoder-mode coverage, and measured
-routing cost. Primary 512-pixel results alone cannot close the publication gates.
+The owner-approved primary-first amendment uses `fit --primary-only` instead of
+the dense fitting recipe above. That fit is complete and frozen in
+`primary-fit-20261105-v1` in the canonical array archive; its identity is recorded
+in the protocol. Reserved primary generation and evaluation remain required for
+the initial frontier. Size-dense development, size generalization, encoder-mode
+coverage and measured routing cost remain outstanding for broader claims.
+Primary 512-pixel results alone cannot establish full-resolution behavior.
 
 ## Artifact writer repair
 
