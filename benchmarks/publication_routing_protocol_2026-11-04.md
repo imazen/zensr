@@ -968,6 +968,14 @@ and leaves the artifact audit mandatory. Its regression rejects changed
 scientific inputs and incomplete recovery before writing a completion marker.
 No models are refitted or thresholds reselected.
 
+The three-reference recovery completed all 1,458 cells. The amendment finalizer
+then verified and assembled 140,940 of 140,940 required cells. Original coverage
+SHA256 is `c0029f8d33962cd1ef87d3c8d895ae7fb2366ad2ac1ca5c252a98324fc9513d1`;
+amended coverage is `a070ee2801cff4f2e10209ba16bfae6e60d638dde30a5435a96a5ddb5345ac7f`.
+The 486 excluded required cells remain visible in the amended ledger, and
+`REFERENCE_EXCLUSION.json` retains the reason and both manifest identities.
+The original frozen executable, models and analysis sources remain unchanged.
+
 The owner subsequently approved a combined 300 GiB staging budget and a 300 GiB
 free-space reserve. The reserved guard now triggers at 290 GiB allocated or
 320 GiB free, with its per-run upper bound deducting the frozen dense allocation
