@@ -197,11 +197,16 @@ publication-routing-cost-pinned manifest cpus pin *args:
 publication-routing-run manifest output role sizes qualities encoders jobs="6" exclusions="":
     ./target/release/routing_study "{{manifest}}" "{{output}}" "{{role}}" "{{sizes}}" "{{qualities}}" "{{encoders}}" "{{jobs}}" "{{exclusions}}"
 
+[positional-arguments]
 publication-routing-amend *args:
-    python3 tools/publication_routing_amend.py {{args}}
+    python3 tools/publication_routing_amend.py "$@"
 
 publication-routing-amend-tests:
     python3 -m unittest discover -s tools -p 'test_publication_routing_amend.py'
+
+# Transport finalized cell tables beside retained artifacts for one local audit.
+publication-routing-audit-bundle root output:
+    tar --dereference -C "{{root}}" -I zstd -cf "{{output}}" cells IDENTITY.tsv FEATURES.tsv ENCODERS.tsv COVERAGE.tsv COMPLETE REFERENCE_EXCLUSION.json reference-exclusion-history
 
 publication-routing-cells *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cells.py {{args}}
