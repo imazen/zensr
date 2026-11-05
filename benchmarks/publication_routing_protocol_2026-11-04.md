@@ -765,8 +765,10 @@ six-reference 4096-edge development resource pilot at turbo 420 q50. This rule
 uses no quality outcomes and selects a 4096×3072 JPEG. The input selector records
 the audited-cell digest, JPEG hash, benchmark binary, model weights and manifest
 hash; a regression checks outcome invariance and rejects missing requested cells.
-The initial cost run uses three exploratory rounds in one process, with generation
+The initial cost run uses five exploratory rounds in one process, with generation
 frozen and the existing performance-core cpuset/pinning recipe. It measures
 resource scale and prepares the later sampling plan, not population latency or
 confirmed performance. Full cost coverage and independent-process confirmation
 remain separate requirements. All 38 publication integrity tests pass.
+The dry-run exposed a five-round minimum in the frozen benchmark tool, so the
+initial three-round proposal was corrected before any timed callbacks ran.
