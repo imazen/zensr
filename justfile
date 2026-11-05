@@ -215,6 +215,12 @@ publication-routing-scores-only-tests:
 publication-routing-scatter *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_scatter.py "$@"
 
+decoded-router-replay replay:
+    ZENSR_ROUTER_REPLAY="{{replay}}" cargo test --locked -p zensr-zenjpeg decoded_router::tests::publication_replay -- --ignored --nocapture
+
+decoded-router-jpeg-replay replay:
+    ZENSR_ROUTER_JPEG_REPLAY="{{replay}}" cargo test --release --locked -p zensr-zenjpeg decoded_router::tests::publication_jpeg_features -- --ignored --nocapture
+
 # Transport finalized cell tables beside retained artifacts for one local audit.
 publication-routing-audit-bundle root output:
     tar --dereference -C "{{root}}" -I zstd -cf "{{output}}" cells IDENTITY.tsv FEATURES.tsv ENCODERS.tsv COVERAGE.tsv COMPLETE REFERENCE_EXCLUSION.json reference-exclusion-history

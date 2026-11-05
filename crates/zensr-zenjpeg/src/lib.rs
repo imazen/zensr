@@ -14,10 +14,16 @@ pub mod api;
 mod calibration;
 #[cfg(feature = "chooser")]
 pub mod chooser;
+#[cfg(feature = "chooser")]
+mod decoded_router;
+#[cfg(feature = "chooser")]
+mod decoded_router_model;
 pub mod jpegli_params;
 pub mod qtables;
 mod qtables_data;
 mod record;
+#[cfg(feature = "chooser")]
+mod router_coefficients;
 
 use zensr_micro::consist::{
     project_chroma_420, project_plane, rgb_to_ycbcr_planes, ycbcr_to_rgb_planes, CoeffOrder,

@@ -20,14 +20,15 @@ use crate::{Projection, RestoreConfig, RestoreError};
 pub enum Intent {
     /// Maximise measured closeness to the pre-compression original.
     ///
-    /// Restores wherever the median gain is positive. Individual files can
-    /// still come out worse — see [`Intent::Conservative`] for the numbers.
+    /// Default requests use the decoded-feature policy at its calibrated
+    /// 512-pixel geometry, and the coefficient/quality policy elsewhere.
+    /// Individual files can still come out worse; this is not a guarantee.
     Fidelity,
     /// Prefer leaving a file alone when the expected gain is small.
     ///
-    /// Uses an earlier identity gate. This reduces restoration coverage and
-    /// measured harm, but also forgoes gains. It is not a never-worse promise;
-    /// see the canon4 calibration report for held-out results.
+    /// Uses the existing coefficient/quality policy with an earlier identity
+    /// gate. This reduces coverage compared with that policy's Fidelity mode;
+    /// it does not promise lower harm than the decoded-feature default.
     Conservative,
 }
 
@@ -366,7 +367,8 @@ pub enum Routing {
 }
 
 impl Default for Routing {
-    /// [`Routing::Auto`] at 0.25 SSIM2. See the canon4 calibration report.
+    /// Explicit legacy [`Routing::Auto`] at 0.25 SSIM2. Omitting a request's
+    /// routing override selects its geometry-specific default instead.
     fn default() -> Self {
         Routing::Auto { min_gain: 0.25 }
     }
@@ -420,7 +422,7 @@ impl Restorer {
             intent: Intent::Fidelity,
             provenance: Provenance::Unknown,
             budget: Budget::Realtime,
-            routing: Routing::default(),
+            routing: None,
             require_consistency: false,
             threads: 0,
         }
@@ -434,7 +436,7 @@ pub struct Request<'a> {
     intent: Intent,
     provenance: Provenance,
     budget: Budget,
-    routing: Routing,
+    routing: Option<Routing>,
     require_consistency: bool,
     threads: usize,
 }
@@ -478,12 +480,14 @@ impl<'a> Request<'a> {
         self
     }
 
-    /// When to spend cycles at all. Defaults to [`Routing::Auto`] at 0.25,
-    /// The restore fraction and quality tradeoff depend on the model, corpus
-    /// and harm definition; see the dated canon4 calibration report.
+    /// Override the default policy. With default features, Fidelity requests
+    /// at a 512-pixel longest edge use the frozen decoded-feature router.
+    /// Explicit overrides retain their existing gain-threshold and gate rules.
+    /// Other geometries, Conservative intent and builds without `chooser` use
+    /// the calibrated Auto policy at 0.25. See the reserved routing report.
     #[must_use]
     pub fn routing(mut self, r: Routing) -> Self {
-        self.routing = r;
+        self.routing = Some(r);
         self
     }
 
@@ -501,32 +505,50 @@ impl<'a> Request<'a> {
             .tier(self.budget)
             .ok_or(RestoreError::TierNotLoaded)?;
 
-        // Routing decides before any model work. The probe is cheap (header
-        // only), so a skip here costs a decode and nothing more.
+        // Routing decides before restoration inference. The learned default
+        // also pays for plain decoded-pixel features; explicit overrides keep
+        // their existing coefficient/quality routing behavior.
         let mut probe_for_routing =
             zenjpeg::detect::probe(self.jpeg).map_err(|e| RestoreError::Probe(format!("{e:?}")))?;
-        crate::record::apply_record(&mut probe_for_routing);
+        let _recorded = crate::record::apply_record(&mut probe_for_routing);
         // Content class selects the fitted curve using the file's own luma
         // coefficients. It costs a coefficient parse even on files that then
         // skip, so compute it only when the decision can depend on it. Measured
         // quality and cost depend on the corpus and implementation. `None` falls back to
         // the pooled curve, so an unparseable file routes exactly as before.
-        let content = match self.routing {
+        let routing = self.routing.unwrap_or_default();
+        let content = match routing {
             Routing::Auto { .. } => classify_content(self.jpeg),
             _ => None,
         };
         let predicted = estimate_gain_for(&probe_for_routing, content);
-        let skip = match self.routing {
+        let skip = match routing {
             Routing::Always => false,
             Routing::Never => true,
             Routing::Auto { min_gain } => predicted < min_gain,
         };
+        let learned = false;
+        #[cfg(feature = "chooser")]
+        let (predicted, skip, learned) =
+            if self.routing.is_none() && self.intent == Intent::Fidelity {
+                match crate::decoded_router::for_jpeg(
+                    self.jpeg,
+                    &probe_for_routing,
+                    predicted,
+                    _recorded,
+                )? {
+                    Some(decision) => (decision.score() as f32, !decision.restore(), true),
+                    None => (predicted, skip, learned),
+                }
+            } else {
+                (predicted, skip, learned)
+            };
 
         // Slack, gate thresholds and deblock policy are derived from the probe
         // and the caller's declarations — never surfaced.
         let mut cfg = RestoreConfig::default()
             .with_threads(self.threads)
-            .with_high_q_identity(true)
+            .with_high_q_identity(!learned)
             .with_projection(Projection::Auto);
 
         // Conservative gates earlier, trading restoration coverage for fewer
@@ -646,6 +668,80 @@ mod tests {
         zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
             .encode(px, w as u32, h as u32)
             .expect("encode")
+    }
+
+    #[cfg(feature = "chooser")]
+    #[test]
+    fn default_decoded_router_matches_pipeline_and_preserves_overrides() {
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model =
+            || zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let reference = model();
+        let restorer = Restorer::new().with_tier(Budget::Realtime, model());
+        // Both profiles exercise the 512-pixel routing geometry. Optimized
+        // runs also exercise the full study-size restoration pipeline.
+        let height = if cfg!(debug_assertions) { 32 } else { 384 };
+        let rgb = synth(512, height);
+        for q in [10., 50., 98.] {
+            for ss in [
+                zenjpeg::encoder::ChromaSubsampling::Quarter,
+                zenjpeg::encoder::ChromaSubsampling::None,
+            ] {
+                let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
+                    .encode(
+                        bytemuck::cast_slice::<_, rgb::Rgb<u8>>(&rgb),
+                        512,
+                        height as u32,
+                    )
+                    .unwrap();
+                let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
+                let recorded = crate::record::apply_record(&mut probe);
+                let gain = estimate_gain_for(&probe, classify_content(&jpg));
+                let decision = crate::decoded_router::for_jpeg(&jpg, &probe, gain, recorded)
+                    .unwrap()
+                    .unwrap();
+                let decoded = zenjpeg::decoder::Decoder::new()
+                    .deblock(zenjpeg::decoder::DeblockMode::Off)
+                    .decode(&jpg, enough::Unstoppable)
+                    .unwrap();
+                let default = restorer.restore(&jpg).threads(1).run().unwrap();
+                assert_eq!(
+                    matches!(default, Outcome::Restored { .. }),
+                    decision.restore()
+                );
+                let expected = if decision.restore() {
+                    crate::restore_jpeg(
+                        &jpg,
+                        &reference,
+                        &RestoreConfig::default()
+                            .with_threads(1)
+                            .with_high_q_identity(false),
+                    )
+                    .unwrap()
+                    .to_rgb8()
+                } else {
+                    decoded.pixels_u8().unwrap().to_vec()
+                };
+                assert_eq!(default.pixels().to_rgb8(), expected);
+                for routing in [
+                    Routing::Never,
+                    Routing::Auto {
+                        min_gain: f32::INFINITY,
+                    },
+                ] {
+                    let result = restorer
+                        .restore(&jpg)
+                        .routing(routing)
+                        .threads(1)
+                        .run()
+                        .unwrap();
+                    assert!(matches!(result, Outcome::Unchanged { .. }));
+                    assert_eq!(result.pixels().to_rgb8(), decoded.pixels_u8().unwrap());
+                }
+            }
+        }
     }
 
     /// Asking for a tier that was never loaded must fail loudly. Silently

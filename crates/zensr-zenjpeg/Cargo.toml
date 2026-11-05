@@ -38,6 +38,7 @@ rgb = "0.8.52"
 bytemuck = "1.25.2"
 
 [features]
+default = ["chooser"]
 # Content-class chooser through the `zenanalyze-api` contract: reads feature
 # values out of an `Offer` the caller hands in, and scans for itself with the
 # bundled `zenanalyze` when there is no offer (`classify_rgb8`). One flag, so
