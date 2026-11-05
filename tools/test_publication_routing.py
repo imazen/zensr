@@ -639,6 +639,23 @@ class PublicationIntegrity(unittest.TestCase):
             self.assertEqual(checkpoint.stat().st_mtime_ns,checkpoint_stat.st_mtime_ns)
             with self.assertRaisesRegex(ValueError,'already frozen'):
                 study.fit(development,root/'selection',dense)
+        with self.assertRaisesRegex(ValueError,'choose exactly one'):
+            study.development_cells(development)
+        with self.assertRaisesRegex(ValueError,'choose exactly one'):
+            study.development_cells(development,dense,primary_only=True)
+        primary_only_rows,primary_only_digest,primary_only_provenance=study.development_cells(development,primary_only=True)
+        self.assertEqual(primary_only_rows,primary_rows)
+        self.assertEqual(primary_only_provenance['scope'],'primary_512_only')
+        self.assertEqual(primary_only_provenance['size_cells'],0)
+        self.assertNotEqual(primary_only_digest,provenance['primary_cells_sha256'])
+        with self.assertRaisesRegex(ValueError,'primary development must use size 512'):
+            study.development_cells(dense,primary_only=True)
+        with patch.object(study,'FEATURES',{'coefficient':study.BASE+('coef_zero_ac_blocks',)}), patch.object(study,'CONFIGS',(('linear',1.),)):
+            with self.assertRaisesRegex(ValueError,'fit resume contract changed'):
+                study.fit(development,root/'selection',primary_only=True)
+            study.fit(development,root/'primary-selection',primary_only=True)
+        study.evaluate(reserved,root/'primary-selection',root/'primary-only-report.json')
+        self.assertEqual(json.loads((root/'primary-only-report.json').read_text())['development_sources']['scope'],'primary_512_only')
         self.assertTrue((root/'selection'/'selection.freeze.json').is_file())
         real_sha=study.sha
         with patch.object(study,'sha',side_effect=lambda p:'changed-selector' if Path(p).name=='publication_routing_sizes.py' else real_sha(p)):

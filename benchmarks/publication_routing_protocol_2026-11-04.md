@@ -4,6 +4,24 @@ Status: protocol and corpus audit, before fitting richer routers. No deployment
 policy is selected; report the gain/risk frontier. The four-encoder canon4
 weights, JPEG dependency revisions, decoder, guards and projection stay frozen.
 
+## Approved pre-fit amendment — 2026-11-05
+
+The owner approved **primary frontier first** before any router fit or reserved
+outcome inspection. The initial fit now uses only the audited 235,224 primary
+512-pixel cells (484 references, 404 origins). Its frozen candidates will be
+compared on the 291-reference, 270-origin reserved primary cohort. All candidate
+families, grouped folds, budgets, harm definitions and scientific identities
+remain unchanged. The CLI requires an explicit `--primary-only` scope; missing
+dense inputs never silently downgrade a size-dense fit. Scope is bound into the
+fit contract, selection and evaluation report, and cannot change on resume.
+
+Initial claims apply to 512-pixel inputs only. Full-resolution production behavior
+is not established. The 20-size development sweep is frozen and preserved at
+77,898 completed cells, plus work completed after that count. Its earlier
+requirement as a prerequisite to fitting is superseded for this initial report;
+size/mode generalization remains separate follow-up evidence. Historical protocol
+and execution records below describe the earlier plan, not a completed dense fit.
+
 ## Questions and candidate families
 
 1. Does continuous coefficient information improve on the current binary zero-AC

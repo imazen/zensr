@@ -139,11 +139,21 @@ def read_cells(root, expected_role):
 
 
 
-def development_cells(root,size_root):
-    """Join audited primary and size-dense data, without counting replays twice."""
+def development_cells(root,size_root=None,*,primary_only=False):
+    """Read an explicit study scope; never silently omit required dense inputs."""
+    if primary_only == (size_root is not None):
+        raise ValueError('choose exactly one of primary-only or size-development')
     rows,primary_digest=read_cells(root,'router_development');primary_contract=study_contract(root)
-    extra,size_digest=read_cells(size_root,'router_development');size_contract=study_contract(size_root)
     if primary_contract['identity'].get('sizes')!='512':raise ValueError('primary development must use size 512')
+    if primary_only:
+        if any(r['size']!='512' for r in rows):raise ValueError('primary-only cells must use size 512')
+        provenance=dict(scope='primary_512_only',primary_cells_sha256=primary_digest,
+            primary_cells=len(rows),size_cells=0,identical_replays=0,combined_cells=len(rows),
+            weighting='Equal total weight per origin across primary 512-pixel cells.',
+            limitation='No size-dense development inputs; no full-resolution deployment claim.')
+        identity=hashlib.sha256(json.dumps(provenance,sort_keys=True).encode()).hexdigest()
+        return rows,identity,provenance
+    extra,size_digest=read_cells(size_root,'router_development');size_contract=study_contract(size_root)
     if size_contract['identity'].get('sizes')!=','.join(map(str,STUDY_SIZES)):raise ValueError('dense development size inventory differs')
     contracts=json.loads(json.dumps([primary_contract,size_contract]))
     for contract in contracts:
@@ -171,7 +181,7 @@ def development_cells(root,size_root):
             if r!=joined[k]:raise ValueError('replayed development cell differs')
             replays+=1
         else:joined[k]=r
-    provenance=dict(primary_cells_sha256=primary_digest,size_cells_sha256=size_digest,
+    provenance=dict(scope='primary_plus_dense',primary_cells_sha256=primary_digest,size_cells_sha256=size_digest,
         size_selection_sha256=sha(selection_path),size_study_contract=size_contract,
         primary_cells=len(rows),size_cells=len(extra),identical_replays=replays,combined_cells=len(joined),
         weighting='Equal total weight per origin across its observed primary and dense-size cells; repeated 512 cells counted once.')
@@ -395,8 +405,8 @@ def threshold_frontier(rows,gain,harm,groups,gates):
     return [dict(choose(candidates,budget),budget=budget) for budget in BUDGETS]
 
 
-def fit(root,out,size_root):
-    rows,identity,development_sources=development_cells(root,size_root)
+def fit(root,out,size_root=None,*,primary_only=False):
+    rows,identity,development_sources=development_cells(root,size_root,primary_only=primary_only)
     contract=study_contract(root)
     fit_contract=dict(cells_sha256=identity,development_sources=development_sources,study=contract,environment=environment_contract(),analysis_sha256=sha(__file__),
         threshold_source_sha256=sha(Path(__file__).with_name('routing_frontier.py')),
@@ -653,12 +663,14 @@ def evaluate(root,selection,out,primary_report=None,mode_report=None):
 def main():
     ap=argparse.ArgumentParser();sub=ap.add_subparsers(dest='command',required=True)
     p=sub.add_parser('fit');p.add_argument('root',type=Path);p.add_argument('output',type=Path)
-    p.add_argument('--size-development',type=Path,required=True)
+    scope=p.add_mutually_exclusive_group(required=True)
+    scope.add_argument('--size-development',type=Path)
+    scope.add_argument('--primary-only',action='store_true',help='Explicit 512-pixel study; no dense-size training claim')
     p=sub.add_parser('evaluate');p.add_argument('root',type=Path);p.add_argument('selection',type=Path);p.add_argument('output',type=Path)
     p.add_argument('--size-generalization-of',type=Path)
     p.add_argument('--mode-generalization-of',type=Path)
     a=ap.parse_args()
-    if a.command=='fit':fit(a.root,a.output,a.size_development)
+    if a.command=='fit':fit(a.root,a.output,a.size_development,primary_only=a.primary_only)
     else:evaluate(a.root,a.selection,a.output,a.size_generalization_of,a.mode_generalization_of)
 
 if __name__=='__main__':main()

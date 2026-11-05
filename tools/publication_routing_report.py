@@ -67,6 +67,9 @@ def render(source, output):
     for ax in list(axes.flat)[len(families):]:ax.set_visible(False)
     axes.flat[0].legend(fontsize=7,loc='best')
     scope=data.get('evaluation_scope','unspecified').replace('_',' ')
+    development=data.get('development_sources',{})
+    training_scope=development.get('scope','unspecified')
+    scope+='; training '+training_scope.replace('_',' ')
     fig.suptitle(f'Frozen routing operating points ({scope}) — labels are development harm budgets\nBars: pointwise 95% origin-bootstrap intervals; gray markers: fixed baselines',fontsize=12)
     footer=.8/fig.get_figheight()
     fig.get_layout_engine().set(rect=(0,footer,1,1-footer))
@@ -79,6 +82,7 @@ def render(source, output):
     fig.savefig(output/'frontier.png',dpi=160);plt.close(fig)
     text=['# Frozen routing operating points','',
           'Evaluation scope: '+data.get('evaluation_scope','unspecified')+'.',
+          'Development scope: '+training_scope+'. '+development.get('limitation',''),
           'No deployment policy has been selected. Budgets below are development targets; held-out harm may exceed them.',
           '', '| Policy | Mean gain | Harm % | Restore % | Worst SSIM2 change |',
           '|---|---:|---:|---:|---:|']
