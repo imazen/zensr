@@ -947,3 +947,30 @@ resumed at 05:17:23 UTC. Scientific inputs and runtime policy are unchanged.
 Full wrapper/count logs, the transfer request and storage-side log are retained
 in `third-drain-execution-20261105` beside the canonical dense archive, with
 `sha256.json`; copied bytes were hash-verified. Source baseline: `b9fb4dc8`.
+
+## Primary selection frozen — 2026-11-05
+
+The explicitly primary-only fit completed all grouped folds and 20 development
+stability splits on 235,224 audited cells from 404 origins. Twelve selected
+model artifacts were fitted. Before reserved generation, their hashes and the
+fit contract, candidate table and stability record were verified against
+`selection.freeze.json`, SHA-256
+`8acb37fe5a32fa251bf728b36ce9650dab7089821564d8135afecab5a1b8ebb8`.
+The retained directory is `primary-fit-20261105-v1` beside the canonical dense
+archive; `execution/` contains the full fit log and its hash. Source: `81db444c`.
+
+Command: `just publication-routing-analysis fit PRIMARY_SNAPSHOT FIT_OUTPUT
+--primary-only`, using the pinned study Python under
+`run-heavy --mem 16G --jobs 4`. The wrapper recorded
+`rc=0 3052s | peak-RSS 4.01GiB | min-avail 15892MiB | peak-load 24.68`.
+
+Reserved primary generation then started with 141,426 required cells, 291
+references, size 512 and the unchanged encoder/quality grid. Its scientific
+identity, feature identity and encoder provenance match development apart from
+the expected role change. All six artifacts in the first completed cell were
+hash-verified before continued generation. Results are not yet audited or
+evaluated: no held-out gain/risk frontier or deployment policy is claimed here.
+The dense-size study remains frozen and preserved.
+
+The primary-scope change passed all seven jobs in CI run 41973407678, including
+Windows ARM64, macOS ARM64 and i686.
