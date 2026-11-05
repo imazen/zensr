@@ -29,6 +29,17 @@ Full-resolution behavior, size-dense generalization and encoder-mode generalizat
 
 ## Artifacts and verification
 
+The owner indicated that 0.55% observed harm is acceptable and requested a
+scatter plot. `decoded-scatter-20261105-v2` beside the report artifacts contains
+PNG/SVG/PDF views and `points.csv.gz` with all 140,940 decisions. The exact
+frozen decoded policy was replayed and matched the report's gain, harm, coverage
+and worst loss. It restores 113,365 cells, including 891 harmed cells; these are
+raw counts, while the 0.5490% harm estimate is origin-balanced. Full-range and
+zoom views plot baseline SSIM2 against policy-applied change, with skip = zero,
+harmed cases highlighted and the quality-dependent harm boundary drawn. The
+zoom explicitly reports its 18,047 omitted out-of-window decisions. Restoration
+and metric generation were not rerun.
+
 Verified on i265. Full score report: `/home/lilith/data/zensr-array-archive/primary-reserved-frontier-scores-only-20261105-v1.json`. Rendered CSV, Markdown, SVG, PDF, PNG, operating points and worst-case records: `/home/lilith/data/zensr-array-archive/primary-reserved-report-scores-only-20261105-v1/`.
 
 Result SHA256: `34ce54cfdf640594861b164d9dd33841fe31cc513b181e401dc154dfdb4108b3`.
