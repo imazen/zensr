@@ -183,6 +183,9 @@ publication-routing-cost-build:
 publication-routing-cost manifest *args:
     ZENSR_COST_MANIFEST="{{manifest}}" ./target/release/routing_cost {{args}}
 
+publication-routing-cost-inputs *args:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cost_inputs.py {{args}}
+
 # Invoke under run-heavy. A system scope supplies a real cpuset boundary on
 # hybrid CPUs; retain the same memory/no-swap cap inside that boundary.
 publication-routing-cost-pinned manifest cpus pin *args:

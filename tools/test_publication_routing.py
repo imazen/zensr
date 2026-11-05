@@ -13,6 +13,17 @@ from publication_routing_analysis import (inputs, labels, origin_weights, summar
 
 
 class PublicationIntegrity(unittest.TestCase):
+    def test_cost_pilot_selection_ignores_outcomes_and_requires_cell(self):
+        from publication_routing_cost_inputs import choose as cost_choice
+        common=dict(size='4096',encoder='turbo',ss='420',nominal_q='50')
+        rows=[dict(common,file='b',reference_sha256='b',restored_ssim2='100'),
+              dict(common,file='a',reference_sha256='a',restored_ssim2='-100')]
+        self.assertEqual(cost_choice(rows,4096,'turbo','420',50)['file'],'a')
+        for r in rows:r['restored_ssim2']=str(-float(r['restored_ssim2']))
+        self.assertEqual(cost_choice(list(reversed(rows)),4096,'turbo','420',50)['file'],'a')
+        with self.assertRaisesRegex(ValueError,'required cost-pilot cell missing'):
+            cost_choice(rows,4096,'turbo','444',50)
+
     def test_origin_balanced_coverage_conditional_harm_and_severity(self):
         gain=np.array([-1.,2.,0.,3.]);harm=np.array([True,False,False,False])
         groups=np.array(['a','a','a','b']);decision=np.array([True,False,False,True])
