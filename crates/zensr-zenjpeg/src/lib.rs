@@ -335,12 +335,32 @@ enum PlaneGeometry {
     Other,
 }
 
-fn plane_geometry(blocks_wide: usize, blocks_high: usize, w: usize, h: usize) -> PlaneGeometry {
-    let hor_full = blocks_wide * 8 >= w;
-    let ver_full = blocks_high * 8 >= h;
-    if hor_full && ver_full {
+fn plane_geometry(
+    h_samp: u8,
+    v_samp: u8,
+    coefficients: &zenjpeg::decoder::DecodedCoefficients,
+) -> PlaneGeometry {
+    let max_h = coefficients
+        .components
+        .iter()
+        .map(|c| c.h_samp)
+        .max()
+        .unwrap_or(0);
+    let max_v = coefficients
+        .components
+        .iter()
+        .map(|c| c.v_samp)
+        .max()
+        .unwrap_or(0);
+    if max_h == 0 || max_v == 0 || h_samp == 0 || v_samp == 0 {
+        return PlaneGeometry::Other;
+    }
+    // Block dimensions include MCU padding and cannot identify sampling on
+    // tiny images. SOF sampling factors express the actual component lattice.
+    if h_samp == max_h && v_samp == max_v {
         PlaneGeometry::Full
-    } else if !hor_full && !ver_full && blocks_wide * 16 >= w && blocks_high * 16 >= h {
+    } else if u16::from(h_samp) * 2 == u16::from(max_h) && u16::from(v_samp) * 2 == u16::from(max_v)
+    {
         PlaneGeometry::HalfBoth
     } else {
         PlaneGeometry::Other
@@ -517,7 +537,7 @@ pub(crate) fn restore_jpeg_prepared(
                 quant: &qt,
             };
             let target = &mut ycc[ci * plane..(ci + 1) * plane];
-            match plane_geometry(comp.blocks_wide, comp.blocks_high, w, h) {
+            match plane_geometry(comp.h_samp, comp.v_samp, coeffs) {
                 PlaneGeometry::Full => {
                     report
                         .projection
@@ -715,6 +735,36 @@ mod tests {
     }
 
     #[test]
+    fn tiny_padded_components_keep_their_sampling_geometry() {
+        use zenjpeg::encoder::ChromaSubsampling;
+        for (w, h) in [(8, 8), (9, 7), (17, 5), (64, 48)] {
+            let pixels = synth_rgb(w, h);
+            for (ss, expected) in [
+                (ChromaSubsampling::Quarter, PlaneGeometry::HalfBoth),
+                (ChromaSubsampling::None, PlaneGeometry::Full),
+                (ChromaSubsampling::HalfHorizontal, PlaneGeometry::Other),
+                (ChromaSubsampling::HalfVertical, PlaneGeometry::Other),
+            ] {
+                let jpg = encode(w, h, &pixels, 50., ss);
+                let coeffs = zenjpeg::decoder::Decoder::new()
+                    .decode_coefficients(&jpg, enough::Unstoppable)
+                    .unwrap();
+                for (i, component) in coeffs.components.iter().enumerate() {
+                    assert_eq!(
+                        plane_geometry(component.h_samp, component.v_samp, &coeffs),
+                        if i == 0 {
+                            PlaneGeometry::Full
+                        } else {
+                            expected
+                        },
+                        "{w}x{h}, component {i}, {ss:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn geometry_classification_422_440_never_uses_420_backprojection() {
         // 4:2:2 and 4:4:0 chroma are half-res in ONE axis; running the 2x2
         // box back-projection on them would corrupt output. They must
@@ -732,13 +782,13 @@ mod tests {
             assert_eq!(coeffs.components.len(), 3);
             let luma = &coeffs.components[0];
             assert_eq!(
-                plane_geometry(luma.blocks_wide, luma.blocks_high, w, h),
+                plane_geometry(luma.h_samp, luma.v_samp, &coeffs),
                 PlaneGeometry::Full,
                 "{name} luma"
             );
             for comp in &coeffs.components[1..] {
                 assert_eq!(
-                    plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                    plane_geometry(comp.h_samp, comp.v_samp, &coeffs),
                     PlaneGeometry::Other,
                     "{name} chroma must NOT be treated as 4:2:0"
                 );
@@ -757,7 +807,7 @@ mod tests {
             .unwrap();
         for comp in &c420.components[1..] {
             assert_eq!(
-                plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                plane_geometry(comp.h_samp, comp.v_samp, &c420),
                 PlaneGeometry::HalfBoth
             );
         }
@@ -767,7 +817,7 @@ mod tests {
             .unwrap();
         for comp in &c444.components {
             assert_eq!(
-                plane_geometry(comp.blocks_wide, comp.blocks_high, w, h),
+                plane_geometry(comp.h_samp, comp.v_samp, &c444),
                 PlaneGeometry::Full
             );
         }

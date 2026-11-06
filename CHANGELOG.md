@@ -9,6 +9,12 @@ history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
 
 None queued by the canon4 update.
 
+### Fixed
+
+- Tiny/odd JPEG chroma projection uses component sampling factors rather than
+  padded block dimensions. Preserves 420 half-resolution projection and leaves
+  422/440 chroma unprojected even when MCU padding masks the subsampling.
+
 ### Added
 
 - Retained-input projection on/off diagnostic measures SSIM2 and coefficient

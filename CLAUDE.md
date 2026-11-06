@@ -2,6 +2,12 @@
 
 ## Known Bugs
 
+- Fixed tiny-image chroma projection: padded MCU block dimensions could make
+  420 chroma appear full-resolution, or misclassify 422/440. Sampling geometry
+  now follows SOF sampling factors. The regression failed on 8x8 420 before
+  the fix and covers tiny/odd 420, 444, 422 and 440 after it. This corrects
+  constraint application; it does not establish perceptual quality at tiny sizes.
+
 - The reserved 512-pixel score comparison found a worst 18.5344 SSIM2 loss
   on a turbo 420 q6 line plot, retained by current routing and the 0.5%-budget
   coefficient/decoded candidates. Lower mean harm frequency does not remove
