@@ -319,3 +319,7 @@ decoded-router-metadata-sensitivity replay output:
 # Experimental selector is compiled only in tests; production stays fixed.
 decoded-router-spatial-diagnostic manifest output:
     ZENSR_SPATIAL_INPUTS="{{manifest}}" ZENSR_SPATIAL_REPORT="{{output}}" cargo test --release --locked -p zensr-zenjpeg publication_spatial_windows -- --ignored --nocapture
+
+# Secondary check only: this cohort was already inspected in the original study.
+routing-feature-check development candidates reserved original_report output:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/routing_feature_check.py "{{development}}" "{{candidates}}" "{{reserved}}" "{{original_report}}" "{{output}}"
