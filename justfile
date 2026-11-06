@@ -311,3 +311,7 @@ projection-check-inputs report root output count="4":
 # New output directory; fits only on the immutable development table snapshot.
 routing-feature-ablation root original output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/routing_feature_ablation.py "{{root}}" "{{original}}" "{{output}}"
+
+# Preserves the frozen model; explicitly measures its APP15-size sensitivity.
+decoded-router-metadata-sensitivity replay output:
+    ZENSR_ROUTER_JPEG_REPLAY="{{replay}}" ZENSR_METADATA_REPORT="{{output}}" cargo test --release --locked -p zensr-zenjpeg publication_metadata_sensitivity -- --ignored --nocapture

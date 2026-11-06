@@ -490,6 +490,93 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "explicit metadata sensitivity diagnostic; caller supplies retained JPEGs and report"]
+    fn publication_metadata_sensitivity() {
+        use std::io::Write;
+        let path =
+            std::env::var("ZENSR_ROUTER_JPEG_REPLAY").expect("retained JPEG vectors required");
+        let output = std::env::var("ZENSR_METADATA_REPORT").expect("report output required");
+        let mut report = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(output)
+            .unwrap();
+        writeln!(report, "row\tpayload_bytes\tfile_bytes_added\tbaseline_gain\tbaseline_risk\tmodified_gain\tmodified_risk\tbaseline_restore\tmodified_restore").unwrap();
+        let text = std::fs::read_to_string(path).unwrap();
+        let mut count = 0;
+        for (i, line) in text.lines().skip(1).enumerate() {
+            let fields: Vec<_> = line.split('\t').collect();
+            let bytes = std::fs::read(fields[43]).unwrap();
+            let mut probe = zenjpeg::detect::probe(&bytes).unwrap();
+            let recorded = crate::record::apply_record(&mut probe);
+            let legacy =
+                crate::api::estimate_gain_for(&probe, crate::api::classify_content(&bytes));
+            let baseline = for_jpeg(&bytes, &probe, legacy, recorded).unwrap().unwrap();
+            let mut prepared = crate::prepared::Prepared::default();
+            prepared.plain(&bytes).unwrap();
+            prepared.coefficients(&bytes).unwrap();
+            for payload in [4096, 16384, 65536, 262144] {
+                // APP15 is an opaque diagnostic payload, not ICC/EXIF or an
+                // encode record. Segment lengths include their own two bytes.
+                let mut modified = Vec::with_capacity(bytes.len() + payload + 32);
+                modified.extend_from_slice(&bytes[..2]);
+                let mut left = payload;
+                while left > 0 {
+                    let n = left.min(65533);
+                    modified.extend_from_slice(&[0xff, 0xef]);
+                    modified.extend_from_slice(&((n + 2) as u16).to_be_bytes());
+                    modified.resize(modified.len() + n, 0);
+                    left -= n;
+                }
+                modified.extend_from_slice(&bytes[2..]);
+                let mut changed_probe = zenjpeg::detect::probe(&modified).unwrap();
+                let changed_recorded = crate::record::apply_record(&mut changed_probe);
+                assert_eq!(
+                    format!("{probe:?}"),
+                    format!("{changed_probe:?}"),
+                    "metadata changed probe"
+                );
+                assert_eq!(recorded, changed_recorded);
+                let mut changed = crate::prepared::Prepared::default();
+                changed.plain(&modified).unwrap();
+                changed.coefficients(&modified).unwrap();
+                assert_eq!(
+                    prepared.plain.as_ref().unwrap().pixels_u8(),
+                    changed.plain.as_ref().unwrap().pixels_u8()
+                );
+                let original_components = &prepared.coefficients.as_ref().unwrap().components;
+                let changed_components = &changed.coefficients.as_ref().unwrap().components;
+                assert_eq!(original_components.len(), changed_components.len());
+                for (a, b) in original_components.iter().zip(changed_components) {
+                    assert_eq!(a.coeffs, b.coeffs);
+                }
+                let prediction =
+                    for_jpeg_prepared(&modified, &changed_probe, legacy, recorded, &mut changed)
+                        .unwrap()
+                        .unwrap();
+                writeln!(
+                    report,
+                    "{i}\t{payload}\t{}\t{:.12}\t{:.12}\t{:.12}\t{:.12}\t{}\t{}",
+                    modified.len() - bytes.len(),
+                    baseline.gain,
+                    baseline.risk,
+                    prediction.gain,
+                    prediction.risk,
+                    baseline.restore(),
+                    prediction.restore()
+                )
+                .unwrap();
+                count += 1;
+            }
+            report.flush().unwrap();
+        }
+        assert_eq!(
+            count, 64,
+            "all sixteen retained JPEGs and four padding sizes required"
+        );
+    }
+
+    #[test]
     #[ignore = "explicit retained score-table replay; just decoded-router-replay supplies input"]
     fn publication_replay() {
         let path =
