@@ -6,6 +6,10 @@ use crate::decoded_router_model as fitted;
 use crate::RestoreError;
 use std::sync::OnceLock;
 
+#[cfg(test)]
+#[path = "decoded_router/spatial.rs"]
+mod spatial;
+
 pub(crate) struct Prediction {
     gain: f64,
     risk: f64,
@@ -199,6 +203,17 @@ pub(crate) fn for_jpeg_prepared(
     recorded: bool,
     prepared: &mut crate::prepared::Prepared,
 ) -> Result<Option<Prediction>, RestoreError> {
+    for_jpeg_prepared_windows(data, probe, legacy_gain, recorded, prepared, None)
+}
+
+fn for_jpeg_prepared_windows(
+    data: &[u8],
+    probe: &zenjpeg::detect::JpegProbe,
+    legacy_gain: f32,
+    recorded: bool,
+    prepared: &mut crate::prepared::Prepared,
+    selected: Option<&[Window]>,
+) -> Result<Option<Prediction>, RestoreError> {
     if probe.dimensions.width.min(probe.dimensions.height) < 8
         || probe.num_components != 3
         || crate::chroma_full_of(probe).is_none()
@@ -227,7 +242,14 @@ pub(crate) fn for_jpeg_prepared(
         .checked_mul(3)
         .ok_or(RestoreError::UnsupportedPixels("router row size"))?;
     let mut weakest: Option<Prediction> = None;
-    for window in windows(width, height) {
+    let default_windows;
+    let regions = if let Some(selected) = selected {
+        selected
+    } else {
+        default_windows = windows(width, height);
+        &default_windows
+    };
+    for &window in regions {
         let crop = crop_rgb(rgb, width, height, stride, window)?;
         let offer = zenanalyze::offer_for_request(
             &crop,
@@ -487,6 +509,72 @@ mod tests {
             let p = for_jpeg(&jpg, &probe, legacy, recorded).unwrap().unwrap();
             assert!(p.score().is_finite());
         }
+    }
+
+    #[test]
+    #[ignore = "explicit native-window diagnostic; caller supplies retained development JPEGs and report"]
+    fn publication_spatial_windows() {
+        use std::io::Write;
+        let manifest =
+            std::env::var("ZENSR_SPATIAL_INPUTS").expect("development manifest required");
+        let output = std::env::var("ZENSR_SPATIAL_REPORT").expect("report path required");
+        let mut report = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(output)
+            .unwrap();
+        writeln!(report, "id\tpolicy\tscore\trestore\tx\ty\twidth\theight").unwrap();
+        let text = std::fs::read_to_string(manifest).unwrap();
+        assert_eq!(text.lines().next(), Some("id\tjpeg"));
+        let mut count = 0;
+        for line in text.lines().skip(1) {
+            let (id, path) = line.split_once('\t').unwrap();
+            let bytes = std::fs::read(path).unwrap();
+            let mut probe = zenjpeg::detect::probe(&bytes).unwrap();
+            let recorded = crate::record::apply_record(&mut probe);
+            let legacy =
+                crate::api::estimate_gain_for(&probe, crate::api::classify_content(&bytes));
+            let mut prepared = crate::prepared::Prepared::default();
+            let coefficients = prepared.coefficients(&bytes).unwrap();
+            let luma = &coefficients.components[0];
+            let (w, h) = (
+                probe.dimensions.width as usize,
+                probe.dimensions.height as usize,
+            );
+            assert!(w.max(h) > 512, "native development input must exceed 512");
+            let candidates = spatial::select(w, h, &luma.coeffs, luma.blocks_wide);
+            for (policy, regions) in [("fixed", windows(w, h)), ("spatial", candidates)] {
+                let prediction = for_jpeg_prepared_windows(
+                    &bytes,
+                    &probe,
+                    legacy,
+                    recorded,
+                    &mut prepared,
+                    Some(&regions),
+                )
+                .unwrap()
+                .unwrap();
+                for window in regions {
+                    writeln!(
+                        report,
+                        "{id}\t{policy}\t{:.12}\t{}\t{}\t{}\t{}\t{}",
+                        prediction.score(),
+                        prediction.restore(),
+                        window.x,
+                        window.y,
+                        window.width,
+                        window.height
+                    )
+                    .unwrap();
+                }
+            }
+            report.flush().unwrap();
+            count += 1;
+        }
+        assert_eq!(
+            count, 8,
+            "bounded eight-cell development diagnostic required"
+        );
     }
 
     #[test]

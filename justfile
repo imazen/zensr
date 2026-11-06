@@ -315,3 +315,7 @@ routing-feature-ablation root original output:
 # Preserves the frozen model; explicitly measures its APP15-size sensitivity.
 decoded-router-metadata-sensitivity replay output:
     ZENSR_ROUTER_JPEG_REPLAY="{{replay}}" ZENSR_METADATA_REPORT="{{output}}" cargo test --release --locked -p zensr-zenjpeg publication_metadata_sensitivity -- --ignored --nocapture
+
+# Experimental selector is compiled only in tests; production stays fixed.
+decoded-router-spatial-diagnostic manifest output:
+    ZENSR_SPATIAL_INPUTS="{{manifest}}" ZENSR_SPATIAL_REPORT="{{output}}" cargo test --release --locked -p zensr-zenjpeg publication_spatial_windows -- --ignored --nocapture
