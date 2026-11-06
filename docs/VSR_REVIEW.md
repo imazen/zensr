@@ -63,8 +63,9 @@ unresolved quality limitations:
   phase. Starts now align to 16 pixels for both 420 and 444.
 - Disabling the old high-quality gate preserves the measured 512 operating point,
   but its effect at other sizes has not been measured.
-- Analysis can repeat pixel decoding and coefficient parsing before restoration.
-  Bounded window count is not a measured end-to-end latency bound.
+- The reviewed implementation repeated pixel decoding and coefficient parsing.
+  The implemented follow-up below shares compatible data; bounded window count
+  is still not a measured end-to-end latency bound.
 
 The existing retained native-crop score grid and completed development size-sweep
 cells could support a development diagnostic without regenerating restoration
@@ -140,3 +141,25 @@ The next engineering change with the clearest compatibility gate is internal
 decode/coefficient reuse. The next quality comparison should pair corrected
 bpp and spatial-window selection on existing development artifacts. Preserve
 arbitrary-resolution support and the original frozen 512 results throughout.
+
+## Implemented follow-ups — 2026-11-06
+
+The matched delivered-RGB8 projection diagnostic is implemented. See
+[its measured four-case results](../benchmarks/projection_diagnostic_2026-11-06.md).
+It reproduces the known line-plot loss unchanged with projection Off/On: that
+repair already lies inside the chosen bounds. This motivates local safeguards;
+coefficient consistency alone does not establish perceptual safety.
+
+The request now shares parsed coefficients across content classification,
+learned routing and projection. Plain Off decoding is shared across routing and
+restoration/skip. Auto deblocking remains a separate decode and releases the
+cached Off buffer. A new parity regression checks odd dimensions, 420/444,
+low/high qualities, deblock Off/Auto, and routed skips using actual canon4;
+floating-point output bits, RGB8 and reports must match fresh decoding.
+The existing independent full prediction and retained-JPEG replays remain gates.
+Profiling captures were recorded before and after, but no controlled deployment
+latency comparison has been completed; no speedup is claimed.
+
+Metadata-independent features, spatial selection/refitting, new guards and
+training changes remain experiments; none was silently applied to the frozen
+model or its recorded quality estimates.

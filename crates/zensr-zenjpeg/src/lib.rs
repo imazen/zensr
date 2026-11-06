@@ -19,6 +19,7 @@ mod decoded_router;
 #[cfg(feature = "chooser")]
 mod decoded_router_model;
 pub mod jpegli_params;
+mod prepared;
 pub mod qtables;
 mod qtables_data;
 mod record;
@@ -362,6 +363,22 @@ pub(crate) fn restore_jpeg_routed(
     cfg: &RestoreConfig,
     skip_model: bool,
 ) -> Result<Restored, RestoreError> {
+    restore_jpeg_prepared(
+        data,
+        model,
+        cfg,
+        skip_model,
+        &mut prepared::Prepared::default(),
+    )
+}
+
+pub(crate) fn restore_jpeg_prepared(
+    data: &[u8],
+    model: &AdoptedModel,
+    cfg: &RestoreConfig,
+    skip_model: bool,
+    prepared: &mut prepared::Prepared,
+) -> Result<Restored, RestoreError> {
     if model.scale != 1 {
         return Err(RestoreError::UnsupportedModel(
             "restore_jpeg is the x1 pipeline",
@@ -395,10 +412,18 @@ pub(crate) fn restore_jpeg_routed(
     };
 
     // 2. decode (deployment decoder)
-    let dec = zenjpeg::decoder::Decoder::new()
-        .deblock(mode)
-        .decode(data, enough::Unstoppable)
-        .map_err(|e| RestoreError::Decode(format!("{e:?}")))?;
+    let auto_decoded;
+    let dec = if want_auto {
+        // Off pixels cannot feed the Auto model path; release that buffer.
+        prepared.plain = None;
+        auto_decoded = zenjpeg::decoder::Decoder::new()
+            .deblock(mode)
+            .decode(data, enough::Unstoppable)
+            .map_err(|e| RestoreError::Decode(format!("{e:?}")))?;
+        &auto_decoded
+    } else {
+        prepared.plain(data)?
+    };
     let (w32, h32) = dec.dimensions();
     let (w, h) = (w32 as usize, h32 as usize);
     let px = dec
@@ -469,9 +494,7 @@ pub(crate) fn restore_jpeg_routed(
         p
     };
     if let Some(pcfg) = pcfg {
-        let coeffs = zenjpeg::decoder::Decoder::new()
-            .decode_coefficients(data, enough::Unstoppable)
-            .map_err(|e| RestoreError::Decode(format!("coefficients: {e:?}")))?;
+        let coeffs = prepared.coefficients(data)?;
         // Only geometries whose color model we know: 1 (grayscale luma) or 3
         // (YCbCr). 4-component (Adobe CMYK/YCCK) coefficients do NOT live in
         // the YCbCr space we reconstruct here — skip projection entirely.
@@ -531,6 +554,62 @@ pub(crate) fn restore_jpeg_routed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_decode_preserves_pixels_and_reports_for_auto_off_and_skip() {
+        use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, OptimizationPreset};
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model = AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let (w, h) = (31, 17);
+        let rgb = synth_rgb(w, h);
+        let mut saw_auto = false;
+        for q in [1., 55., 98.] {
+            for ss in [ChromaSubsampling::Quarter, ChromaSubsampling::None] {
+                let jpg = EncoderConfig::ycbcr(q, ss)
+                    .optimization(OptimizationPreset::MozjpegBaseline)
+                    .encode(
+                        bytemuck::cast_slice::<_, rgb::Rgb<u8>>(&rgb),
+                        w as u32,
+                        h as u32,
+                    )
+                    .unwrap();
+                for deblock in [false, true] {
+                    for skip in [false, true] {
+                        let mut cfg = RestoreConfig::default()
+                            .with_threads(1)
+                            .with_high_q_identity(false);
+                        cfg.deblock_policy = deblock;
+                        let fresh = restore_jpeg_routed(&jpg, &model, &cfg, skip).unwrap();
+                        let mut prepared = prepared::Prepared::default();
+                        prepared.plain(&jpg).unwrap();
+                        prepared.coefficients(&jpg).unwrap();
+                        let reused =
+                            restore_jpeg_prepared(&jpg, &model, &cfg, skip, &mut prepared).unwrap();
+                        assert_eq!(fresh.to_rgb8(), reused.to_rgb8());
+                        assert!(fresh
+                            .planes
+                            .iter()
+                            .zip(&reused.planes)
+                            .all(|(a, b)| a.to_bits() == b.to_bits()));
+                        assert_eq!(
+                            format!("{:?}", fresh.report),
+                            format!("{:?}", reused.report)
+                        );
+                        saw_auto |= reused.report.used_deblock_auto;
+                        if reused.report.used_deblock_auto {
+                            assert!(
+                                prepared.plain.is_none(),
+                                "Off buffer must be released for Auto"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(saw_auto, "test must exercise the distinct Auto decode path");
+    }
 
     fn synth_rgb(w: usize, h: usize) -> Vec<u8> {
         let mut v = vec![0u8; 3 * w * h];

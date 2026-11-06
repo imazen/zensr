@@ -67,6 +67,10 @@ None queued by the canon4 update.
 
 ### Changed
 
+- Reuse per-request JPEG coefficient data and compatible plain decoded pixels
+  across routing and restoration. Auto deblocking retains its distinct decode.
+  Cached/fresh parity checks preserve output float bits, RGB8 and reports.
+
 - Realtime tool defaults select the four-encoder `dejpeg_rt24i_canon4` model
   (86,406 f16 bytes). Refit routing curves, AQ correction, content threshold
   and family-aware identity gates using an image-separated calibration.

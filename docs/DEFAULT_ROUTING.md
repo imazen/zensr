@@ -83,5 +83,7 @@ Reproduction tools:
 
 The Python artifact is 5,660 bytes; that is not a Rust deployment-size measurement.
 The image weights are separate, 86,406 bytes. Pixel feature extraction adds work
-before the restoration decision; deployment latency has not been confirmed by a
+before the restoration decision; the request now shares coefficient data and
+reuses plain decoded pixels whenever the restoration decode mode is Off. Auto
+deblocking retains a distinct pixel decode. Deployment latency has not been confirmed by a
 valid runtime comparison. The worst reserved loss remains 18.5344 SSIM2.

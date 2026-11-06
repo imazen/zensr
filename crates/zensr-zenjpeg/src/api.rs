@@ -263,10 +263,13 @@ pub(crate) enum Content {
 
 /// Classify from luma zero-AC fraction, with a threshold selected on the
 /// calibration images only. Missing coefficients fall back to pooled curves.
+#[cfg(test)]
 pub(crate) fn classify_content(jpeg: &[u8]) -> Option<Content> {
-    let coeffs = zenjpeg::decoder::Decoder::new()
-        .decode_coefficients(jpeg, enough::Unstoppable)
-        .ok()?;
+    let mut prepared = crate::prepared::Prepared::default();
+    classify_coefficients(prepared.coefficients(jpeg).ok()?)
+}
+
+fn classify_coefficients(coeffs: &zenjpeg::decoder::DecodedCoefficients) -> Option<Content> {
     let luma = coeffs.components.first()?;
     let nblocks = luma.coeffs.len() / 64;
     if nblocks == 0 {
@@ -516,9 +519,13 @@ impl<'a> Request<'a> {
         // skip, so compute it only when the decision can depend on it. Measured
         // quality and cost depend on the corpus and implementation. `None` falls back to
         // the pooled curve, so an unparseable file routes exactly as before.
+        let mut prepared = crate::prepared::Prepared::default();
         let routing = self.routing.unwrap_or_default();
         let content = match routing {
-            Routing::Auto { .. } => classify_content(self.jpeg),
+            Routing::Auto { .. } => prepared
+                .coefficients(self.jpeg)
+                .ok()
+                .and_then(classify_coefficients),
             _ => None,
         };
         let predicted = estimate_gain_for(&probe_for_routing, content);
@@ -531,11 +538,12 @@ impl<'a> Request<'a> {
         #[cfg(feature = "chooser")]
         let (predicted, skip, learned) =
             if self.routing.is_none() && self.intent == Intent::Fidelity {
-                match crate::decoded_router::for_jpeg(
+                match crate::decoded_router::for_jpeg_prepared(
                     self.jpeg,
                     &probe_for_routing,
                     predicted,
                     _recorded,
+                    &mut prepared,
                 )? {
                     Some(decision) => (decision.score() as f32, !decision.restore(), true),
                     None => (predicted, skip, learned),
@@ -571,11 +579,12 @@ impl<'a> Request<'a> {
             cfg = cfg.with_projection(Projection::Off);
         }
         let geometry_unavailable = crate::chroma_full_of(&probe_for_routing).is_none();
-        let mut r = crate::restore_jpeg_routed(
+        let mut r = crate::restore_jpeg_prepared(
             self.jpeg,
             model,
             &cfg,
             skip || (self.require_consistency && geometry_unavailable),
+            &mut prepared,
         )?;
         let consistency_unavailable = geometry_unavailable || r.report.projection.len() != 3;
         if self.require_consistency
@@ -586,7 +595,7 @@ impl<'a> Request<'a> {
         {
             // A partial projection cannot satisfy the request. Return the
             // decode, never restored pixels labeled Unchanged.
-            r = crate::restore_jpeg_routed(self.jpeg, model, &cfg, true)?;
+            r = crate::restore_jpeg_prepared(self.jpeg, model, &cfg, true, &mut prepared)?;
         }
         let chroma = match r.report.chroma_full {
             Some(true) => Chroma::Full,

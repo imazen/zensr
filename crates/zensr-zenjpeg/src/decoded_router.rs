@@ -176,11 +176,28 @@ fn coefficient_window(
     crate::router_coefficients::features(&selected, bw * bh, bw).ok_or_else(error)
 }
 
+#[cfg(test)]
 pub(crate) fn for_jpeg(
     data: &[u8],
     probe: &zenjpeg::detect::JpegProbe,
     legacy_gain: f32,
     recorded: bool,
+) -> Result<Option<Prediction>, RestoreError> {
+    for_jpeg_prepared(
+        data,
+        probe,
+        legacy_gain,
+        recorded,
+        &mut crate::prepared::Prepared::default(),
+    )
+}
+
+pub(crate) fn for_jpeg_prepared(
+    data: &[u8],
+    probe: &zenjpeg::detect::JpegProbe,
+    legacy_gain: f32,
+    recorded: bool,
+    prepared: &mut crate::prepared::Prepared,
 ) -> Result<Option<Prediction>, RestoreError> {
     if probe.dimensions.width.min(probe.dimensions.height) < 8
         || probe.num_components != 3
@@ -193,17 +210,14 @@ pub(crate) fn for_jpeg(
             "decoded router feature definitions changed",
         ));
     }
-    let decoded = zenjpeg::decoder::Decoder::new()
-        .deblock(zenjpeg::decoder::DeblockMode::Off)
-        .decode(data, enough::Unstoppable)
-        .map_err(|e| RestoreError::Decode(format!("{e:?}")))?;
+    prepared.plain(data)?;
+    prepared.coefficients(data)?;
+    let decoded = prepared.plain.as_ref().unwrap();
     let (w, h) = decoded.dimensions();
     let rgb = decoded
         .pixels_u8()
         .ok_or(RestoreError::UnsupportedPixels("router requires RGB8"))?;
-    let coefficients = zenjpeg::decoder::Decoder::new()
-        .decode_coefficients(data, enough::Unstoppable)
-        .map_err(|e| RestoreError::Decode(format!("{e:?}")))?;
+    let coefficients = prepared.coefficients.as_ref().unwrap();
     let plane = coefficients
         .components
         .first()
