@@ -323,3 +323,6 @@ decoded-router-spatial-diagnostic manifest output:
 # Secondary check only: this cohort was already inspected in the original study.
 routing-feature-check development candidates reserved original_report output:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/routing_feature_check.py "{{development}}" "{{candidates}}" "{{reserved}}" "{{original_report}}" "{{output}}"
+
+decoded-router-candidate-replay replay:
+    ZENSR_CANDIDATE_REPLAY="{{replay}}" cargo test --release --locked -p zensr-zenjpeg candidate_publication_replay -- --ignored --nocapture

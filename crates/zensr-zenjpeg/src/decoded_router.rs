@@ -10,6 +10,46 @@ use std::sync::OnceLock;
 #[path = "decoded_router/spatial.rs"]
 mod spatial;
 
+#[cfg(test)]
+#[path = "decoded_router_candidate.rs"]
+mod candidate;
+
+struct Heads {
+    mean: &'static [f64; 37],
+    scale: &'static [f64; 37],
+    gain: &'static [f64; 47],
+    risk: &'static [f64; 47],
+    gain_bias: f64,
+    risk_bias: f64,
+    categories: [&'static [&'static str]; 3],
+}
+
+const FROZEN: Heads = Heads {
+    mean: &fitted::MEAN,
+    scale: &fitted::SCALE,
+    gain: &fitted::GAIN,
+    risk: &fitted::RISK,
+    gain_bias: fitted::GAIN_BIAS,
+    risk_bias: fitted::RISK_BIAS,
+    categories: fitted::CATEGORIES,
+};
+
+#[cfg(test)]
+const CANDIDATE: Heads = Heads {
+    mean: &candidate::MEAN,
+    scale: &candidate::SCALE,
+    gain: &candidate::GAIN,
+    risk: &candidate::RISK,
+    gain_bias: candidate::GAIN_BIAS,
+    risk_bias: candidate::RISK_BIAS,
+    categories: candidate::CATEGORIES,
+};
+
+#[cfg(test)]
+fn predict_candidate(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
+    predict_heads(numeric, categories, &CANDIDATE)
+}
+
 pub(crate) struct Prediction {
     gain: f64,
     risk: f64,
@@ -26,22 +66,26 @@ impl Prediction {
 }
 
 fn predict(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
+    predict_heads(numeric, categories, &FROZEN)
+}
+
+fn predict_heads(numeric: &[f64; 37], categories: &[&str; 3], heads: &Heads) -> Option<Prediction> {
     if !numeric.iter().all(|v| v.is_finite()) {
         return None;
     }
-    let mut gain = fitted::GAIN_BIAS;
-    let mut risk = fitted::RISK_BIAS;
+    let mut gain = heads.gain_bias;
+    let mut risk = heads.risk_bias;
     for (i, value) in numeric.iter().enumerate() {
-        let z = (value - fitted::MEAN[i]) / fitted::SCALE[i];
-        gain += z * fitted::GAIN[i];
-        risk += z * fitted::RISK[i];
+        let z = (value - heads.mean[i]) / heads.scale[i];
+        gain += z * heads.gain[i];
+        risk += z * heads.risk[i];
     }
     let mut offset = numeric.len();
-    for (value, known) in categories.iter().zip(fitted::CATEGORIES) {
+    for (value, known) in categories.iter().zip(heads.categories) {
         for (i, category) in known.iter().enumerate() {
             if value == category {
-                gain += fitted::GAIN[offset + i];
-                risk += fitted::RISK[offset + i];
+                gain += heads.gain[offset + i];
+                risk += heads.risk[offset + i];
             }
         }
         offset += known.len();
@@ -203,7 +247,7 @@ pub(crate) fn for_jpeg_prepared(
     recorded: bool,
     prepared: &mut crate::prepared::Prepared,
 ) -> Result<Option<Prediction>, RestoreError> {
-    for_jpeg_prepared_windows(data, probe, legacy_gain, recorded, prepared, None)
+    for_jpeg_prepared_windows(data, probe, legacy_gain, recorded, prepared, None, predict)
 }
 
 fn for_jpeg_prepared_windows(
@@ -213,6 +257,7 @@ fn for_jpeg_prepared_windows(
     recorded: bool,
     prepared: &mut crate::prepared::Prepared,
     selected: Option<&[Window]>,
+    classify: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
 ) -> Result<Option<Prediction>, RestoreError> {
     if probe.dimensions.width.min(probe.dimensions.height) < 8
         || probe.num_components != 3
@@ -308,7 +353,7 @@ fn for_jpeg_prepared_windows(
         } else {
             "420"
         };
-        let prediction = predict(&numeric, &[&family, &scale, ss])
+        let prediction = classify(&numeric, &[&family, &scale, ss])
             .ok_or(RestoreError::UnsupportedModel("non-finite router input"))?;
         if weakest
             .as_ref()
@@ -325,12 +370,19 @@ mod tests {
     use super::*;
 
     fn replay(text: &str) -> usize {
+        replay_using(text, predict)
+    }
+
+    fn replay_using(
+        text: &str,
+        classifier: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
+    ) -> usize {
         let mut count = 0;
         for line in text.lines().skip(1) {
             let fields: Vec<_> = line.split('\t').collect();
             assert_eq!(fields.len(), 43);
             let numeric = core::array::from_fn(|i| fields[i].parse::<f64>().unwrap());
-            let p = predict(&numeric, &[fields[37], fields[38], fields[39]]).unwrap();
+            let p = classifier(&numeric, &[fields[37], fields[38], fields[39]]).unwrap();
             let gain: f64 = fields[40].parse().unwrap();
             let risk: f64 = fields[41].parse().unwrap();
             assert!((p.gain - gain).abs() < 1e-9, "gain mismatch at row {count}");
@@ -353,6 +405,27 @@ mod tests {
         assert_eq!(
             replay(include_str!("../tests/data/decoded_router_golden.tsv")),
             16
+        );
+    }
+
+    #[test]
+    fn candidate_sklearn_golden_predictions_and_decisions() {
+        assert_eq!(
+            replay_using(
+                include_str!("../tests/data/decoded_router_candidate_golden.tsv"),
+                predict_candidate
+            ),
+            16
+        );
+    }
+
+    #[test]
+    #[ignore = "explicit independent candidate replay; caller provides vectors"]
+    fn candidate_publication_replay() {
+        let path = std::env::var("ZENSR_CANDIDATE_REPLAY").expect("candidate vectors required");
+        assert_eq!(
+            replay_using(&std::fs::read_to_string(path).unwrap(), predict_candidate),
+            140940
         );
     }
 
@@ -551,6 +624,7 @@ mod tests {
                     recorded,
                     &mut prepared,
                     Some(&regions),
+                    predict,
                 )
                 .unwrap()
                 .unwrap();
@@ -603,6 +677,17 @@ mod tests {
             let mut prepared = crate::prepared::Prepared::default();
             prepared.plain(&bytes).unwrap();
             prepared.coefficients(&bytes).unwrap();
+            let candidate_before = for_jpeg_prepared_windows(
+                &bytes,
+                &probe,
+                legacy,
+                recorded,
+                &mut prepared,
+                None,
+                predict_candidate,
+            )
+            .unwrap()
+            .unwrap();
             for payload in [4096, 16384, 65536, 262144] {
                 // APP15 is an opaque diagnostic payload, not ICC/EXIF or an
                 // encode record. Segment lengths include their own two bytes.
@@ -642,6 +727,26 @@ mod tests {
                     for_jpeg_prepared(&modified, &changed_probe, legacy, recorded, &mut changed)
                         .unwrap()
                         .unwrap();
+                let candidate_after = for_jpeg_prepared_windows(
+                    &modified,
+                    &changed_probe,
+                    legacy,
+                    recorded,
+                    &mut changed,
+                    None,
+                    predict_candidate,
+                )
+                .unwrap()
+                .unwrap();
+                assert_eq!(
+                    candidate_before.gain.to_bits(),
+                    candidate_after.gain.to_bits()
+                );
+                assert_eq!(
+                    candidate_before.risk.to_bits(),
+                    candidate_after.risk.to_bits()
+                );
+                assert_eq!(candidate_before.restore(), candidate_after.restore());
                 writeln!(
                     report,
                     "{i}\t{payload}\t{}\t{:.12}\t{:.12}\t{:.12}\t{:.12}\t{}\t{}",
