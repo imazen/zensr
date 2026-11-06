@@ -2,6 +2,10 @@
 
 The score-table comparison is complete. Pixel-artifact auditing was cancelled by the owner and remains incomplete. The owner subsequently selected `decoded/budget-0.005` as the default; its native implementation now supports arbitrary resolutions through native analysis windows. The quality measurements below remain scoped to 512 pixels. See the [default routing contract](../docs/DEFAULT_ROUTING.md).
 
+The 37-input default measured here was superseded by the owner-approved
+[metadata-independent default](routing_feature_ablation_2026-11-06.md) on
+2026-11-06. This original report and its results remain unchanged.
+
 ## Evidence and scope
 
 140,940 completed cells, 290 references, 269 grouped origins, four encoders, 420/444, and the frozen 61-value quality grid. The owner-approved oversized-reference exclusion removed one 124,227,840-pixel PNG and its 486 required cells. The frozen development fit and operating points were not reselected on reserved outcomes.

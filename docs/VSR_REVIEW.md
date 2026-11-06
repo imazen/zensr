@@ -171,8 +171,8 @@ reproduces the original baseline fit exactly, then removes bpp and optionally
 width/height. The 34-input candidate avoids direct dependence on those three
 fields and has native prediction/replay and APP15 invariance checks. It trades
 slightly lower gain and slightly higher observed harm on the reused reserved
-cohort for metadata stability; activation awaits owner selection. The default
-and all frozen baseline expectations remain unchanged.
+cohort for metadata stability. The owner approved adopting it as the default
+on 2026-11-06. All frozen baseline expectations remain preserved.
 
 A test-only structure/AC selector samples an off-center synthetic structure
 missed by fixed windows. It changes scores but no decisions in the bounded

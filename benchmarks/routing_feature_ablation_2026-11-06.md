@@ -1,7 +1,8 @@
 # Metadata-independent routing candidates — 2026-11-06
 
-Production default is unchanged pending owner selection. Candidate code is
-compiled only for tests. No CNN training, encoder generation or cancelled
+The owner approved the 34-input metadata-independent candidate as the default
+on 2026-11-06. Its native heads now serve default Fidelity requests; the
+original model and replay expectations remain preserved. No CNN training, encoder generation or cancelled
 pixel-artifact audit was resumed.
 
 ## Development comparison
@@ -38,17 +39,17 @@ publication evaluation. The original baseline summary replays exactly.
 
 | Policy | Mean gain | Observed harm | Cell restore coverage | Changed decisions |
 |---|---:|---:|---:|---:|
-| Current default | +2.426027 | 0.548952% | 80.4349% | 0 |
+| Original 37-input default | +2.426027 | 0.548952% | 80.4349% | 0 |
 | Remove bpp | +2.418632 | 0.569859% | 79.8680% | 2,689 |
-| Remove bpp and dimensions | +2.417327 | 0.566162% | 79.7524% | 2,890 |
+| Approved 34-input default | +2.417327 | 0.566162% | 79.7524% | 2,890 |
 
 Gain and harm are origin-balanced. All three retain the same worst loss,
 18.534408 SSIM2. Removing bpp and dimensions changes mean gain by -0.008700
 (pointwise paired origin-bootstrap 95% interval [-0.013265, -0.004891]) and harm
 by +0.017211 percentage points (interval [-0.006502, +0.048954]). These intervals
 carry the cohort and reuse limitations above; they are not deployment bounds.
-The observed candidate harm is slightly above the owner's previously accepted
-0.55%, so activation requires the owner's choice.
+The observed candidate harm is slightly above the previously accepted 0.55%;
+the owner explicitly approved adopting it after reviewing this tradeoff.
 
 ## Actual metadata sensitivity
 
