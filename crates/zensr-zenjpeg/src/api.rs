@@ -681,6 +681,50 @@ mod tests {
 
     #[cfg(feature = "chooser")]
     #[test]
+    fn opaque_metadata_preserves_default_pixels_and_decision() {
+        let weights = zensr_micro::decode_all_f16(include_bytes!(
+            "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
+        ));
+        let model = zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1).unwrap();
+        let restorer = Restorer::new().with_tier(Budget::Realtime, model);
+        let (w, h) = (31, 17);
+        let pixels = synth(w, h);
+        for q in [1., 55., 98.] {
+            for ss in [
+                zenjpeg::encoder::ChromaSubsampling::Quarter,
+                zenjpeg::encoder::ChromaSubsampling::None,
+            ] {
+                let jpg = zenjpeg::encoder::EncoderConfig::ycbcr(q, ss)
+                    .optimization(zenjpeg::encoder::OptimizationPreset::MozjpegBaseline)
+                    .encode(
+                        bytemuck::cast_slice::<_, rgb::Rgb<u8>>(&pixels),
+                        w as u32,
+                        h as u32,
+                    )
+                    .unwrap();
+                let mut padded = Vec::with_capacity(jpg.len() + 8196);
+                padded.extend_from_slice(&jpg[..2]);
+                padded.extend_from_slice(&[0xff, 0xef]);
+                padded.extend_from_slice(&8194u16.to_be_bytes());
+                padded.resize(padded.len() + 8192, 0);
+                padded.extend_from_slice(&jpg[2..]);
+                let before = restorer.restore(&jpg).threads(1).run().unwrap();
+                let after = restorer.restore(&padded).threads(1).run().unwrap();
+                assert_eq!(
+                    matches!(before, Outcome::Restored { .. }),
+                    matches!(after, Outcome::Restored { .. })
+                );
+                assert_eq!(before.pixels().to_rgb8(), after.pixels().to_rgb8());
+                assert_eq!(
+                    format!("{:?}", before.report()),
+                    format!("{:?}", after.report())
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "chooser")]
+    #[test]
     fn default_decoded_router_matches_pipeline_and_preserves_overrides() {
         let weights = zensr_micro::decode_all_f16(include_bytes!(
             "../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw"
@@ -713,9 +757,15 @@ mod tests {
                     let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
                     let recorded = crate::record::apply_record(&mut probe);
                     let gain = estimate_gain_for(&probe, classify_content(&jpg));
-                    let decision = crate::decoded_router::for_jpeg(&jpg, &probe, gain, recorded)
-                        .unwrap()
-                        .unwrap();
+                    let decision = crate::decoded_router::for_jpeg_prepared(
+                        &jpg,
+                        &probe,
+                        gain,
+                        recorded,
+                        &mut crate::prepared::Prepared::default(),
+                    )
+                    .unwrap()
+                    .unwrap();
                     let decoded = zenjpeg::decoder::Decoder::new()
                         .deblock(zenjpeg::decoder::DeblockMode::Off)
                         .decode(&jpg, enough::Unstoppable)

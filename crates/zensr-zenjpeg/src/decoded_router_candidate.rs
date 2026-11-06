@@ -1,4 +1,4 @@
-// Experimental candidate; default model is unchanged.
+// Metadata-independent heads; activation is selected in decoded_router.rs.
 // Exported by tools/routing_candidate_export.py.
 // Development manifest SHA256: 3d4a4f5f34a4af10e7398f13f3bf8d0b0227677a01b9d011bc706bb47a824c00
 // Model SHA256: 67332af66b2d2e8314bee812f4270a24b03cb1d5c289a4cbb2aa006109a92693
@@ -191,3 +191,6 @@ pub(super) const CATEGORIES: [&[&str]; 3] = [
     &["ButteraugliDistance", "IjgQuality", "MozjpegQuality"],
     &["420", "444"],
 ];
+
+pub(super) const PENALTY: f64 = 32.0;
+pub(super) const THRESHOLD: f64 = 0.0;

@@ -1,7 +1,9 @@
-//! Frozen decoded-linear-1 routing, selected by the owner on 2026-11-05.
+//! Metadata-independent linear routing, selected by the owner on 2026-11-06.
 //! Native analysis windows preserve JPEG artifact scale at arbitrary sizes.
-//! The 512-pixel measured path remains unchanged; larger images require all
-//! sampled windows to accept restoration. Explicit caller overrides stay intact.
+//! The historical baseline remains reproducible in tests. Larger images require
+//! all sampled windows to accept restoration. Explicit caller overrides stay intact.
+use crate::decoded_router_features as definitions;
+#[cfg(test)]
 use crate::decoded_router_model as fitted;
 use crate::RestoreError;
 use std::sync::OnceLock;
@@ -10,7 +12,6 @@ use std::sync::OnceLock;
 #[path = "decoded_router/spatial.rs"]
 mod spatial;
 
-#[cfg(test)]
 #[path = "decoded_router_candidate.rs"]
 mod candidate;
 
@@ -24,6 +25,7 @@ struct Heads {
     categories: [&'static [&'static str]; 3],
 }
 
+#[cfg(test)]
 const FROZEN: Heads = Heads {
     mean: &fitted::MEAN,
     scale: &fitted::SCALE,
@@ -34,7 +36,6 @@ const FROZEN: Heads = Heads {
     categories: fitted::CATEGORIES,
 };
 
-#[cfg(test)]
 const CANDIDATE: Heads = Heads {
     mean: &candidate::MEAN,
     scale: &candidate::SCALE,
@@ -45,7 +46,6 @@ const CANDIDATE: Heads = Heads {
     categories: candidate::CATEGORIES,
 };
 
-#[cfg(test)]
 fn predict_candidate(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
     predict_heads(numeric, categories, &CANDIDATE)
 }
@@ -57,14 +57,15 @@ pub(crate) struct Prediction {
 
 impl Prediction {
     pub(crate) fn score(&self) -> f64 {
-        self.gain - fitted::PENALTY * self.risk
+        self.gain - candidate::PENALTY * self.risk
     }
 
     pub(crate) fn restore(&self) -> bool {
-        self.score() >= fitted::THRESHOLD
+        self.score() >= candidate::THRESHOLD
     }
 }
 
+#[cfg(test)]
 fn predict(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
     predict_heads(numeric, categories, &FROZEN)
 }
@@ -113,7 +114,7 @@ fn definitions_match() -> bool {
     static MATCH: OnceLock<bool> = OnceLock::new();
     *MATCH.get_or_init(|| {
         let actual = zenanalyze::versioning::feature_qualified_names();
-        fitted::PIXELS
+        definitions::PIXELS
             .iter()
             .all(|(name, qualified)| actual.iter().any(|(n, q)| n == name && q == qualified))
     })
@@ -231,12 +232,14 @@ pub(crate) fn for_jpeg(
     legacy_gain: f32,
     recorded: bool,
 ) -> Result<Option<Prediction>, RestoreError> {
-    for_jpeg_prepared(
+    for_jpeg_prepared_windows(
         data,
         probe,
         legacy_gain,
         recorded,
         &mut crate::prepared::Prepared::default(),
+        None,
+        predict,
     )
 }
 
@@ -247,7 +250,15 @@ pub(crate) fn for_jpeg_prepared(
     recorded: bool,
     prepared: &mut crate::prepared::Prepared,
 ) -> Result<Option<Prediction>, RestoreError> {
-    for_jpeg_prepared_windows(data, probe, legacy_gain, recorded, prepared, None, predict)
+    for_jpeg_prepared_windows(
+        data,
+        probe,
+        legacy_gain,
+        recorded,
+        prepared,
+        None,
+        predict_candidate,
+    )
 }
 
 fn for_jpeg_prepared_windows(
@@ -331,7 +342,7 @@ fn for_jpeg_prepared_windows(
             c.gutted_block_frac,
             c.gutted_clustering,
         ]);
-        for (target, (name, _)) in numeric[13..].iter_mut().zip(fitted::PIXELS) {
+        for (target, (name, _)) in numeric[13..].iter_mut().zip(definitions::PIXELS) {
             *target = f64::from(
                 offer
                     .get(name)
@@ -402,6 +413,11 @@ mod tests {
 
     #[test]
     fn sklearn_golden_predictions_and_decisions() {
+        assert_eq!(definitions::PIXELS, fitted::PIXELS);
+        assert_eq!(
+            (candidate::PENALTY, candidate::THRESHOLD),
+            (fitted::PENALTY, fitted::THRESHOLD)
+        );
         assert_eq!(
             replay(include_str!("../tests/data/decoded_router_golden.tsv")),
             16
@@ -677,17 +693,10 @@ mod tests {
             let mut prepared = crate::prepared::Prepared::default();
             prepared.plain(&bytes).unwrap();
             prepared.coefficients(&bytes).unwrap();
-            let candidate_before = for_jpeg_prepared_windows(
-                &bytes,
-                &probe,
-                legacy,
-                recorded,
-                &mut prepared,
-                None,
-                predict_candidate,
-            )
-            .unwrap()
-            .unwrap();
+            let candidate_before =
+                for_jpeg_prepared(&bytes, &probe, legacy, recorded, &mut prepared)
+                    .unwrap()
+                    .unwrap();
             for payload in [4096, 16384, 65536, 262144] {
                 // APP15 is an opaque diagnostic payload, not ICC/EXIF or an
                 // encode record. Segment lengths include their own two bytes.
@@ -723,21 +732,21 @@ mod tests {
                 for (a, b) in original_components.iter().zip(changed_components) {
                     assert_eq!(a.coeffs, b.coeffs);
                 }
-                let prediction =
-                    for_jpeg_prepared(&modified, &changed_probe, legacy, recorded, &mut changed)
-                        .unwrap()
-                        .unwrap();
-                let candidate_after = for_jpeg_prepared_windows(
+                let prediction = for_jpeg_prepared_windows(
                     &modified,
                     &changed_probe,
                     legacy,
                     recorded,
                     &mut changed,
                     None,
-                    predict_candidate,
+                    predict,
                 )
                 .unwrap()
                 .unwrap();
+                let candidate_after =
+                    for_jpeg_prepared(&modified, &changed_probe, legacy, recorded, &mut changed)
+                        .unwrap()
+                        .unwrap();
                 assert_eq!(
                     candidate_before.gain.to_bits(),
                     candidate_after.gain.to_bits()
@@ -811,13 +820,22 @@ mod tests {
                 "risk at row {count}"
             );
             assert_eq!(p.restore(), f[42] == "1", "decision at row {count}");
-            if (p.restore() && !restored_checked) || (!p.restore() && !skipped_checked) {
+            let active = for_jpeg_prepared(
+                &bytes,
+                &probe,
+                legacy,
+                recorded,
+                &mut crate::prepared::Prepared::default(),
+            )
+            .unwrap()
+            .unwrap();
+            if (active.restore() && !restored_checked) || (!active.restore() && !skipped_checked) {
                 let actual = restorer.restore(&bytes).threads(1).run().unwrap();
                 assert_eq!(
                     matches!(actual, crate::api::Outcome::Restored { .. }),
-                    f[42] == "1"
+                    active.restore()
                 );
-                let expected = if f[42] == "1" {
+                let expected = if active.restore() {
                     restored_checked = true;
                     crate::restore_jpeg(
                         &bytes,

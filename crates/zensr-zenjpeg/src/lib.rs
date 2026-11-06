@@ -17,6 +17,8 @@ pub mod chooser;
 #[cfg(feature = "chooser")]
 mod decoded_router;
 #[cfg(feature = "chooser")]
+mod decoded_router_features;
+#[cfg(all(feature = "chooser", test))]
 mod decoded_router_model;
 pub mod jpegli_params;
 mod prepared;

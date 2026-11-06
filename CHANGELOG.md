@@ -19,7 +19,7 @@ None queued by the canon4 update.
 
 - Development-only routing feature ablation and secondary reused-cohort check;
   native 34-input candidate replay, APP15 invariance controls and experimental
-  structure-selected analysis windows. Default policy remains unchanged.
+  structure-selected analysis windows. Spatial selection remains experimental.
 
 - Retained-input projection on/off diagnostic measures SSIM2 and coefficient
   residuals reconstructed from delivered RGB8; independent DCT and odd-edge
@@ -76,6 +76,10 @@ None queued by the canon4 update.
   [the probe record](benchmarks/coz_runtime_2026-10-18.pointer.md).
 
 ### Changed
+
+- Owner-approved metadata-independent default: 34 numeric inputs exclude file
+  bpp and dimensions. Reused reserved-cohort gain +2.4173 SSIM2, observed harm
+  0.5662%; original model/replays retained. APP15 padding preserves predictions.
 
 - Reuse per-request JPEG coefficient data and compatible plain decoded pixels
   across routing and restoration. Auto deblocking retains its distinct decode.

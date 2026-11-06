@@ -38,7 +38,7 @@ def export(root, inputs, source, golden, replay):
         values[slots] = coefficients[:len(numeric)]
         values[len(complete):] = coefficients[len(numeric):]
         expanded.append(values)
-    text = ['// Experimental candidate; default model is unchanged.',
+    text = ['// Metadata-independent heads; activation is selected in decoded_router.rs.',
             '// Exported by tools/routing_candidate_export.py.',
             '// Development manifest SHA256: '+study.sha(freeze),
             '// Model SHA256: '+study.sha(model_path)]
@@ -46,7 +46,7 @@ def export(root, inputs, source, golden, replay):
         text += [f'pub(super) const {name}: [f64; {len(values)}] = [']
         text += ['    '+repr(float(v))+',' for v in values]
         text += ['];']
-    for name,value in [('GAIN_BIAS',gain.intercept_),('RISK_BIAS',risk.intercept_[0])]:
+    for name,value in [('GAIN_BIAS',gain.intercept_),('RISK_BIAS',risk.intercept_[0]),('PENALTY',point['penalty']),('THRESHOLD',point['threshold'])]:
         text += [f'pub(super) const {name}: f64 = {float(value)!r};']
     text += ['pub(super) const CATEGORIES: [&[&str]; 3] = [']
     text += ['    &['+','.join(json.dumps(str(v)) for v in values)+'],' for values in categories]
