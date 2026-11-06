@@ -80,3 +80,63 @@ This establishes the source license, not a conclusion about other rights.
 The review did not establish independent quality gains, weight reproducibility
 or suitability of its IPP dependency, approximate hashing, fast-math build
 settings and border fallback for zensr's exact-output contracts.
+
+## Follow-up assessment — 2026-11-06
+
+Source inspection at `816a43ce7b2f` confirms the opportunities below. Its remote
+CI completed successfully. This follow-up ran no quality or speed experiment;
+priorities express engineering judgment, not estimated gains.
+
+| Priority | Improvement | Current evidence | Acceptance condition |
+|---|---|---|---|
+| 1 | Reuse parsed coefficients and compatible decoded pixels | `api.rs::run` classifies from coefficients; `decoded_router::for_jpeg` decodes pixels and coefficients again; `restore_jpeg_routed` decodes pixels and parses coefficients for projection | Preserve decisions, output pixels and reports; profile and measure before claiming a speedup |
+| 2 | Make bpp describe the primary image, independently of metadata | `decoded_router.rs` uses `data.len()*8/(w*h)` | Matched feature extraction and refit; adding non-pixel APP/COM payload must not change the new feature or decision |
+| 3 | Select windows using spatial damage and structure | `windows()` selects only center/corners; coefficient extraction already examines the luma block map | Compare position-only and structure/damage-aware selection at the same window budget; fit aggregation on development data and report gain, harm, severity and coverage by size |
+| 4 | Evaluate local structure safeguards with a true unguarded control | `dejpeg_eval.rs::run_model` always calls `guarded_merge`, including `model_off`; the texture map uses a 16-pixel-cell mean absolute Laplacian | Isolate clamp, texture gate and fallback effects; evaluate a coherence-aware candidate on final projected output; refit routing if adopted |
+| 5 | Diversify pre-JPEG resizing and smooth-region training | `make_dejpeg_data4.py` imports native `gen_crops`; that generator rejects grayscale standard deviation below eight | Paired training with matched origins/seeds and our resize/encoder path; report native/resized and smooth/texture/line strata separately |
+| 6 | Test absolute JPEG block-phase conditioning | Current compact graph accepts three pixel channels; previous rejected conditioning supplied damage/severity, not absolute phase | Separate model experiment; no quality claim without matched evaluation and exact whole/tiled output |
+
+Decode reuse must respect policy differences: routing sees deblocking Off,
+while restoration may use Auto. Reuse those pixels only when the selected
+restoration decode is identical. A rejected file can reuse its plain decode.
+Coefficient reuse is independent of that pixel-deblocking choice. Keep the
+public API unchanged; pass an internal prepared-input context through the call
+chain rather than introducing a second restoration implementation.
+
+For spatial routing, high AC energy alone is insufficient: useful candidates
+include both structured edges/lines and regions with unusually erased AC.
+Keep a representative region as well. Blank margins can be useful evidence of
+smooth content, so blindly dropping every flat region is also unjustified.
+Compare the current minimum-window-score rule with a calibrated aggregation
+that accounts for window count and evidence. A local gate may retain gains in
+safe regions instead of rejecting an entire mixed-content image, but it changes
+the restored output and therefore requires new outcome labels.
+
+Additional controls matter:
+
+- At ×1, the guard's round-trip operation reduces to output-versus-input mean
+  absolute deviation. It is not independent evidence that a correction is wrong.
+  Its image-wide mean can dilute a localized change. Compare a local version
+  jointly with the texture/clamp controls; do not assume every large residual
+  is damage.
+- The exported selection deliberately has `domain_guard = false`
+  (`publication_routing_export_linear.py` checks it). Absence of range abstention
+  is not a missing implementation of that frozen choice. Small-image handling,
+  fitted ranges and high-quality gating should be compared as candidate policies.
+- Clamping dimensions into the fitted range invents a different feature vector.
+  Prefer matched native-window development inputs when refitting; retain the
+  measured 512 policy as a comparison.
+- Metadata-only additions provide a strict feature-invariance control when the
+  image and encode record are unchanged. White-margin additions change content
+  and geometry: measure their effect, rather than imposing decision invariance
+  as a correctness guarantee.
+- The retained native-crop grid is a useful diagnostic, but its 12,096 cells are
+  the combined grid, not all untouched validation data. Its old harm tables use
+  a loss threshold of 0.1; recompute using the owner's quality-dependent curve
+  before comparing them to the publication frontier. Check origin overlap with
+  router fitting inputs before labeling any subset held out.
+
+The next engineering change with the clearest compatibility gate is internal
+decode/coefficient reuse. The next quality comparison should pair corrected
+bpp and spatial-window selection on existing development artifacts. Preserve
+arbitrary-resolution support and the original frozen 512 results throughout.
