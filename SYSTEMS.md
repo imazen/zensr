@@ -493,7 +493,7 @@ and uses it the same shortcut way — conditioning substitutes for pixel
 analysis instead of augmenting it, costing ~3 dB on every degraded band
 for a clean-identity win qboost provides anyway. **S2a and S7-as-input
 falsified; S10's value is the OUTPUT-side projection** (DCT-box clamp —
-no training, hard re-encode-consistency guarantee), not input channels.
+no training, family-calibrated coefficient constraints; no exact re-encode guarantee), not input channels.
 The shipping architecture stays pixels-in/pixels-out.
 
 Fleet postscript: 6 training runs + 1 confound probe across lianli/

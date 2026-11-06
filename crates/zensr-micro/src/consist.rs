@@ -1,20 +1,21 @@
 //! S10 quantization-consistency projection (decoder-agnostic).
 //!
-//! A JPEG file certifies, per 8x8 block and DCT band (u,v), that the encoder's
-//! true coefficient satisfied |c - c_hat| <= Q[u,v]/2 (+ encoder slack for
-//! trellis quantizers). The set of consistent images is convex and contains
-//! the original; clamping the model output's block-DCT coefficients into the
-//! per-band interval is the exact Euclidean projection onto that set
-//! (orthonormal DCT), so it NEVER increases error vs the original:
-//! ||P(y) - truth|| <= ||y - truth|| for every output. Re-encoding the
-//! projected output with the same tables reproduces the file's coefficients.
+//! For an ideal nearest-rounding quantizer, a stored coefficient k and step Q
+//! imply a pre-quantized coefficient in k*Q +/- Q/2. Real encoders can deviate
+//! through trellis decisions, adaptive quantization and sample conversion.
+//! Callers therefore supply empirical relative and absolute slack.
 //!
-//! Domain: the projection is exact in the decoder's YCbCr space, on
-//! level-shifted samples (value*255 - 128), per JPEG/JFIF. Callers hand in
-//! one component plane at a time plus that component's coefficients (natural
-//! or zigzag order per `CoeffOrder`) and quant table. Chroma of subsampled
-//! files must be projected on the subsampled lattice (back-projection form)
-//! — v1 supports full-resolution planes only (luma always; chroma at 4:4:4).
+//! Clamping an orthonormal block DCT is Euclidean projection onto the chosen
+//! coefficient box BEFORE pixel clipping. It cannot increase squared error to
+//! a target inside that box. Neither containment of the original nor perceptual
+//! improvement follows for arbitrary JPEGs. Widened boxes do not promise that
+//! re-encoding reproduces the original quantized coefficients.
+//!
+//! Planes use decoder YCbCr units, level-shifted as value*255 - 128. Full-size
+//! components are projected directly; 420 chroma uses box-downsampled planes
+//! and replicated corrections. Edge replication, pixel clipping, color conversion
+//! and RGB8 rounding can change the final coefficients. Delivered-pixel
+//! consistency requires a separate check using an explicit sampling operator.
 //!
 //! No SIMD here on purpose: plain separable matrix DCT auto-vectorizes and
 //! keeps this module out of the kernel-fragility zone (26x-incident lesson).
@@ -119,8 +120,8 @@ fn basis() -> [[f32; B]; B] {
 /// `plane`: [0,1] samples, `w*h`, tight rows. Interpretation: this component's
 /// YCbCr value where JPEG stores `value*255 - 128` (Y straight; Cb/Cr with the
 /// +0.5 offset already folded into [0,1]). Blocks beyond `w`/`h` (partial edge
-/// blocks) are handled by edge replication, matching encoder padding closely
-/// enough that edge coefficients stay in-box for real files.
+/// blocks) are handled by edge replication. Encoder padding may differ; clipping
+/// and retaining only the visible part can invalidate the projected bounds.
 pub fn project_plane(
     plane: &mut [f32],
     w: usize,
@@ -265,9 +266,9 @@ pub fn ycbcr_to_rgb_planes(y: &[f32], cb: &[f32], cr: &[f32], rgb: &mut [f32], p
 /// the 2x-subsampled lattice (4:2:0), via one back-projection pass:
 /// down = box2x2(plane); down' = project(down); plane += replicate(down' - down).
 /// Replication is the exact right-inverse of the box decimation, so the
-/// corrected plane satisfies the half-res constraint EXACTLY in one pass
-/// (up to [0,1] clamping); the correction field is piecewise-constant at
-/// 2x2 granularity, which is invisible at chroma scales.
+/// correction restores the projected box averages before clipping. This uses
+/// a box sampling model, which may differ from the encoder. Clipping can break
+/// the bounds; piecewise-constant 2x2 corrections are not a visibility guarantee.
 pub fn project_chroma_420(
     plane: &mut [f32],
     w: usize,

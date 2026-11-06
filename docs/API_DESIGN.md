@@ -1,3 +1,7 @@
+> Historical design proposal. Current coefficient projection uses empirical
+> slack and does not certify exact re-encoding or perceptual safety. The draft
+> `Certified` terminology below must not be interpreted as a shipped guarantee.
+
 # zensr restoration API — design (revised 2026-08-03 against measurement)
 
 > **Revision note.** The 2026-08-01 draft is superseded where it conflicts with
@@ -90,9 +94,9 @@ encoded the file. The API asks the question they can answer.
 #[non_exhaustive]
 pub enum Consistency {
     /// Every output coefficient lies within the interval the file's own
-    /// quantisation tables certify. Re-encoding with those tables
-    /// reproduces the input's coefficients. This property is what makes
-    /// restoration safe to apply blind (F1).
+    /// quantisation tables suggest, widened by empirical slack. Final RGB8
+    /// consistency needs an explicit check; this does not certify exact
+    /// re-encoding or perceptual safety.
     Certified { half_width_q: f32, absolute_units: f32 },
     /// Projection could not be applied. `why` is specific: 4:2:2/4:4:0
     /// chroma geometry, CMYK, or caller opt-out.
@@ -100,8 +104,8 @@ pub enum Consistency {
 }
 ```
 
-No other JPEG restorer offers this. It should be the first thing the docs say,
-and callers who need it should be able to *require* it (below).
+This proposed certification requires stronger final-output verification than
+the current implementation supplies.
 
 ### 2.3 "Unchanged" is a first-class outcome
 
