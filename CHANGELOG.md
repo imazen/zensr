@@ -17,6 +17,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Development-only routing feature ablation and secondary reused-cohort check;
+  native 34-input candidate replay, APP15 invariance controls and experimental
+  structure-selected analysis windows. Default policy remains unchanged.
+
 - Retained-input projection on/off diagnostic measures SSIM2 and coefficient
   residuals reconstructed from delivered RGB8; independent DCT and odd-edge
   box-sampling checks. See the four-case diagnostic in benchmarks.

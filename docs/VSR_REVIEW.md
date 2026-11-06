@@ -163,3 +163,18 @@ latency comparison has been completed; no speedup is claimed.
 Metadata-independent features, spatial selection/refitting, new guards and
 training changes remain experiments; none was silently applied to the frozen
 model or its recorded quality estimates.
+
+## Feature and spatial follow-up — 2026-11-06
+
+The [measured feature ablation](../benchmarks/routing_feature_ablation_2026-11-06.md)
+reproduces the original baseline fit exactly, then removes bpp and optionally
+width/height. The 34-input candidate avoids direct dependence on those three
+fields and has native prediction/replay and APP15 invariance checks. It trades
+slightly lower gain and slightly higher observed harm on the reused reserved
+cohort for metadata stability; activation awaits owner selection. The default
+and all frozen baseline expectations remain unchanged.
+
+A test-only structure/AC selector samples an off-center synthetic structure
+missed by fixed windows. It changes scores but no decisions in the bounded
+eight-cell native-size diagnostic. That is insufficient evidence to replace
+production window selection. No spatial quality improvement is claimed.

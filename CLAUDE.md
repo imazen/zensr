@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Current frozen decoded routing uses whole-file bpp, so nonsemantic APP15
+  padding can change its decision while pixels, coefficients and probe match.
+  A bounded 16-input diagnostic (including near-boundary cases) reproduces it.
+  The 34-input candidate removes bpp/dimensions and passes all 64 padding checks;
+  activation awaits owner selection because secondary observed harm is 0.5662%
+  versus current 0.5490%. See `benchmarks/routing_feature_ablation_2026-11-06.md`.
+
 - Fixed tiny-image chroma projection: padded MCU block dimensions could make
   420 chroma appear full-resolution, or misclassify 422/440. Sampling geometry
   now follows SOF sampling factors. The regression failed on 8x8 420 before
