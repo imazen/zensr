@@ -45,3 +45,11 @@ Verified on i265. Supporting artifacts and logs are preserved at
 The initial release build/test/run wrapper reported:
 `run-heavy: done rc=0 55s | peak-RSS 1.41GiB | min-avail 20666MiB | peak-load 2.79`.
 That includes compilation and is not a runtime benchmark.
+
+Tool/source commit: `577c4daf728f`. Decode reuse landed as `f1de5e4aa2db`;
+all four ablation tables and saved outputs remained byte-identical afterward.
+Sampling-factor geometry correction: `dc12fad581a8`. The reserved vector table's
+minimum short edge is 201 pixels; the reproduced tiny-padding failure is outside
+that measured geometry. Follow-up logs and profiler captures are in the artifact
+folder's `follow-up-verification/`, with a build-identity/hash manifest. Profiling
+is diagnostic; no controlled speedup claim is made.
