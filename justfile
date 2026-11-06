@@ -307,3 +307,7 @@ projection-check-tests:
 
 projection-check-inputs report root output count="4":
     python3 tools/projection_check_inputs.py "{{report}}" "{{root}}" "{{output}}" --count "{{count}}"
+
+# New output directory; fits only on the immutable development table snapshot.
+routing-feature-ablation root original output:
+    {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/routing_feature_ablation.py "{{root}}" "{{original}}" "{{output}}"
