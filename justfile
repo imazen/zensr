@@ -297,3 +297,13 @@ publication-routing-transfer-pilot config source archive reference logs:
 # Run beside storage; stop only the exact native-transfer Python child.
 publication-routing-stop-native container:
     docker exec "{{container}}" python3 -c 'import os,signal,pathlib; rows=[(int(p.parent.name),p.read_bytes().split(b"\0")) for p in pathlib.Path("/proc").glob("[0-9]*/cmdline")]; ids=[pid for pid,args in rows if args[0]==b"python3" and b"/tools/publication_routing_native_stage.py" in args and b"drain" in args]; assert len(ids)==1,ids; os.kill(ids[0],signal.SIGTERM)'
+
+# Retained inputs; no encoding or routing refit. Invoke under run-heavy.
+projection-check manifest output:
+    cargo run --release --locked -p zensr-bench --bin projection_check -- "{{manifest}}" "{{output}}"
+
+projection-check-tests:
+    cargo test --locked -p zensr-bench --bin projection_check
+
+projection-check-inputs report root output count="4":
+    python3 tools/projection_check_inputs.py "{{report}}" "{{root}}" "{{output}}" --count "{{count}}"

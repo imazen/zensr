@@ -11,6 +11,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Retained-input projection on/off diagnostic measures SSIM2 and coefficient
+  residuals reconstructed from delivered RGB8; independent DCT and odd-edge
+  box-sampling checks. See the four-case diagnostic in benchmarks.
+
 - Arbitrary-resolution decoded routing through at most five native windows,
   aligned to luma DCT blocks and 420 MCUs, with restoration at original dimensions. Includes
   strided crop, coefficient-padding, flat-image, wide/tall and selected-output
