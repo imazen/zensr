@@ -330,3 +330,10 @@ decoded-router-candidate-replay replay:
 # Write raw RGB8; the example prints output dimensions.
 repair-example input output:
     cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}"
+
+docs-check:
+    python3 tools/check_docs.py
+
+# Documentation maintenance; claim the checkout and start from a clean tree.
+docs-move source destination:
+    python3 tools/relocate_docs.py "{{source}}" "{{destination}}"
