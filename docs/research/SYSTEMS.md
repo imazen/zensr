@@ -540,14 +540,14 @@ every consumer (46k LLVM lines in our 300-line glue; 11.6 s glue edits)
 The `code review / refactor / minimize public API` milestone (user-directed):
 
 - **Public surface minimized and snapshotted.** `zensr-micro` default API went
-  260 → 169 lines (`apidoc/zensr-micro.public-api.txt`); the SPANF research
+  260 → 169 lines (`docs/api/zensr-micro.public-api.txt`); the SPANF research
   surface (simd/tiled/px modules, root re-exports, `SpanfWeights`/`SpanfModel`/
   `Scratch`/layout consts/f16+int8 decoders, scalar `spanf_x4`) is gone from
   the default surface — modules are `pub(crate)` unless the `internals`
   feature opts in; root items that must stay compiled are `#[doc(hidden)]`.
   `px` was dropped from default features (SPANF-only, zero consumers) and now
   also requires `internals`; the `zensr-verify` bin is
-  `required-features = ["internals"]`. Contract doc: `apidoc/PUBLIC_API.md`.
+  `required-features = ["internals"]`. Contract doc: `docs/api/PUBLIC_API.md`.
   Product-crates rebuild: 1.56 s (was 2.0 s with zenpixels in the default
   graph).
 - **Review caught a real 4:2:2/4:4:0 bug** in `restore_jpeg`: the old

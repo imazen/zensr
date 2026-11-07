@@ -564,7 +564,7 @@ Shipped fix: a measured <b>high-q identity gate</b> (probe q≥94.5 IJG/Moz scal
 Cjpegli-family; q93 reads d 0.7–1.0 and stays modeled) — the top-end analog of the low-q
 deblock policy. One marginal negative cell remains on the grid (turbo q93, −0.02).
 Engineering: SPANF research surface gated behind <code>internals</code> (default API 260→169
-lines, contract in apidoc/PUBLIC_API.md), product-crates rebuild 1.56 s; review caught and
+lines, contract in docs/api/PUBLIC_API.md), product-crates rebuild 1.56 s; review caught and
 fixed a 4:2:2/4:4:0-misclassified-as-4:2:0 chroma corruption bug (regression-tested on real
 encodes of all four subsampling modes); CMYK skips projection. Upstream issues filed —
 zenjpeg#189 (encoder parameter record), zenjpeg#190 (impl-Stop monomorphization).</div>

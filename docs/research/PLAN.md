@@ -350,7 +350,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
   (spec + harness + frozen subcorpus + all baseline numbers) — user-gated like any publish.
   *Status 2026-07-26: the zenjpeg leg is LIVE — `zensr-zenjpeg::restore_jpeg` (probe →
   deblock policy → decode → guarded ×1 model → S10 projection, 444+420, YCbCr-native-aware)
-  with a minimized snapshot-enforced API (`apidoc/PUBLIC_API.md`); product-crates rebuild
+  with a minimized snapshot-enforced API (`docs/api/PUBLIC_API.md`); product-crates rebuild
   1.56 s. See docs/research/SYSTEMS.md "Production hardening pass".*
 - **P5.5 — Challenge entries:** NTIRE ESR + real-world/real-time track submissions with
   shipping models (calendar-driven; prep starts when P4 models exist). Gate G5.

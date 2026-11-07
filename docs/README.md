@@ -7,7 +7,7 @@
 - [Integration and dependencies](PRODUCTION_DEPENDENCIES.md): crate graph,
   model loading and reproducible source builds.
 - [Readiness](REPAIR_READINESS.md): verified behavior and remaining validation.
-- [Public API inventories](../apidoc/PUBLIC_API.md): historical API snapshots.
+- [Public API inventories](api/PUBLIC_API.md): historical API snapshots.
 
 ## Evidence
 
