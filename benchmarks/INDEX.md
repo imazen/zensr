@@ -32,7 +32,7 @@ per subcorpus, n=64/cell, gate disabled unless stated. Raw:
 | `pinned_gate_jpegli444_2026-08-02.tsv` | 4:4:4 jpegli+zenjpeg — confirms the harm is not family-specific |
 | `gated_444_after_2026-08-02.tsv` | the fix, verified: every 4:4:4 cell reads +0.000, harm_frac 0.00 |
 
-Conclusion and full context: `SYSTEMS.md` "CHROMA SUBSAMPLING BREAKS THE
+Conclusion and full context: `docs/research/SYSTEMS.md` "CHROMA SUBSAMPLING BREAKS THE
 HIGH-Q GATE", `ROADMAP.md` 1.1.
 
 ## Realtime kernels (x86)

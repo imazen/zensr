@@ -99,7 +99,7 @@ def main():
     print(f"train files {len(train_f)} / val files {n_val}", flush=True)
     crops = gen_crops(train_f, n_pairs - VAL_TAIL, rng) + gen_crops(val_f, VAL_TAIL, rng)
     print(f"{len(crops)} crops ready", flush=True)
-    # Generation-loss augmentation (SYSTEMS.md "generation loss"): fractions
+    # Generation-loss augmentation (docs/research/SYSTEMS.md "generation loss"): fractions
     # of pairs re-encoded 2x/3x with independent random enc/ss/q per
     # generation. Default OFF — enable per measured gen_eval verdict.
     p_gen2 = float(os.environ.get("ZENSR_GEN2", "0"))

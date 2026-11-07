@@ -3,7 +3,7 @@
 //! production pipeline (restore_jpeg: policy + guarded model + S10 projection)
 //! and a no-projection arm.
 //!
-//! Key questions this answers (SYSTEMS.md "generation loss"):
+//! Key questions this answers (docs/research/SYSTEMS.md "generation loss"):
 //! 1. How much does the model under-correct on gen2/3 (artifacts baked into
 //!    the signal the FINAL encode quantized — the file's DQT understates
 //!    true damage)?

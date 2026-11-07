@@ -1,6 +1,6 @@
 # zensr roadmap — what to try next, and what is already dead
 
-**Read `SYSTEMS.md` first for the measured record; this file is the forward plan.**
+**Read `docs/research/SYSTEMS.md` first for the measured record; this file is the forward plan.**
 Every item below is either (a) an open rung with a stated decision it informs, or
 (b) explicitly listed as closed so nobody spends a night re-deriving it.
 

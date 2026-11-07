@@ -3,7 +3,7 @@
 //! One call: JPEG bytes -> probe -> deblock policy -> zenjpeg decode ->
 //! guarded x1 model -> quantization-consistency projection -> RGB planes.
 //!
-//! Policy (measured, SYSTEMS.md "S6-v2"): `DeblockMode::Auto` (Knusperli)
+//! Policy (measured, docs/research/SYSTEMS.md "S6-v2"): `DeblockMode::Auto` (Knusperli)
 //! only for Annex-K-family files at probe-estimated q <= 9.5 — the regime where
 //! coefficient-domain correction beats pixel-exact decode; AQ-family
 //! (Cjpegli*/zenjpeg) never. Routing can skip model execution. Projection

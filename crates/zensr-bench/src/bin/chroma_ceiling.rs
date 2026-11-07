@@ -1,4 +1,4 @@
-//! Oracle-chroma ceiling for the S5 two-trunk question (SYSTEMS.md scope
+//! Oracle-chroma ceiling for the S5 two-trunk question (docs/research/SYSTEMS.md scope
 //! correction, 2026-07-27): if chroma restoration were PERFECT, how much
 //! ssim2 is left on the table by the current pipeline at 4:2:0?
 //!

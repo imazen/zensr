@@ -238,7 +238,7 @@ Reports committed to `benchmarks/` with commit hashes.
 - G2rt (P4 realtime tier): ≥ 15 MP-out/s single-thread; beats Lanczos on degraded inputs by
   <!-- status 2026-07-23: rt_distill_2x = 21.9 MP/s @12T but 3.1 @1T (single-thread gate
        NOT yet met — needs guard SIMD + maybe nf16 or ½-res shape); q35 ssim2 +2.5 ✓ at
-       one band; q50 +0.5 ✗; see SYSTEMS.md S-E verdict. -->
+       one band; q50 +0.5 ✗; see docs/research/SYSTEMS.md S-E verdict. -->
   ≥ 0.7 dB PSNR-equiv and ≥ 4 ssim2 median at q∈{50,70} on ≥ 6/8 subcorpora; ≤ 4× Lanczos cost.
 - G4: 4:2:0 chroma: measurable win from S5 or documented falsification.
 - G5 (P5.5): at least one top-3 sub-track placement (runtime/params/overall) in a public
@@ -331,7 +331,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
   (PReLU/nearest-residual/scale-param shuffle) landed; Compact + SPAN-48 ports golden-verified
   (7 adopted models, incl. stale-eval_conv branch-merge fix); guard layer (residual clamp /
   texture gate / round-trip fallback) property-tested; systems_eval with REAL turbo-jpeg axis;
-  SYSTEMS.md defines the five deployable systems; S-E realtime distillation pilot launched.
+  docs/research/SYSTEMS.md defines the five deployable systems; S-E realtime distillation pilot launched.
   Remaining P0: zensim eval column (API is pipeline-shaped, deferred), G1 baseline report =
   the systems_eval output being generated now.
 - **P1 — Data + LAN fleet:** HR corpus assembly + licensing gate; `zensr-degrade` + manifests
@@ -351,7 +351,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
   *Status 2026-07-26: the zenjpeg leg is LIVE — `zensr-zenjpeg::restore_jpeg` (probe →
   deblock policy → decode → guarded ×1 model → S10 projection, 444+420, YCbCr-native-aware)
   with a minimized snapshot-enforced API (`apidoc/PUBLIC_API.md`); product-crates rebuild
-  1.56 s. See SYSTEMS.md "Production hardening pass".*
+  1.56 s. See docs/research/SYSTEMS.md "Production hardening pass".*
 - **P5.5 — Challenge entries:** NTIRE ESR + real-world/real-time track submissions with
   shipping models (calendar-driven; prep starts when P4 models exist). Gate G5.
 - **P6 — Frontier (ongoing):** S5 native-plane models, PLKSR-Rep-class large-kernel port,
@@ -362,7 +362,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
 full CLOSED list (13 falsified directions with their evidence), infrastructure
 debts, and the squintly human-judgment track. Read it before proposing work.
 
-## Session state 2026-07-28 (for continuation — canon lives in SYSTEMS.md, read it first)
+## Session state 2026-07-28 (for continuation — canon lives in docs/research/SYSTEMS.md, read it first)
 
 Everything below is COMMITTED with benchmarks/ TSVs; repo has NO remote — Tower bundle
 `/mnt/tower/output/zensr-archive/zensr-2026-07-28.bundle` + models mirror are the backup.
@@ -373,7 +373,7 @@ low-q-graphics route (chooser p>0.85 ∧ q≤60) / gates: q≥95 identity, Annex
 Knusperli / chain ×1-before-SR when 420 ∨ q≲50. Reproducibility: every model dir has
 repro.sh + full meta.repro; f16 baked into train_people.py export.
 
-**Open tasks (task list + SYSTEMS.md sections have full detail):**
+**Open tasks (task list + docs/research/SYSTEMS.md sections have full detail):**
 - #15 GPU spike: CUDA floor DONE (loses to CPU 4x naive; ladder to win = smem tiling,
   persistent buffers, pinned staging, f16). NEXT: wgpu leg on lianli(2080/vulkan) +
   mac(Metal) — `cargo build -p zensr-gpu-spike --features wgpu`; then decide tiled-kernel
