@@ -6,6 +6,9 @@ JPEG repair returns RGB pixels at the original resolution. The compact canon4
 model uses **86,406 bytes of f16 weights**. Routing can leave an image unchanged;
 repair uses a tiled CNN followed by JPEG coefficient constraints.
 
+[Models and training](docs/MODELS.md) covers the larger quality models,
+realtime retrains, SR models, and how canon4 was trained.
+
 ## JPEG repair
 
 Load the model once, then reuse the restorer:

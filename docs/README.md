@@ -7,6 +7,7 @@
 - [Integration and dependencies](PRODUCTION_DEPENDENCIES.md): crate graph,
   model loading and reproducible source builds.
 - [Readiness](REPAIR_READINESS.md): verified behavior and remaining validation.
+- [Models and training](MODELS.md): the model family and canon4's training recipe.
 - [Public API inventories](api/PUBLIC_API.md): historical API snapshots.
 
 ## Evidence
