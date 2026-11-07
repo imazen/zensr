@@ -1,12 +1,21 @@
 # Train from the pair preview
 
 The draft data release preserves all 48,000 existing pairs. Two archives contain
-39,895 rows whose **source IDs are canonical train**. They retain 39,503
+39,895 rows whose **source IDs belong to imazen-26's published `train` bucket**.
+The authority is `imazen/imazen-26`, revision
+`187fbf338ce08e8e6654db7f04ddae58d5263da2`, `manifests/split_map.tsv`.
+They retain 39,503
 optimizer-training rows and a separate 392-row internal validation tail.
-A third archive contains 8,105 canonical validation/test rows and is excluded
+A third archive contains 8,105 rows from imazen-26's published validation/test
+source buckets and is excluded
 by the default assembler. This subset supports a compliant source-ID boundary;
 it does not retroactively change the original canon4 weights or establish
-content-family independence across canonical IDs.
+content-family independence across imazen-26 IDs.
+
+[Split authorities and field definitions](SPLIT_DEFINITIONS.md) distinguish this
+imazen-26 membership filter from zensr's historical reassignment and the pair
+dataset's internal validation partition. Existing archive and CLI names keep
+`canonical` for compatibility; here it means the published imazen-26 ID split.
 
 ## Clone, download and assemble
 
@@ -32,7 +41,7 @@ python tools/pair_release.py assemble \
 
 Install the `zstd` and `tar` command-line tools before assembly. Archives and
 their members are SHA-256 checked before use. The assembler preserves original
-pair indices, enforces canonical `train` source labels, and checks that internal
+pair indices, enforces the published imazen-26 `train` source labels, and checks that internal
 training/validation source IDs do not overlap. It never rebuilds JPEG encodes.
 
 ## Train

@@ -12,17 +12,24 @@ crate publication or approval to publish the underlying content.
 
 ## Data layout and training check
 
+**Split authority:** `imazen/imazen-26` revision
+`187fbf338ce08e8e6654db7f04ddae58d5263da2`, `manifests/split_map.tsv`.
+This is the published imazen-26 ID split, not zensr's historical reassignment.
+The [field definitions](../docs/SPLIT_DEFINITIONS.md) name both policies and
+the separate pair-internal validation partition. Existing asset filenames retain
+`canonical` as a compatibility name for the published imazen-26 ID split.
+
 | Archive | Pairs | Compressed bytes |
 |---|---:|---:|
-| Canonical training sources, part 1 | 19,966 | 802,684,752 |
-| Canonical training sources, part 2 | 19,929 | 806,185,904 |
-| Canonical held-out sources | 8,105 | 241,942,346 |
+| Published imazen-26 training IDs, part 1 | 19,966 | 802,684,752 |
+| Published imazen-26 training IDs, part 2 | 19,929 | 806,185,904 |
+| Published imazen-26 validation/test IDs | 8,105 | 241,942,346 |
 
-The first two archives contain only source IDs assigned canonical `train`.
+The first two archives contain only source IDs assigned published-imazen-26 `train`.
 The assembler preserves 39,503 optimizer-training rows and the 392-row internal
 validation tail, with no shared source IDs between those partitions. The
 third archive includes the 7,985 historical training rows and 120 internal
-validation rows whose sources belong to canonical validate/test.
+validation rows whose sources belong to published-imazen-26 validate/test.
 
 All original pair indices, LR/HR arrays, severity and uncertainty arrays are
 preserved. The default assembler excludes the held-out-source archive, verifies

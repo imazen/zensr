@@ -1,6 +1,8 @@
 # Models and training
 
 Canon4 is the current realtime JPEG repair default, not the entire model family.
+The `canon4` artifact name does not certify compliance with imazen-26's published
+ID split. See [split authorities](SPLIT_DEFINITIONS.md) for explicit definitions.
 The runtime accepts caller-loaded weights. Its current automatic repair router
 is calibrated for canon4; another model needs its own routing evaluation.
 
@@ -10,7 +12,7 @@ is calibrated for canon4; another model needs its own routing evaluation.
 |---|---|---|
 | `dejpeg_rt24i_canon4` | Compact ×1 generalist, 43,203 parameters | Current default; committed f16 weights and goldens |
 | `dejpeg_rt24g` | Previous realtime ×1 model | Committed weights retained for comparisons |
-| `dejpeg_rt24h_canon` | Canonical-corpus retrain using turbo and zenjpeg | Superseded by canon4; local research artifact, not committed |
+| `dejpeg_rt24h_canon` | imazen-26-source retrain using turbo and zenjpeg | Superseded by canon4; local research artifact, not committed |
 | `dejpeg_rt24z_zen` | zenjpeg specialist | Not adopted; small median advantages did not justify its mean losses and tails; local artifact |
 | `dejpeg7_graphics` | Larger ×1 quality model, historically reported as 595k parameters | Historical model; weights are not included in this checkout |
 | `dejpeg9_gfxycc` | Larger low-quality graphics specialist | Historical candidate; harmful on photographs in measured higher-quality bands; weights not included here |
@@ -56,10 +58,10 @@ The committed [metadata](../models/adopted/dejpeg_rt24i_canon4/meta.json) and
 run at source revision `4a33019`:
 
 1. **Prepare paired data.** The recorded dataset contains 48,000 crops of
-   128 × 128 pixels selected through zensr's effective imazen-26 training
-   split, which differs from the corpus's original split. The final 512
+   128 × 128 pixels selected through zensr's historical reassigned source
+   split, which differs from the published imazen-26 ID split. The final 512
    crops are validation pairs from separate source images within that same
-   effective training pool, not the corpus's canonical validation bucket. The
+   zensr historical training pool, not imazen-26's published validation bucket. The
    [generator](../tools/make_dejpeg_data4.py) chooses among turbo, mozjpeg,
    jpegli and zenjpeg, samples integer quality 5–96, and chooses 4:2:0 with
    probability 0.6, otherwise 4:4:4. Five percent of pairs are clean identity
@@ -99,18 +101,18 @@ Rechecked on 2026-11-07 against corpus revision
 
 | Split policy | Train | Validate | Test |
 |---|---:|---:|---:|
-| Canonical imazen-26 | 1,084 | 658 | 418 |
-| zensr effective split | 1,151 | 648 | 361 |
+| Published imazen-26 ID split (`manifests/split_map.tsv` at the revision above) | 1,084 | 658 | 418 |
+| zensr historical reassignment (`tools/corpus_split.py`) | 1,151 | 648 | 361 |
 
 The [split helper](../tools/corpus_split.py) groups related images and assigns
 each group to its lowest-ID member's bucket. This changes 309 memberships,
-including **103 canonical validation and 77 canonical test images assigned to
-the effective training pool**. It also moves 113 canonical training images out
+including **103 published-imazen-26 validation and 77 published-imazen-26 test images assigned to
+zensr's historical training pool**. It also moves 113 published-imazen-26 training images out
 of that pool. Therefore canon4's documented selection policy does not preserve
-the original canonical held-out boundary.
+the published imazen-26 held-out boundary.
 
-Python training selects effective `train`; Rust model evaluation reads effective
-`validate` plus `test`. The saved effective split exactly matches regeneration
+Python training selects zensr historical `train`; Rust model evaluation reads
+zensr historical `validate` plus `test`. The saved zensr map exactly matches regeneration
 from the helper and the current corpus snapshot. The split helper, corpus
 adapter and training-pool selector match their bytes at trainer revision
 `4a33019`; the v4 generator differs only in a documentation-path comment.
@@ -121,28 +123,28 @@ coordinates, so those identities cannot be verified from the pair ledger.
 The subsequent [exact reconstruction](../benchmarks/canon4_pair_sources_2026-11-07.md)
 recovers all 48,000 pair identities and crop coordinates by matching saved
 targets and recipe draws, with a separate coordinate-based check. Its training
-partition contains 7,985 rows from 162 canonical held-out sources. This improves
+partition contains 7,985 rows from 162 published-imazen-26 validation/test sources. This improves
 the retained dataset's provenance; it does not undo the split-policy violation.
 
-The publication study additionally excludes complete origins touching effective
+The publication study additionally excludes complete origins touching zensr historical
 model training, including stronger document/book grouping. Its separation is
-against the effective policy, not proof that model training used only the raw
-canonical training bucket. See the
+against zensr's historical policy, not proof that model training used only the
+published imazen-26 training bucket. See the
 [study's data-separation record](../benchmarks/publication_routing_protocol_2026-11-04.md#data-separation).
 
 The history explains how this happened. Commit `69147a0` introduced the
 lowest-ID reassignment while stating that the split was no longer defined by
 zensr. It treated the corpus's near-duplicate caution as permission to change
-membership across canonical boundaries. Commit `95d4465` expanded grouping
+membership across published imazen-26 boundaries. Commit `95d4465` expanded grouping
 and made evaluation follow the derived split after finding that Python and
 Rust disagreed. This repaired agreement between consumers without restoring
-the original held-out boundary. The October canon4 run inherited that policy.
+the published imazen-26 held-out boundary. The November canon4 run inherited that policy.
 
 Consumer agreement and non-overlap under the derived split do not establish
-compliance with the canonical split. A compliant future training admission
-check must require canonical `train` membership for each source ID, independently
+compliance with the published imazen-26 split. A compliant future training admission
+check must require published-imazen-26 `train` membership for each source ID, independently
 of grouping; conflicting related sources can be excluded without moving
-canonical held-out IDs into training. Existing weights and pair archives must
+published-imazen-26 held-out IDs into training. Existing weights and pair archives must
 retain their actual policy labels. Changing a manifest cannot retrospectively
 remove training exposure, and a compliant retrain would be a separate artifact.
 
@@ -152,15 +154,17 @@ Use GitHub release assets for additional model bundles and `.tar.zst` training
 pair archives, keeping manifests, checksums and download instructions in Git.
 Each asset must be smaller than 2 GiB under the
 [GitHub release limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
-Shard archives if needed; compressed sizes have not been measured.
+The [uploaded preview records](../benchmarks/preview_assets_2026-11-07.md) give
+measured compressed sizes and verified draft assets.
 
 The retained canon4 dataset contains **48,000 pairs**, including the 512-pair
 internal validation tail. Its four arrays plus `pairs.tsv` and `meta.json`
 total **4,744,799,731 bytes uncompressed** on i265. These are existing artifacts,
-not a regenerated dataset. Any archive must carry the effective split, source
+not a regenerated dataset. Any archive must distinguish the published imazen-26
+source buckets from zensr's historical reassignment, and carry source
 revision, existing metadata and the missing-per-pair-identity limitation above;
-an archive alone does not repair that provenance gap. No release assets have
-been uploaded as part of this inventory.
+an archive alone does not repair that provenance gap. The data and model
+previews are uploaded as unpublished drafts; see the preview records above.
 
 ## Reproduction limits
 

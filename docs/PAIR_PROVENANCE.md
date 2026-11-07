@@ -10,13 +10,19 @@ identifies all 48,000 pairs and 1,127 source IDs, with both checks passing.
 
 ## Output
 
+Field authorities: `canonical_split` means the **published imazen-26 ID split**
+at corpus revision `187fbf338ce08e8e6654db7f04ddae58d5263da2`;
+`effective_split` means **zensr's historical reassigned split**. `partition`
+is the **pair dataset's internal training/validation role**. These are separate
+definitions; see [the exact sources and mapping](SPLIT_DEFINITIONS.md).
+
 - `pairs.tsv`: one row per saved array index, identifying the imazen-26 ID,
-  canonical source path, crop rectangle, canonical split, effective split,
+  imazen-26 source path, crop rectangle, published imazen-26 split, zensr historical split,
   optimizer-training/internal-validation partition, encoder settings and
   SHA-256 hashes of source bytes and both saved RGB crops.
 - `sources.tsv`: one row per contributing source, with its ID, dimensions,
-  actual and canonical-manifest byte hashes, split labels and pair counts.
-- `summary.json`: coverage, canonical exposure counts, input/output hashes,
+  actual and imazen-26-manifest byte hashes, split labels and pair counts.
+- `summary.json`: coverage, published-imazen-26 exposure counts, input/output hashes,
   corpus revision, tool identity, environment and limitations.
 - `progress.json`: stage, completed/required counts, PID, last update and any
   failure. Failed attempts retain partial files and never acquire final manifest
@@ -25,9 +31,9 @@ identifies all 48,000 pairs and 1,127 source IDs, with both checks passing.
 The separate `tools/verify_pair_sources.py` checks the final manifest by
 loading each source once and taking its recorded crop rectangles. It uses no
 replay seed. It compares every saved target pixel, checks every LR/HR crop hash,
-and joins canonical IDs and split labels independently of the derived split.
+and joins published imazen-26 IDs and split labels independently of zensr's reassignment.
 Its output includes `verification.json` and `sources-with-links.tsv`, retaining
-all canonical source/render URLs and the corpus licence labels.
+all imazen-26 source/render URLs and the corpus licence labels.
 
 Crop coordinates are zero-based in the historical decoder's returned raster;
 source dimensions are decoded dimensions. They do not necessarily describe the
@@ -73,7 +79,7 @@ identical pixels. Non-clean LR images are bound by hashes, not recreated with
 historical encoder binaries. Severity and uncertainty channels remain recorded
 inputs, not newly verified encoder outputs.
 
-Source IDs and crop rectangles allow actual canonical-bucket exposure to be
-counted or canonical-only subsets to be selected. They do not remove exposure
+Source IDs and crop rectangles allow exposure to published imazen-26 buckets
+to be counted, or an imazen-26-training-ID-only subset to be selected. They do not remove exposure
 from existing weights or establish a compliant retrain. See the
 [model selection-policy record](MODELS.md#training-and-held-out-membership).
