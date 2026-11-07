@@ -7,9 +7,18 @@ import unittest
 import numpy as np
 
 from recover_pair_sources import canonical_rows, replay_crops, verify_crop, verify_recipe
+from verify_pair_sources import coordinate_crop
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_coordinate_verifier_edges_and_bounds(self):
+        image = np.arange(11 * 13 * 3, dtype=np.uint8).reshape(11, 13, 3)
+        row = dict(x='5', y='3', width='8', height='8')
+        np.testing.assert_array_equal(coordinate_crop(image, row), image[3:11, 5:13, ::-1])
+        for bad in [dict(x='6'), dict(y='4'), dict(x='-1'), dict(width='0')]:
+            with self.assertRaisesRegex(ValueError, 'coordinate'):
+                coordinate_crop(image, {**row, **bad})
+
     def test_join_small_identity_map_to_hashed_bucket_tables(self):
         with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as td:
             corpus = Path(td)
