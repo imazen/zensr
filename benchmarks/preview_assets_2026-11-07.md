@@ -2,9 +2,9 @@
 
 Two unpublished prerelease drafts are uploaded:
 
-- [Paired data](https://github.com/imazen/zensr/releases/tag/untagged-6d945203269554d9112c),
+- [Paired data](https://github.com/imazen/zensr/releases/tag/untagged-00d16506fbe67348ec81),
   tag intent `data-preview-2026-11-07`.
-- [Models](https://github.com/imazen/zensr/releases/tag/untagged-71db29b6982428753dd8),
+- [Models](https://github.com/imazen/zensr/releases/tag/untagged-1bf3c152494538494374),
   tag intent `models-preview-2026-11-07`.
 
 Draft access requires appropriate repository permissions. Neither draft is a
