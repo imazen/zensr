@@ -352,3 +352,9 @@ pair-release *args:
 
 test-pair-release:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_pair_release.py
+
+model-release *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/model_release.py {{args}}
+
+test-model-release:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_model_release.py

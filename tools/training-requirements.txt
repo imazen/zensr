@@ -1,0 +1,5 @@
+# Install a PyTorch build suitable for the CPU/CUDA environment.
+# Observed versions are recorded with the preview; identical weights are not promised.
+numpy
+opencv-python-headless
+torch
