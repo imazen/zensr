@@ -346,3 +346,9 @@ test-pair-recovery:
 
 verify-pair-sources *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/verify_pair_sources.py {{args}}
+
+pair-release *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/pair_release.py {{args}}
+
+test-pair-release:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_pair_release.py

@@ -212,13 +212,21 @@ def main():
         tgt_div = 1.0 if hr_f16 else 255.0
     else:
         hr_all, tgt_div = None, 1.0
-    n = lr_all.shape[0] - 512
+    dm = os.path.join(D, "meta.json")
+    dataset_meta = {}
+    if os.path.exists(dm):
+        with open(dm) as f:
+            dataset_meta = json.load(f)
+    val_tail = int(dataset_meta.get("val_tail", 512))
+    if not 0 < val_tail < lr_all.shape[0]:
+        raise ValueError("invalid dataset validation tail")
+    n = lr_all.shape[0] - val_tail
     val_lr = torch.from_numpy(lr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(255).to(dev)
     if teacher is None:
         val_hr = torch.from_numpy(hr_all[n:].copy()).float().permute(0, 3, 1, 2).div_(tgt_div).to(dev)
     else:
         with torch.no_grad():
-            val_hr = torch.cat([teacher(val_lr[i:i + 128]) for i in range(0, 512, 128)])
+            val_hr = torch.cat([teacher(val_lr[i:i + 128]) for i in range(0, val_tail, 128)])
     # ZENSR_CPU_DATA=1: keep the full dataset host-side and ship per-step
     # batches (~2.3MB) — required on MPS (multi-GB single .to(mps) copies
     # hang in waitUntilCompleted) and on small-VRAM cards (node-3's 1660 Ti).
@@ -320,17 +328,19 @@ def main():
         if step % 500 == 0 or step == steps:
             with torch.no_grad(), torch.autocast(dev, dtype=amp_dt, enabled=amp_on):
                 vps = []
-                for i in range(0, 512, 128):
+                val_batch_sizes = []
+                for i in range(0, val_tail, 128):
                     vo = m(to_space(val_lr[i:i + 128])).float()
                     mse = ((vo - to_space(val_hr[i:i + 128])) ** 2).mean().item()
                     vps.append(-10 * np.log10(max(mse, 1e-10)))
+                    val_batch_sizes.append(len(vo))
                 # hr_f16.npy is written only by make_teacher_targets.py, so when
                 # it is present the target — and therefore this metric — is the
                 # TEACHER's output, not ground truth. Reporting it as "vs_GT"
                 # overstated what was measured.
                 print(f"step {step} loss {loss.item():.5f} "
                       f"val_psnr_vs_{'teacher' if hr_f16 or teacher is not None else 'GT'} "
-                      f"{np.mean(vps):.2f}"
+                      f"{np.average(vps, weights=val_batch_sizes):.2f}"
                       # both components, so the weight can be judged from the
                       # log instead of guessed: an affinity term that dwarfs
                       # reconstruction is not a KD arm, it is a different loss
