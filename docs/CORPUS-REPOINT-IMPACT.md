@@ -1,5 +1,17 @@
 # What the imazen-26 repoint actually changed
 
+## Correction to the historical split claims — 2026-11-07
+
+The account below says zensr no longer defines a split, but the implementation
+introduced in `69147a0` and expanded in `95d4465` did reassign canonical buckets.
+Its lowest-ID grouping puts 103 canonical validation and 77 canonical test
+images into the eligible effective training pool. Making evaluation follow
+that same derived split did not preserve the original imazen-26 boundary.
+The claims below that characterize this as merely reading the canonical split
+are incorrect. The [model guide](MODELS.md) records the measured memberships,
+historical selection policy and missing per-pair provenance. These corrections
+do not change or regenerate existing artifacts.
+
 Measured 2026-09-07/08, after executing Step 1 of `CORPUS-REPOINT-HANDOFF.md`.
 Everything here is counted from the canonical corpus repository; nothing is
 carried over from the pre-repoint record, which was fitted through the deleted

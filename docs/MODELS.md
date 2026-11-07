@@ -124,6 +124,22 @@ against the effective policy, not proof that model training used only the raw
 canonical training bucket. See the
 [study's data-separation record](../benchmarks/publication_routing_protocol_2026-11-04.md#data-separation).
 
+The history explains how this happened. Commit `69147a0` introduced the
+lowest-ID reassignment while stating that the split was no longer defined by
+zensr. It treated the corpus's near-duplicate caution as permission to change
+membership across canonical boundaries. Commit `95d4465` expanded grouping
+and made evaluation follow the derived split after finding that Python and
+Rust disagreed. This repaired agreement between consumers without restoring
+the original held-out boundary. The October canon4 run inherited that policy.
+
+Consumer agreement and non-overlap under the derived split do not establish
+compliance with the canonical split. A compliant future training admission
+check must require canonical `train` membership for each source ID, independently
+of grouping; conflicting related sources can be excluded without moving
+canonical held-out IDs into training. Existing weights and pair archives must
+retain their actual policy labels. Changing a manifest cannot retrospectively
+remove training exposure, and a compliant retrain would be a separate artifact.
+
 ## Artifact distribution
 
 Use GitHub release assets for additional model bundles and `.tar.zst` training
