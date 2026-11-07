@@ -637,7 +637,7 @@ skip restores the truth-in-box guarantee for those families.</li>
 <li>Norm-folding into conv_1 (borders wrong by 0.32 — official zero-pads after normalization).</li>
 <li>Consistency-only goldens (agreed on a broken graph — reference-gate everything).</li>
 <li>+16 stride padding (2× slower), SiLU/gate store-fusion (26× MIR-inline regression),
-row-band tiling (50–377 MB/thread) — engine appendix, PLAN.md.</li>
+row-band tiling (50–377 MB/thread) — engine appendix, docs/research/PLAN.md.</li>
 </ul>
 
 <footer>

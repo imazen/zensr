@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to zensr are documented here. (Started 2026-08-28; earlier
-history lives in `git log`, `PLAN.md`, and `benchmarks/`.)
+history lives in `git log`, `docs/research/PLAN.md`, and `benchmarks/`.)
 
 ## [Unreleased]
 

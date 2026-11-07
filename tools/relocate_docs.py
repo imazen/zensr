@@ -27,7 +27,7 @@ def relocate(source, destination):
         raise ValueError('no tracked/source files to relocate')
     mapping = {str(old): str(new) for old, new in moved.items()}
     references = re.compile(r'(?<![\w/.-])('+ '|'.join(
-        re.escape(name) for name in sorted(mapping, key=len, reverse=True))+r')(?![\w.-])')
+        re.escape(name) for name in sorted(mapping, key=len, reverse=True))+r')(?![\w-]|\.[A-Za-z0-9])')
     rewritten = {}
     for old in names:
         if old.suffix not in ('.md', '.rs', '.py', '.txt', '.toml') and old.name != 'justfile':

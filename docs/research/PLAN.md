@@ -147,7 +147,7 @@ Ground truth = the pre-degradation image at target scale (for (ii), the HR itsel
 
 Discipline: every experiment lands in `benchmarks/` with commit + config + n; conclusions that
 inform shipped constants follow the workspace sweep/calibration rules (dense axes, held-out
-validation, no hand-distilled N=1 anchors). Falsified branches get recorded in PLAN.md
+validation, no hand-distilled N=1 anchors). Falsified branches get recorded in docs/research/PLAN.md
 (appendix) so they are never re-run blind.
 
 ## Data plan (workspace ML-data discipline applies in full)
@@ -314,7 +314,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
 - Every phase has a Definition-of-Done gate below; a phase without its gate met does not yield
   to the next except by a written kill/pivot note in the appendix.
 - Every experiment run lands in `benchmarks/` same-day with commit + config; conclusions edit
-  PLAN.md in the same change (workspace DOCS discipline).
+  docs/research/PLAN.md in the same change (workspace DOCS discipline).
 - The scoreboard is regenerated at every P≥3 milestone; regressions block.
 - Kill criteria are pre-declared per science question (see S1–S9 falsification clauses) — a
   falsified branch is recorded and never blocks the critical path (which is: data → q-banded
@@ -405,7 +405,7 @@ repro.sh + full meta.repro; f16 baked into train_people.py export.
 - Bicubic++ / AnimeJaNai / eSR / EchoSR / SAFMN / OmniSR / ABPN: license-blocked.
 - Intel RAISR implementation: BSD-3-Clause source license verified on 2026-11-05;
   earlier grouping as license-blocked was inaccurate. No code or weights adopted.
-  See the [source review and proposed experiments](docs/VSR_REVIEW.md).
+  See the [source review and proposed experiments](../VSR_REVIEW.md).
 - **Consistency-only goldens (torch-reimpl ↔ Rust)**: agreed on a broken SPAN graph
   (missing input norm + inplace-SiLU concat semantics → constant gray) for a full eval +
   a poisoned 14k-pair teacher run (2026-07-23). Goldens MUST be cross-checked against the

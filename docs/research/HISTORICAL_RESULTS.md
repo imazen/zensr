@@ -21,7 +21,7 @@ parity and metadata-invariance checks are retained.
 This is a locked-source integration, not a crates.io release. Quality numbers
 below are limited to 512 pixels and reuse an inspected cohort. Arbitrary-size
 execution is implemented; quality across sizes and deployment latency remain
-unestablished. See [readiness and remaining work](../../docs/REPAIR_READINESS.md).
+unestablished. See [readiness and remaining work](../REPAIR_READINESS.md).
 
 Default `api::Restorer` Fidelity requests use the owner-selected decoded-feature
 router for RGB 420/444 JPEGs at arbitrary resolutions (minimum dimension eight
@@ -40,7 +40,7 @@ enabled by default for decoded routing;
 the older content-class classifier is not an input to the new linear router.
 Quality at other resolutions and runtime cost have not been established.
 Low-level `restore_jpeg` remains the configurable
-restoration pipeline. [Default routing implementation](../../docs/DEFAULT_ROUTING.md).
+restoration pipeline. [Default routing implementation](../DEFAULT_ROUTING.md).
 
 Ship format is f16. Goldens are generated through the f16 roundtrip and tested
 in Rust on whole and tiled paths. The library accepts caller-loaded models;
@@ -55,7 +55,7 @@ its current routing estimates are calibrated for canon4, not arbitrary weights.
 - `zensr-bench`: quality evaluation, model comparison and profiling tools.
 - `zensr-gpu-spike`: research CUDA/wgpu kernels; no production GPU backend.
 
-The longer-term upscaling and training plan is [PLAN.md](../../PLAN.md).
+The longer-term upscaling and training plan is [PLAN.md](PLAN.md).
 
 ### Historical model comparisons
 
@@ -76,7 +76,7 @@ references, turbo 4:2:0, per-file median of projected output minus identity,
 with the identity gate disabled. Auto routing skips some of those restores.
 The quality-tier row retains its older measurement; it is not a contemporaneous
 head-to-head comparison. [Calibration and skip tradeoffs](../../benchmarks/ship_rt24i_canon4_2026-11-04.md).
-[Runtime dependency chain](../../docs/PRODUCTION_DEPENDENCIES.md).
+[Runtime dependency chain](../PRODUCTION_DEPENDENCIES.md).
 
 > **Re-measured 2026-09-08 on the canonical corpus.** The previous figures
 > (+10.65/+5.64/+3.53/+2.03/+0.95 and +6.88/+3.36/+2.02/+1.15/+0.32) were produced
