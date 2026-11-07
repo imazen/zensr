@@ -26,6 +26,11 @@ and joins canonical IDs and split labels independently of the derived split.
 Its output includes `verification.json` and `sources-with-links.tsv`, retaining
 all canonical source/render URLs and the corpus licence labels.
 
+Crop coordinates are zero-based in the historical decoder's returned raster;
+source dimensions are decoded dimensions. They do not necessarily describe the
+stored raster before orientation handling. Use the recorded decoder path when
+recreating crops rather than applying an additional orientation transform.
+
 ## Reproduce
 
 Use an environment with the historical decoder dependencies (NumPy, OpenCV,
