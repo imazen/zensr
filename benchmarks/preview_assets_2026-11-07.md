@@ -2,9 +2,9 @@
 
 Two unpublished prerelease drafts are uploaded:
 
-- [Paired data](https://github.com/imazen/zensr/releases/tag/untagged-00d16506fbe67348ec81),
+- [Paired data](https://github.com/imazen/zensr/releases/tag/untagged-64d46c763ba130440c12),
   tag intent `data-preview-2026-11-07`.
-- [Models](https://github.com/imazen/zensr/releases/tag/untagged-1bf3c152494538494374),
+- [Models](https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e),
   tag intent `models-preview-2026-11-07`.
 
 Draft access requires appropriate repository permissions. Neither draft is a
@@ -90,10 +90,12 @@ artifacts exist. Detailed path inventories remain outside Git at
 
 ## Uploaded bytes and verification
 
-All **12 assets** are in `uploaded` state; GitHub's server-side SHA-256 and size
-match each local file. Total uploaded bytes: **1,994,914,536**. All members of the
+All **14 assets** are in `uploaded` state; GitHub's server-side SHA-256 and size
+match each local file. Total uploaded bytes: **1,994,921,106**. All members of the
 three pair archives and both model archives passed decompression/hash checks.
-Both releases were verified as drafts with no publication timestamp.
+Both releases were verified as drafts with no publication timestamp. A standalone
+`SPLIT-DEFINITIONS.md` is attached to both drafts. Existing archives and their
+checksums are unchanged.
 
 Small evidence records: [GitHub asset verification](preview_assets_2026-11-07.github.json)
 and [archive verification](preview_assets_2026-11-07.archives.json). Large

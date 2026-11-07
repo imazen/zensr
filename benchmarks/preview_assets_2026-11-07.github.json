@@ -2,7 +2,7 @@
   {
     "tag": "data-preview-2026-11-07",
     "id": 437463779,
-    "url": "https://github.com/imazen/zensr/releases/tag/untagged-00d16506fbe67348ec81",
+    "url": "https://github.com/imazen/zensr/releases/tag/untagged-64d46c763ba130440c12",
     "draft": true,
     "prerelease": true,
     "assets": [
@@ -41,13 +41,19 @@
         "size": 478,
         "digest": "sha256:53a10b572af28df3f6a4271e942f51ba141741d24d05d0403b2132258fb0d41b",
         "state": "uploaded"
+      },
+      {
+        "name": "SPLIT-DEFINITIONS.md",
+        "size": 3285,
+        "digest": "sha256:278c393661eccc26b851f93131676abf89af215fba18f20f9e46d2b9c6dcfefb",
+        "state": "uploaded"
       }
     ]
   },
   {
     "tag": "models-preview-2026-11-07",
     "id": 437464697,
-    "url": "https://github.com/imazen/zensr/releases/tag/untagged-1bf3c152494538494374",
+    "url": "https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e",
     "draft": true,
     "prerelease": true,
     "assets": [
@@ -73,6 +79,12 @@
         "name": "SHA256SUMS",
         "size": 480,
         "digest": "sha256:bc24762d0c8f8f73c7b0136f8b12df5fc898f6b4ecba960d8370fd932614d5fa",
+        "state": "uploaded"
+      },
+      {
+        "name": "SPLIT-DEFINITIONS.md",
+        "size": 3285,
+        "digest": "sha256:278c393661eccc26b851f93131676abf89af215fba18f20f9e46d2b9c6dcfefb",
         "state": "uploaded"
       },
       {
