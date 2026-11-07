@@ -56,8 +56,10 @@ The committed [metadata](../models/adopted/dejpeg_rt24i_canon4/meta.json) and
 run at source revision `4a33019`:
 
 1. **Prepare paired data.** The recorded dataset contains 48,000 crops of
-   128 × 128 pixels from canonical imazen-26 training content. The final 512
-   crops are validation pairs from separate source images. The
+   128 × 128 pixels selected through zensr's effective imazen-26 training
+   split, which differs from the corpus's original split. The final 512
+   crops are validation pairs from separate source images within that same
+   effective training pool, not the corpus's canonical validation bucket. The
    [generator](../tools/make_dejpeg_data4.py) chooses among turbo, mozjpeg,
    jpegli and zenjpeg, samples integer quality 5–96, and chooses 4:2:0 with
    probability 0.6, otherwise 4:4:4. Five percent of pairs are clean identity
@@ -89,6 +91,54 @@ Despite the trainer's historical name, `train_people.py`, this run uses the
 mixed-content JPEG dataset. The generator also writes severity and uncertainty
 channels for conditioning experiments; canon4's network reads RGB only.
 It uses reference targets, rather than teacher-output distillation.
+
+## Training and held-out membership
+
+Rechecked on 2026-11-07 against corpus revision
+`187fbf338ce08e8e6654db7f04ddae58d5263da2`:
+
+| Split policy | Train | Validate | Test |
+|---|---:|---:|---:|
+| Canonical imazen-26 | 1,084 | 658 | 418 |
+| zensr effective split | 1,151 | 648 | 361 |
+
+The [split helper](../tools/corpus_split.py) groups related images and assigns
+each group to its lowest-ID member's bucket. This changes 309 memberships,
+including **103 canonical validation and 77 canonical test images assigned to
+the effective training pool**. It also moves 113 canonical training images out
+of that pool. Therefore canon4's documented selection policy does not preserve
+the original canonical held-out boundary.
+
+Python training selects effective `train`; Rust model evaluation reads effective
+`validate` plus `test`. The saved effective split exactly matches regeneration
+from the helper and the current corpus snapshot. The split helper, corpus
+adapter and training-pool selector match their bytes at trainer revision
+`4a33019`; the v4 generator differs only in a documentation-path comment.
+This establishes a shared selection policy, not the actual source of every
+historical crop. `pairs.tsv` has 48,000 rows but no source-image IDs or crop
+coordinates, so those identities cannot be verified from the pair ledger.
+
+The publication study additionally excludes complete origins touching effective
+model training, including stronger document/book grouping. Its separation is
+against the effective policy, not proof that model training used only the raw
+canonical training bucket. See the
+[study's data-separation record](../benchmarks/publication_routing_protocol_2026-11-04.md#data-separation).
+
+## Artifact distribution
+
+Use GitHub release assets for additional model bundles and `.tar.zst` training
+pair archives, keeping manifests, checksums and download instructions in Git.
+Each asset must be smaller than 2 GiB under the
+[GitHub release limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
+Shard archives if needed; compressed sizes have not been measured.
+
+The retained canon4 dataset contains **48,000 pairs**, including the 512-pair
+internal validation tail. Its four arrays plus `pairs.tsv` and `meta.json`
+total **4,744,799,731 bytes uncompressed** on i265. These are existing artifacts,
+not a regenerated dataset. Any archive must carry the effective split, source
+revision, existing metadata and the missing-per-pair-identity limitation above;
+an archive alone does not repair that provenance gap. No release assets have
+been uploaded as part of this inventory.
 
 ## Reproduction limits
 

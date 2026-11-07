@@ -72,8 +72,8 @@ The canonical corpus checkout is `187fbf338ce08e8e6654db7f04ddae58d5263da2`.
 The existing effective split matches `tools/corpus_split.py` exactly. Model
 training origins are excluded, using stronger document-level grouping for
 patents, books and the EPA report. Previously inspected files and every related
-origin are development-only. The remainder of canonical validate supplies router
-development; canonical test supplies reserved test, with any group touching
+origin are development-only. The remainder of effective validate supplies router
+development; effective test supplies reserved test, with any group touching
 validate moved entirely into development. No test score may choose features,
 hyperparameters, thresholds, harm budgets, or stopping criteria.
 
@@ -94,7 +94,11 @@ hashes are frozen. Once inspected, it is an audit set, not fresh confirmation.
 Training-provenance limit: the adopted model metadata identifies trainer commit
 `4a33019`, the dataset directory, seed and source-class policy. The generator and
 split helpers at that commit match their current source and restrict the default
-pool to canonical training membership. However, historical `pairs.tsv` records
+pool to zensr's effective training membership. This differs from the raw
+canonical split: 103 canonical validation and 77 canonical test images are
+assigned to the effective training pool. The effective split and historical
+selection policy are documented in [the model guide](../docs/MODELS.md).
+However, historical `pairs.tsv` records
 encoder, quality and conditioning, not each pair's source-image ID, and the
 generation environment/corpus snapshot is not fully recorded. Separation here
 is verified against that documented source policy and the frozen current
