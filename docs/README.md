@@ -9,6 +9,7 @@
 - [Readiness](REPAIR_READINESS.md): verified behavior and remaining validation.
 - [Models and training](MODELS.md): the model family and canon4's training recipe.
 - [Pair provenance](PAIR_PROVENANCE.md): reconstruct and verify saved crop identities.
+- [Train from the preview](TRAINING_PREVIEW.md): download, assemble and train canonical-only pairs.
 - [Public API inventories](api/PUBLIC_API.md): historical API snapshots.
 
 ## Evidence

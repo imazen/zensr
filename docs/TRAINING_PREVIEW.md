@@ -11,7 +11,8 @@ content-family independence across canonical IDs.
 ## Clone, download and assemble
 
 Use Python 3.12 and a current PyTorch build for your CPU or CUDA system. The
-preview records the tested environment; installing dependencies does not promise
+preview records the [tested environment](../benchmarks/preview_training_environment_2026-11-07.json);
+installing dependencies does not promise
 bit-identical retraining across hardware or package versions.
 
 ```sh

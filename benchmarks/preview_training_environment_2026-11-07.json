@@ -1,0 +1,14 @@
+{
+  "observed": "2026-11-07",
+  "python": "3.12.14",
+  "packages": {
+    "numpy": "2.5.4",
+    "torch": "2.15.0",
+    "opencv-python-headless": "5.0.0.93"
+  },
+  "tested": "one-step CPU training/export from a clean source snapshot with the assembled canonical-only dataset",
+  "source_snapshot": "04617a3c990c",
+  "training_rows": 39503,
+  "validation_rows": 392,
+  "note": "Package wheels and CUDA drivers are not bundled. This records the tested environment, not a bit-identical retraining promise."
+}

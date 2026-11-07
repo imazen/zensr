@@ -1,0 +1,27 @@
+[
+  {
+    "archive": "canon4-canonical-train-01.tar.zst",
+    "members": 7,
+    "status": "all_member_hashes_match"
+  },
+  {
+    "archive": "canon4-canonical-train-02.tar.zst",
+    "members": 7,
+    "status": "all_member_hashes_match"
+  },
+  {
+    "archive": "canon4-canonical-heldout.tar.zst",
+    "members": 7,
+    "status": "all_member_hashes_match"
+  },
+  {
+    "archive": "zensr-model-collection-20261107.tar.zst",
+    "members": 351,
+    "status": "all_member_hashes_match"
+  },
+  {
+    "archive": "zensr-model-collection-20261107.tar.zst",
+    "members": 16,
+    "status": "all_member_hashes_match"
+  }
+]

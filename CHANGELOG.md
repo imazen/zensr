@@ -17,6 +17,12 @@ None queued by the canon4 update.
 
 ### Added
 
+- Draft artifact packaging for canonical-source pair subsets and the retained
+  model collection, with source-ID manifests, archive hashes and bounded
+  inventory of material not uploaded (`4fd49461`, `04617a3c`, `0177d775`).
+  The trainer honors dataset validation-tail metadata while preserving its
+  original default. [Preview records](benchmarks/preview_assets_2026-11-07.md).
+
 - Reconstruction of retained v4 pair source IDs and crop coordinates, with
   exact saved-target/recipe checks and an independent coordinate-based verifier
   (`f11177a3`, `5f2a500b`). All 48,000 canon4 pairs matched; the manifest records

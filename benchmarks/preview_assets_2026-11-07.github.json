@@ -1,0 +1,92 @@
+[
+  {
+    "tag": "data-preview-2026-11-07",
+    "id": 437463779,
+    "url": "https://github.com/imazen/zensr/releases/tag/untagged-6d945203269554d9112c",
+    "draft": true,
+    "prerelease": true,
+    "assets": [
+      {
+        "name": "bundle-index.json",
+        "size": 5694,
+        "digest": "sha256:37997288b325daf4af2d49446a71f8fd7ef3cd788c6da771351bc45e4fa5a902",
+        "state": "uploaded"
+      },
+      {
+        "name": "canon4-canonical-heldout.tar.zst",
+        "size": 241942346,
+        "digest": "sha256:5241c09abd2a3d6c18b577599e3d04273529e813f946cec7d4034aca3a06d471",
+        "state": "uploaded"
+      },
+      {
+        "name": "canon4-canonical-train-01.tar.zst",
+        "size": 802684752,
+        "digest": "sha256:e26832df21d3b230cab142be7092a67226497f542fd125e9355a66eda4e8698e",
+        "state": "uploaded"
+      },
+      {
+        "name": "canon4-canonical-train-02.tar.zst",
+        "size": 806185904,
+        "digest": "sha256:c68583c91a3e2255d9a24917755899db176cb1cb476c74fcc5fa53c9df32fffe",
+        "state": "uploaded"
+      },
+      {
+        "name": "canon4-data-manifest.tar.zst",
+        "size": 4661402,
+        "digest": "sha256:60d9d6ecaf21489e2994c538f003e32d34f4c364b28718d5501741b4cdd4a2c4",
+        "state": "uploaded"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 478,
+        "digest": "sha256:53a10b572af28df3f6a4271e942f51ba141741d24d05d0403b2132258fb0d41b",
+        "state": "uploaded"
+      }
+    ]
+  },
+  {
+    "tag": "models-preview-2026-11-07",
+    "id": 437464697,
+    "url": "https://github.com/imazen/zensr/releases/tag/untagged-71db29b6982428753dd8",
+    "draft": true,
+    "prerelease": true,
+    "assets": [
+      {
+        "name": "ARTIFACTS-NOT-UPLOADED.json",
+        "size": 1113,
+        "digest": "sha256:9c5d5c7677f57e77f130778019a02bcd26a4439c787cbab721691bf05a204417",
+        "state": "uploaded"
+      },
+      {
+        "name": "MODEL-CATALOG.json",
+        "size": 163789,
+        "digest": "sha256:6d2aa43dbf330993f648c2666e31bae9f1d9dc2e8ee162cb5032bca19ff4ad87",
+        "state": "uploaded"
+      },
+      {
+        "name": "ROUTING-CATALOG.json",
+        "size": 5190,
+        "digest": "sha256:283ea3b62c4a13f6d6a6db6170c129c084aa2a50f455e9beeede00a64d3972ae",
+        "state": "uploaded"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 480,
+        "digest": "sha256:bc24762d0c8f8f73c7b0136f8b12df5fc898f6b4ecba960d8370fd932614d5fa",
+        "state": "uploaded"
+      },
+      {
+        "name": "zensr-model-collection-20261107.tar.zst",
+        "size": 138820393,
+        "digest": "sha256:bc7ec39ad931b0a21ee10e428b749ed25a12ee83c95b0180b2dcd7249ca26bcf",
+        "state": "uploaded"
+      },
+      {
+        "name": "zensr-routing-estimators-20261107.tar.zst",
+        "size": 442995,
+        "digest": "sha256:31c9df19b1f8e6d5f98f0c29d4c9fd9df24b66d434a0e796d2ed0f20697d09bd",
+        "state": "uploaded"
+      }
+    ]
+  }
+]
