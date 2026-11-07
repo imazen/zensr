@@ -33,6 +33,29 @@ def pixel_digest(array):
     return hashlib.sha256(array.tobytes(order='C')).hexdigest()
 
 
+def canonical_rows(corpus):
+    """The split map is a small identity table; hashes live in bucket tables."""
+    def read(name):
+        with (corpus / 'manifests' / name).open() as f:
+            return list(csv.DictReader(f, delimiter='\t'))
+    canonical = {}
+    for bucket in ['train', 'validate', 'test']:
+        for row in read(bucket + '.tsv'):
+            if row['split'] != bucket or row['path'] in canonical:
+                raise ValueError('invalid/duplicate canonical bucket membership')
+            sha = row['sha256']
+            if len(sha) != 64 or any(c not in '0123456789abcdef' for c in sha):
+                raise ValueError('invalid canonical source hash')
+            canonical[row['path']] = row
+    mapping = read('split_map.tsv')
+    if len(mapping) != len(canonical) or any(
+            row['path'] not in canonical or
+            any(row[k] != canonical[row['path']][k] for k in ('id', 'split'))
+            for row in mapping):
+        raise ValueError('canonical split map and bucket tables disagree')
+    return canonical
+
+
 def replay_crops(files, want, rng, crop, reader):
     """The historical gen_crops order, RNG calls, contrast test and RGB layout."""
     if not files:
@@ -119,8 +142,7 @@ def recover(dataset, output, corpus, model_meta):
         os.environ['ZENSR_FOLDER_CAP'] = '0'
         import make_distill_data as historical
         from corpus_split import split_map
-        from imazen26_canonical import split_rows
-        canonical = {r['path']: r for r in split_rows()}
+        canonical = canonical_rows(corpus)
         effective = split_map()
         rng = random.Random(meta['seed'])
         files = historical.build_pool(subs=meta['subs'], rng=rng)
@@ -197,7 +219,8 @@ def recover(dataset, output, corpus, model_meta):
             source_bytes_match_manifest=sum(r['source_sha256'] == r['manifest_sha256'] for r in sources.values()),
             dataset_inputs=inputs, dataset_meta=meta, model_metadata_sha256=digest(model_meta),
             corpus_revision=subprocess.check_output(['git', '-C', str(corpus), 'rev-parse', 'HEAD'], text=True).strip(),
-            corpus_inputs={name: digest(corpus / name) for name in ['manifests/split_map.tsv', 'CORPUS-MANIFEST.tsv']},
+            corpus_inputs={name: digest(corpus / name) for name in ['manifests/split_map.tsv',
+                'manifests/train.tsv', 'manifests/validate.tsv', 'manifests/test.tsv', 'CORPUS-MANIFEST.tsv']},
             tool_revision=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
             tool_sources={name: digest(Path(__file__).parent / name) for name in
                 ['recover_pair_sources.py', 'make_distill_data.py', 'corpus_split.py', 'imazen26_canonical.py']},

@@ -1,13 +1,29 @@
 """Exactness and RNG failures must not turn into asserted source identities."""
 import random
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
 
-from recover_pair_sources import replay_crops, verify_crop, verify_recipe
+from recover_pair_sources import canonical_rows, replay_crops, verify_crop, verify_recipe
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_join_small_identity_map_to_hashed_bucket_tables(self):
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as td:
+            corpus = Path(td)
+            (corpus / 'manifests').mkdir()
+            (corpus / 'manifests/split_map.tsv').write_text('id\tsplit\tpath\n1000\ttrain\ta.jpg\n')
+            for bucket in ['train', 'validate', 'test']:
+                (corpus / 'manifests' / (bucket + '.tsv')).write_text(
+                    'id\tsplit\tpath\tsha256\n' +
+                    ('1000\ttrain\ta.jpg\t' + 'a' * 64 + '\n' if bucket == 'train' else ''))
+            self.assertEqual(canonical_rows(corpus)['a.jpg']['sha256'], 'a' * 64)
+            (corpus / 'manifests/split_map.tsv').write_text('id\tsplit\tpath\n1000\ttest\ta.jpg\n')
+            with self.assertRaisesRegex(ValueError, 'disagree'):
+                canonical_rows(corpus)
+
     def test_exact_crop_and_coordinates(self):
         image = np.random.default_rng(3).integers(0, 256, (21, 23, 3), dtype=np.uint8)
         rows = list(replay_crops(['a'], 8, random.Random(11), 8, lambda _: image))
