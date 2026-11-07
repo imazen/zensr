@@ -326,3 +326,7 @@ routing-feature-check development candidates reserved original_report output:
 
 decoded-router-candidate-replay replay:
     ZENSR_CANDIDATE_REPLAY="{{replay}}" cargo test --release --locked -p zensr-zenjpeg candidate_publication_replay -- --ignored --nocapture
+
+# Write raw RGB8; the example prints output dimensions.
+repair-example input output:
+    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}"
