@@ -28,6 +28,27 @@ that is a dated inventory, not 47 models distributed in today's checkout.
 It also found corrupted targets in the older quality-model fine-tune lineage.
 Canon4 was trained from scratch and does not inherit those weights.
 
+## Retained artifact locations
+
+Read-only filesystem checks on **2026-11-07** found the following under each
+host's primary checkout, at `models/adopted/`:
+
+| Host | Verified f16 artifacts |
+|---|---|
+| `i265` | Four model directories: `dejpeg_rt24g`, `dejpeg_rt24h_canon`, `dejpeg_rt24i_canon4`, `dejpeg_rt24z_zen` |
+| `dev` | 47 weight files, including `dejpeg7_graphics`, `dejpeg9_gfxycc`, older realtime experiments, teacher/distillation runs and ×2/×4 SR models |
+
+The weight filename is `weights_f16.raw` inside each model directory. The two
+larger repair models on `dev` each have **1,190,918 bytes** of f16 weights.
+Examples of retained SR models there are `nomosuni_compact_2x`,
+`nomosuni_span_2x`, `nomosuni_span_4x`, `general_x4v3`, `general_wdn_x4v3`,
+`people_rtc_2x` and `rtc_distill_2x`.
+
+Only rt24g and canon4 weights are tracked by this repository; a fresh clone
+does not include the other retained artifacts. These locations establish
+presence, not a new quality or provenance validation. Recheck each host's
+`models/adopted/*/weights_f16.raw` before relying on this dated inventory.
+
 ## How canon4 was made
 
 The committed [metadata](../models/adopted/dejpeg_rt24i_canon4/meta.json) and
