@@ -8,6 +8,7 @@
   model loading and reproducible source builds.
 - [Readiness](REPAIR_READINESS.md): verified behavior and remaining validation.
 - [Models and training](MODELS.md): the model family and canon4's training recipe.
+- [Pair provenance](PAIR_PROVENANCE.md): reconstruct and verify saved crop identities.
 - [Public API inventories](api/PUBLIC_API.md): historical API snapshots.
 
 ## Evidence
