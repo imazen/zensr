@@ -337,3 +337,9 @@ docs-check:
 # Documentation maintenance; claim the checkout and start from a clean tree.
 docs-move source destination:
     python3 tools/relocate_docs.py "{{source}}" "{{destination}}"
+
+recover-pair-sources *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/recover_pair_sources.py {{args}}
+
+test-pair-recovery:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_recover_pair_sources.py
