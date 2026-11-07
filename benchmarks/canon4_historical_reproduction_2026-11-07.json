@@ -1,0 +1,36 @@
+{
+  "status": "complete",
+  "rows": 48000,
+  "training_rows": 47488,
+  "internal_validation_rows": 512,
+  "qboost_sampling_entries": 72478,
+  "original_index_order": true,
+  "original_ledger_fields_match": true,
+  "arrays": [
+    {
+      "name": "lr_u8.npy",
+      "bytes": 2359296128,
+      "sha256": "b8bad074b758fa800fce7aeb492df093f863839869f8ad5215914d8a6f43ca0a",
+      "byte_identical_to_retained_original": true
+    },
+    {
+      "name": "hr_u8.npy",
+      "bytes": 2359296128,
+      "sha256": "a133cb8d10877ca87dd2178ca93522d511b9952c2b772cd1efb145bae9ef3975",
+      "byte_identical_to_retained_original": true
+    },
+    {
+      "name": "cond_scalar_f32.npy",
+      "bytes": 192128,
+      "sha256": "29f05ebe3b0e10ab12b104d89a4902ba5155021785e500538a2d142f01fba2aa",
+      "byte_identical_to_retained_original": true
+    },
+    {
+      "name": "dmap_u16.npy",
+      "bytes": 24576128,
+      "sha256": "275a6980351a567a52284c5d3d432ae99ccbaeadc168b0b8a32d7cbda579f9b1",
+      "byte_identical_to_retained_original": true
+    }
+  ],
+  "limitation": "Byte-identical retained inputs and recipe do not guarantee byte-identical retrained weights across environments."
+}

@@ -1,14 +1,18 @@
 # Train from the pair preview
 
-The draft data release preserves all 48,000 existing pairs. Two archives contain
-39,895 rows whose **source IDs belong to imazen-26's published `train` bucket**.
+The draft preserves **all 48,000 pairs needed to repeat the original canon4
+training experiment**. Use all three archives with `--policy historical` to
+restore 47,488 optimizer-training rows and the original 512-row validation tail.
+
+For a separate new experiment, two archives contain 39,895 rows whose
+**source IDs belong to imazen-26's published `train` bucket**.
 The authority is `imazen/imazen-26`, revision
 `187fbf338ce08e8e6654db7f04ddae58d5263da2`, `manifests/split_map.tsv`.
 They retain 39,503
 optimizer-training rows and a separate 392-row internal validation tail.
 A third archive contains 8,105 rows from imazen-26's published validation/test
-source buckets and is excluded
-by the default assembler. This subset supports a compliant source-ID boundary;
+source buckets. The default filtered assembler excludes that third archive;
+the historical reproduction mode includes it. The filtered subset supports a compliant source-ID boundary;
 it does not retroactively change the original canon4 weights or establish
 content-family independence across imazen-26 IDs.
 
@@ -43,6 +47,11 @@ source selection violated imazen-26's published split. This path reconstructs
 all **48,000 rows** in original order: **47,488 optimizer-training rows plus
 the original 512-row internal-validation tail**. It includes every original
 LR/HR, severity and uncertainty array; no JPEGs need regeneration.
+
+The [full-data roundtrip check](../benchmarks/canon4_historical_reproduction_2026-11-07.json)
+restored all four arrays byte for byte against the retained original files,
+preserved every original index and ledger field, and reproduced the original
+72,478-entry boosted sampling pool.
 
 ```sh
 # Draft release assets require repository write access while unpublished.

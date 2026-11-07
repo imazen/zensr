@@ -36,6 +36,15 @@ preserved. The default assembler excludes the held-out-source archive, verifies
 archive/member hashes and enforces source labels. The trainer reads the tail
 size from metadata; its original 512-row default is preserved.
 
+To reconstruct the **existing canon4 experiment**, include all three archives
+and select `--policy historical`. A full roundtrip restored all four arrays
+byte for byte against the retained original files, in original index order,
+with 47,488 optimizer-training rows, the original 512-row internal-validation
+tail and the original 72,478-entry boosted sampling pool. The
+[roundtrip record](canon4_historical_reproduction_2026-11-07.json) binds the exact
+array hashes. This path includes imazen-26 validation/test sources because the
+original model used them. The two-archive filter is a separate new experiment.
+
 A clean source snapshot at `04617a3c990c` assembled the two training-source
 archives and completed one CPU optimization step, internal validation and export
 of a 43,203-parameter model. The smoke artifact is a test fixture, not a released
