@@ -19,10 +19,7 @@
 
 ## Research and engineering
 
-- [Project plan](research/PLAN.md).
-- [Research roadmap](../ROADMAP.md).
-- [Experiment record](research/SYSTEMS.md).
-- [Historical results and runtime notes](research/HISTORICAL_RESULTS.md).
+- [Research record](research/README.md): plans, experiment history and previous results.
 - [VSR source review](VSR_REVIEW.md).
 - [API design proposal](API_DESIGN.md), retained as historical design context.
 - [ARM kernel audit](engineering/ARM_AUDIT_2026-08-01.md).

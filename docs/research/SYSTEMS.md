@@ -736,7 +736,7 @@ Model ladder (all golden-verified; std-grid mean ssim2 gain / full-pipeline spee
 > models.** Kept as the dated record of what was measured on 07-27; do not quote
 > them. Clean-reference figures (pinned split, per-file median, turbo 4:2:0,
 > n=64) are in `README.md`: quality tier **+10.65/+5.64/+3.53/+2.03/+0.95**,
-> realtime `dejpeg_rt24g` **+6.88/+3.36/+2.02/+1.15/+0.32**. See `ROADMAP.md`
+> realtime `dejpeg_rt24g` **+6.88/+3.36/+2.02/+1.15/+0.32**. See `docs/research/ROADMAP.md`
 > §0.1 and §0.1b for what was wrong and why.
 
 | tier | model | params | q15 / q35 / q55 / q75 / q90 | s/MP |

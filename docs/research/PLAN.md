@@ -358,7 +358,7 @@ The moat is degradation exactness + conditioning + the engine — not brute comp
   fusion-retry via per-tier `#[rite]` exp helpers, QAT-int8 if ever needed; scoreboard defense
   as competitors move.
 
-**FORWARD PLAN: see `ROADMAP.md`** (2026-07-31) — open rungs ranked by EV, the
+**FORWARD PLAN: see `docs/research/ROADMAP.md`** (2026-07-31) — open rungs ranked by EV, the
 full CLOSED list (13 falsified directions with their evidence), infrastructure
 debts, and the squintly human-judgment track. Read it before proposing work.
 

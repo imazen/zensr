@@ -1,6 +1,6 @@
 # Affinity-KD two-seed pair — raw rows
 
-Analysis and verdict: `ROADMAP.md` §1.4.
+Analysis and verdict: `docs/research/ROADMAP.md` §1.4.
 
 Five eval runs at 179 KB each (895 KB total), past the 30 KB in-repo threshold,
 so they live in block storage.

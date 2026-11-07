@@ -33,7 +33,7 @@ per subcorpus, n=64/cell, gate disabled unless stated. Raw:
 | `gated_444_after_2026-08-02.tsv` | the fix, verified: every 4:4:4 cell reads +0.000, harm_frac 0.00 |
 
 Conclusion and full context: `docs/research/SYSTEMS.md` "CHROMA SUBSAMPLING BREAKS THE
-HIGH-Q GATE", `ROADMAP.md` 1.1.
+HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
 
 ## Realtime kernels (x86)
 

@@ -22,7 +22,7 @@
 >    aggressively downscaled input a q83 file carries far more damage than a
 >    q83 native file, because downscaling packs content into exactly the
 >    frequencies the quantiser coarsens. A detail-density signal is a concrete
->    candidate (`ROADMAP.md` 1.8) but it is not built, so the variant would be
+>    candidate (`docs/research/ROADMAP.md` 1.8) but it is not built, so the variant would be
 >    a promise with no implementation behind it.
 >
 > One thing is **added**: chroma subsampling is now a first-class part of the
@@ -204,7 +204,7 @@ during the last two weeks of measurement.
 
 1. **Is `Intent::Appearance` real?** It is currently a hypothesis: our metrics
    penalise invented detail, and we believe humans may not. The squintly study
-   (`ROADMAP.md` §4) decides whether this variant ships or is removed. **Do not
+   (`docs/research/ROADMAP.md` §4) decides whether this variant ships or is removed. **Do not
    ship an enum variant we cannot justify with data.**
 2. **Where is the high-quality cutoff?** Measured crossover moved from q82 to
    above q85 once contaminated references were excluded, and it is single-
