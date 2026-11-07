@@ -82,7 +82,7 @@ gains at every q (they were fit pre-canonical-corpus).
 - Regenerate goldens for rt24i_canon4 with the shipped f16 (however
   rt24g's goldens were produced — check its meta.json/repro).
 - Update: `benchmarks/retrain_rt24h_canon_2026-10-30.md` (mark superseded),
-  README realtime tier, SYSTEMS.md, api.rs/lib.rs constants + comments,
+  README realtime tier, docs/research/SYSTEMS.md, api.rs/lib.rs constants + comments,
   CHANGELOG.
 - `cargo test -p zensr-zenjpeg -p zensr-micro` must pass; shape tests in
   api.rs are contracts — recalibration failures mean the curve is wrong.
