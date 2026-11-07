@@ -21,6 +21,7 @@ mod decoded_router_features;
 #[cfg(all(feature = "chooser", test))]
 mod decoded_router_model;
 pub mod jpegli_params;
+pub mod model_file;
 mod prepared;
 pub mod qtables;
 mod qtables_data;
@@ -49,11 +50,15 @@ pub use zensr_micro::guards::{GuardConfig, GuardReport};
 /// ">=0.8.4, <0.10" — string prefixes stay stable across that range where a
 /// `match` would not.
 pub fn policy_wants_auto(probe: &zenjpeg::detect::JpegProbe) -> bool {
+    policy_wants_auto_at(probe, 9.5)
+}
+
+fn policy_wants_auto_at(probe: &zenjpeg::detect::JpegProbe, max_quality: f32) -> bool {
     let fam = format!("{:?}", probe.encoder);
     let scale = format!("{:?}", probe.quality.scale);
     !fam.starts_with("Cjpegli")
         && (scale == "IjgQuality" || scale == "MozjpegQuality")
-        && probe.quality.value <= 9.5
+        && probe.quality.value <= max_quality
 }
 
 /// Family-conditional projection slack, calibrated 2026-07-25 on 1M luma
@@ -153,6 +158,25 @@ pub(crate) fn chroma_full_of(probe: &zenjpeg::detect::JpegProbe) -> Option<bool>
 /// "conservative" caller restore MORE, which is why it is one function rather
 /// than two call sites.
 pub fn policy_high_q_identity_with_margin(probe: &zenjpeg::detect::JpegProbe, margin: f32) -> bool {
+    high_q_identity_with_gates(
+        probe,
+        margin,
+        [
+            calibration::GATE_IJG_420,
+            calibration::GATE_IJG_444,
+            calibration::GATE_MOZJPEG_420,
+            calibration::GATE_MOZJPEG_444,
+            calibration::GATE_DISTANCE_420,
+            calibration::GATE_DISTANCE_444,
+        ],
+    )
+}
+
+fn high_q_identity_with_gates(
+    probe: &zenjpeg::detect::JpegProbe,
+    margin: f32,
+    gates: [f32; 6],
+) -> bool {
     let mut corrected = probe.clone();
     record::apply_record(&mut corrected);
     let probe = &corrected;
@@ -165,20 +189,15 @@ pub fn policy_high_q_identity_with_margin(probe: &zenjpeg::detect::JpegProbe, ma
         "IjgQuality" | "MozjpegQuality" => {
             let mozjpeg = format!("{:?}", probe.encoder) == "Mozjpeg";
             let threshold = match (mozjpeg, full_chroma) {
-                (false, false) => calibration::GATE_IJG_420,
-                (false, true) => calibration::GATE_IJG_444,
-                (true, false) => calibration::GATE_MOZJPEG_420,
-                (true, true) => calibration::GATE_MOZJPEG_444,
+                (false, false) => gates[0],
+                (false, true) => gates[1],
+                (true, false) => gates[2],
+                (true, true) => gates[3],
             };
             probe.quality.value >= threshold - margin
         }
         "ButteraugliDistance" => {
-            probe.quality.value
-                <= (if full_chroma {
-                    calibration::GATE_DISTANCE_444
-                } else {
-                    calibration::GATE_DISTANCE_420
-                }) + margin
+            probe.quality.value <= (if full_chroma { gates[5] } else { gates[4] }) + margin
         }
         _ => false,
     }
@@ -216,6 +235,8 @@ pub struct RestoreConfig {
     pub threads: usize,
     /// Tile size for the model runner; 0 = auto.
     pub tile: usize,
+    pub(crate) deblock_max_quality: f32,
+    pub(crate) model_gates: Option<[f32; 6]>,
 }
 
 impl RestoreConfig {
@@ -253,6 +274,8 @@ impl Default for RestoreConfig {
             high_q_margin: 0.0,
             threads: 1,
             tile: 0,
+            deblock_max_quality: 9.5,
+            model_gates: None,
         }
     }
 }
@@ -425,7 +448,8 @@ pub(crate) fn restore_jpeg_prepared(
     // the probe enums are non_exhaustive upstream and zenjpeg::types is not a
     // public path.
     report.chroma_full = chroma_full_of(&probe);
-    let want_auto = !skip_model && cfg.deblock_policy && policy_wants_auto(&probe);
+    let want_auto =
+        !skip_model && cfg.deblock_policy && policy_wants_auto_at(&probe, cfg.deblock_max_quality);
     report.used_deblock_auto = want_auto;
     let mode = if want_auto {
         zenjpeg::decoder::DeblockMode::Auto
@@ -466,7 +490,11 @@ pub(crate) fn restore_jpeg_prepared(
     // do harm here (measured; see policy_high_q_identity). The decode is
     // already consistent, so projection is a no-op too: return it.
     if skip_model
-        || (cfg.high_q_identity && policy_high_q_identity_with_margin(&probe, cfg.high_q_margin))
+        || (cfg.high_q_identity
+            && match cfg.model_gates {
+                Some(gates) => high_q_identity_with_gates(&probe, cfg.high_q_margin, gates),
+                None => policy_high_q_identity_with_margin(&probe, cfg.high_q_margin),
+            })
     {
         report.skipped_model_high_q = !skip_model;
         return Ok(Restored {

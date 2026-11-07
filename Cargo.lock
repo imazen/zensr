@@ -4211,6 +4211,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "rgb",
+ "sha2",
  "zenanalyze",
  "zenanalyze-api",
  "zenjpeg",
