@@ -69,7 +69,8 @@ def build(inputs, output):
         if str(rel).startswith('models/adopted/'):continue
         checkpoint='checkpoints' in rel.parts
         associated=next((n for n in sorted(known,key=len,reverse=True) if rel.name.startswith(n+'_')),None)
-        extra.append(dict(kind='training-checkpoint' if checkpoint else 'runtime-baseline',
+        kind = 'routing-estimator' if rel.suffix == '.joblib' else 'training-checkpoint' if checkpoint else 'runtime-baseline'
+        extra.append(dict(kind=kind,
                           model=associated,object=f['object'],sha256=f['sha256'],bytes=f['bytes'],
                           name=None if checkpoint else rel.name))
     public=dict(schema=1,models=catalog,other_binaries=extra,
@@ -88,6 +89,7 @@ def build(inputs, output):
     summary=dict(adopted_model_names=len(catalog),captured_binary_files=len(files),
                  unique_binary_objects=len(list(objects.iterdir())),
                  checkpoints=sum(f['kind']=='training-checkpoint' for f in extra),
+                 routing_estimators=sum(f['kind']=='routing-estimator' for f in extra),
                  runtime_baselines=sum(f['kind']=='runtime-baseline' for f in extra),
                  original_text_files_not_uploaded=len(omitted),asset_bytes=asset['bytes'],asset_sha256=asset['sha256'])
     json_file(output/'summary.json',summary)
