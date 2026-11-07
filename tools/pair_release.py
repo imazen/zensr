@@ -201,6 +201,14 @@ def assemble(index_path, output, policy):
     records.sort(key=lambda item: item[0])
     if not records or len({r[0] for r in records}) != len(records):
         raise ValueError('missing or duplicated pair rows')
+    if policy == 'historical':
+        if [r[0] for r in records] != list(range(index['original_rows'])):
+            raise ValueError('historical assembly requires every original pair index')
+        boundary = index['original_rows'] - index['dataset_recipe']['val_tail']
+        for original, row, _, _ in records:
+            expected = 'model_train' if original < boundary else 'internal_validation'
+            if row['partition'] != expected:
+                raise ValueError('historical assembly must preserve the original partition')
     if policy == 'canonical-train' and any(r[1]['canonical_split'] != 'train' for r in records):
         raise ValueError('canonical held-out source admitted to training dataset')
     # Preserve the original internal split, with the validation rows at the tail.

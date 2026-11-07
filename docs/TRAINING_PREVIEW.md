@@ -17,7 +17,7 @@ imazen-26 membership filter from zensr's historical reassignment and the pair
 dataset's internal validation partition. Existing archive and CLI names keep
 `canonical` for compatibility; here it means the published imazen-26 ID split.
 
-## Clone, download and assemble
+## Setup
 
 Use Python 3.12 and a current PyTorch build for your CPU or CUDA system. The
 preview records the [tested environment](../benchmarks/preview_training_environment_2026-11-07.json);
@@ -30,8 +30,55 @@ cd zensr
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r tools/training-requirements.txt
+```
 
+Install the `zstd` and `tar` command-line tools before assembly. Archive/member
+SHA-256 hashes are checked. The choice below determines which experiment you run.
+
+## Reconstruct the original canon4 training inputs
+
+**Download all three pair archives, including imazen-26 validation/test sources.**
+Historical reproduction requires the actual data canon4 used, even though its
+source selection violated imazen-26's published split. This path reconstructs
+all **48,000 rows** in original order: **47,488 optimizer-training rows plus
+the original 512-row internal-validation tail**. It includes every original
+LR/HR, severity and uncertainty array; no JPEGs need regeneration.
+
+```sh
 # Draft release assets require repository write access while unpublished.
+gh release download data-preview-2026-11-07 --dir ../zensr-preview \
+  --pattern bundle-index.json --pattern 'canon4-canonical-*.tar.zst'
+python tools/pair_release.py assemble \
+  --index ../zensr-preview/bundle-index.json --policy historical \
+  --output ../canon4-historical-pairs
+```
+
+Use the recorded original trainer revision and recipe for retraining:
+
+```sh
+mkdir -p ../canon4-original-source/tools
+git show 4a33019:tools/train_people.py > ../canon4-original-source/tools/train_people.py
+ZENSR_DATA="$(realpath ../canon4-historical-pairs)" \
+ZENSR_SCALE=1 ZENSR_NF=24 ZENSR_NC=8 ZENSR_QBOOST=3 \
+ZENSR_CKPT_EVERY=5000 ZENSR_OUT=dejpeg_rt24i_canon4_reproduction \
+ZENSR_COMMIT=4a33019 \
+python ../canon4-original-source/tools/train_people.py 200000 48 3e-4
+```
+
+The original run used torch 2.15.0+cu132, CUDA/bfloat16, torch seed 7 and NumPy
+seed 11. Matching data and recipe does not guarantee identical learned weights
+across hardware, library versions or numerical settings. The original weights
+are separately included in the model draft. This recipe reproduces the
+historical experiment; it is not the source-selection policy for a new
+imazen-26-compliant model.
+
+## Train a new model using only published imazen-26 training IDs
+
+This is a separate experiment, not reproduction of the existing canon4 model.
+Only the first two archives are required. The assembler's default policy selects
+them and excludes the imazen-26-validation/test-source archive.
+
+```sh
 gh release download data-preview-2026-11-07 --dir ../zensr-preview \
   --pattern bundle-index.json --pattern 'canon4-canonical-train-*.tar.zst'
 python tools/pair_release.py assemble \
@@ -39,12 +86,9 @@ python tools/pair_release.py assemble \
   --output ../zensr-canonical-pairs
 ```
 
-Install the `zstd` and `tar` command-line tools before assembly. Archives and
-their members are SHA-256 checked before use. The assembler preserves original
+The assembler preserves original
 pair indices, enforces the published imazen-26 `train` source labels, and checks that internal
 training/validation source IDs do not overlap. It never rebuilds JPEG encodes.
-
-## Train
 
 ```sh
 ZENSR_DATA=../zensr-canonical-pairs \

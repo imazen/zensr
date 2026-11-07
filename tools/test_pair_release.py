@@ -53,6 +53,13 @@ class PairReleaseTests(unittest.TestCase):
             historical = root / 'historical'
             assemble(output/'bundle-index.json', historical, 'historical')
             np.testing.assert_array_equal(np.load(historical/'hr_u8.npy'), images)
+            index=json.loads((output/'bundle-index.json').read_text())
+            for bad_name, bad in [
+                ('missing-original-row',dict(index,original_rows=7)),
+                ('changed-original-partition',dict(index,dataset_recipe=dict(meta,val_tail=1)))]:
+                path=output/(bad_name+'.json');json_file(path,bad)
+                with self.assertRaisesRegex(ValueError,'historical assembly'):
+                    assemble(path,root/bad_name,'historical')
             archive=output/(json.loads((output/'bundle-index.json').read_text())['bundles'][0]['name']+'.tar.zst')
             with archive.open('ab') as f:f.write(b'changed')
             with self.assertRaisesRegex(ValueError,'archive hash'):
