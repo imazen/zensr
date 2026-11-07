@@ -110,7 +110,7 @@ pub enum NotCertified {
     CallerDisabled,
 }
 
-/// What can be certified about the output.
+/// Whether coefficient projection was applied to the output.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Consistency {
@@ -119,9 +119,8 @@ pub enum Consistency {
     /// slack expands the quantisation intervals, and RGB conversion and
     /// rounding can move coefficients after projection.
     ///
-    /// This is not only a safety property. The projection's measured
-    /// contribution *grows* with quality — +0.39 to +1.31 ssim2 from q90 to
-    /// q100 at 4:2:0, monotone — so at high quality it is carrying the gain.
+    /// This records application of the projection, not a final RGB8 bound
+    /// check or a guarantee of improved perceptual quality.
     Certified,
     /// Projection was not applied; `why` is specific.
     NotEnforced(NotCertified),
@@ -473,10 +472,10 @@ impl<'a> Request<'a> {
         self
     }
 
-    /// Return [`Outcome::Unchanged`] rather than emit pixels whose
-    /// quantisation box cannot be certified. Some pipelines would rather do
-    /// nothing than emit uncertifiable output; that is a policy only the
-    /// caller can set.
+    /// Return [`Outcome::Unchanged`] if coefficient projection cannot be applied
+    /// to all three YCbCr components. This requires projection availability;
+    /// it does not verify the bounds again after RGB conversion and rounding.
+    /// See [`Consistency::Certified`] for the scope of that report.
     #[must_use]
     pub fn require_consistency(mut self, on: bool) -> Self {
         self.require_consistency = on;

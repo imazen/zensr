@@ -1,27 +1,62 @@
-# zensr — CPU super-resolution for web JPEGs
+# zensr — JPEG repair and CPU super-resolution
 
-**Long-term charter: [PLAN.md](PLAN.md)** — the science + training plan for being the best
-compact CPU engine at upscaling libjpeg-turbo/mozjpeg-encoded images (exact-encoder training,
-quant-table conditioning via zenjpeg, fidelity-first). Model/runtime survey that seeded this:
-`~/work/zen/SR-MODELS-RUNTIMES-2026-07-21.md`. Two crates today:
+## JPEG repair status — 2026-11-07
 
-- **`zensr-bench`** — tract-onnx CPU bench for fixed-shape SR ONNX exports
-  (`tools/export_ntire25.py` exports NTIRE2025_ESR zoo checkpoints from
-  `~/work/superrez/NTIRE2025_ESR`; ONNX files land in gitignored `models/`).
-- **`zensr-micro`** (+ `zensr-micro-abi` cdylib) — hand-rolled SPANF (fc=32, x4) inference in
-  safe Rust; FFI unsafe isolated in the -abi crate (zentract-abi pattern). Op set: grouped/plain
-  conv3x3, conv1x1, SiLU, sigmoid gate, concat, PixelShuffle(4).
+The ×1 repair implementation and owner-approved default are committed. The
+implementation passed CI on Linux x86/ARM, Windows x86/ARM, macOS ARM and i686,
+including formatting and Clippy. Independent model replays, selected-path pixel
+parity and metadata-invariance checks are retained.
 
-## Production SOTA (2026-07-27 — every number traces to a benchmarks/ TSV)
+This is a locked-source integration, not a crates.io release. Quality numbers
+below are limited to 512 pixels and reuse an inspected cohort. Arbitrary-size
+execution is implemented; quality across sizes and deployment latency remain
+unestablished. See [readiness and remaining work](docs/REPAIR_READINESS.md).
 
-**The shipped pipeline** (`zensr-zenjpeg::restore_jpeg`): probe → decode policy
+Default `api::Restorer` Fidelity requests use the owner-selected decoded-feature
+router for RGB 420/444 JPEGs at arbitrary resolutions (minimum dimension eight
+pixels). It analyzes native windows without resizing and restores the original
+dimensions. On 140,940 reserved **512-pixel** cells it gives **+2.417 mean SSIM2
+and 0.566% harm**, both origin-balanced, restoring 79.75% of cells. This
+secondary check reuses the inspected cohort. Harm uses the quality-dependent
+loss curve; the worst loss is 18.534 SSIM2. Pixel-artifact auditing was cancelled by the owner.
+[Metadata-independent default, comparison and limitations](benchmarks/routing_feature_ablation_2026-11-06.md).
+
+Explicit `Routing` overrides, Conservative intent, unsupported JPEG layouts and
+`--no-default-features` builds use the calibrated coefficient/quality routing.
+The heads exclude file bpp and image dimensions, so opaque metadata padding
+cannot affect them through file size. The `chooser` analysis dependency is
+enabled by default for decoded routing;
+the older content-class classifier is not an input to the new linear router.
+Quality at other resolutions and runtime cost have not been established.
+Low-level `restore_jpeg` remains the configurable
+restoration pipeline. [Default routing implementation](docs/DEFAULT_ROUTING.md).
+
+Ship format is f16. Goldens are generated through the f16 roundtrip and tested
+in Rust on whole and tiled paths. The library accepts caller-loaded models;
+its current routing estimates are calibrated for canon4, not arbitrary weights.
+
+## Workspace
+
+- `zensr-zenjpeg`: JPEG probing, routing, decoded-pixel repair, guards and
+  coefficient projection. The public repair call is ×1 only.
+- `zensr-micro`: CPU model inference, SIMD kernels and tiled processing;
+  `zensr-micro-abi` provides a separate C entry point for SPANF ×4.
+- `zensr-bench`: quality evaluation, model comparison and profiling tools.
+- `zensr-gpu-spike`: research CUDA/wgpu kernels; no production GPU backend.
+
+The longer-term upscaling and training plan is [PLAN.md](PLAN.md).
+
+## Historical model comparisons
+
+**Low-level ×1 repair pipeline** (`zensr-zenjpeg::restore_jpeg`): probe → decode policy
 (Knusperli only Annex-K q≤9.5) → guarded ×1 model → S10 quantization-consistency
 projection (family-calibrated relative and absolute slack; not a bit-exact
-re-encoding guarantee) → optional ×2 SR.
+re-encoding guarantee) → output pixels. Repair → ×2 chaining exists in the
+evaluation harness as a separate operation.
 
 | tier | model | params / f16 size | ssim2 gain q15/35/55/75/90 | s/MP @12T |
 |---|---|---|---|---|
-| quality (default) | dejpeg7_graphics | 595k / 1.16 MB | **+7.78/+6.11/+4.60/+3.19/+1.06** | 5.3 |
+| historical quality tier | dejpeg7_graphics | 595k / 1.16 MB | **+7.78/+6.11/+4.60/+3.19/+1.06** | 5.3 |
 | realtime | **dejpeg_rt24i_canon4** (four-encoder retrain, 200k steps) | 43,203 / **86,406 bytes** | **+6.542/+4.246/+2.473/+1.308/+0.593** | not measured |
 | low-q graphics route | dejpeg9_gfxycc | 595k / 1.16 MB | **+2.72/+1.45/+1.09/+0.78/+0.21 OVER dejpeg7 on graphics** (paired, 81/81/89/81/67% of files); **negative on photographs from q55 up** — route it, do not default to it | 5.3 |
 
@@ -65,30 +100,8 @@ family (AVX2/SSE4.2/NEON/WASM128/scalar) + a hand `_v4x` AVX-512 f32x16 variant,
 packed weights, tiled multithreading with exact halos, strided rows. Measured
 efficiency: realtime tier ~410 GFLOPS aggregate @12T (near practical peak);
 quality tier ~225 GFLOPS (cache-bound at nf=64 — open rungs: strip-fused layer
-scheduling, Winograd F(2,3)). No GPU path yet (CubeCL spike queued).
-
-Default `api::Restorer` Fidelity requests use the owner-selected decoded-feature
-router for RGB 420/444 JPEGs at arbitrary resolutions (minimum dimension eight
-pixels). It analyzes native windows without resizing and restores the original
-dimensions. On 140,940 reserved **512-pixel** cells it gives **+2.417 mean SSIM2
-and 0.566% harm**, both origin-balanced, restoring 79.75% of cells. This
-secondary check reuses the inspected cohort. Harm uses the quality-dependent
-loss curve; the worst loss is 18.534 SSIM2. Pixel-artifact auditing was cancelled by the owner.
-[Metadata-independent default, comparison and limitations](benchmarks/routing_feature_ablation_2026-11-06.md).
-
-Explicit `Routing` overrides, Conservative intent, unsupported JPEG layouts and
-`--no-default-features` builds use the calibrated coefficient/quality routing.
-The heads exclude file bpp and image dimensions, so opaque metadata padding
-cannot affect them through file size. The `chooser` analysis dependency is
-enabled by default for decoded routing;
-the older content-class classifier is not an input to the new linear router.
-Quality at other resolutions and runtime cost have not been established.
-Low-level `restore_jpeg` remains the configurable
-restoration pipeline. [Default routing implementation](docs/DEFAULT_ROUTING.md).
-
-Ship format is f16. Goldens are generated through the f16 roundtrip and tested
-in Rust on whole and tiled paths. The library accepts caller-loaded models;
-its current routing estimates are calibrated for canon4, not arbitrary weights.
+scheduling, Winograd F(2,3)). No production GPU path. The existing CubeCL CUDA/wgpu spike is a research
+baseline, described in `SYSTEMS.md`.
 
 Key falsifications (full registry in SYSTEMS.md): input conditioning (scalar &
 dmap), YCbCr-native as general pipeline (3 designs incl. de-confounded scratch

@@ -57,7 +57,7 @@ On the 16 retained JPEG replay inputs, inject opaque APP15 payloads while
 requiring exact decoded RGB8, coefficient and record-corrected probe parity.
 The inputs include eight near-boundary cases and are not a representative sample.
 
-| Added payload | Changed current-default decisions |
+| Added payload | Changed original 37-input decisions |
 |---|---:|
 | 4 KiB | 4 / 16 |
 | 16 KiB | 5 / 16 |

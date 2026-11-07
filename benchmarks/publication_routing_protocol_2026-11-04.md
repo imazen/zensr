@@ -3,7 +3,9 @@
 Status: the primary development fit is frozen and reserved comparison is complete
 after the approved oversized-reference exclusion. The owner cancelled the pixel
 artifact audit; comparison uses complete score tables with that limitation
-explicit in the output. No deployment policy is selected. The four-encoder canon4
+explicit in the output. The owner subsequently selected the 37-input default
+and then approved its metadata-independent 34-input replacement on 2026-11-06.
+See [the final feature comparison](routing_feature_ablation_2026-11-06.md). The four-encoder canon4
 weights, JPEG dependency revisions, decoder, guards and projection stay frozen.
 
 The [reserved score-table frontier](publication_primary_reserved_2026-11-05.md)
