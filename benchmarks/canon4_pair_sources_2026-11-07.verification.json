@@ -1,0 +1,10 @@
+{
+  "status": "complete",
+  "pairs": 48000,
+  "sources": 1127,
+  "reconstruction_summary_sha256": "3d210a6973eac4d1c42cf9d07cb2780fde51a14999fd88d6a4621086a8c83b63",
+  "sources_with_links_sha256": "8133a9d45b681517af5ab10bc1f140838b2775908049901dfa3e7c0fb6df93da",
+  "verification_source_sha256": "0ea5c0d8d4529733474d8e7d5809c33486d3846bda8cb35ef5ef87384a4416ee",
+  "method": "Exact coordinate-based RGB comparison of every saved HR target; every LR/HR pixel hash checked. No RNG or encoder replay.",
+  "limitation": "Reconstructed by exact target/seeded-recipe replay, not contemporaneous source logging. Does not prove uniqueness against pixel-identical sources or reproduce JPEG encoder binaries. Only clean LR pairs are checked against HR; other LR bytes are bound by hashes, not regenerated."
+}

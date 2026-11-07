@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "pairs": 48000,
+  "exact_target_matches": 48000,
+  "recipe_matches": 48000,
+  "sources": 1127,
+  "pair_counts_by_canonical_split": {
+    "model_train": {
+      "train": 39503,
+      "test": 3554,
+      "validate": 4431
+    },
+    "internal_validation": {
+      "train": 392,
+      "validate": 89,
+      "test": 31
+    }
+  },
+  "source_counts_by_canonical_split": {
+    "model_train": {
+      "train": 910,
+      "test": 71,
+      "validate": 91
+    },
+    "internal_validation": {
+      "train": 43,
+      "validate": 9,
+      "test": 3
+    }
+  },
+  "internal_source_overlap": 0,
+  "source_bytes_match_manifest": 97,
+  "dataset_inputs": {
+    "meta.json": {
+      "bytes": 1041,
+      "sha256": "e4c017909e794cb664d2959743bc32771f56e7faf515c342d414a711fb413e04"
+    },
+    "pairs.tsv": {
+      "bytes": 1438178,
+      "sha256": "c4347870d2575dc282bbcaf480ff966d49b62a44de5de2b954ea128ff0d80b4a"
+    },
+    "hr_u8.npy": {
+      "bytes": 2359296128,
+      "sha256": "a133cb8d10877ca87dd2178ca93522d511b9952c2b772cd1efb145bae9ef3975"
+    },
+    "lr_u8.npy": {
+      "bytes": 2359296128,
+      "sha256": "b8bad074b758fa800fce7aeb492df093f863839869f8ad5215914d8a6f43ca0a"
+    },
+    "cond_scalar_f32.npy": {
+      "bytes": 192128,
+      "sha256": "29f05ebe3b0e10ab12b104d89a4902ba5155021785e500538a2d142f01fba2aa"
+    },
+    "dmap_u16.npy": {
+      "bytes": 24576128,
+      "sha256": "275a6980351a567a52284c5d3d432ae99ccbaeadc168b0b8a32d7cbda579f9b1"
+    }
+  },
+  "dataset_meta": {
+    "n": 48000,
+    "val_tail": 512,
+    "seed": 20260728,
+    "crop": 128,
+    "task": "v4 conditioning ablation (policy-mix decode)",
+    "q": "U(5,96)+5% clean",
+    "encoders": [
+      "turbo",
+      "mozjpeg",
+      "jpegli",
+      "zenjpeg"
+    ],
+    "subs": [
+      "1000-lilith-photos-general",
+      "1200-lilith-interiors",
+      "1400-lilith-nature",
+      "1600-lilith-food",
+      "2000-unsplash-people",
+      "2200-unsplash-renders",
+      "2400-unsplash-textures",
+      "3000-art-institute-of-chicago-photos",
+      "3300-met-museum-photos",
+      "5000-national-park-service-brochures",
+      "5200-epa-climate-impact-2021-report",
+      "5300-noaa-hurricane-documents",
+      "6000-lilith-scans-public-patents",
+      "6600-ia-scans-manuscript-illustrations",
+      "6800-ia-scans-manuscript-text",
+      "7000-lilith-plots",
+      "8000-lilith-mobile-screenshots",
+      "8100-lilith-web-screenshots",
+      "9000-lilith-ai-clipart",
+      "9094-lilith-ai-illustrations",
+      "9226-lilith-ai-products"
+    ],
+    "gen2": 0.0,
+    "gen3": 0.0,
+    "cond": "scalar=probe severity; dmap=per-block erased-band Q^2/12 log-scaled",
+    "val_split": "image-level"
+  },
+  "model_metadata_sha256": "6e7a04d88969df262d5dae6f581ac90254be0ea7d7f486ac02c3302b47999d9a",
+  "corpus_revision": "187fbf338ce08e8e6654db7f04ddae58d5263da2",
+  "corpus_inputs": {
+    "manifests/split_map.tsv": "346c077cf0972209e0041a91305e1e218faa64448466af305f224ae311268d81",
+    "manifests/train.tsv": "90f0e727343bfe4ccd63b9ebd055c3e45460186e8e48fc1d33dbfcf686e72e3d",
+    "manifests/validate.tsv": "5698f65fa9364ac6bf96f7a7272b1d46fa2b8449a205e974dfd36016f96ad004",
+    "manifests/test.tsv": "fcd23ee81d6a49fd47c27b92825e16ce57095c4888fa5cb9dd97e94cf8c39cd4",
+    "CORPUS-MANIFEST.tsv": "a85038a8b47eb6bc1b851a8e6f5c4a100fee4a7fef733d4e2e1f1a19f28867ba"
+  },
+  "tool_revision": "6ab4af2565b8fba3061f0a4332f5874dc30424c7",
+  "tool_sources": {
+    "recover_pair_sources.py": "aaadbe5d87cba9ee5cffacb3f9f472790c325a277c2d91eead2030335a926e35",
+    "make_distill_data.py": "a216f9735fe069b07c8d1137dcca64c2eddab295481fb66e37f122284a8f2f36",
+    "corpus_split.py": "e2d819dbf744b08f166627ac1a32a2b6bd9697429182656e8ff3e901bb668d47",
+    "imazen26_canonical.py": "c685282234abfa2ab84a7c675beb53d3c4ad0786caad5e6a9de87c2a9591585f"
+  },
+  "environment": {
+    "numpy": "2.5.4",
+    "opencv": "5.0.0"
+  },
+  "outputs": {
+    "pairs.tsv": "3b5190bca6055f2092d2610e1b985208f57c8e432e07627f8f0c49bb00b19770",
+    "sources.tsv": "1dea7af11074030e36661b5a7827731d7f76bc228a0620fafdadc163222b570a"
+  },
+  "limitation": "Reconstructed by exact target/seeded-recipe replay, not contemporaneous source logging. Does not prove uniqueness against pixel-identical sources or reproduce JPEG encoder binaries. Only clean LR pairs are checked against HR; other LR bytes are bound by hashes, not regenerated."
+}

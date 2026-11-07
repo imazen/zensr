@@ -118,6 +118,12 @@ This establishes a shared selection policy, not the actual source of every
 historical crop. `pairs.tsv` has 48,000 rows but no source-image IDs or crop
 coordinates, so those identities cannot be verified from the pair ledger.
 
+The subsequent [exact reconstruction](../benchmarks/canon4_pair_sources_2026-11-07.md)
+recovers all 48,000 pair identities and crop coordinates by matching saved
+targets and recipe draws, with a separate coordinate-based check. Its training
+partition contains 7,985 rows from 162 canonical held-out sources. This improves
+the retained dataset's provenance; it does not undo the split-policy violation.
+
 The publication study additionally excludes complete origins touching effective
 model training, including stronger document/book grouping. Its separation is
 against the effective policy, not proof that model training used only the raw

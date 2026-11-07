@@ -5,6 +5,9 @@ crop coordinates. `tools/recover_pair_sources.py` reconstructs those fields
 from the historical crop-selection recipe, then requires exact agreement with
 the existing arrays. It does not overwrite arrays or regenerate JPEG inputs.
 
+The [completed canon4 reconstruction](../benchmarks/canon4_pair_sources_2026-11-07.md)
+identifies all 48,000 pairs and 1,127 source IDs, with both checks passing.
+
 ## Output
 
 - `pairs.tsv`: one row per saved array index, identifying the imazen-26 ID,

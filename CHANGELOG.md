@@ -17,6 +17,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Reconstruction of retained v4 pair source IDs and crop coordinates, with
+  exact saved-target/recipe checks and an independent coordinate-based verifier
+  (`f11177a3`, `5f2a500b`). All 48,000 canon4 pairs matched; the manifest records
+  actual canonical held-out exposure. [Results](benchmarks/canon4_pair_sources_2026-11-07.md).
+
 - Development-only routing feature ablation and secondary reused-cohort check;
   native 34-input candidate replay, APP15 invariance controls and experimental
   structure-selected analysis windows. Spatial selection remains experimental.

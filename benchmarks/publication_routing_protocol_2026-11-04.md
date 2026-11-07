@@ -105,6 +105,12 @@ is verified against that documented source policy and the frozen current
 manifest; it is not a complete per-pair reconstruction of model-training inputs.
 Do not turn that provenance gap into an unconditional leakage-free claim.
 
+**2026-11-07 provenance follow-up:** the retained 48,000-pair dataset now has
+an [exactly checked source/crop reconstruction](canon4_pair_sources_2026-11-07.md).
+This follow-up does not refit policies or change frozen study inputs. Its
+identity, source-byte drift and historical-logging limitations remain explicit;
+the original model-selection policy did not preserve the raw canonical split.
+
 ## Coverage and limits
 
 The primary grid includes q0–100 at both step 2 and step 5, including the
