@@ -328,8 +328,8 @@ decoded-router-candidate-replay replay:
     ZENSR_CANDIDATE_REPLAY="{{replay}}" cargo test --release --locked -p zensr-zenjpeg candidate_publication_replay -- --ignored --nocapture
 
 # Write raw RGB8; the example prints output dimensions.
-repair-example input output:
-    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}"
+repair-example input output *args:
+    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}" {{args}}
 
 docs-check:
     python3 tools/check_docs.py
@@ -358,3 +358,28 @@ model-release *args:
 
 test-model-release:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_model_release.py
+
+# Single-file CPU models; generated containers stay outside git.
+model-container *args:
+    python3 tools/model_container.py {{args}}
+
+test-model-container:
+    python3 -m unittest discover -s tools -p test_model_container.py
+
+repair-model input output model *args:
+    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}" --model "{{model}}" {{args}}
+
+container-check:
+    cargo clippy --locked -p zensr-zenjpeg --all-targets -- -D warnings
+
+container-tests:
+    cargo test --locked -p zensr-zenjpeg --all-targets
+
+container-check-no-chooser:
+    cargo clippy --locked -p zensr-zenjpeg --no-default-features --all-targets -- -D warnings
+
+container-tests-no-chooser:
+    cargo test --locked -p zensr-zenjpeg --no-default-features --all-targets
+
+container-doc-tests:
+    cargo test --locked -p zensr-zenjpeg --doc
