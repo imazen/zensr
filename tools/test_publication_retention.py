@@ -161,6 +161,15 @@ class ScoredOutputRetention(unittest.TestCase):
         self.assertEqual(result['study']['removed_this_attempt'], 3)
         self.assertTrue((self.root / self.row['reference_artifact']).exists())
 
+    def test_legacy_no_coverage_mode_is_explicit_and_does_not_certify_grid(self):
+        (self.root / 'COVERAGE.tsv').unlink()
+        with self.assertRaisesRegex(ValueError, 'coverage ledger required'):
+            self.plan()
+        result = retention.plan(self.root, self.root, self.output, legacy_scored_cells=True)
+        self.assertFalse(result['grid_coverage_verified'])
+        retention.apply(self.root, self.output)
+        self.assertTrue((self.root / self.row['reference_artifact']).exists())
+
 
 if __name__ == '__main__':
     unittest.main()

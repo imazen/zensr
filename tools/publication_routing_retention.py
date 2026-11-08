@@ -54,7 +54,7 @@ def stopped():
 def identity(root):
     # Early scored pilots predate separate FEATURES/ENCODERS records. Preserve
     # and bind every available identity; never manufacture missing provenance.
-    required = ('COMPLETE', 'COVERAGE.tsv', 'IDENTITY.tsv')
+    required = ('COMPLETE', 'IDENTITY.tsv')
     return {name: digest(root / name) for name in METADATA
             if name in required or (root / name).exists()}
 
@@ -79,7 +79,7 @@ def signature(path):
                 allocated=s.st_blocks * 512, links=s.st_nlink)
 
 
-def plan(root, tables, output):
+def plan(root, tables, output, legacy_scored_cells=False):
     stopped()
     root = root.resolve(strict=True)
     if not (root / 'COMPLETE').is_file():
@@ -89,7 +89,12 @@ def plan(root, tables, output):
     original = identity(root)
     if identity(tables) != original:
         raise ValueError('table source metadata differs from completed run')
-    required = required_coverage(root)
+    if (root / 'COVERAGE.tsv').exists():
+        required = required_coverage(root)
+    elif legacy_scored_cells:
+        required = None
+    else:
+        raise ValueError('coverage ledger required; early scored pilots need explicit legacy-scored-cells mode')
     covered = set()
     protected = set()
     candidates = set()
@@ -122,7 +127,7 @@ def plan(root, tables, output):
         count += 1
         if count % 8192 == 0:
             print(f'planned roles from {count} scored cells', flush=True)
-    if covered != required:
+    if not covered or (required is not None and covered != required):
         raise ValueError('scored cells differ from required coverage')
     if identity(root) != original:
         raise ValueError('run metadata changed during planning')
@@ -141,6 +146,7 @@ def plan(root, tables, output):
     record = dict(schema='zensr-scored-output-retention-v1', created=now(),
                   root=str(root), tool_sha256=digest(Path(__file__)), metadata=original,
                   cells=count, cells_sha256=cell_hash.hexdigest(),
+                  grid_coverage_verified=required is not None,
                   protected_inputs=len(protected), output_files=len(candidates),
                   output_allocated_bytes=allocated, output_logical_bytes=logical,
                   outputs_sha256=digest(manifest), policy='keep references, JPEGs, scores and identities; drop scored RGB outputs and metric maps')
@@ -236,7 +242,7 @@ def apply(root, output):
     return state
 
 
-def batch(root, output, runs):
+def batch(root, output, runs, legacy_scored_cells=False):
     root = root.resolve(strict=True)
     if len(set(runs)) != len(runs):
         raise ValueError('duplicate batch run')
@@ -252,7 +258,7 @@ def batch(root, output, runs):
         child = root / name
         destination = output / name
         if not (destination / 'PLAN.json').exists():
-            plan(child, child, destination)
+            plan(child, child, destination, legacy_scored_cells)
         results[name] = apply(child, destination)
         persist(output / 'SUMMARY.json', dict(checked=now(), runs=results))
     return results
@@ -265,13 +271,15 @@ if __name__ == '__main__':
     p.add_argument('output', type=Path)
     p.add_argument('--tables', type=Path)
     p.add_argument('--runs', help='explicit comma-separated completed child names for batch')
+    p.add_argument('--legacy-scored-cells', action='store_true',
+                   help='allow early completed pilots without coverage ledgers; drop only referenced scored outputs')
     a = p.parse_args()
     os.nice(19)
     if a.action == 'plan':
-        plan(a.root, a.tables or a.root, a.output)
+        plan(a.root, a.tables or a.root, a.output, a.legacy_scored_cells)
     elif a.action == 'apply':
         apply(a.root, a.output)
     else:
         if not a.runs:
             p.error('batch requires an explicit --runs list')
-        batch(a.root, a.output, a.runs.split(','))
+        batch(a.root, a.output, a.runs.split(','), a.legacy_scored_cells)
