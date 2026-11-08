@@ -399,3 +399,6 @@ qat-mirror *args:
 
 qat-float-postquant *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/post_quantize.py {{args}}
+
+qat-package *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/package.py {{args}}
