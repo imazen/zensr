@@ -56,9 +56,37 @@ These are whole-process observations. Do not divide their duration by 20 to
 publish inference latency. The independent zenbench experiment retains model
 preparation outside measured calls and records its own reliability flags.
 
-On the Core Ultra 7 265K, optimized graph inspection selects the 256-bit
-`avxvnni_mmm_i32_8x8` path. That graph observation is distinct from the executed
-7950X assembly samples above. This WSL2 profile is not a bare-metal CPU claim.
+## Core Ultra 7 265K execution
+
+A subsequent probe directly records execution of the 256-bit
+`avxvnni_mmm_i32_8x8_0_23_10` assembly on i265. It uses the same 128-pixel
+input and 20-call procedure, pinned to performance core 2, with the preserved
+v7 executable. That build supports multithreaded matrix multiplication; these
+probes explicitly use one execution thread. Original timing blocks retain
+their own build identities and controls.
+
+| Sampled operation | QLinearConv | ConvInteger with float scaling |
+|---|---:|---:|
+| Actual AVX-VNNI assembly | 51.17% | 65.61% |
+| Convolution input patch packing | 15.86% | 19.78% |
+| Float-to-U8 activation quantization | 3.01% | 3.59% |
+| Float multiplication | 1.33% | 1.68% |
+
+QLinearConv also records 6.82% in `QSumB`. These shares show that the integer
+kernel contributes much more to the Intel probe than to the WSL2 probe;
+packing/conversion overhead alone does not explain both machines. A function's
+sample share does not separate its arithmetic throughput from its load/stall
+costs, or establish a speed ratio between CPUs.
+
+There are 6,008 and 4,711 samples respectively, with zero lost samples.
+
+```text
+QLinearConv: run-heavy: done rc=0 13s | peak-RSS 0.04GiB | min-avail 24387MiB | peak-load 1.69
+ConvInteger: run-heavy: done rc=0 10s | peak-RSS 0.04GiB | min-avail 23566MiB | peak-load 2.05
+```
+
+These remain whole-process profiles, not inference latency measurements.
+The WSL2 observations above do not establish bare-metal 7950X performance.
 
 ## Retention
 

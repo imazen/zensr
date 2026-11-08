@@ -103,3 +103,20 @@ not establish a clean confirmation, regardless of the observed speed gap.
 [Executed VNNI and packing/quantization profiles](../benchmarks/quality_int8_profile_2026-11-08.md)
 explain the observed integer overhead. Profile shares do not predict latency;
 the independent timing runs retain their actual sample counts and gate flags.
+
+## Threaded replay budget
+
+The threaded runner can explicitly use `ZENSR_THREAD_PARITY=first-process`.
+With pinned zenbench 0.1.11, child zero checks exact one-thread/four-thread
+output equality for all nine models at both 512 and 1024 pixels before timing.
+The parent must finish that child successfully before launching either later
+child. The mode requires the three-process subprocess context and a retained
+first-child result. Models, binary, inputs and CPU boundary remain frozen.
+The default still checks each process. This avoids repeating the same full-size
+numerical test in every fresh timing process; all three timing processes remain.
+
+`rgb-grid EXPORTS OUTPUT.json` checks the first input quantizer selected from
+the actual frozen QLinearConv graph against every RGB8 code in every channel.
+This is separate from the table's native normalization/roundtrip field;
+internal weight/activation quantization and final RGB errors remain full-study
+measurements. Keeping an original float head is not a trained post-refiner.

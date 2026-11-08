@@ -57,3 +57,5 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
   how damaged the input itself is.
 - `tools/model_ab.py` — per-file comparison of two models measured in separate
   eval runs.
+
+- [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): original latency block, precision protocol and executed-kernel profiles; remaining comparisons in progress.
