@@ -28,6 +28,14 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(result['qat_across_seeds']['baseline']['mean'],0)
         self.assertEqual(result['qat_across_seeds']['matched_float']['exploratory_seed_origin_bootstrap_95'],[0,0])
 
+    def test_postquantized_float_controls_remain_paired(self):
+        rows=self.rows()
+        rows += [dict(r,arm=r['arm'].replace('float-s','float-ptq-s').replace('-selected',''))
+                 for r in rows.copy() if r['arm'].startswith('float-s')]
+        result=report.summarize(rows,'routed')
+        self.assertEqual(result['qat_across_seeds']['matched_float_ptq']['mean'],0)
+        self.assertEqual(result['paired_comparisons']['qat8-s7-vs-float-ptq-s7']['mean'],0)
+
     def test_missing_duplicate_or_changed_control_is_rejected(self):
         rows=self.rows()
         with self.assertRaisesRegex(ValueError,'coverage'):report.summarize(rows[:-1],'forced')
@@ -50,5 +58,11 @@ class MergeTests(unittest.TestCase):
     def test_extra_control_cannot_change_routing(self):
         first,second=self.fixtures();second[1]['default_restore']='0'
         with self.assertRaisesRegex(ValueError,'control differs'):merge.combine(first,second)
+
+    def test_three_postquantized_controls_have_complete_baseline_coverage(self):
+        first,second=self.fixtures()
+        controls=[second[0]]+[dict(second[1],arm=f'float-ptq-s{s}') for s in [7,17,29]]
+        self.assertEqual(len(merge.combine(first,controls)),3)
+        with self.assertRaisesRegex(ValueError,'coverage'):merge.combine(first,controls[:-1]+[controls[1]])
 
 if __name__=='__main__':unittest.main()

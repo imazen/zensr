@@ -198,7 +198,10 @@ fn main() {
         return;
     }
     assert!(
-        args.len() == 5 || (args.len() == 7 && args[5] == "--only-model" && args[6] == "ptq8-gpu"),
+        args.len() == 5
+            || (args.len() == 7
+                && args[5] == "--only-model"
+                && matches!(args[6].as_str(), "ptq8-gpu" | "float-ptq")),
         "qat_eval inputs.tsv training-root output jobs"
     );
     let training = Path::new(&args[2]);
@@ -216,7 +219,16 @@ fn main() {
         }
     }
     if args.len() == 7 {
-        names = vec!["baseline".to_owned(), "ptq8-gpu".to_owned()];
+        names = if args[6] == "ptq8-gpu" {
+            vec!["baseline".to_owned(), "ptq8-gpu".to_owned()]
+        } else {
+            vec![
+                "baseline".to_owned(),
+                "float-ptq-s7".to_owned(),
+                "float-ptq-s17".to_owned(),
+                "float-ptq-s29".to_owned(),
+            ]
+        };
     }
     let mut identity = format!(
         "binary_sha256\t{}\ninputs_sha256\t{}\ntraining_plan_sha256\t{}\n",

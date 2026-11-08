@@ -85,3 +85,14 @@ The extra evaluator run repeats the baseline. Combining results requires exact
 agreement of its baseline scores and control fields with the original run;
 source binary identities remain separate. This isolates conversion rounding
 from QAT's measured effect rather than attributing both to fine-tuning.
+
+## Secondary causal control: float fine-tuning followed by PTQ
+
+After inspecting the initial results, add deterministic INT8 conversion of
+all three already-selected float controls. Keep their original float-forward
+validation-selected steps (5,500 / 3,500 / 7,500); do not reselect checkpoints,
+perform optimizer steps or change QAT candidates. Use the matching GPU
+conversion and the same frozen external inputs. This distinguishes generic
+fine-tuning followed by rounding from quantization-aware fine-tuning itself.
+It is a disclosed secondary control, not a preregistered primary comparison.
+The repeated-baseline equality gate also applies to this supplementary run.

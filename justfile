@@ -393,3 +393,9 @@ qat-backend-check *args:
 
 qat-merge *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/merge.py {{args}}
+
+qat-mirror *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/mirror.py {{args}}
+
+qat-float-postquant *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/post_quantize.py {{args}}

@@ -31,9 +31,12 @@ def combine(first,second):
         for column,value in r.items():
             if column not in ARTIFACTS and repeated[key][column]!=value:
                 raise ValueError(f'repeated baseline differs: {key} {column}')
-    if {r['arm'] for r in second}!={'baseline','ptq8-gpu'}:raise ValueError('unexpected supplementary arm')
-    extra=[r for r in second if r['arm']=='ptq8-gpu']
-    if len(extra)!=len(base) or {r['id'] for r in extra}!=base.keys():raise ValueError('supplementary coverage differs')
+    kinds={r['arm'] for r in second}-{'baseline'}
+    if kinds not in [{'ptq8-gpu'},{'float-ptq-s7','float-ptq-s17','float-ptq-s29'}]:raise ValueError('unexpected supplementary arm')
+    extra=[r for r in second if r['arm']!='baseline']
+    for arm in kinds:
+        subset=[r for r in extra if r['arm']==arm]
+        if len(subset)!=len(base) or {r['id'] for r in subset}!=base.keys():raise ValueError('supplementary coverage differs')
     for r in extra:
         for column in ('origin','source_id','identity_ssim2','default_restore'):
             if r[column]!=base[r['id']][column]:raise ValueError('supplementary control differs')
@@ -57,7 +60,7 @@ def main(a):
     (a.output/'inputs.tsv').write_bytes((a.primary/'inputs.tsv').read_bytes())
     (a.output/'IDENTITY.tsv').write_text('primary_identity_sha256\t'+sha(a.primary/'IDENTITY.tsv')+'\ncontrol_identity_sha256\t'+sha(a.control/'IDENTITY.tsv')+'\ninputs_sha256\t'+one['inputs_sha256']+'\ntraining_plan_sha256\t'+one['training_plan_sha256']+'\n')
     (a.output/'MERGE.json').write_text(json.dumps(dict(primary_results_sha256=sha(a.primary/'results.tsv'),
-        control_results_sha256=sha(a.control/'results.tsv'),repeated_baseline_rows=len(extra),exact_baseline_comparison=True,
+        control_results_sha256=sha(a.control/'results.tsv'),repeated_baseline_rows=len({r['id'] for r in extra}),exact_baseline_comparison=True,
         tool_sha256=sha(Path(__file__)),interpretation='Additional untrained GPU PTQ numerical control; no learned model or policy re-selection.'),indent=2)+'\n')
     (a.output/'COMPLETE').write_text(sha(a.output/'results.tsv'))
 
