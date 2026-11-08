@@ -227,6 +227,11 @@ def main(a):
         rows, list(csv.DictReader(a.inputs.open(), delimiter="\t")), a.expected_inputs
     )
     report = dict(
+        evaluation_identity=identity,
+        input_manifest_sha256=sha(a.inputs),
+        shared_report_helper_sha256=sha(
+            Path(__file__).resolve().parents[1] / "qat/report.py"
+        ),
         results_sha256=sha(a.root / "results.tsv"),
         report_tool_sha256=sha(__file__),
         cohorts={},

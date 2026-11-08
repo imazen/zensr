@@ -436,3 +436,6 @@ quality-int8-report-tests:
 
 quality-int8-latency-report *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/latency_report.py {{args}}
+
+quality-int8-package *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/package.py {{args}}

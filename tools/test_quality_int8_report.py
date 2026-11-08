@@ -3,6 +3,9 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json
+import tempfile
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location(
     "quality_precision_report", Path(__file__).parent / "quality-int8/report.py"
@@ -160,6 +163,29 @@ class LatencyEvidenceTests(unittest.TestCase):
         runs[0]["incomplete"] = True
         with self.assertRaises(ValueError):
             latency.summarize(experiment, runs)
+
+
+package_spec = importlib.util.spec_from_file_location(
+    "quality_package", Path(__file__).parent / "quality-int8/package.py"
+)
+package = importlib.util.module_from_spec(package_spec)
+package_spec.loader.exec_module(package)
+
+
+class PackagingAdmissionTests(unittest.TestCase):
+    def test_a_complete_pilot_is_not_a_complete_study(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evaluation = root / "evaluation-v6"
+            evaluation.mkdir()
+            table = evaluation / "results.tsv"
+            table.write_text("pilot fixture\n")
+            (evaluation / "COMPLETE").write_text(package.sha(table))
+            (evaluation / "IDENTITY.json").write_text(
+                json.dumps(dict(required_inputs=8))
+            )
+            with self.assertRaisesRegex(ValueError, "2960"):
+                package.main(SimpleNamespace(root=root))
 
 
 if __name__ == "__main__":
