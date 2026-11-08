@@ -63,6 +63,6 @@ class MergeTests(unittest.TestCase):
         first,second=self.fixtures()
         controls=[second[0]]+[dict(second[1],arm=f'float-ptq-s{s}') for s in [7,17,29]]
         self.assertEqual(len(merge.combine(first,controls)),3)
-        with self.assertRaisesRegex(ValueError,'coverage'):merge.combine(first,controls[:-1]+[controls[1]])
+        with self.assertRaisesRegex(ValueError,'coverage'):merge.combine(first,controls+[controls[1]])
 
 if __name__=='__main__':unittest.main()
