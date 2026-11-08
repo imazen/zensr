@@ -6,6 +6,14 @@ Decoded and repaired RGB buffers are temporary scoring inputs; discard them afte
 their scores are recorded. Diagnostic metric maps are off by default. A separate
 diagnostic run requires explicit opt-in, a bounded witness set and a byte budget.
 
+The routing-study and QAT evaluators record `retention=scores-only-v1` in their
+run identities. Their historical output-pixel/map path columns are empty; this
+is an explicit contract, not a missing-file fallback. References and JPEGs remain
+retained. Input verification uses that declared artifact set; legacy runs still
+require their original artifact fields. The frozen old evaluators are not rebuilt
+or silently resumed under the new policy. A diagnostic opt-in mode is not supplied
+by these routine evaluators.
+
 ## Existing completed routing studies
 
 The owner authorized dropping their scored decoded/repaired pixels and diagnostic

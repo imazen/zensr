@@ -5,6 +5,13 @@ sizes, and independently decoded JPEG dimensions and subsampling. It does not
 recompute quality metrics. Fitting requires its cell digest, coverage digest and
 auditor-source identity to match the retained data.
 
+Current scoring uses the [score-only retention policy](SCORING_RETENTION.md).
+For identities declaring `scores-only-v1`, the retained artifact set is JPEGs
+and source-reference RGB buffers; output/map path columns must be empty. Legacy
+runs still require all six original artifact roles. After authorized pruning,
+their historical artifact-audit record moves to `audit-history`; it is not a
+current claim that deleted outputs remain available.
+
 Artifact reads run concurrently (`--workers`, default one); cell-table reads are
 serial, with batches capped at 128 cells. Repeated artifacts are verified once,
 but every row still checks its dimensions and subsampling. Progress is recorded

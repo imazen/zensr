@@ -125,35 +125,6 @@ fn load(dir: &Path) -> (AdoptedModel, String) {
     );
     (model, format!("{}\t{}\t{max:.12}", hash(&raw), digest))
 }
-fn artifact(root: &Path, bytes: &[u8], suffix: &str) -> String {
-    // Reuse routing_study's bounded zstd pipe, draining output concurrently.
-    use std::process::{Command, Stdio};
-    let mut child = Command::new("zstd")
-        .args(["-q", "-3", "-T1", "-c"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut stdin = child.stdin.take().unwrap();
-    let result = std::thread::scope(|scope| {
-        let writing = scope.spawn(move || {
-            let result = stdin.write_all(bytes);
-            drop(stdin);
-            result
-        });
-        let result = child.wait_with_output().unwrap();
-        writing.join().unwrap().unwrap();
-        result
-    });
-    assert!(result.status.success(), "artifact compression");
-    let bytes = &result.stdout;
-    let digest = hash(bytes);
-    let dir = root.join("artifacts").join(&digest[..2]);
-    fs::create_dir_all(&dir).unwrap();
-    let relative = format!("artifacts/{}/{digest}.{suffix}.zst", &digest[..2]);
-    storage::publish(&root.join(&relative), bytes);
-    relative
-}
 
 struct Measures {
     ssim: f64,
@@ -162,7 +133,7 @@ struct Measures {
     pixels: String,
     map: String,
 }
-fn measure(root: &Path, reference: &Rgb8Img, image: &Rgb8Img) -> Measures {
+fn measure(reference: &Rgb8Img, image: &Rgb8Img) -> Measures {
     use rgb::FromSlice;
     assert_eq!((reference.w, reference.h), (image.w, image.h));
     let ssim = ssim2(reference, image);
@@ -170,24 +141,20 @@ fn measure(root: &Path, reference: &Rgb8Img, image: &Rgb8Img) -> Measures {
     let result = butteraugli::butteraugli(
         imgref::Img::new(reference.px.as_rgb(), reference.w, reference.h),
         imgref::Img::new(image.px.as_rgb(), image.w, image.h),
-        &butteraugli::ButteraugliParams::default().with_compute_diffmap(true),
+        &butteraugli::ButteraugliParams::default().with_compute_diffmap(false),
     )
     .unwrap();
     assert!(result.score.is_finite() && result.pnorm_3.is_finite());
-    let map: Vec<u8> = result
-        .diffmap
-        .as_ref()
-        .unwrap()
-        .buf()
-        .iter()
-        .flat_map(|v| v.to_le_bytes())
-        .collect();
+    assert!(
+        result.diffmap.is_none(),
+        "score-only metric must not return a map"
+    );
     Measures {
         ssim,
         max: result.score,
         pnorm: result.pnorm_3,
-        pixels: artifact(root, &image.px, "rgb8"),
-        map: artifact(root, &map, "butter-f32le"),
+        pixels: String::new(),
+        map: String::new(),
     }
 }
 fn main() {
@@ -231,7 +198,7 @@ fn main() {
         };
     }
     let mut identity = format!(
-        "binary_sha256\t{}\ninputs_sha256\t{}\ntraining_plan_sha256\t{}\n",
+        "retention\tscores-only-v1\nbinary_sha256\t{}\ninputs_sha256\t{}\ntraining_plan_sha256\t{}\n",
         hash(&fs::read(std::env::current_exe().unwrap()).unwrap()),
         hash(&fs::read(&args[1]).unwrap()),
         hash(&fs::read(training.join("PLAN.json")).unwrap())
@@ -303,7 +270,7 @@ fn main() {
         let dec=zenjpeg::decoder::Decoder::new().deblock(zenjpeg::decoder::DeblockMode::Off).decode(&data,enough::Unstoppable).unwrap();
         let (w,h)=dec.dimensions();assert_eq!((w as usize,h as usize),(reference.w,reference.h));
         let plain=Rgb8Img{px:dec.pixels_u8().unwrap().to_vec(),w:w as usize,h:h as usize};
-        let identity=measure(output,reference,&plain);
+        let identity=measure(reference,&plain);
         let routed=restorer.restore(&data).threads(1).run().unwrap();let restore=matches!(routed,Outcome::Restored{..});
         if !restore {assert_eq!(routed.pixels().to_rgb8(),plain.px);}
         let mut cell=header.to_owned();
@@ -312,7 +279,7 @@ fn main() {
             let restored=zensr_zenjpeg::restore_jpeg(&data,model,&cfg).unwrap();assert!(restored.planes.iter().all(|v|v.is_finite()));
             let pixels=Rgb8Img{px:restored.to_rgb8(),w:restored.width,h:restored.height};
             if name=="baseline" && restore {assert_eq!(pixels.px,routed.pixels().to_rgb8(),"frozen default pipeline differs from forced baseline");}
-            let forced=measure(output,reference,&pixels);let routed_metric=if restore {&forced}else{&identity};
+            let forced=measure(reference,&pixels);let routed_metric=if restore {&forced}else{&identity};
             let metadata=["id","source_id","origin","content","cohort","size","encoder","ss","q"].map(|s|r[col(s)]).join("\t");
             cell+=&format!("{metadata}\t{name}\t{}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{}\t{}\t{}\t{}\t{}\n",u8::from(restore),identity.ssim,forced.ssim,routed_metric.ssim,identity.max,forced.max,identity.pnorm,forced.pnorm,forced.pixels,routed_metric.pixels,identity.pixels,forced.map,identity.map);
         }
@@ -348,6 +315,20 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scalar_scoring_does_not_retain_pixels_or_maps() {
+        let image = Rgb8Img {
+            px: vec![128; 32 * 32 * 3],
+            w: 32,
+            h: 32,
+        };
+        let result = measure(&image, &image);
+        assert_eq!(result.ssim, 100.0);
+        assert_eq!(result.max, 0.0);
+        assert_eq!(result.pnorm, 0.0);
+        assert!(result.pixels.is_empty() && result.map.is_empty());
+    }
     fn fixture() -> Vec<u8> {
         let mut b = b"ZSRQ8PC\0".to_vec();
         for v in [1u32, 24, 8, 1] {

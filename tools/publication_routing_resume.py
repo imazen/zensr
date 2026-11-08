@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import json
 from pathlib import Path
+from publication_routing_cells import retained_artifact_columns, validate_retention_row
 
 
 def verify(root,quarantine=False):
@@ -17,11 +18,12 @@ def verify(root,quarantine=False):
         except (FileNotFoundError,ProcessLookupError,PermissionError):continue
         if args and Path(args[0].decode(errors='replace')).name=='routing_study' and str(root).encode() in args:
             raise ValueError('stop the study before resume verification')
-    columns=('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact','identity_butter_map','restored_butter_map')
+    columns=retained_artifact_columns(root)
     referenced=set();cells=0
     for path in sorted((root/'cells').glob('*.tsv')):
         with path.open() as f:rows=list(csv.DictReader(f,delimiter='\t'))
         if len(rows)!=1:raise ValueError(f'incomplete committed cell: {path}')
+        validate_retention_row(rows[0],columns)
         referenced.update(rows[0][column] for column in columns);cells+=1
         if cells%4096==0:print(f'read {cells} completed cells',flush=True)
     print(f'checking artifacts for {cells} completed cells',flush=True)

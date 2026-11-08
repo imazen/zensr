@@ -83,6 +83,25 @@ def write_record(path,record):
     os.replace(name,path)
 
 
+def retained_artifact_columns(root):
+    legacy = ('jpeg_artifact', 'reference_artifact', 'decoded_artifact',
+              'restored_artifact', 'identity_butter_map', 'restored_butter_map')
+    path = root / 'IDENTITY.tsv'
+    identity = dict(line.split('\t', 1) for line in path.read_text().splitlines()) if path.exists() else {}
+    policy = identity.get('retention')
+    if policy is None:
+        return legacy
+    if policy != 'scores-only-v1':
+        raise ValueError('unknown artifact retention policy')
+    return legacy[:2]
+
+
+def validate_retention_row(row, columns):
+    if len(columns) == 2 and any(row.get(name, '') for name in (
+            'decoded_artifact', 'restored_artifact', 'identity_butter_map', 'restored_butter_map')):
+        raise ValueError('score-only run unexpectedly retains output pixels/maps')
+
+
 def audit(root,workers=1):
     if workers<1:raise ValueError('audit workers must be positive')
     if not (root/'COMPLETE').is_file():raise ValueError('grid completion marker required')
@@ -95,8 +114,7 @@ def audit(root,workers=1):
     seen=set();covered=set();count=0;verified={};cell_hash=hashlib.sha256()
     paths=sorted((root/'cells').glob('*.tsv'))
     if not paths:raise ValueError('no completed cells')
-    required_artifacts=('jpeg_artifact','reference_artifact','decoded_artifact','restored_artifact',
-                        'identity_butter_map','restored_butter_map')
+    required_artifacts=retained_artifact_columns(root)
     def progress(stage,error=None):
         write_record(root/'AUDIT_PROGRESS.json',dict(stage=stage,checked=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             pid=os.getpid(),root=str(root),workers=workers,checked_cells=count,required_cells=len(planned),
@@ -112,7 +130,7 @@ def audit(root,workers=1):
                     data=path.read_bytes();cell_hash.update(path.name.encode());cell_hash.update(data)
                     rows=list(csv.DictReader(io.StringIO(data.decode()),delimiter='\t'))
                     if len(rows)!=1:raise ValueError(f'incomplete cell {path}')
-                    row=rows[0];batch.append(row)
+                    row=rows[0];validate_retention_row(row, required_artifacts);batch.append(row)
                     key=tuple(row[c] for c in ('reference_sha256','size','encoder','ss','nominal_q'))
                     if key in seen:raise ValueError(f'duplicate {key}')
                     seen.add(key)
@@ -148,7 +166,8 @@ def audit(root,workers=1):
         write_record(root/'AUDITED.json',dict(cells=count,artifacts=len(verified),cells_sha256=cell_hash.hexdigest(),
             audit_source_sha256=audit_source,coverage_sha256=coverage_hash,artifact_workers=workers,
             zstd_binary_sha256=digest(Path(zstd_program())),independent_jpeg_decoder='Pillow/libjpeg',
-            pillow_version=PIL.__version__,libjpeg_version=features.version('jpg')))
+            pillow_version=PIL.__version__,libjpeg_version=features.version('jpg'),
+            retained_artifact_columns=list(required_artifacts)))
         progress('complete')
     except BaseException as error:
         progress('failed',f'{type(error).__name__}: {error}')

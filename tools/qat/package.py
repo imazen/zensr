@@ -113,7 +113,7 @@ def main(a):
         models=catalog,
         not_uploaded=dict(
             unselected_optimizer_checkpoints=not_uploaded,
-            metric_artifacts="Exact RGB8 outputs, JPEG/reference inputs and per-pixel Butteraugli maps stay in the experiment archive, outside git and this model-only package.",
+            metric_artifacts="JPEG/reference inputs and scores stay in the experiment archive, outside this model-only package. Historical experiments may also retain RGB outputs/maps; current routine scoring discards those diagnostics.",
         ),
         quantized_format="Q8PC v1: per-output-channel signed int8 conv weights; f32 scales/biases/PReLU; f32 execution",
         status="research candidates; current f16 serving default is unchanged",

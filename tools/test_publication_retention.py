@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 import publication_routing_retention as retention
+from publication_routing_cells import retained_artifact_columns, validate_retention_row
 
 
 class ScoredOutputRetention(unittest.TestCase):
@@ -123,6 +124,21 @@ class ScoredOutputRetention(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'plan changed'):
             retention.apply(self.root, self.output)
         self.assertTrue((self.root / self.row['restored_artifact']).exists())
+
+    def test_score_only_policy_is_explicit_and_legacy_requirements_remain(self):
+        identity = self.root / 'IDENTITY.tsv'
+        identity.write_text('binary\tfrozen\n')
+        self.assertEqual(len(retained_artifact_columns(self.root)), 6)
+        identity.write_text('binary\tfrozen\nretention\tscores-only-v1\n')
+        columns = retained_artifact_columns(self.root)
+        self.assertEqual(columns, retention.KEEP)
+        with self.assertRaisesRegex(ValueError, 'unexpectedly retains'):
+            validate_retention_row(self.row, columns)
+        blank = dict(self.row, **{k: '' for k in retention.OUTPUTS})
+        validate_retention_row(blank, columns)
+        identity.write_text('retention\tunknown\n')
+        with self.assertRaisesRegex(ValueError, 'unknown artifact retention'):
+            retained_artifact_columns(self.root)
 
 
 if __name__ == '__main__':

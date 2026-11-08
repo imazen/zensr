@@ -159,22 +159,24 @@ fn finite(v: f64) -> String {
     format!("{v:.12}")
 }
 
-fn metric_columns(root: &Path, reference: &Rgb8Img, image: &Rgb8Img) -> Vec<String> {
+fn metric_columns(reference: &Rgb8Img, image: &Rgb8Img) -> Vec<String> {
     use rgb::FromSlice;
     let result = butteraugli::butteraugli(
         imgref::Img::new(reference.px.as_rgb(), reference.w, reference.h),
         imgref::Img::new(image.px.as_rgb(), image.w, image.h),
-        &butteraugli::ButteraugliParams::default().with_compute_diffmap(true),
+        &butteraugli::ButteraugliParams::default().with_compute_diffmap(false),
     )
     .expect("butteraugli");
-    let map = result.diffmap.as_ref().expect("requested difference map");
-    let bytes: Vec<u8> = map.buf().iter().flat_map(|x| x.to_le_bytes()).collect();
+    assert!(
+        result.diffmap.is_none(),
+        "score-only metric must not return a map"
+    );
     let mut out = vec![
         finite(ssim2(reference, image)),
         finite(psnr_rgb8(reference, image)),
         finite(result.score),
         finite(result.pnorm_3),
-        artifact(root, &bytes, "butter-f32le"),
+        String::new(), // No diagnostic map is generated or retained.
     ];
     // Preserve per-channel squared-error sums, not only aggregate PSNR.
     for c in 0..3 {
@@ -301,7 +303,7 @@ fn main() {
             "encoder_dependencies_sha256\t{}\n",
             sha(encoder_versions.as_bytes())
         );
-    let identity = identity + &format!("exclusions\t{}\n", a[7]);
+    let identity = identity + &format!("exclusions\t{}\nretention\tscores-only-v1\n", a[7]);
     let run_id = root.join("IDENTITY.tsv");
     if run_id.exists() {
         assert_eq!(fs::read_to_string(&run_id).unwrap(), identity);
@@ -403,7 +405,7 @@ fn main() {
                 let data=fs::read(&jpg).unwrap();
                 let jpg_art=artifact(&root,&data,"jpg");
                 let decoded=encoding::zj_decode(&data,false);
-                let decode_art=artifact(&root,&decoded.px,"rgb8");
+                let decode_art=String::new(); // Pixels live only until scoring finishes.
                 let coef=zenjpeg::decoder::Decoder::new().decode_coefficients(&data,enough::Unstoppable).unwrap();
                 let plane=&coef.components[0];
                 let cf=coefficients::features(&plane.coeffs,plane.coeffs.len()/64,plane.blocks_wide).unwrap();
@@ -421,7 +423,7 @@ fn main() {
                 let restored=zensr_zenjpeg::restore_jpeg(&data,&model,&zensr_zenjpeg::RestoreConfig::default()
                     .with_threads(1).with_high_q_identity(false)).unwrap();
                 let output=Rgb8Img{px:restored.to_rgb8(),w,h};
-                let out_art=artifact(&root,&output.px,"rgb8");
+                let out_art=String::new(); // Retain scalar results, not per-case RGB buffers.
                 let mut values=vec![r[1].into(),r[2].into(),r[3].into(),r[4].into(),r[6].into(),r[9].into(),
                     w.to_string(),h.to_string(),size.to_string(),encoder.into(),ss.into(),q.to_string(),jpg_art,
                     ref_art.clone(),decode_art,out_art,info.encoder_family.clone(),info.quality_scale.clone(),
@@ -436,8 +438,8 @@ fn main() {
                 for v in [g.clamped_frac,g.mean_alpha,g.roundtrip_mae,g.fallback_blend] {values.push(finite(v as f64));}
                 assert_eq!(restored.report.projection.len(),3,"incomplete projection");
                 for p in &restored.report.projection {values.push(finite(p.clamped_frac as f64));}
-                values.extend(metric_columns(&root,&reference,&decoded));
-                values.extend(metric_columns(&root,&reference,&output));
+                values.extend(metric_columns(&reference,&decoded));
+                values.extend(metric_columns(&reference,&output));
                 let head=header();assert_eq!(values.len(),head.trim_end().split('\t').count());
                 let partial=cell.with_extension("partial");
                 fs::write(&partial,head+&values.join("\t")+"\n").unwrap();
@@ -462,4 +464,27 @@ fn main() {
         format!("{completed}/{required} required cells completed\n"),
     )
     .unwrap();
+}
+
+#[cfg(test)]
+mod scoring_tests {
+    use super::*;
+
+    #[test]
+    fn identity_scores_are_retained_without_a_diagnostic_map() {
+        let image = Rgb8Img {
+            px: vec![128; 32 * 32 * 3],
+            w: 32,
+            h: 32,
+        };
+        let columns = metric_columns(&image, &image);
+        assert_eq!(columns.len(), 8);
+        assert_eq!(columns[0].parse::<f64>().unwrap(), 100.0);
+        assert_eq!(columns[2].parse::<f64>().unwrap(), 0.0);
+        assert_eq!(columns[3].parse::<f64>().unwrap(), 0.0);
+        assert!(columns[4].is_empty());
+        assert!(columns[5..]
+            .iter()
+            .all(|v| v.parse::<f64>().unwrap() == 0.0));
+    }
 }

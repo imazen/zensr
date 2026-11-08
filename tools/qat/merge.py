@@ -55,7 +55,8 @@ def main(a):
         for root,rows in [(a.primary,first),(a.control,extra)]:
             for row in rows:
                 row=row.copy()
-                for key in ARTIFACTS:row[key]=os.path.relpath(root/row[key],a.output)
+                for key in ARTIFACTS:
+                    if row[key]:row[key]=os.path.relpath(root/row[key],a.output)
                 writer.writerow(row)
     (a.output/'inputs.tsv').write_bytes((a.primary/'inputs.tsv').read_bytes())
     (a.output/'IDENTITY.tsv').write_text('primary_identity_sha256\t'+sha(a.primary/'IDENTITY.tsv')+'\ncontrol_identity_sha256\t'+sha(a.control/'IDENTITY.tsv')+'\ninputs_sha256\t'+one['inputs_sha256']+'\ntraining_plan_sha256\t'+one['training_plan_sha256']+'\nbaseline\t'+one['baseline']+'\n')
