@@ -58,6 +58,30 @@ def main(args):
     ):
         raise ValueError("wrong frozen export plan")
     plan = json.loads((exports / "PLAN.json").read_text())
+    shared = root / "exports-shared-v1"
+    if sha(shared / "PLAN.json") != identity["plan_sha256"]:
+        raise ValueError("shared evaluation graph plan differs")
+    shared_plan = json.loads((shared / "PLAN.json").read_text())
+    retained_auxiliary = []
+    auxiliary = [
+        (exports / (name + "-audit.onnx"), metadata["sha256"])
+        for name, metadata in plan["audited_exports"].items()
+    ] + [
+        (shared / "PLAN.json", identity["plan_sha256"]),
+        (shared / "joint.onnx", identity["joint_sha256"]),
+        (shared / "joint-map.json", shared_plan["joint_map_sha256"]),
+    ]
+    for path, expected_hash in auxiliary:
+        if sha(path) != expected_hash:
+            raise ValueError("retained auxiliary graph identity differs")
+        retained_auxiliary.append(
+            dict(
+                path=str(path.relative_to(root)),
+                bytes=path.stat().st_size,
+                sha256=expected_hash,
+                uploaded=False,
+            )
+        )
     catalog = []
     for name, metadata in plan["exports"].items():
         source = exports / (name + ".onnx")
@@ -100,6 +124,7 @@ def main(args):
         layout="ONNX opset 13, RGB float NCHW [1,3,H,W], x1 output with input residual already added; guard/projection outside model",
         status="Frozen PTQ format comparison; historical model provenance limits remain; no QAT or serving-default adoption",
         historical_reference="Original unrounded f32 weights included for retention; not used by this experiment",
+        retained_auxiliary_graphs=retained_auxiliary,
         not_uploaded=[
             "JPEG/reference pixels",
             "raw profiler captures and machine logs",

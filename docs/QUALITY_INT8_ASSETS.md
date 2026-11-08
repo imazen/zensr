@@ -49,6 +49,8 @@ code grid. Its serialized weights are F32. It is a precision control.
 The package excludes JPEG/reference pixels, raw profiler captures, machine
 logs, auxiliary range-counter/shared graphs and raw timing-round objects.
 Those remain in the retained experiment. `MODEL-CATALOG.json` records exclusions.
+It also identifies each retained auxiliary graph/map by relative path, byte count
+and SHA-256 so those files can be retrieved separately.
 
 ## Reproduce an export
 
