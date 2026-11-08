@@ -118,3 +118,20 @@ jobs:
         run: cargo clippy -p zensr-micro -p zensr-zenjpeg --all-targets -- -D warnings
       - name: Clippy (internals)
         run: cargo clippy -p zensr-micro --features internals,px --all-targets -- -D warnings
+
+  qat:
+    name: Canon4 QAT and packed-weight checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Isolated CPU training-tool dependencies
+        run: |
+          python3 -m venv .venv-qat-ci
+          .venv-qat-ci/bin/python -m pip install torch==2.14.1+cpu --index-url https://download.pytorch.org/whl/cpu
+          .venv-qat-ci/bin/python -m pip install numpy==2.5.2
+      - name: QAT gradient, golden and serialization checks
+        run: |
+          mkdir -p "$HOME/tmp/qat-ci"
+          export TMPDIR="$HOME/tmp/qat-ci"
+          export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2
+          .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat.py
