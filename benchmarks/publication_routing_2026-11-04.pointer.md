@@ -36,6 +36,16 @@ the separately retained coverage and contract files. It preserves measurements,
 not the bulk pixel artifacts. Removing pixel artifacts would remove direct
 replay/inspection evidence; none was deleted by this inventory.
 
+The frozen harness requests a Butteraugli difference map for both decoded and
+restored images and saves every map as compressed little-endian f32. These are
+spatial diagnostics for inspecting damage, not router inputs. Analysis reads
+the scalar Butteraugli scores from cell tables and includes map paths in its
+worst-case records; fitting and runtime do not consume map pixels. Given the
+retained reference and output RGB buffers plus the exact metric implementation,
+maps can be regenerated. Saving every map was broader diagnostic retention than
+the routing analysis needed. The artifact-byte total above combines JPEGs,
+RGB buffers and maps; a map-only byte total has not been measured.
+
 ## Frozen inputs
 
 | Input | SHA256 |
