@@ -67,6 +67,8 @@ def main(args):
         catalog.append(dict(name=name, bytes=source.stat().st_size, **metadata))
     for name in ["weights.raw", "gold-input.raw", "gold-float.raw", "PLAN.json"]:
         copy(exports / name, "models/" + name)
+    for name in ["PLAN.json", "gold-input.raw", "gold-float.raw"]:
+        copy(root / "exports-v1" / name, "calibration/" + name)
     copy(root / "model/weights_f16.raw", "baseline/weights_f16.raw")
     copy(root / "model/weights.raw", "historical-reference/original-unrounded-f32.raw")
     copy(root / "model/meta.json", "historical-reference/meta.json")

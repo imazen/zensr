@@ -120,3 +120,5 @@ the actual frozen QLinearConv graph against every RGB8 code in every channel.
 This is separate from the table's native normalization/roundtrip field;
 internal weight/activation quantization and final RGB errors remain full-study
 measurements. Keeping an original float head is not a trained post-refiner.
+
+[Model asset layout and export reproduction](QUALITY_INT8_ASSETS.md).
