@@ -30,6 +30,55 @@ that is a dated inventory, not 47 models distributed in today's checkout.
 It also found corrupted targets in the older quality-model fine-tune lineage.
 Canon4 was trained from scratch and does not inherit those weights.
 
+## Quality-model origin and current evidence
+
+`dejpeg7_graphics` is a zensr fine-tune with external initialization, not a
+from-scratch model. The retained preview `MODEL-CATALOG.json` records this
+parent chain:
+
+```text
+2xNomosUni_compact_multijpg_ldl
+  → dejpeg_1x → dejpeg2_off → dejpeg2b_off → dejpeg3_off
+  → dejpeg4_policy → dejpeg7_graphics
+```
+
+The original [NomosUni model card](https://huggingface.co/Phips/2xNomosUni_compact_multijpg_ldl)
+credits Philip Hofmann, gives a January 11, 2024 release date and lists
+CC BY 4.0. It uses SRVGGNetCompact for ×2 upscaling. zensr's
+[initialization loader](../tools/train_people.py) loads matching `body.*`
+tensors by key and shape, allowing reuse of a trunk with a different output
+scale. The retained metadata names the parents but leaves trainer/dataset
+details unknown; this chain is not a complete reproducible training recipe.
+The deployed ×1 model has 18 convolutions, 64 hidden channels and 595,459
+parameters, stored in 1,190,918 bytes of f16 weights.
+
+The [November 8 precision comparison](../benchmarks/quality_int8_2026-11-08.md)
+also measures the native float model with the deployed f16-expanded weights.
+On 2,720 primary JPEG cases from 17 origins at long side 512, forced repair
+with guard/coefficient projection gives **+2.86600 origin-balanced mean
+SSIMULACRA2**, **257/2,720 harm cases (9.45%)**, and **−6.62849 worst gain**
+against decoded JPEG. Routing and the near-pristine gate are off. These are
+reused inputs, not a fresh generalization certification or a comparison to
+modern external models. The earlier audit's corrupted-target finding remains
+a lineage limitation; its impact on these weights has not been isolated.
+
+## Research after the project's first commit
+
+The first repository commit is `cd1b9f4` (July 21, 2026). Primary-source review
+on November 8 found these later papers worth evaluating:
+
+| Work | Method and relevance | Limits of this comparison |
+|---|---|---|
+| [Wavelet-domain MeanFlow JPEG restoration](https://arxiv.org/abs/2608.28730), August 28 | Invertible Haar transform and residual generation in one or two network evaluations | 65M parameters; authors report GPU throughput and LPIPS results. The abstract still says code will be released soon. |
+| [PixelIR](https://arxiv.org/abs/2608.30782), August 31 | Separates faithful reconstruction from generated detail; useful for an explicit fidelity/perception control | 32.9M-parameter SR student; generated detail is not a guarantee of recovered source content. |
+| [FreeTransformSR v5](https://arxiv.org/abs/2609.05912v5), September 5, revised October 30 | Low-rank learnable transforms with adaptive local processing | Authors report 634K parameters at ×2 and 653K at ×4 on classical SR benchmarks, not our ×1 JPEG repair task. |
+
+These are research candidates, not measured replacements. We have not run them
+on zensr's cohort, and their PSNR/LPIPS or GPU results cannot establish a
+SSIMULACRA2 or CPU advantage here. A clean split-respecting reconstruction
+baseline followed by a controlled architecture comparison is the recommended
+next experiment; it has not been performed by this literature review.
+
 ## Retained artifact locations
 
 Read-only filesystem checks on **2026-11-07** found the following under each
