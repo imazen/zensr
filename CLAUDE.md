@@ -2,6 +2,11 @@
 
 ## Known Bugs
 
+- Threaded precision timing correctly distinguishes confirmation registration in
+  the parent from actual child execution. The first-process replay mode initially
+  rejected the registration callback before any timings. Two context regressions
+  cover deferral in the parent and mandatory exact checks in child zero.
+
 - Model archive packaging no longer imports pair-image processing dependencies.
   A minimal-environment admission test exposed an unnecessary OpenCV import;
   the existing archive helpers now live in a standard-library-only module.

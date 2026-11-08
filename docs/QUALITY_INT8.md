@@ -122,3 +122,9 @@ internal weight/activation quantization and final RGB errors remain full-study
 measurements. Keeping an original float head is not a trained post-refiner.
 
 [Model asset layout and export reproduction](QUALITY_INT8_ASSETS.md).
+
+Modern confirmation invokes registration in the parent before dispatching its
+three children. First-process parity mode defers that registration-only check;
+child zero still checks every model/size before timing. Parent/child context
+regressions cover this distinction. The initial four-thread launch failed at
+registration before measuring any calls; its log is retained.

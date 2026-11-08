@@ -164,5 +164,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: tools/quality-int8/runtime -> target
+      - name: Threaded confirmation context regression checks
+        run: cargo test --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin scaling
       - name: Compile and lint every comparison executable
         run: cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings

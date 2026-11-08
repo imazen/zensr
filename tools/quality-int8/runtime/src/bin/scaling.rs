@@ -8,15 +8,30 @@ use zenbench::prelude::*;
 // Zenbench 0.1.11 runs children sequentially and stops if a child fails.
 // The optional mode checks every model/size in child zero before any timings;
 // later children retain the same frozen binary, models and CPU boundary.
-fn check_threads_in_this_process() -> bool {
-    match std::env::var("ZENSR_THREAD_PARITY") {
-        Err(std::env::VarError::NotPresent) => true,
-        Ok(mode) if mode == "each-process" => true,
-        Ok(mode) if mode == "first-process" => {
-            assert_eq!(std::env::var("ZENBENCH_SUBPROCESS").as_deref(), Ok("1"));
-            assert_eq!(std::env::var("ZENBENCH_PROCESSES").as_deref(), Ok("3"));
-            let result = std::env::var("ZENBENCH_RESULT_PATH").expect("result path");
-            let path = Path::new(&result);
+fn checks_in_context(
+    mode: Option<&str>,
+    subprocess: Option<&str>,
+    processes: Option<&str>,
+    result: Option<&Path>,
+    args: &[String],
+) -> bool {
+    match mode {
+        None | Some("each-process") => true,
+        Some("first-process") => {
+            if subprocess.is_none() {
+                // Modern Confirm/Evidence registers callbacks before dispatching.
+                assert!(
+                    args.iter()
+                        .any(|v| v == "--mode=confirm" || v == "--mode=evidence")
+                        && args.iter().any(|v| v == "--processes=3")
+                        && !args.iter().any(|v| v == "--dry-run"),
+                    "first-process parity requires three-process confirmation context"
+                );
+                return false;
+            }
+            assert_eq!(subprocess, Some("1"));
+            assert_eq!(processes, Some("3"));
+            let path = result.expect("result path");
             let name = path.file_name().unwrap().to_str().unwrap();
             assert!(matches!(name, "0.json.gz" | "1.json.gz" | "2.json.gz"));
             assert!(
@@ -28,6 +43,43 @@ fn check_threads_in_this_process() -> bool {
         other => panic!("unsupported explicit parity mode: {other:?}"),
     }
 }
+fn check_threads_in_this_process() -> bool {
+    let mode = std::env::var("ZENSR_THREAD_PARITY").ok();
+    let subprocess = std::env::var("ZENBENCH_SUBPROCESS").ok();
+    let processes = std::env::var("ZENBENCH_PROCESSES").ok();
+    let result = std::env::var("ZENBENCH_RESULT_PATH")
+        .ok()
+        .map(std::path::PathBuf::from);
+    checks_in_context(
+        mode.as_deref(),
+        subprocess.as_deref(),
+        processes.as_deref(),
+        result.as_deref(),
+        &std::env::args().collect::<Vec<_>>(),
+    )
+}
+#[test]
+fn confirmation_registration_defers_checks_to_the_child() {
+    let args = vec!["--mode=confirm".to_owned(), "--processes=3".to_owned()];
+    assert!(!checks_in_context(
+        Some("first-process"),
+        None,
+        None,
+        None,
+        &args
+    ));
+}
+#[test]
+fn first_child_always_performs_exact_output_checks() {
+    assert!(checks_in_context(
+        Some("first-process"),
+        Some("1"),
+        Some("3"),
+        Some(Path::new("0.json.gz")),
+        &[]
+    ));
+}
+
 fn costs(suite: &mut Suite) {
     let check_threads = check_threads_in_this_process();
     let root = std::env::var("ZENSR_QUALITY_EXPORTS").expect("ZENSR_QUALITY_EXPORTS");
