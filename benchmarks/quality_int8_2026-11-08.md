@@ -1,10 +1,11 @@
 # Quality-model precision and inference comparison — 2026-11-08
 
-The full quality cohort is complete. The four-thread timing studies are still
-running. This report contains all quality results and the completed
-single-thread timing blocks on both CPUs.
-The observed integer path is slower, but every process has a resource-gate
-warning: **zenbench marks confirmation invalid**. These are descriptive
+The full quality cohort and all five timing blocks are complete. The tested
+activation-quantized formats lose quality and take longer than native float in
+these observed measurements. Original float output layers recover part of the
+loss. Native float remains the serving implementation.
+The observed integer path is slower, but every timing block has resource-gate
+warnings: **zenbench marks confirmation invalid**. These are descriptive
 shared-host measurements, not a clean confirmed performance claim.
 
 ## Complete quality comparison
@@ -229,6 +230,52 @@ Observed arithmetic means of process means, in milliseconds:
 
 Retained report: `latency-wsl-original.json`. The wrapper memory observation covers the
 complete matrix and setup; it is not per-model memory.
+
+## Four-thread inference on both CPUs
+
+Three fresh processes per host, with five measured rounds at 512 pixels in
+all six processes. The 265K also completes five rounds at 1024 in each process.
+The 7950X/WSL2 1024-pixel groups complete **4, 3 and 3 rounds** within the unchanged
+1800-second group wall limit. Actual retained sample counts remain in the JSON.
+All processes are unreliable under the resource/noise gates, so confirmation
+is invalid. No process or arm is removed from these means.
+
+The same generic x86-64 binary runs on both hosts, with four execution threads.
+The 265K uses cgroup-enforced P-cores 0–3; WSL2 uses guest CPUs 0, 2, 4 and 6.
+Models/input tensors are prepared before timing. Native uses its serving tile
+path. These are separate build blocks from the original single-thread study;
+no cross-build ratio is presented as a pure threading speedup.
+
+Observed arithmetic means of process means, in milliseconds:
+
+| Model | 265K, 512 | 7950X/WSL2, 512 | 265K, 1024 | 7950X/WSL2, 1024 |
+|---|---:|---:|---:|---:|
+| Native float, tiled | 1075.735 | 1011.981 | 4242.399 | 3677.003 |
+| Tract float | 2401.228 | 3822.082 | 10515.037 | 16755.359 |
+| Rounded-weight float | 2414.796 | 3846.003 | 10459.517 | 16700.800 |
+| QLinearConv | 8348.855 | 11402.509 | 40199.424 | 63096.263 |
+| QLinearConv + 1 F32 | 8167.452 | 11104.994 | 39265.289 | 58772.867 |
+| QLinearConv + 2 F32 | 7853.036 | 10752.915 | 37394.554 | 58641.328 |
+| ConvInteger | 5847.033 | 8038.603 | 29581.930 | 48558.978 |
+| ConvInteger + 1 F32 | 5707.880 | 7759.958 | 28666.810 | 46754.340 |
+| ConvInteger + 2 F32 | 5555.342 | 7627.477 | 27632.213 | 45592.189 |
+
+All nine arms pass exact one-thread/four-thread output-bit checks at both sizes
+in child zero on each host. Later children retain the frozen binary, models and
+CPU boundary. The reference comparison and full quality table use the same
+plain model bytes; timing does not use the shared/instrumented graphs.
+
+```text
+265K:
+run-heavy: done rc=2 6484s | peak-RSS 1.71GiB | min-avail 21403MiB | peak-load 16.06
+7950X / WSL2:
+run-heavy: done rc=2 8078s | peak-RSS 1.93GiB | min-avail 4295MiB | peak-load 15.47
+```
+
+These resource observations cover the whole multi-model experiment and setup,
+not per-model runtime memory. Binary SHA-256:
+`551ab32e1db68f5c76e06e666c63dae93b0eb57a9f63ea8fe12b555791698c4e`.
+Retained reports: `latency-i265-threads.json`, `latency-wsl-threads.json`.
 
 ## Input precision and executed kernels
 

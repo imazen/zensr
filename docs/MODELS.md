@@ -199,9 +199,10 @@ convolutions improves the ConvInteger delta to −3.57714, with a worst loss of
 recover the native result. A separately trained post-refiner and activation-QAT
 for this larger model remain untested.
 
-The fixed-input independent ONNX reference check agrees with both variants with 18 integer convolutions
-Tract outputs bit for bit. PReLU and residual addition remain float. Completed single-thread timing blocks also show the
-tested integer paths taking longer than native float. The
+On the fixed input, ONNX reference and Tract outputs match bit for bit for both
+variants with 18 integer convolutions. PReLU and residual addition remain float.
+Completed single- and four-thread timing blocks show the tested integer paths
+taking longer than native float. The
 [complete comparison](../benchmarks/quality_int8_2026-11-08.md) records RGB error
 histograms, harm frequency, tails, secondary sizes and timing reliability limits.
 [Asset layout and export reproduction](QUALITY_INT8_ASSETS.md).

@@ -10,6 +10,16 @@ The historical quality model retains the target/provenance limitations in
 Reused evaluation inputs do not establish unseen-origin quality. No serving
 model or backend is adopted by this package.
 
+The complete 17-origin, 2,720-case primary comparison finds mean SSIM2 losses
+of 4.71186 for QLinearConv and 4.61554 for ConvInteger against native float after
+guard/coefficient projection. Retaining two original float output layers
+reduces those losses to 4.17339 and 3.57714. The tested integer paths also take
+longer in the observed single- and four-thread measurements on both CPUs;
+resource/noise flags leave formal confirmation invalid. These are forced-repair
+results. The [complete report](https://github.com/imazen/zensr/blob/main/benchmarks/quality_int8_2026-11-08.md)
+retains harm frequency, worst losses and RGB errors. Native float remains the
+serving implementation.
+
 ## Files
 
 | ONNX file | Convolution representation | Bytes |
