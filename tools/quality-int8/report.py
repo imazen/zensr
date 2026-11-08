@@ -241,7 +241,7 @@ def main(a):
         results_sha256=sha(a.root / "results.tsv"),
         report_tool_sha256=sha(__file__),
         cohorts={},
-        limitations="Historical quality model; reused evaluation inputs do not establish unseen-source generalization. Frozen PTQ, not QAT. No model/default selection. Only model input range exceedances are counted; QLinearConv internal output saturation is not instrumented. RGB8 error histograms are pixel-weighted; SSIM2 changes are origin-balanced. No new artifact audit.",
+        limitations="Historical quality model; reused evaluation inputs do not establish unseen-source generalization. Frozen PTQ, not QAT. No model/default selection. Range counters cover inputs to explicit QuantizeLinear nodes; QLinearConv internal output saturation is not instrumented. RGB8 error histograms are pixel-weighted; SSIM2 changes are origin-balanced. No new artifact audit.",
         input_rgb8_roundtrip_max=max(
             float(r["input_rgb8_roundtrip_max"]) for r in rows
         ),
