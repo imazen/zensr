@@ -45,6 +45,22 @@ class ContainerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "geometry"):
                 m.pack(path, "manual", "quality")
 
+    def test_f32_export_convention_and_span_layout(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as scratch:
+            path = Path(scratch)
+            meta = dict(arch="compact", nf=4, nc=0, scale=1, space="rgb", f16_goldens=False)
+            (path / "meta.json").write_text(json.dumps(meta))
+            (path / "weights.raw").write_bytes(struct.pack("<227f", *([0.0] * 227)))
+            info = m.inspect_bytes(m.pack(path, "manual", "quality"))
+            self.assertEqual(info["encoding"], "f32")
+            self.assertEqual(info["weights_bytes"], 908)
+            meta.update(arch="span48", nf=48, nc=6, scale=2)
+            count = 28*48 + 19*(9*48*48+48) + 4*48*48+48 + 27*48*4+3*4
+            (path / "meta.json").write_text(json.dumps(meta))
+            (path / "weights.raw").write_bytes(bytes(count*4))
+            info = m.inspect_bytes(m.pack(path, "manual", "quality"))
+            self.assertEqual((info["architecture"], info["scale"]), ("span48",2))
+
     def test_metadata_is_part_of_calibration_identity(self):
         data = m.pack(MODEL, "canon4", "realtime")
         _, _, meta_size, policy_size, _ = struct.unpack_from("<8sIIQQ", data)

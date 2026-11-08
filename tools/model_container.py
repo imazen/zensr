@@ -95,7 +95,7 @@ def pack(directory, policy, budget):
     meta = json.loads((directory / "meta.json").read_text())
     arch = {"compact": 1, "span48": 2}[meta["arch"]]
     encoding = 1 if meta.get("f16_goldens", False) else 2
-    filename = "weights_f16.raw" if encoding == 1 else "weights_f32.raw"
+    filename = "weights_f16.raw" if encoding == 1 else "weights.raw"
     weight_path = directory / filename
     if weight_path.stat().st_size > LIMIT:
         raise ValueError("weights exceed runtime size limit")
