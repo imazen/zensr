@@ -380,3 +380,9 @@ qat-evaluator-tests:
 
 qat-evaluate *args:
     tools/qat/runtime/target/release/zensr-qat-eval {{args}}
+
+qat-report *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/report.py {{args}}
+
+qat-report-tests:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_qat_report.py
