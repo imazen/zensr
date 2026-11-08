@@ -1,6 +1,6 @@
 import unittest
 from decimal import Decimal
-from qat import report
+from qat import report, merge
 
 class ReportTests(unittest.TestCase):
     def test_decimal_harm_boundary(self):
@@ -33,5 +33,22 @@ class ReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'coverage'):report.summarize(rows[:-1],'forced')
         rows[-1]['default_restore']='0'
         with self.assertRaisesRegex(ValueError,'control'):report.summarize(rows,'forced')
+
+class MergeTests(unittest.TestCase):
+    def fixtures(self):
+        base=dict(id='one',arm='baseline',origin='a',source_id='1007',identity_ssim2='70',
+                  default_restore='1',forced_ssim2='80',routed_ssim2='80')
+        extra=dict(base,arm='ptq8-gpu')
+        return [base],[base.copy(),extra]
+
+    def test_exact_repeated_baseline_is_required(self):
+        first,second=self.fixtures()
+        self.assertEqual(len(merge.combine(first,second)),1)
+        second[0]['forced_ssim2']='80.00000000000001'
+        with self.assertRaisesRegex(ValueError,'baseline differs'):merge.combine(first,second)
+
+    def test_extra_control_cannot_change_routing(self):
+        first,second=self.fixtures();second[1]['default_restore']='0'
+        with self.assertRaisesRegex(ValueError,'control differs'):merge.combine(first,second)
 
 if __name__=='__main__':unittest.main()

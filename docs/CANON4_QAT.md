@@ -70,3 +70,18 @@ slopes except after the final convolution. Codes are -127..127. Scales must be
 finite and positive. No entropy compression is applied. The exported
 `weights.raw` is the exact f32 expansion for existing runtimes, not the compact
 storage-size claim. This experimental format is not yet a `.zensr` encoding.
+
+## Numerical-control amendment, before reading external candidate scores
+
+The explicit CPU/GPU conversion check found identical initial INT8 codes but
+seven differing f32 scale words: 1,025 expanded coefficients differ, with a
+maximum absolute difference of 2.9802322387695312e-8. Add an untrained
+GPU-exported PTQ control using the unchanged baseline. Evaluate it on the same
+frozen inputs, with the same runtime/dependency graph, threads, routing and
+metrics. Retain the original CPU PTQ control as well. No training, checkpoint
+selection, evaluation-source selection or routing calibration changes.
+
+The extra evaluator run repeats the baseline. Combining results requires exact
+agreement of its baseline scores and control fields with the original run;
+source binary identities remain separate. This isolates conversion rounding
+from QAT's measured effect rather than attributing both to fine-tuning.

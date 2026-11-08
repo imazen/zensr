@@ -84,7 +84,7 @@ def summarize(rows,mode):
     comparisons={}
     for seed in [7,17,29]:
         q={r['id']:r for r in arms[f'qat8-s{seed}-selected']}
-        for control in ['ptq8',f'float-s{seed}-selected']:
+        for control in ['ptq8',f'float-s{seed}-selected']+(['ptq8-gpu'] if 'ptq8-gpu' in arms else []):
             deltas=[(r['origin'],float(Decimal(q[r['id']][score])-Decimal(r[score]))) for r in arms[control]]
             means=balanced(deltas)
             comparisons[f'qat8-s{seed}-vs-{control}']=dict(mean=statistics.fmean(means.values()),paired_origin_bootstrap_95=interval(means))
@@ -92,7 +92,7 @@ def summarize(rows,mode):
     # together, preserving each seed's matched float-control pairing.
     joint={}
     origins=sorted({r['origin'] for r in rows})
-    for kind in ['baseline','ptq8','matched_float']:
+    for kind in ['baseline','ptq8','matched_float']+(['ptq8-gpu'] if 'ptq8-gpu' in arms else []):
         matrix=[]
         for seed in [7,17,29]:
             q={r['id']:r for r in arms[f'qat8-s{seed}-selected']}

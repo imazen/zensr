@@ -386,3 +386,10 @@ qat-report *args:
 
 qat-report-tests:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_qat_report.py
+
+# Requires a released CUDA device; never silently falls back to CPU.
+qat-backend-check *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/check_backends.py {{args}}
+
+qat-merge *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/merge.py {{args}}
