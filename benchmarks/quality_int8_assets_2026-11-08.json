@@ -1,0 +1,38 @@
+{
+  "release_id": 437464697,
+  "tag": "models-preview-2026-11-07",
+  "draft": true,
+  "url": "https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e",
+  "assets": [
+    {
+      "id": 723462057,
+      "name": "quality-int8-ptq-20261108.tar.zst",
+      "bytes": 16530407,
+      "sha256": "14afbbad20d14fd1b8679984cee3a3f5abc8147041fb69120d4ced2536e06c79",
+      "state": "uploaded"
+    },
+    {
+      "id": 723462052,
+      "name": "QUALITY-INT8-20261108.json",
+      "bytes": 6034,
+      "sha256": "cc4d6c7f380d2175a96650cfb7754dc941f1e3b69b3597d0989dae2d3faba02a",
+      "state": "uploaded"
+    },
+    {
+      "id": 723462055,
+      "name": "QUALITY-INT8-README.md",
+      "bytes": 5237,
+      "sha256": "40a735574999d27acc5c36d40b986deca8936c734693a6faf37cf79b8d5daa89",
+      "state": "uploaded"
+    },
+    {
+      "id": 723462053,
+      "name": "QUALITY-INT8-SHA256SUMS",
+      "bytes": 282,
+      "sha256": "418a0a5fc2fed05b728c68f9c895bc4ed48bd4d728f380d08b9d5b19ee83cf67",
+      "state": "uploaded"
+    }
+  ],
+  "verified_archive_members": 35,
+  "onnx_models": 8
+}

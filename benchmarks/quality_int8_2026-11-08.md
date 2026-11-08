@@ -299,3 +299,21 @@ and model binaries remain outside git.
 This historical model retains the training/provenance limitations in
 [Models](../docs/MODELS.md). Reused quality inputs do not establish unseen-origin
 generalization. No new serving backend, model or routing default is selected.
+
+## Model preview assets
+
+The existing [model preview draft](https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e)
+contains `quality-int8-ptq-20261108.tar.zst` (16,530,407 bytes), the model catalog,
+README and checksums. GitHub's uploaded sizes and server SHA-256 digests match
+all four local assets; the release remains a draft.
+[Upload verification](quality_int8_assets_2026-11-08.json).
+
+All 35 regular archive members match their source hashes. The bundle contains
+eight ONNX graphs, retained f16 and expanded-f32 baselines, historical unrounded
+weights, frozen calibration ranges, full quality rows/summary and all five
+latency summaries. The catalog separately identifies 19 retained auxiliary
+graphs/maps with paths, sizes and hashes. JPEG/reference pixels, machine logs,
+raw profiler/round objects and reference golden tensors remain outside the
+model-only upload. Their exclusion does not remove any rows from the reports.
+
+Archive SHA-256: `14afbbad20d14fd1b8679984cee3a3f5abc8147041fb69120d4ced2536e06c79`.
