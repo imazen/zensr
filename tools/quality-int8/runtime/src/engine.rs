@@ -2,13 +2,16 @@ use std::{fs, path::Path};
 use tract_onnx::prelude::*;
 use tract_onnx::tract_core::internal::anyhow;
 use zensr_micro::adopted::AdoptedModel;
-pub(crate) const ARMS: [&str; 6] = [
+pub(crate) const ARMS: [&str; 9] = [
     "native",
     "float",
     "weight-int8",
     "int8",
     "final-f32",
     "final2-f32",
+    "integer-f32",
+    "integer-final-f32",
+    "integer-final2-f32",
 ];
 pub(crate) fn floats(path: &Path) -> Vec<f32> {
     let b = fs::read(path).unwrap();
@@ -25,6 +28,25 @@ pub(crate) enum Engine {
 }
 impl Engine {
     pub(crate) fn load(root: &Path, name: &str, h: usize, w: usize) -> TractResult<Self> {
+        Self::load_threads(root, name, h, w, 1)
+    }
+    pub(crate) fn load_threads(
+        root: &Path,
+        name: &str,
+        h: usize,
+        w: usize,
+        threads: usize,
+    ) -> TractResult<Self> {
+        Self::load_impl(root, name, h, w, threads, false)
+    }
+    pub(super) fn load_impl(
+        root: &Path,
+        name: &str,
+        h: usize,
+        w: usize,
+        threads: usize,
+        audited: bool,
+    ) -> TractResult<Self> {
         if name == "native" {
             return Ok(Self::Native(
                 AdoptedModel::load_compact(&floats(&root.join("weights.raw")), 64, 16, 1)
@@ -32,10 +54,22 @@ impl Engine {
             ));
         }
         let model = tract_onnx::onnx()
-            .model_for_path(root.join(format!("{name}.onnx")))?
+            .model_for_path(root.join(format!(
+                "{name}{}.onnx",
+                if audited { "-audit" } else { "" }
+            )))?
             .with_input_fact(0, f32::fact([1, 3, h, w]).into())?
             .into_optimized()?;
-        Ok(Self::Tract(model.into_runnable()?))
+        let plan = if threads > 1 {
+            let options = tract_onnx::tract_core::runtime::RunOptions {
+                executor: Some(tract_linalg::multithread::Executor::multithread(threads)),
+                ..Default::default()
+            };
+            model.into_runnable_with_options(&options)?
+        } else {
+            model.into_runnable()?
+        };
+        Ok(Self::Tract(plan))
     }
     pub(crate) fn run(
         &self,

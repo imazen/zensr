@@ -145,21 +145,233 @@ fn evaluate(exports: &Path, inputs: &Path, out: &Path, jobs: usize, limit: Optio
     let required = rows.len();
     assert!(required > 0 && jobs > 0);
     let done = Mutex::new(0usize);
-    let columns = "id\tsource_id\torigin\tcontent\tcohort\tsize\tencoder\tss\tq\tarm\twidth\theight\tidentity_ssim2\traw_ssim2\tprojected_ssim2\traw_butter_max\tprojected_butter_max\traw_butter_pnorm3\tprojected_butter_pnorm3\traw_mae\traw_max\traw_rgb8_changed\traw_rgb8_gt1\traw_rgb8_gt2\traw_rgb8_max\tprojected_mae\tprojected_max\tprojected_rgb8_changed\tprojected_rgb8_gt1\tprojected_rgb8_gt2\tprojected_rgb8_max\tvalues\tinput_rgb8_roundtrip_max\traw_outside01\tprojected_outside01\n";
+    let columns = "id\tsource_id\torigin\tcontent\tcohort\tsize\tencoder\tss\tq\tarm\twidth\theight\tidentity_ssim2\traw_ssim2\tprojected_ssim2\traw_butter_max\tprojected_butter_max\traw_butter_pnorm3\tprojected_butter_pnorm3\traw_mae\traw_max\traw_rgb8_changed\traw_rgb8_gt1\traw_rgb8_gt2\traw_rgb8_max\tprojected_mae\tprojected_max\tprojected_rgb8_changed\tprojected_rgb8_gt1\tprojected_rgb8_gt2\tprojected_rgb8_max\tvalues\tinput_rgb8_roundtrip_max\traw_outside01\tprojected_outside01\tactivation_range_exceedances\tactivation_values\traw_rgb8_sha256\tprojected_rgb8_sha256\traw_f32_sha256\tprojected_f32_sha256\n";
+    let plan_hash = hash(&fs::read(exports.join("PLAN.json")).unwrap());
+    let input_hash = hash(text.as_bytes());
     let progress = |stage: &str, n: usize| {
-        fs::write(out.join("PROGRESS.json"),serde_json::to_vec_pretty(&serde_json::json!({"stage":stage,"pid":std::process::id(),"complete_inputs":n,"required_inputs":required,"arms":ARMS,"exports_plan_sha256":hash(&fs::read(exports.join("PLAN.json")).unwrap()),"inputs_sha256":hash(text.as_bytes())})).unwrap()).unwrap()
+        let record = serde_json::json!({
+            "stage": stage,
+            "pid": std::process::id(),
+            "complete_inputs": n,
+            "required_inputs": required,
+            "arms": ARMS,
+            "exports_plan_sha256": plan_hash,
+            "inputs_sha256": input_hash,
+        });
+        fs::write(
+            out.join("PROGRESS.json"),
+            serde_json::to_vec_pretty(&record).unwrap(),
+        )
+        .unwrap();
     };
+    let identity = serde_json::json!({
+        "binary_sha256": hash(&fs::read(std::env::current_exe().unwrap()).unwrap()),
+        "inputs_sha256": input_hash,
+        "plan_sha256": plan_hash,
+        "joint_sha256": hash(&fs::read(exports.join("joint.onnx")).unwrap()),
+        "required_inputs": required,
+        "arms": ARMS,
+    });
+    fs::write(
+        out.join("IDENTITY.json"),
+        serde_json::to_vec_pretty(&identity).unwrap(),
+    )
+    .unwrap();
     progress("running", 0);
+
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .unwrap();
-    pool.install(||rows.par_chunks(required.div_ceil(jobs)).for_each(|chunk|{let mut cache:HashMap<(usize,usize),Vec<Engine>>=HashMap::new();for(rowindex,r)in chunk.iter().enumerate(){let jpg=fs::read(r[at("jpeg")]).unwrap();assert_eq!(hash(&jpg),r[at("jpeg_sha256")]);let gt=fs::read(r[at("reference_rgb8")]).unwrap();assert_eq!(hash(&gt),r[at("reference_rgb8_sha256")]);let mut probe=zenjpeg::detect::probe(&jpg).unwrap();record_probe::apply_record(&mut probe);let(input,w,h)=decode(&jpg,zensr_zenjpeg::policy_wants_auto(&probe));let(identity,iw,ih)=decode(&jpg,false);assert_eq!((w,h),(iw,ih));assert_eq!(gt.len(),3*w*h);let idscore=metrics(&gt,&rgb8(&identity,w,h),w,h).0;
- let engines=cache.entry((h,w)).or_insert_with(||ARMS.iter().map(|arm|Engine::load(exports,arm,h,w).unwrap()).collect());let x=tensor(&input,h,w);let baseline=engines[0].run(&x,h,w,false).unwrap();let finished=finish(baseline.clone(),&input,&jpg,&probe,w,h);
- if rowindex==0 {let model=zensr_micro::adopted::AdoptedModel::load_compact(&floats(&exports.join("weights.raw")),64,16,1).unwrap();let expected=zensr_zenjpeg::restore_jpeg(&jpg,&model,&RestoreConfig::default().with_high_q_identity(false)).unwrap();assert_eq!(rgb8(&finished,w,h),expected.to_rgb8(),"native projection adapter disagrees with serving pipeline");}
- let mut cell=String::from(columns);for(arm,engine)in ARMS.iter().zip(engines.iter()){let raw=if *arm=="native"{baseline.clone()}else{engine.run(&x,h,w,false).unwrap()};let projected=if *arm=="native"{finished.clone()}else{finish(raw.clone(),&input,&jpg,&probe,w,h)};let rm=metrics(&gt,&rgb8(&raw,w,h),w,h);let pm=metrics(&gt,&rgb8(&projected,w,h),w,h);let re=errors(&baseline,&raw,w,h);let pe=errors(&finished,&projected,w,h);let roundtrip=input.iter().map(|v|(v-(v*255.).round()/255.).abs()).fold(0f32,f32::max);let prefix=["id","source_id","origin","content","cohort","size","encoder","ss","q"].map(|name|r[at(name)]).join("\t");cell+=&format!("{prefix}\t{arm}\t{w}\t{h}\t{idscore:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{:.17}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",rm.0,pm.0,rm.1,pm.1,rm.2,pm.2,re.0,re.1,re.2,re.3,re.4,re.5,pe.0,pe.1,pe.2,pe.3,pe.4,pe.5,raw.len(),roundtrip,raw.iter().filter(|x|**x<0.||**x>1.).count(),projected.iter().filter(|x|**x<0.||**x>1.).count());}
- let p=out.join("cells").join(format!("{}.tsv",r[at("id")]));fs::write(p,cell).unwrap();let mut n=done.lock().unwrap();*n+=1;if n.is_multiple_of(8)||*n==required{progress("running",*n);println!("completed {}/{}",*n,required);}
- }}));
+
+    pool.install(|| {
+        rows.par_chunks(required.div_ceil(jobs)).for_each(|chunk| {
+            let mut cache: HashMap<(usize, usize), (Vec<Engine>, Engine)> = HashMap::new();
+            let layout: serde_json::Value =
+                serde_json::from_slice(&fs::read(exports.join("joint-map.json")).unwrap()).unwrap();
+            for (rowindex, r) in chunk.iter().enumerate() {
+                let jpg = fs::read(r[at("jpeg")]).unwrap();
+                assert_eq!(hash(&jpg), r[at("jpeg_sha256")]);
+                let gt = fs::read(r[at("reference_rgb8")]).unwrap();
+                assert_eq!(hash(&gt), r[at("reference_rgb8_sha256")]);
+                let mut probe = zenjpeg::detect::probe(&jpg).unwrap();
+                record_probe::apply_record(&mut probe);
+                let (input, w, h) = decode(&jpg, zensr_zenjpeg::policy_wants_auto(&probe));
+                assert_eq!(
+                    (w, h),
+                    (
+                        r[at("width")].parse::<usize>().unwrap(),
+                        r[at("height")].parse::<usize>().unwrap()
+                    ),
+                    "manifest geometry differs from JPEG",
+                );
+                let (identity, iw, ih) = decode(&jpg, false);
+                assert_eq!((w, h), (iw, ih));
+                assert_eq!(gt.len(), 3 * w * h);
+                let idscore = metrics(&gt, &rgb8(&identity, w, h), w, h).0;
+                assert!(w * h <= i32::MAX as usize / 64, "counter domain exceeded");
+                let (engines, joint) = cache.entry((h, w)).or_insert_with(|| {
+                    let engines = ARMS
+                        .iter()
+                        .map(|arm| Engine::load_audited(exports, arm, h, w).unwrap())
+                        .collect();
+                    (engines, Engine::load(exports, "joint", h, w).unwrap())
+                });
+                let x = tensor(&input, h, w);
+                let joint_values = match joint {
+                    Engine::Tract(p) => p.run(tvec!(x.clone())).unwrap(),
+                    Engine::Native(_) => unreachable!(),
+                };
+                let baseline = engines[0].run(&x, h, w, false).unwrap();
+                let finished = finish(baseline.clone(), &input, &jpg, &probe, w, h);
+                if rowindex == 0 {
+                    let model = zensr_micro::adopted::AdoptedModel::load_compact(
+                        &floats(&exports.join("weights.raw")),
+                        64,
+                        16,
+                        1,
+                    )
+                    .unwrap();
+                    let expected = zensr_zenjpeg::restore_jpeg(
+                        &jpg,
+                        &model,
+                        &RestoreConfig::default().with_high_q_identity(false),
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        rgb8(&finished, w, h),
+                        expected.to_rgb8(),
+                        "native projection adapter disagrees with serving pipeline"
+                    );
+                }
+                let mut cell = String::from(columns);
+                for (arm, engine) in ARMS.iter().zip(engines.iter()) {
+                    let (raw, range_counts) = if *arm == "native" {
+                        (baseline.clone(), vec![])
+                    } else {
+                        let mapping = &layout[*arm];
+                        let pixels = joint_values[mapping["pixels"].as_u64().unwrap() as usize]
+                            .try_as_plain_ram()
+                            .unwrap()
+                            .as_slice::<f32>()
+                            .unwrap()
+                            .to_vec();
+                        let counts = mapping["counts"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|v| {
+                                joint_values[v.as_u64().unwrap() as usize]
+                                    .cast_to_scalar::<i64>()
+                                    .unwrap()
+                            })
+                            .collect::<Vec<_>>();
+                        (pixels, counts)
+                    };
+                    if rowindex == 0 {
+                        let plain = Engine::load(exports, arm, h, w)
+                            .unwrap()
+                            .run(&x, h, w, false)
+                            .unwrap();
+                        assert_eq!(
+                            raw.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            plain.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            "shared graph changed full-size output"
+                        );
+                        let separate = engine.run_audited(&x, h, w).unwrap();
+                        assert_eq!(
+                            range_counts, separate.1,
+                            "shared graph changed range counters"
+                        );
+                    }
+                    let projected = if *arm == "native" {
+                        finished.clone()
+                    } else {
+                        finish(raw.clone(), &input, &jpg, &probe, w, h)
+                    };
+                    let rm = metrics(&gt, &rgb8(&raw, w, h), w, h);
+                    let pm = metrics(&gt, &rgb8(&projected, w, h), w, h);
+                    let re = errors(&baseline, &raw, w, h);
+                    let pe = errors(&finished, &projected, w, h);
+                    let roundtrip = input
+                        .iter()
+                        .map(|v| (v - (v * 255.).round() / 255.).abs())
+                        .fold(0f32, f32::max);
+                    let mut fields = [
+                        "id",
+                        "source_id",
+                        "origin",
+                        "content",
+                        "cohort",
+                        "size",
+                        "encoder",
+                        "ss",
+                        "q",
+                    ]
+                    .map(|name| r[at(name)].to_owned())
+                    .to_vec();
+                    fields.extend([
+                        arm.to_string(),
+                        w.to_string(),
+                        h.to_string(),
+                        format!("{idscore:.17}"),
+                    ]);
+                    fields.extend([rm.0, pm.0, rm.1, pm.1, rm.2, pm.2].map(|v| format!("{v:.17}")));
+                    fields.extend([
+                        re.0.to_string(),
+                        re.1.to_string(),
+                        re.2.to_string(),
+                        re.3.to_string(),
+                        re.4.to_string(),
+                        re.5.to_string(),
+                        pe.0.to_string(),
+                        pe.1.to_string(),
+                        pe.2.to_string(),
+                        pe.3.to_string(),
+                        pe.4.to_string(),
+                        pe.5.to_string(),
+                        raw.len().to_string(),
+                        roundtrip.to_string(),
+                        raw.iter()
+                            .filter(|x| **x < 0. || **x > 1.)
+                            .count()
+                            .to_string(),
+                        projected
+                            .iter()
+                            .filter(|x| **x < 0. || **x > 1.)
+                            .count()
+                            .to_string(),
+                        range_counts.iter().sum::<i64>().to_string(),
+                        (if range_counts.is_empty() {
+                            0
+                        } else {
+                            (3 + 64 * (range_counts.len() - 1)) * w * h
+                        })
+                        .to_string(),
+                        hash(&rgb8(&raw, w, h)),
+                        hash(&rgb8(&projected, w, h)),
+                        hash(&raw.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>()),
+                        hash(
+                            &projected
+                                .iter()
+                                .flat_map(|v| v.to_le_bytes())
+                                .collect::<Vec<_>>(),
+                        ),
+                    ]);
+                    cell.push_str(&fields.join("\t"));
+                    cell.push('\n');
+                }
+                let p = out.join("cells").join(format!("{}.tsv", r[at("id")]));
+                fs::write(p, cell).unwrap();
+                let mut n = done.lock().unwrap();
+                *n += 1;
+                if n.is_multiple_of(8) || *n == required {
+                    progress("running", *n);
+                    println!("completed {}/{}", *n, required);
+                }
+            }
+        });
+    });
     let mut file = fs::File::create_new(out.join("results.tsv")).unwrap();
     file.write_all(columns.as_bytes()).unwrap();
     for r in &rows {
@@ -204,11 +416,35 @@ fn main() -> TractResult<()> {
                         "unchanged adopted-model golden ceiling: {arm} {error}"
                     );
                 }
+                let audited = Engine::load_audited(root, arm, 17, 13)?;
+                let (audit_pixels, counts) = audited.run_audited(&x, 17, 13)?;
+                assert_eq!(
+                    y.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    audit_pixels.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    "audit instrumentation changed primary output"
+                );
+                assert!(counts.iter().all(|n| *n >= 0));
                 fs::write(
                     output.join(format!("{arm}-gold.raw")),
                     y.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>(),
                 )?;
                 println!("{arm} golden max error {error}");
+            }
+        }
+        Some("probe") => {
+            let root = Path::new(&args[2]);
+            let arm = &args[3];
+            let h = args[4].parse()?;
+            let w = args[5].parse()?;
+            let count: usize = args[6].parse()?;
+            let e = Engine::load(root, arm, h, w)?;
+            let values: Vec<f32> = (0..3 * h * w)
+                .map(|i| ((i * 13 + i / 17) % 251) as f32 / 255.)
+                .collect();
+            let x = tensor(&values, h, w);
+            println!("probe pid {} arm {}", std::process::id(), arm);
+            for _ in 0..count {
+                std::hint::black_box(e.run(&x, h, w, false)?);
             }
         }
         Some("evaluate") => {
@@ -255,4 +491,25 @@ fn rgb8(input: &[f32], w: usize, h: usize) -> Vec<u8> {
     (0..n)
         .flat_map(|i| (0..3).map(move |c| (input[c * n + i] * 255. + 0.5).clamp(0., 255.) as u8))
         .collect()
+}
+
+impl Engine {
+    fn load_audited(root: &Path, name: &str, h: usize, w: usize) -> TractResult<Self> {
+        Self::load_impl(root, name, h, w, 1, true)
+    }
+    fn run_audited(&self, input: &TValue, h: usize, w: usize) -> TractResult<(Vec<f32>, Vec<i64>)> {
+        match self {
+            Self::Native(_) => Ok((self.run(input, h, w, false)?, vec![])),
+            Self::Tract(p) => {
+                let values = p.run(tvec!(input.clone()))?;
+                let pixels = values[0].try_as_plain_ram()?.as_slice::<f32>()?.to_vec();
+                let counts = values
+                    .iter()
+                    .skip(1)
+                    .map(|v| v.cast_to_scalar::<i64>())
+                    .collect::<TractResult<Vec<_>>>()?;
+                Ok((pixels, counts))
+            }
+        }
+    }
 }

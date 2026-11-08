@@ -1683,6 +1683,7 @@ dependencies = [
  "minijinja",
  "num-traits",
  "pastey",
+ "rayon",
  "tract-data",
  "walkdir",
 ]
@@ -2264,6 +2265,7 @@ dependencies = [
  "rgb",
  "serde_json",
  "sha2",
+ "tract-linalg",
  "tract-onnx",
  "zenbench",
  "zenjpeg",

@@ -20,6 +20,7 @@ enough = "0.4.4"
 sha2 = "0.11.1"
 
 tract-onnx = "0.23.10"
+tract-linalg = { version = "0.23.10", features = ["multithread-mm"] }
 zenbench = "0.1.11"
 serde_json = "1.0.151"
 
