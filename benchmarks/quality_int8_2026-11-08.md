@@ -1,7 +1,7 @@
 # Quality-model precision and inference comparison — 2026-11-08
 
-The full quality, additional-format and threaded studies are still running.
-This report currently contains the completed original six-arm timing block.
+The full quality and threaded studies are still running. This report contains
+the completed single-thread timing blocks on both CPUs.
 The observed integer path is slower, but every process has a resource-gate
 warning: **zenbench marks confirmation invalid**. These are descriptive
 shared-host measurements, not a clean confirmed performance claim.
@@ -50,6 +50,53 @@ The later ConvInteger block includes new native, Tract-float and QLinearConv
 controls because its build enables the multithreaded matrix capability.
 Comparisons between graph representations belong within that block; it does
 not replace these original measurements.
+
+## Core Ultra 7 265K: conversion-reduced follow-up
+
+The follow-up enables the multithreaded matrix capability at build time but
+explicitly executes one thread, pinned to performance core 2. Three fresh
+processes completed five measured rounds at all four sizes. All process
+reliability flags remain in the retained report; confirmation is unconfirmed.
+Comparisons between graph formats use these controls from the same build.
+
+```text
+run-heavy: done rc=2 6885s | peak-RSS 1.41GiB | min-avail 21865MiB | peak-load 17.70
+```
+
+Observed arithmetic means of process means, in milliseconds:
+
+| Side | Native float | Tract float | QLinearConv | ConvInteger | ConvInteger + last F32 | ConvInteger + last 2 F32 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 128 | 202.163 | 220.839 | 630.750 | 498.094 | 490.951 | 475.633 |
+| 256 | 827.001 | 1152.474 | 3158.389 | 2560.501 | 2522.676 | 2449.025 |
+| 512 | 3326.484 | 5060.393 | 13792.843 | 10829.920 | 10705.134 | 10324.575 |
+| 1024 | 13108.450 | 20631.249 | 62799.175 | 48997.322 | 48154.125 | 46428.804 |
+
+Retained report: `latency-i265-convinteger.json`. The wrapper memory observation covers the
+complete matrix and setup; it is not per-model memory.
+
+## Ryzen 9 7950X under WSL2: single thread
+
+Three fresh processes ran the nine-arm matrix on guest core 2. This is a WSL2
+observation, not a bare-metal measurement. The 1800-second per-group wall cap
+can reduce the completed round count; the retained report records actual
+counts for every arm/process. Resource/noise flags make confirmation invalid.
+
+```text
+run-heavy: done rc=2 10485s | peak-RSS 1.88GiB | min-avail 5672MiB | peak-load 11.00
+```
+
+Observed arithmetic means of process means, in milliseconds:
+
+| Side | Native float | Tract float | QLinearConv | ConvInteger | ConvInteger + last F32 | ConvInteger + last 2 F32 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 128 | 214.580 | 464.507 | 838.394 | 457.216 | 451.369 | 437.231 |
+| 256 | 905.631 | 2051.786 | 3866.835 | 2468.279 | 2439.898 | 2445.278 |
+| 512 | 3762.106 | 11148.657 | 22198.396 | 15440.346 | 15198.954 | 14754.043 |
+| 1024 | 15807.805 | 49668.635 | 126068.369 | 93764.254 | 92842.990 | 85111.778 |
+
+Retained report: `latency-wsl-original.json`. The wrapper memory observation covers the
+complete matrix and setup; it is not per-model memory.
 
 ## Input precision and executed kernels
 
