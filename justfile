@@ -418,3 +418,21 @@ quality-int8-bench *args:
 
 quality-int8-check:
     cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings
+
+quality-int8-reexport *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/reexport.py {{args}}
+
+quality-int8-scaling *args:
+    tools/quality-int8/runtime/target/release/scaling {{args}}
+
+quality-int8-report *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/report.py {{args}}
+
+quality-int8-combine *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/combine.py {{args}}
+
+quality-int8-report-tests:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_quality_int8_report.py
+
+quality-int8-latency-report *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/latency_report.py {{args}}
