@@ -11,6 +11,11 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Routine routing and QAT scoring no longer persists every decoded/repaired RGB
+  buffer or requests Butteraugli maps (`930476d7`). Explicit score-only identities
+  preserve legacy artifact requirements; completed-run pruning protects source
+  references and encoded JPEGs (`80748c5a`). [Retention](docs/SCORING_RETENTION.md).
+
 - Tiny/odd JPEG chroma projection uses component sampling factors rather than
   padded block dimensions. Preserves 420 half-resolution projection and leaves
   422/440 chroma unprojected even when MCU padding masks the subsampling.

@@ -180,6 +180,12 @@ publication-routing-inventory manifest:
 publication-routing-build:
     cargo build --release -p zensr-bench --bin routing_study --bin zjtool
 
+publication-routing-score-tests:
+    cargo test --locked -p zensr-bench --bin routing_study
+
+publication-routing-score-check:
+    cargo clippy --locked -p zensr-bench --bin routing_study -- -D warnings
+
 publication-routing-cost-build:
     cargo build --release -p zensr-bench --features routing-cost --bin routing_cost
 
@@ -383,6 +389,9 @@ qat-evaluator-check:
 
 qat-evaluator-tests:
     cargo test --release --locked --manifest-path tools/qat/runtime/Cargo.toml
+
+qat-evaluator-debug-tests:
+    cargo test --locked --manifest-path tools/qat/runtime/Cargo.toml
 
 qat-evaluate *args:
     tools/qat/runtime/target/release/zensr-qat-eval {{args}}

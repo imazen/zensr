@@ -1,5 +1,13 @@
 # Publication routing study protocol — 2026-11-04
 
+**Retention amendment — 2026-11-08:** routine scoring now keeps scalars and
+reproducible inputs/identities, with temporary decoded/repaired pixels discarded
+after scoring and diagnostic maps off. The owner authorized removing those
+outputs from completed existing runs. This supersedes the older blanket map/output
+retention text below; it does not alter frozen scores or selections. Each pruned
+run records its removed-artifact plan and retention status. See
+[scoring retention](../docs/SCORING_RETENTION.md).
+
 Status: the primary development fit is frozen and reserved comparison is complete
 after the approved oversized-reference exclusion. The owner cancelled the pixel
 artifact audit; comparison uses complete score tables with that limitation
