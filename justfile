@@ -228,6 +228,12 @@ publication-routing-audit-bundle root output:
 publication-routing-cells *args:
     {{env_var_or_default("ZENSR_STUDY_PYTHON", "python3")}} tools/publication_routing_cells.py {{args}}
 
+publication-routing-retention *args:
+    python3 tools/publication_routing_retention.py {{args}}
+
+publication-routing-retention-tests:
+    python3 -m unittest discover -s tools -p test_publication_retention.py
+
 # Run beside storage only while the writer is frozen or ended.
 # Even a storage-local directory scan can contend with active cell renames.
 publication-routing-storage-count root:
