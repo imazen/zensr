@@ -17,12 +17,19 @@ None queued by the canon4 update.
 
 ### Added
 
+- Larger-model PTQ comparison with a complete 2,960-input cohort, RGB precision
+  measurements, original float-head controls and independent ONNX reference
+  execution (`aea36936`, `9b2b7d3f`). The tested activation-quantized formats lose
+  quality; native float remains the serving implementation.
+  [Results](benchmarks/quality_int8_2026-11-08.md).
+
 - Controlled canon4 W8A32 QAT study with three paired seeds, native packed-weight
   replay, float/PTQ controls, source-excluded evaluation and model-only draft
   packaging. The f16 default is unchanged (`be26a373`, `369b5f74`).
   [Results](benchmarks/canon4_qat_2026-11-08.md).
 
-- Draft artifact packaging for canonical-source pair subsets and the retained
+- Draft artifact packaging for pair subsets identified against imazen-26's
+  published ID split and the retained
   model collection, with source-ID manifests, archive hashes and bounded
   inventory of material not uploaded (`4fd49461`, `04617a3c`, `0177d775`).
   The trainer honors dataset validation-tail metadata while preserving its
@@ -31,7 +38,7 @@ None queued by the canon4 update.
 - Reconstruction of retained v4 pair source IDs and crop coordinates, with
   exact saved-target/recipe checks and an independent coordinate-based verifier
   (`f11177a3`, `5f2a500b`). All 48,000 canon4 pairs matched; the manifest records
-  actual canonical held-out exposure. [Results](benchmarks/canon4_pair_sources_2026-11-07.md).
+  exposure to imazen-26's published validate/test IDs. [Results](benchmarks/canon4_pair_sources_2026-11-07.md).
 
 - Development-only routing feature ablation and secondary reused-cohort check;
   native 34-input candidate replay, APP15 invariance controls and experimental

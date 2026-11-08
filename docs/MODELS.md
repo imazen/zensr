@@ -14,7 +14,7 @@ is calibrated for canon4; another model needs its own routing evaluation.
 | `dejpeg_rt24g` | Previous realtime ×1 model | Committed weights retained for comparisons |
 | `dejpeg_rt24h_canon` | imazen-26-source retrain using turbo and zenjpeg | Superseded by canon4; local research artifact, not committed |
 | `dejpeg_rt24z_zen` | zenjpeg specialist | Not adopted; small median advantages did not justify its mean losses and tails; local artifact |
-| `dejpeg7_graphics` | Larger ×1 quality model, historically reported as 595k parameters | Historical model; weights are not included in this checkout |
+| `dejpeg7_graphics` | Larger ×1 quality model, 595,459 parameters | Historical model; weights are not included in this checkout |
 | `dejpeg9_gfxycc` | Larger low-quality graphics specialist | Historical candidate; harmful on photographs in measured higher-quality bands; weights not included here |
 
 The [production comparison](../benchmarks/prod_models_2026-11-04.md) records why
@@ -184,3 +184,24 @@ for f16. QAT recovers the mean PTQ loss on the selected cohort, but increases
 observed harm; f16 remains the serving default. Activations and inference stay
 f32. See the [protocol](CANON4_QAT.md) and
 [measured results](../benchmarks/canon4_qat_2026-11-08.md).
+
+## Larger-model PTQ comparison
+
+The retained `dejpeg7_graphics` artifact has 1,190,918 bytes of f16 weights,
+expanded to f32 for both native and Tract float execution. Its QLinearConv
+INT8 ONNX export is 614,764 bytes; its float ONNX export is 2,384,621 bytes.
+
+On the completed 17-origin, 2,720-case primary comparison, forced repair with
+QLinearConv loses 4.71186 mean SSIM2 against native float after guard/coefficient
+projection. ConvInteger loses 4.61554. Retaining two original float output
+convolutions improves the ConvInteger delta to −3.57714, with a worst loss of
+17.40309 against the decoded JPEG. These float layers are insufficient to
+recover the native result. A separately trained post-refiner and activation-QAT
+for this larger model remain untested.
+
+The fixed-input independent ONNX reference check agrees with both full-integer
+Tract outputs bit for bit. Completed single-thread timing blocks also show the
+tested integer paths taking longer than native float. The
+[complete comparison](../benchmarks/quality_int8_2026-11-08.md) records RGB error
+histograms, harm frequency, tails, secondary sizes and timing reliability limits.
+[Asset layout and export reproduction](QUALITY_INT8_ASSETS.md).

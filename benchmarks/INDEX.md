@@ -21,7 +21,7 @@ block, so this directory stays small enough to clone.
 ## Precision and inference
 
 - [Canon4 QAT](canon4_qat_2026-11-08.md): paired weight-compression controls and model-only draft assets.
-- [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): original latency block and precision study; remaining comparisons in progress.
+- [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): complete precision study and single-thread timing blocks; four-thread measurements in progress.
 - [Executed VNNI profiles](quality_int8_profile_2026-11-08.md): integer kernels, packing and conversion costs on two CPUs.
 
 ## 2026-08-02 — identity gate re-derived on clean references
