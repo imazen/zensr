@@ -10,6 +10,11 @@ shared-host measurements, not a clean confirmed performance claim.
 
 ## Complete quality comparison
 
+For the native model's quality dependence, see the
+[JPEG-quality × image-category breakdown](quality_by_category_2026-11-08.md),
+including harm counts, worst losses and encoder/sampling strata. Each category
+contains only one source image in this comparison.
+
 **The tested PTQ activation formats lose substantial quality. Retaining one or
 two original float output convolutions does not recover the native result.**
 This is PTQ on the larger historical model; no activation-QAT training or

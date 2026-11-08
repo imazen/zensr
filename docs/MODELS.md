@@ -54,6 +54,10 @@ parameters, stored in 1,190,918 bytes of f16 weights.
 
 The [November 8 precision comparison](../benchmarks/quality_int8_2026-11-08.md)
 also measures the native float model with the deployed f16-expanded weights.
+The [quality-by-category tables](../benchmarks/quality_by_category_2026-11-08.md)
+break out gains, harm and worst losses by nominal JPEG quality, category,
+encoder and chroma sampling. Each of the 17 categories has only one source
+image; repeated JPEG encodings do not establish category-wide performance.
 On 2,720 primary JPEG cases from 17 origins at long side 512, forced repair
 with guard/coefficient projection gives **+2.86600 origin-balanced mean
 SSIMULACRA2**, **257/2,720 harm cases (9.45%)**, and **−6.62849 worst gain**

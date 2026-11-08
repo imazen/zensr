@@ -428,6 +428,9 @@ quality-int8-scaling *args:
 quality-int8-report *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/report.py {{args}}
 
+quality-int8-stratify *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/stratify.py {{args}}
+
 quality-int8-combine *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/combine.py {{args}}
 

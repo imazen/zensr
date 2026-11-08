@@ -6,12 +6,57 @@ import unittest
 import json
 import tempfile
 from types import SimpleNamespace
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "quality_precision_report", Path(__file__).parent / "quality-int8/report.py"
 )
 report = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(report)
+
+strata_spec = importlib.util.spec_from_file_location(
+    "quality_stratification", Path(__file__).parent / "quality-int8/stratify.py"
+)
+strata = importlib.util.module_from_spec(strata_spec)
+with mock.patch.dict("sys.modules", {"report": report}):
+    strata_spec.loader.exec_module(strata)
+
+
+class StratificationTests(unittest.TestCase):
+    def test_unequal_origin_counts_do_not_reweight_mean_or_harm(self):
+        rows = [dict(origin="a", identity_ssim2="80", projected_ssim2="79")
+                for _ in range(3)]
+        rows.append(dict(origin="b", identity_ssim2="80", projected_ssim2="83"))
+        result = strata.summary(rows, "projected")
+        self.assertEqual(result["mean"], 1)
+        self.assertEqual(result["harm_percent"], 50)
+        self.assertEqual(result["harmed"], 3)
+        self.assertEqual(result["cases"], 4)
+        self.assertEqual(result["origins"], 2)
+        self.assertEqual(result["median"], -1)
+        self.assertEqual(result["worst"], -1)
+
+    def test_strict_decimal_harm_boundaries(self):
+        rows = [dict(origin="a", identity_ssim2=identity, projected_ssim2=actual)
+                for identity, actual in [("90", "89.5"), ("95", "94.7"),
+                                         ("95", "94.69999999999999999")]]
+        self.assertEqual(strata.summary(rows, "projected")["harmed"], 1)
+
+    def test_quality_category_cross_product_is_kept_separate(self):
+        rows = [dict(origin="a", content="photo", q="20", identity_ssim2="80",
+                     projected_ssim2="82"),
+                dict(origin="b", content="plot", q="25", identity_ssim2="80",
+                     projected_ssim2="77")]
+        groups = strata.group(rows, ["content", "band"], "projected")
+        self.assertEqual(set(groups), {("photo", "5–20"), ("plot", "25–40")})
+        self.assertEqual(groups[("plot", "25–40")]["mean"], -3)
+        self.assertEqual(groups[("plot", "25–40")]["harm_percent"], 100)
+        for q in [0, 6, 101]:
+            with self.assertRaises(ValueError):
+                strata.band(q)
+        self.assertEqual(strata.band(100), "85–100")
+        with self.assertRaises(ValueError):
+            strata.summary([], "projected")
 
 
 def fixture():
