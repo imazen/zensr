@@ -58,7 +58,7 @@ def main(a):
                 for key in ARTIFACTS:row[key]=os.path.relpath(root/row[key],a.output)
                 writer.writerow(row)
     (a.output/'inputs.tsv').write_bytes((a.primary/'inputs.tsv').read_bytes())
-    (a.output/'IDENTITY.tsv').write_text('primary_identity_sha256\t'+sha(a.primary/'IDENTITY.tsv')+'\ncontrol_identity_sha256\t'+sha(a.control/'IDENTITY.tsv')+'\ninputs_sha256\t'+one['inputs_sha256']+'\ntraining_plan_sha256\t'+one['training_plan_sha256']+'\n')
+    (a.output/'IDENTITY.tsv').write_text('primary_identity_sha256\t'+sha(a.primary/'IDENTITY.tsv')+'\ncontrol_identity_sha256\t'+sha(a.control/'IDENTITY.tsv')+'\ninputs_sha256\t'+one['inputs_sha256']+'\ntraining_plan_sha256\t'+one['training_plan_sha256']+'\nbaseline\t'+one['baseline']+'\n')
     (a.output/'MERGE.json').write_text(json.dumps(dict(primary_results_sha256=sha(a.primary/'results.tsv'),
         control_results_sha256=sha(a.control/'results.tsv'),repeated_baseline_rows=len({r['id'] for r in extra}),exact_baseline_comparison=True,
         tool_sha256=sha(Path(__file__)),interpretation='Additional untrained GPU PTQ numerical control; no learned model or policy re-selection.'),indent=2)+'\n')
