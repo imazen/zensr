@@ -1,0 +1,37 @@
+{
+  "checked_utc": "2026-11-08T02:40:19.360468+00:00",
+  "release_id": 437464697,
+  "draft": true,
+  "tag": "models-preview-2026-11-07",
+  "url": "https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e",
+  "verified_assets": [
+    {
+      "id": 722662880,
+      "name": "canon4-qat-w8a32-20261108.tar.zst",
+      "size": 4731426,
+      "digest": "sha256:65af652692ee0ccd2f39d91bace60905f6997bc061b61ac0c262f4134c791dc1",
+      "state": "uploaded"
+    },
+    {
+      "id": 722662879,
+      "name": "CANON4-QAT-20261108.json",
+      "size": 40512,
+      "digest": "sha256:514236f898caf1d1b245e6a0e4ef363b43408fc6c2f4d3f8d398636db8486c87",
+      "state": "uploaded"
+    },
+    {
+      "id": 722662882,
+      "name": "CANON4-QAT-README.md",
+      "size": 2636,
+      "digest": "sha256:a7954dd691326bb31632acec0f3d68679fdd62ab4e1c0b586abea92e7e0bd663",
+      "state": "uploaded"
+    },
+    {
+      "id": 722662881,
+      "name": "CANON4-QAT-SHA256SUMS",
+      "size": 278,
+      "digest": "sha256:de1823905dd584458219bc0d6406849e39fcd3f8047fcef5ff39a8f85878cee9",
+      "state": "uploaded"
+    }
+  ]
+}

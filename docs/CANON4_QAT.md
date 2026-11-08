@@ -96,3 +96,10 @@ conversion and the same frozen external inputs. This distinguishes generic
 fine-tuning followed by rounding from quantization-aware fine-tuning itself.
 It is a disclosed secondary control, not a preregistered primary comparison.
 The repeated-baseline equality gate also applies to this supplementary run.
+
+## Completed comparison
+
+The [2026-11-08 results](../benchmarks/canon4_qat_2026-11-08.md) report all three
+seeds, all controls, origin uncertainty, harm frequency and worst losses.
+The f16 default remains unchanged. Q8PC files are experimental W8A32 study
+artifacts; they are not a new `.zensr` encoding.

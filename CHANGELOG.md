@@ -17,6 +17,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Controlled canon4 W8A32 QAT study with three paired seeds, native packed-weight
+  replay, float/PTQ controls, source-excluded evaluation and model-only draft
+  packaging. The f16 default is unchanged (`be26a373`, `369b5f74`).
+  [Results](benchmarks/canon4_qat_2026-11-08.md).
+
 - Draft artifact packaging for canonical-source pair subsets and the retained
   model collection, with source-ID manifests, archive hashes and bounded
   inventory of material not uploaded (`4fd49461`, `04617a3c`, `0177d775`).

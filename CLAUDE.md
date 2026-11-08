@@ -2,6 +2,15 @@
 
 ## Known Bugs
 
+- QAT export rounding is fixed: dividing by a scale can disagree with PyTorch's
+  native reciprocal quantization at a half-step. Packing now recovers native
+  integer codes, with exact operand comparison. CPU/GPU initial scale rounding
+  differs slightly; the study retains both PTQ controls. QAT CI uses an explicit
+  pinned CPU torch environment. See `docs/CANON4_QAT.md`.
+
+- QAT model packaging uses a nested-member hash verifier. The existing pair
+  archive extractor intentionally accepts flat members only; it is unchanged.
+
 - Fixed by the approved 34-input default: the original router used whole-file
   bpp, so nonsemantic APP15
   padding can change its decision while pixels, coefficients and probe match.

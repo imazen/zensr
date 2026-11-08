@@ -175,3 +175,12 @@ and historical corpus fetches had missing files. Dataset paths in the command
 are historical local paths. Regenerating data with current tools is a new run,
 not verification of identical original training bytes. Preserve these limits
 when describing training provenance or publication reproducibility.
+
+## Canon4 INT8 weight-only experiment
+
+Three paired seeds compare QAT, float fine-tuning and post-training quantization
+on the deployed canon4 weights. Each QAT file is 45,408 bytes versus 86,406 bytes
+for f16. QAT recovers the mean PTQ loss on the selected cohort, but increases
+observed harm; f16 remains the serving default. Activations and inference stay
+f32. See the [protocol](CANON4_QAT.md) and
+[measured results](../benchmarks/canon4_qat_2026-11-08.md).

@@ -24,6 +24,7 @@
 ## Research and engineering
 
 - [Research record](research/README.md): plans, experiment history and previous results.
+- [Canon4 INT8 QAT](CANON4_QAT.md): controlled weight-compression experiment and measured limits.
 - [VSR source review](VSR_REVIEW.md).
 - [API design proposal](API_DESIGN.md), retained as historical design context.
 - [ARM kernel audit](engineering/ARM_AUDIT_2026-08-01.md).
