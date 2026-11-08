@@ -7,6 +7,7 @@
 - [Integration and dependencies](PRODUCTION_DEPENDENCIES.md): crate graph,
   model loading and reproducible source builds.
 - [Readiness](REPAIR_READINESS.md): verified behavior and remaining validation.
+- [Single-file runtime models](MODEL_CONTAINER.md): packing, loading and format.
 - [Models and training](MODELS.md): the model family and canon4's training recipe.
 - [Pair provenance](PAIR_PROVENANCE.md): reconstruct and verify saved crop identities.
 - [Train from the preview](TRAINING_PREVIEW.md): assemble pairs from published imazen-26 training IDs.

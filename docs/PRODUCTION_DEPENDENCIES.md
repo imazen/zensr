@@ -11,6 +11,7 @@ cargo tree --locked -p zensr-micro-abi -e normal --depth 2
 ```text
 application
 └── zensr-zenjpeg 0.1.0
+    ├── sha2 0.11.1 (single-file model checksums)
     ├── enough 0.4.5
     ├── zenanalyze 0.2.0 @ e676651e (default chooser feature)
     ├── zenanalyze-api 0.1.1 @ e676651e (default chooser feature)
@@ -31,7 +32,7 @@ application
 `zensr-micro-abi` is a separate entry point into `zensr-micro`; it does not
 provide the JPEG restoration pipeline. `zensr-micro` has no JPEG decoder,
 PyTorch, ONNX, or GPU dependency. The f16 model weights are a separate artifact,
-loaded into the runtime; committing a model directory does not embed a default
+loaded into the runtime or [bundled with their policy](MODEL_CONTAINER.md); committing a model directory does not embed a default
 model into the public library.
 
 With `chooser` (now enabled by default), `zensr-zenjpeg` additionally uses `zenanalyze 0.2.0` and

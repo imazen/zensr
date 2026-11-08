@@ -17,6 +17,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Versioned `.zensr` containers bundle CPU weights, architecture/color metadata
+  and bound routing/repair policy. Includes strict loading, a standard-library
+  packer, and `repair --model`; uncalibrated models require explicit routing.
+
+
 - Draft artifact packaging for canonical-source pair subsets and the retained
   model collection, with source-ID manifests, archive hashes and bounded
   inventory of material not uploaded (`4fd49461`, `04617a3c`, `0177d775`).

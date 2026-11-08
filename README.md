@@ -14,20 +14,20 @@ realtime retrains, SR models, and how canon4 was trained.
 Load the model once, then reuse the restorer:
 
 ```rust
-use zensr_micro::{adopted::AdoptedModel, decode_all_f16};
-use zensr_zenjpeg::api::{Budget, Restorer};
+use zensr_zenjpeg::model_file::ModelBundle;
 
-let weights = decode_all_f16(&weights_f16);
-let model = AdoptedModel::load_compact(&weights, 24, 8, 1)?;
-let restorer = Restorer::new().with_tier(Budget::Realtime, model);
+let restorer = ModelBundle::from_file("canon4.zensr")?.into_restorer()?;
 
 let outcome = restorer.restore(&jpeg_bytes).run()?;
 let pixels = outcome.pixels();
 let rgb8 = pixels.to_rgb8(); // Interleaved RGB, pixels.width() × pixels.height().
 ```
 
+[Single-file models](docs/MODEL_CONTAINER.md) bundle weights, routing and repair
+settings; larger uncalibrated models require an explicit routing choice.
+
 The [runnable example](crates/zensr-zenjpeg/examples/repair.rs) loads the included
-weights and writes raw RGB8, printing the dimensions:
+weights (or accepts `--model path.zensr`) and writes raw RGB8, printing the dimensions:
 
 ```sh
 cargo run --release --locked -p zensr-zenjpeg --example repair -- input.jpg output.rgb8

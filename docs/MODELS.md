@@ -3,7 +3,7 @@
 Canon4 is the current realtime JPEG repair default, not the entire model family.
 The `canon4` artifact name does not certify compliance with imazen-26's published
 ID split. See [split authorities](SPLIT_DEFINITIONS.md) for explicit definitions.
-The runtime accepts caller-loaded weights. Its current automatic repair router
+The runtime accepts caller-loaded weights and [single-file model containers](MODEL_CONTAINER.md). Its current automatic repair router
 is calibrated for canon4; another model needs its own routing evaluation.
 
 ## Model family
