@@ -358,3 +358,10 @@ model-release *args:
 
 test-model-release:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_model_release.py
+
+# Weight-only canon4 QAT; use the workspace resource wrapper for training/evaluation.
+qat-tests:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} -m unittest discover -s tools -p test_canon4_qat.py
+
+qat-train *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/train.py {{args}}
