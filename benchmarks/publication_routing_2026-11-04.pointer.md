@@ -17,12 +17,21 @@ This is NAS-backed storage. No R2 mirror was created by this study. Generated
 images, compressed pixel buffers, metric maps, fitted models and large tables
 stay outside git. The content-addressed artifact paths are recorded in each cell.
 
-## Storage footprint
+## Authorized scored-output removal — 2026-11-08
+
+Decoded/repaired RGB buffers and diagnostic maps were removed from all ten
+completed runs with the owner's approval. The directory now measures
+**7,985,520,640 allocated bytes (7.99 GB)**. JPEGs, reference buffers, score
+tables and identities remain. Deletion plans and per-run receipts identify
+the removed artifacts; historical audit records moved to `audit-history`.
+[Removal counts, retained-input checks and new defaults](scoring_retention_2026-11-08.md).
+
+## Storage footprint before removal
 
 A read-only `du -B1 --max-depth=1` inventory on 2026-11-08 measured
 **390,309,404,672 allocated bytes** for this directory; **385,234,767,872 bytes
-(98.70%)** belong to `development-primary`. Retained files include JPEGs,
-zstd-compressed RGB buffers and compressed Butteraugli maps. These support
+(98.70%)** belonged to `development-primary`. Original files included JPEGs,
+zstd-compressed RGB buffers and compressed Butteraugli maps. These supported
 inspection and replay of the experiment; inference does not load this tree.
 This is not model-weight storage. Recheck with the same command on the actual
 storage directory before treating these dated counts as current usage.
@@ -36,13 +45,15 @@ the separately retained coverage and contract files. It preserves measurements,
 not the bulk pixel artifacts. Removing pixel artifacts would remove direct
 replay/inspection evidence; none was deleted by this inventory.
 
-The frozen harness requests a Butteraugli difference map for both decoded and
-restored images and saves every map as compressed little-endian f32. These are
+The frozen harness requested a Butteraugli difference map for both decoded and
+restored images and saved every map as compressed little-endian f32. These were
 spatial diagnostics for inspecting damage, not router inputs. Analysis reads
 the scalar Butteraugli scores from cell tables and includes map paths in its
 worst-case records; fitting and runtime do not consume map pixels. Given the
-retained reference and output RGB buffers plus the exact metric implementation,
-maps can be regenerated. Saving every map was broader diagnostic retention than
+original reference and output RGB buffers plus the exact metric implementation,
+maps could be regenerated. After output removal, the decoded/repaired pixels
+must first be regenerated from the JPEGs and frozen implementation. Saving every
+map was broader diagnostic retention than
 the routing analysis needed. The artifact-byte total above combines JPEGs,
 RGB buffers and maps; a map-only byte total has not been measured.
 

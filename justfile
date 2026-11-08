@@ -240,6 +240,9 @@ publication-routing-retention *args:
 publication-routing-retention-tests:
     python3 -m unittest discover -s tools -p test_publication_retention.py
 
+publication-routing-retention-inventory root:
+    python3 tools/publication_routing_retention_inventory.py "{{root}}"
+
 # Run beside storage only while the writer is frozen or ended.
 # Even a storage-local directory scan can contend with active cell renames.
 publication-routing-storage-count root:

@@ -20,7 +20,10 @@ The owner authorized dropping their scored decoded/repaired pixels and diagnosti
 maps on November 8, 2026. The retention tool plans from completed cell roles and
 excludes every reference/JPEG input, including reference/output deduplication.
 It never deletes unreferenced files, source references, encoded inputs, models,
-scores, coverage or tool identities. Incomplete grids cannot be pruned.
+scores, coverage or tool identities. A completion marker is required; modern
+runs must match their full coverage ledger. Early completed pilots without a
+ledger need the explicit `--legacy-scored-cells` option, and their receipts
+do not certify grid coverage. Only their recorded scored outputs are removed.
 
 ```sh
 just publication-routing-retention plan RUN PLAN --tables TABLE_SNAPSHOT

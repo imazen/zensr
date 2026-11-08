@@ -1,0 +1,109 @@
+{
+  "runs": {
+    "development-primary": {
+      "retained_inputs": {
+        "rgb8": 484,
+        "jpeg": 235154
+      },
+      "removed": 932129,
+      "removed_allocated_bytes": 378724683776,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "pilot-v1": {
+      "retained_inputs": {
+        "rgb8": 2,
+        "jpeg": 4
+      },
+      "removed": 12,
+      "removed_allocated_bytes": 49152,
+      "grid_coverage_verified": false,
+      "score_metadata_unchanged": true
+    },
+    "pilot-v3": {
+      "retained_inputs": {
+        "rgb8": 10,
+        "jpeg": 380
+      },
+      "removed": 1456,
+      "removed_allocated_bytes": 649506816,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "pilot-v4": {
+      "retained_inputs": {
+        "rgb8": 2,
+        "jpeg": 4
+      },
+      "removed": 12,
+      "removed_allocated_bytes": 49152,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "mode-pilot-v1": {
+      "retained_inputs": {
+        "rgb8": 2,
+        "jpeg": 212
+      },
+      "removed": 542,
+      "removed_allocated_bytes": 2220032,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "resource-4096-v1": {
+      "retained_inputs": {
+        "rgb8": 1,
+        "jpeg": 2
+      },
+      "removed": 8,
+      "removed_allocated_bytes": 238002176,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "resource-4096-two-v1": {
+      "retained_inputs": {
+        "rgb8": 2,
+        "jpeg": 4
+      },
+      "removed": 16,
+      "removed_allocated_bytes": 453677056,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "resource-4096-four-v1": {
+      "retained_inputs": {
+        "rgb8": 4,
+        "jpeg": 8
+      },
+      "removed": 32,
+      "removed_allocated_bytes": 1064124416,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "resource-4096-six-v1": {
+      "retained_inputs": {
+        "rgb8": 6,
+        "jpeg": 12
+      },
+      "removed": 48,
+      "removed_allocated_bytes": 1363169280,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    },
+    "transport-replay-cache-512-v1": {
+      "retained_inputs": {
+        "rgb8": 6,
+        "jpeg": 12
+      },
+      "removed": 48,
+      "removed_allocated_bytes": 28266496,
+      "grid_coverage_verified": true,
+      "score_metadata_unchanged": true
+    }
+  },
+  "removed_files": 934303,
+  "removed_allocated_bytes": 382523748352,
+  "score_archive_sha256": "0ff5a241849430ecad22b9bc911c94d15ed8d10d7844482b80d194d1b4fd4bfb",
+  "storage_before_allocated_bytes": 390309404672,
+  "storage_after_allocated_bytes": 7985520640
+}
