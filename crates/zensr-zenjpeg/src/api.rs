@@ -67,7 +67,7 @@ pub enum Provenance {
     // n -> slack_abs mapping is measured end to end (ROADMAP 1.9).
 }
 
-/// Select a caller-loaded model tier. The library does not load weights itself.
+/// Select a model tier supplied by the caller or a single-file model container.
 /// Current routing calibration targets canon4; other model weights need their
 /// own quality measurements. Runtime cost depends on the selected model and host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -535,7 +535,8 @@ impl<'a> Request<'a> {
         self
     }
 
-    /// Compute budget. Defaults to [`Budget::Realtime`].
+    /// Compute budget. Defaults to [`Budget::Realtime`] for raw models, or
+    /// the tier stored in a loaded model container.
     #[must_use]
     pub fn budget(mut self, b: Budget) -> Self {
         self.budget = b;
@@ -617,6 +618,11 @@ impl<'a> Request<'a> {
                 |p| p.gain(&probe_for_routing, content),
             )
         };
+        if !predicted.is_finite() {
+            return Err(RestoreError::UnsupportedModel(
+                "non-finite calibrated gain estimate",
+            ));
+        }
         let skip = match routing {
             Routing::Always => false,
             Routing::Never => true,

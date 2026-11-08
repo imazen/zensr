@@ -454,3 +454,21 @@ fn bad_router_schema_scales_and_categories_fail_loading() {
     checksum(&mut bytes);
     assert!(error(&bytes).contains("category count"));
 }
+
+#[test]
+fn overflowing_finite_gain_curves_cannot_silently_route() {
+    let mut bundle = ModelBundle::from_bytes(&canon4_bytes(2)).unwrap();
+    let policy = Arc::get_mut(&mut bundle.policy).unwrap();
+    // Finite endpoints alone do not guarantee finite f32 interpolation.
+    for curve in &mut policy.curves {
+        *curve = vec![(0.0, -f32::MAX), (1e6, f32::MAX)];
+    }
+    let data = jpeg(17, 15, 55., false);
+    let error = bundle
+        .into_restorer()
+        .unwrap()
+        .restore(&data)
+        .run()
+        .unwrap_err();
+    assert!(error.to_string().contains("non-finite calibrated gain"));
+}
