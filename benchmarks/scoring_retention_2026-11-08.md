@@ -67,3 +67,10 @@ The primary output manifest has SHA-256
 `26a19e630bbb691984aa624f8ccfefda2a5be97876171bc2bf56abd968e1d41c`.
 Operational logs and the independently replayed inventory report are retained
 on i265 at `/mnt/v/output/zensr/routing-retention-20261108/`.
+
+Those operational records were mirrored to
+`tower:/mnt/disk1/coefficient/output/zensr/routing-retention-20261108/operational-record-v1.tar`:
+81,920 bytes, SHA-256
+`d1acb9782a99261c4d25d4b72f815c25d04914533d7e0acdde7061f3bc56887e`.
+Sender/server lengths and digests matched; file and directory synchronization
+completed. The complete per-file removal manifests remain at the study root.
