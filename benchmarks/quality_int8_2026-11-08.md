@@ -22,7 +22,8 @@ in steps of five. The secondary cohort contains 240 cases from two origins at
 
 Repair is forced on every input, with routing unused and the near-pristine gate
 off. Each arm is scored before and after the guard/coefficient projection.
-SSIMULACRA2 changes are origin-balanced. Intervals resample 17 origin means
+Quality inference ran on the Core Ultra 7 270K Plus with eight single-thread
+workers. SSIMULACRA2 changes are origin-balanced. Intervals resample 17 origin means
 10,000 times with seed 20261108. Analysis uses NumPy 2.5.2. Harm is loss against
 the decoded JPEG above 0.5 SSIM2 through identity score 90, tapering linearly to
 0.1 at score 100. It is counted with decimal boundary arithmetic.
@@ -115,7 +116,8 @@ of their 41 fields. Those replays independently compare original models and
 range counters with the shared graph, and the native adapter with `restore_jpeg`.
 
 On the fixed `[1,3,17,13]` input, ONNX 1.23.2's reference evaluator matches both
-full-integer Tract outputs bit for bit. All eight exported variants have
+variants with 18 integer convolutions bit for bit; PReLU and residual addition
+remain float. All eight exported variants have
 identical RGB8 results to the reference; maximum normalized float difference
 is 7.1525574e-7. Official opset adaptation from 13 to 19 leaves every node,
 constant and input/output declaration unchanged. The reference uses NumPy

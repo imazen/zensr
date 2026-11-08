@@ -126,7 +126,8 @@ eight exports with ONNX's independent reference evaluator on the fixed
 `[1,3,17,13]` input. ONNX 1.23.2's reference quantizers require opset 19;
 official version conversion must leave every node, constant and input/output
 declaration unchanged. Only inferred value metadata and the opset declaration
-change. Both full-integer graphs match Tract bit for bit on this input. All
+change. Both variants with all 18 convolutions quantized match Tract bit for bit on
+this input. PReLU and residual addition still use float arithmetic. All
 eight variants produce identical RGB8 values; the largest normalized float
 difference is 7.1525574e-7. This is one-input interoperability evidence, not
 reference-backend validation of the complete cohort. The initial direct
