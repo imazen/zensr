@@ -263,18 +263,20 @@ def main(a):
     with a.output.open("x") as f:
         json.dump(report, f, indent=2)
         f.write("\n")
-    for name, r in report["cohorts"]["primary"]["all"]["projected"].items():
-        print(
-            name,
-            "SSIM2 delta",
-            r["mean_vs_native_ssim2"],
-            "harm cases",
-            r["harm_cases"],
-            "RGB8 changed fraction",
-            r["rgb8_changed_fraction"],
-            "max RGB8 delta",
-            r["rgb8_max_code_error"],
-        )
+    for cohort, groups in report["cohorts"].items():
+        for name, r in groups["all"]["projected"].items():
+            print(
+                cohort,
+                name,
+                "SSIM2 delta",
+                r["mean_vs_native_ssim2"],
+                "harm cases",
+                r["harm_cases"],
+                "RGB8 changed fraction",
+                r["rgb8_changed_fraction"],
+                "max RGB8 delta",
+                r["rgb8_max_code_error"],
+            )
 
 
 if __name__ == "__main__":
