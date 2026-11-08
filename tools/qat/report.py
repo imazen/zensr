@@ -88,8 +88,25 @@ def summarize(rows,mode):
             deltas=[(r['origin'],float(Decimal(q[r['id']][score])-Decimal(r[score]))) for r in arms[control]]
             means=balanced(deltas)
             comparisons[f'qat8-s{seed}-vs-{control}']=dict(mean=statistics.fmean(means.values()),paired_origin_bootstrap_95=interval(means))
+    # Exploratory two-way uncertainty: resample training seeds and origins
+    # together, preserving each seed's matched float-control pairing.
+    joint={}
+    origins=sorted({r['origin'] for r in rows})
+    for kind in ['baseline','ptq8','matched_float']:
+        matrix=[]
+        for seed in [7,17,29]:
+            q={r['id']:r for r in arms[f'qat8-s{seed}-selected']}
+            control=f'float-s{seed}-selected' if kind=='matched_float' else kind
+            values=balanced([(r['origin'],float(Decimal(q[r['id']][score])-Decimal(r[score]))) for r in arms[control]])
+            matrix.append([values[o] for o in origins])
+        matrix=np.array(matrix)
+        rng=np.random.default_rng(20261108)
+        si=rng.integers(0,3,(10000,3,1))
+        oi=rng.integers(0,len(origins),(10000,1,len(origins)))
+        sample=matrix[si,oi].mean(axis=(1,2))
+        joint[kind]=dict(mean=float(matrix.mean()),exploratory_seed_origin_bootstrap_95=[float(v) for v in np.quantile(sample,[.025,.975])])
     return dict(arms=result,paired_comparisons=comparisons,qat_seed_mean_vs_baseline=statistics.fmean(seed_means),
-                qat_seed_range_vs_baseline=[min(seed_means),max(seed_means)])
+                qat_seed_range_vs_baseline=[min(seed_means),max(seed_means)],qat_across_seeds=joint)
 
 
 def main(a):
@@ -99,7 +116,7 @@ def main(a):
     result=dict(report_sha256=sha(Path(__file__)),results_sha256=sha(a.root/'results.tsv'),
         identity_sha256=sha(a.root/'IDENTITY.tsv'),
         harm_definition='Loss >0.5 at identity SSIM2 <=90; linearly tapers to >0.1 at 100. Strict decimal comparison.',
-        uncertainty='Paired bootstrap over origins, 10000 resamples, seed 20261108. Small designed cohort; pointwise intervals are not population guarantees. Three training seeds are reported separately.',
+        uncertainty='Paired bootstrap over origins, 10000 resamples, seed 20261108. Small designed cohort; pointwise intervals are not population guarantees. Three training seeds are reported separately; exploratory joint intervals also resample those three seeds. This does not establish uncertainty over arbitrary training runs.',
         limitations='Previously inspected routing-study inputs. No test-output checkpoint selection. Frozen canon4 routing, no model-specific recalibration. Weight-only compression with f32 execution; no integer speed claim.')
     for cohort in sorted({r['cohort'] for r in rows}):
         selected=[r for r in rows if r['cohort']==cohort]
@@ -107,6 +124,12 @@ def main(a):
         if cohort=='secondary':
             groups.update({size:[r for r in selected if r['size']==size] for size in sorted({r['size'] for r in selected},key=int)})
         result[cohort]={name:{mode:summarize(group,mode) for mode in ['routed','forced']} for name,group in groups.items()}
+        if cohort=='primary':
+            subgroups={'encoder_'+encoder:[r for r in selected if r['encoder']==encoder] for encoder in sorted({r['encoder'] for r in selected})}
+            subgroups['q5_to_60']=[r for r in selected if float(r['q'])<=60]
+            subgroups['q65_to_100']=[r for r in selected if float(r['q'])>=65]
+            result['primary_subgroups']={name:{mode:summarize(group,mode) for mode in ['routed','forced']} for name,group in subgroups.items()}
+
     with a.output.open('x') as f:json.dump(result,f,indent=2);f.write('\n')
     for cohort in ['primary','secondary']:
         print(cohort)

@@ -25,6 +25,8 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(result['arms']['ptq8']['mean_vs_baseline_ssim2'],0)
         self.assertEqual(len(result['paired_comparisons']),6)
         self.assertEqual(result['qat_seed_range_vs_baseline'],[0,0])
+        self.assertEqual(result['qat_across_seeds']['baseline']['mean'],0)
+        self.assertEqual(result['qat_across_seeds']['matched_float']['exploratory_seed_origin_bootstrap_95'],[0,0])
 
     def test_missing_duplicate_or_changed_control_is_rejected(self):
         rows=self.rows()
