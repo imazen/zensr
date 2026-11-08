@@ -18,6 +18,12 @@ block, so this directory stays small enough to clone.
 - **n bounds the claim.** At n=64 differences below ~0.1 ssim2 are not
   resolvable. Non-monotonic wiggles at that scale are noise.
 
+## Precision and inference
+
+- [Canon4 QAT](canon4_qat_2026-11-08.md): paired weight-compression controls and model-only draft assets.
+- [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): original latency block and precision study; remaining comparisons in progress.
+- [Executed VNNI profiles](quality_int8_profile_2026-11-08.md): integer kernels, packing and conversion costs on two CPUs.
+
 ## 2026-08-02 — identity gate re-derived on clean references
 
 Corpus `/mnt/v/imazen-26-clean` (974 refs, 0 JPEG), pinned eval split, 8 files
@@ -57,5 +63,3 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
   how damaged the input itself is.
 - `tools/model_ab.py` — per-file comparison of two models measured in separate
   eval runs.
-
-- [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): original latency block, precision protocol and executed-kernel profiles; remaining comparisons in progress.

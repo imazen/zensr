@@ -118,6 +118,7 @@ def summarize(rows, mode):
             losses.append(
                 dict(
                     delta=float(actual - baseline),
+                    gain_vs_decode=float(actual - identity),
                     id=r["id"],
                     source_id=r["source_id"],
                     encoder=r["encoder"],
@@ -158,6 +159,11 @@ def summarize(rows, mode):
             mean_vs_native_butter_pnorm3=statistics.fmean(
                 balanced(butter_pnorm).values()
             ),
+            worst_gain_vs_decode=min(v for _, v in gain),
+            worst_delta_vs_native=min(v for _, v in delta),
+            worst_cases_vs_decode=sorted(losses, key=lambda r: r["gain_vs_decode"])[
+                :10
+            ],
             cells=len(values),
             origins=len(balanced(delta)),
             mean_vs_native_ssim2=statistics.fmean(balanced(delta).values()),

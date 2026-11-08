@@ -69,6 +69,8 @@ class QualityReportTests(unittest.TestCase):
         result = report.summarize(rows, "projected")["int8"]
         self.assertEqual(result["harm_cases"], 1)
         self.assertEqual(result["harm_fraction"], 0.25)
+        self.assertAlmostEqual(result["worst_gain_vs_decode"], -0.4999961)
+        self.assertEqual(result["worst_cases_vs_decode"][0]["id"], "a")
 
     def test_rgb_histogram_uses_channel_values(self):
         rows = fixture()
