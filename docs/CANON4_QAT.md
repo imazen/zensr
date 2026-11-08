@@ -103,3 +103,17 @@ The [2026-11-08 results](../benchmarks/canon4_qat_2026-11-08.md) report all thre
 seeds, all controls, origin uncertainty, harm frequency and worst losses.
 The f16 default remains unchanged. Q8PC files are experimental W8A32 study
 artifacts; they are not a new `.zensr` encoding.
+
+## Inference speed and architecture limits
+
+The study packs INT8 weights, expands them to f32 at load, and runs existing
+float CPU convolutions. It measures storage reduction and quality, not an
+integer inference speedup. QAT training also uses float computation with fake
+quantization. Its wall time is not a serving-latency benchmark.
+
+A compute-speed experiment needs actual integer kernels, compatible activation
+quantization, exact backend replay, and paired latency/quality measurements.
+The current weight-only study does not establish the quality of quantized
+activations. A larger model would also require its own repair/routing checks.
+The [dependency guide](PRODUCTION_DEPENDENCIES.md) distinguishes native Quality
+tier execution from the separate Tract ONNX benchmark.

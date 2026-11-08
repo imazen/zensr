@@ -53,6 +53,15 @@ interchange. No dependency versions were changed for the model swap.
 zenanalyze, additional image codecs, and command-line reference encoders. Those
 are not dependencies of `zensr-micro` or the default `zensr-zenjpeg` entry point.
 
+## Quality tier and inference engine
+
+`Budget::Quality` selects the caller-loaded `AdoptedModel` in `Restorer`.
+Both Quality and Realtime use `zensr-micro` and its tiled SIMD execution;
+the quality tier does not switch to Tract. The adopted graph implementations
+are Compact and SPAN-48. Tract serves the separate ONNX benchmark executable.
+SSIMULACRA2 and Butteraugli evaluation are offline measurements, not part of
+serving inference.
+
 ## Distribution constraints
 
 The tree is not a crates.io release: `zensr-micro` is `publish = false`, and
