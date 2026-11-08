@@ -99,3 +99,7 @@ as five completed rounds, or treat a one-round within-process interval as
 an uncertainty estimate. The three independent processes remain required.
 Quietness-gate flags remain part of the retained evidence; flagged runs do
 not establish a clean confirmation, regardless of the observed speed gap.
+
+[Executed VNNI and packing/quantization profiles](../benchmarks/quality_int8_profile_2026-11-08.md)
+explain the observed integer overhead. Profile shares do not predict latency;
+the independent timing runs retain their actual sample counts and gate flags.
