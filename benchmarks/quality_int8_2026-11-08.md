@@ -317,3 +317,7 @@ raw profiler/round objects and reference golden tensors remain outside the
 model-only upload. Their exclusion does not remove any rows from the reports.
 
 Archive SHA-256: `14afbbad20d14fd1b8679984cee3a3f5abc8147041fb69120d4ced2536e06c79`.
+
+The complete experiment also has a synchronized 1,529,344,000-byte storage
+archive. Sender/server hashes match and six archive members were read back
+against source hashes. [Storage pointer and recovery record](quality_int8_2026-11-08.pointer.md).
