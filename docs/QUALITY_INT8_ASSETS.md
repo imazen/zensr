@@ -6,7 +6,7 @@ parameters. They are experimental PTQ exports. The separate canon4 study
 contains the QAT-trained models.
 
 The historical quality model retains the target/provenance limitations in
-[Models](https://github.com/imazen/zensr/blob/bed17b5f1499fbb4bbe28e1a0a25a7d5589b1e9a/docs/MODELS.md).
+[Models](https://github.com/imazen/zensr/blob/a3fe952074bb4d37ffda2ab47d760caa5a6a9d61/docs/MODELS.md).
 Reused evaluation inputs do not establish unseen-origin quality. No serving
 model or backend is adopted by this package.
 
@@ -52,7 +52,7 @@ Those remain in the retained experiment. `MODEL-CATALOG.json` records exclusions
 
 ## Reproduce an export
 
-Clone zensr at source revision `bed17b5f1499fbb4bbe28e1a0a25a7d5589b1e9a`.
+Clone zensr at source revision `a3fe952074bb4d37ffda2ab47d760caa5a6a9d61`.
 The frozen calibration/export environment records PyTorch
 2.15.0+cu132, NumPy 2.5.4 and ONNX 1.23.2.
 Re-export uses the stored ranges and runs on CPU without recalibration or
@@ -76,7 +76,7 @@ The standalone Rust harness builds with the committed lockfile:
 cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml
 ```
 
-The [protocol](https://github.com/imazen/zensr/blob/bed17b5f1499fbb4bbe28e1a0a25a7d5589b1e9a/docs/QUALITY_INT8.md)
+The [protocol](https://github.com/imazen/zensr/blob/a3fe952074bb4d37ffda2ab47d760caa5a6a9d61/docs/QUALITY_INT8.md)
 and [comparison report](https://github.com/imazen/zensr/blob/main/benchmarks/quality_int8_2026-11-08.md)
 define coverage and limits. The quality comparison forces repair and reports
 both raw and guarded/projected outputs; it does not measure the routed default.
