@@ -2,6 +2,11 @@
 
 ## Known Bugs
 
+- QAT archive transfer initially exceeded its 4 GiB cgroup through dirty NFS
+  page-cache charges despite a bounded Python stream. Periodic fdatasync and
+  DONTNEED now bound outstanding output pages; partial archives remain retained.
+  This orchestration failure does not change completed training or IQA.
+
 - QAT export rounding is fixed: dividing by a scale can disagree with PyTorch's
   native reciprocal quantization at a half-step. Packing now recovers native
   integer codes, with exact operand comparison. CPU/GPU initial scale rounding

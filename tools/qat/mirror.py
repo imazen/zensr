@@ -33,6 +33,11 @@ def main(a):
                 while block:=stream.read(1024*1024):
                     output.write(block);digest.update(block);copied+=len(block)
                     if copied%(64*1024*1024)==0:record('copying')
+                    if copied%(256*1024*1024)==0:
+                        # Dirty NFS pages count against the cgroup even though
+                        # the Python stream itself uses only a few MiB.
+                        output.flush();os.fdatasync(output.fileno())
+                        os.posix_fadvise(output.fileno(),0,copied,os.POSIX_FADV_DONTNEED)
             if process.wait()!=0:raise ValueError('archive command failed')
             record('synchronizing',sha256=digest.hexdigest());output.flush();os.fsync(output.fileno())
         if a.destination.exists():raise ValueError('archive destination appeared')
