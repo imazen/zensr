@@ -423,7 +423,7 @@ quality-int8-reexport *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/reexport.py {{args}}
 
 quality-int8-scaling *args:
-    tools/quality-int8/runtime/target/release/scaling {{args}}
+    ZENSR_THREAD_PARITY={{env_var_or_default("ZENSR_THREAD_PARITY", "each-process")}} tools/quality-int8/runtime/target/release/scaling {{args}}
 
 quality-int8-report *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/report.py {{args}}
@@ -439,3 +439,6 @@ quality-int8-latency-report *args:
 
 quality-int8-package *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/package.py {{args}}
+
+quality-int8-rgb-grid exports output:
+    tools/quality-int8/runtime/target/release/zensr-quality-int8 rgb-grid {{exports}} {{output}}

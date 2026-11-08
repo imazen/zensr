@@ -5,7 +5,31 @@ use engine::*;
 use std::{path::Path, sync::Arc, time::Duration};
 use tract_onnx::prelude::{TValue, TractResult};
 use zenbench::prelude::*;
+// Zenbench 0.1.11 runs children sequentially and stops if a child fails.
+// The optional mode checks every model/size in child zero before any timings;
+// later children retain the same frozen binary, models and CPU boundary.
+fn check_threads_in_this_process() -> bool {
+    match std::env::var("ZENSR_THREAD_PARITY") {
+        Err(std::env::VarError::NotPresent) => true,
+        Ok(mode) if mode == "each-process" => true,
+        Ok(mode) if mode == "first-process" => {
+            assert_eq!(std::env::var("ZENBENCH_SUBPROCESS").as_deref(), Ok("1"));
+            assert_eq!(std::env::var("ZENBENCH_PROCESSES").as_deref(), Ok("3"));
+            let result = std::env::var("ZENBENCH_RESULT_PATH").expect("result path");
+            let path = Path::new(&result);
+            let name = path.file_name().unwrap().to_str().unwrap();
+            assert!(matches!(name, "0.json.gz" | "1.json.gz" | "2.json.gz"));
+            assert!(
+                name == "0.json.gz" || path.with_file_name("0.json.gz").is_file(),
+                "first subprocess must finish before parity is reused"
+            );
+            name == "0.json.gz"
+        }
+        other => panic!("unsupported explicit parity mode: {other:?}"),
+    }
+}
 fn costs(suite: &mut Suite) {
+    let check_threads = check_threads_in_this_process();
     let root = std::env::var("ZENSR_QUALITY_EXPORTS").expect("ZENSR_QUALITY_EXPORTS");
     let _reference = Engine::load(Path::new(&root), "native", 17, 13).unwrap();
     let threads: usize = std::env::var("ZENSR_QUALITY_THREADS")
@@ -23,23 +47,25 @@ fn costs(suite: &mut Suite) {
                 Arc::new(Engine::load_threads(Path::new(&root), arm, n, n, threads).unwrap())
             })
             .collect();
-        for (arm, model) in ARMS.iter().zip(&models) {
-            let single = Engine::load(Path::new(&root), arm, n, n).unwrap();
-            let expected = single.run_threads(&x, n, n, 1).unwrap();
-            let actual = model.run_threads(&x, n, n, threads).unwrap();
-            assert_eq!(
-                actual.len(),
-                expected.len(),
-                "threaded shape differs: {arm}"
-            );
-            assert!(
-                actual
-                    .iter()
-                    .zip(&expected)
-                    .all(|(a, b)| a.is_finite() && a.to_bits() == b.to_bits()),
-                "threaded pixels differ: {arm}, {n}x{n}, {threads} threads"
-            );
-            eprintln!("thread-parity passed: {arm}, {n}x{n}, {threads} threads");
+        if check_threads {
+            for (arm, model) in ARMS.iter().zip(&models) {
+                let single = Engine::load(Path::new(&root), arm, n, n).unwrap();
+                let expected = single.run_threads(&x, n, n, 1).unwrap();
+                let actual = model.run_threads(&x, n, n, threads).unwrap();
+                assert_eq!(
+                    actual.len(),
+                    expected.len(),
+                    "threaded shape differs: {arm}"
+                );
+                assert!(
+                    actual
+                        .iter()
+                        .zip(&expected)
+                        .all(|(a, b)| a.is_finite() && a.to_bits() == b.to_bits()),
+                    "threaded pixels differ: {arm}, {n}x{n}, {threads} threads"
+                );
+                eprintln!("thread-parity passed: {arm}, {n}x{n}, {threads} threads");
+            }
         }
         suite.group(format!("quality-{n}x{n}-{threads}-threads"), |g| {
             g.config()

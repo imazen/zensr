@@ -73,6 +73,7 @@ def main(args):
     for name in ["results.tsv", "COMPLETE", "IDENTITY.json"]:
         copy(evaluation / name, "quality/" + name)
     copy(args.summary, "quality/SUMMARY.json")
+    copy(root / "rgb-grid-i270.json", "quality/RGB8-INPUT-QUANTIZER.json")
     copy(args.inputs, "quality/INPUTS-MANIFEST.tsv")
     for path in args.latency:
         copy(path, "latency/" + path.name)

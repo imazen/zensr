@@ -431,6 +431,41 @@ fn main() -> TractResult<()> {
                 println!("{arm} golden max error {error}");
             }
         }
+        Some("rgb-grid") => {
+            let root = Path::new(&args[2]);
+            let output = Path::new(&args[3]);
+            let model_path = root.join("int8.onnx");
+            let model = tract_onnx::onnx()
+                .model_for_path(&model_path)?
+                .with_input_fact(0, f32::fact([1, 3, 1, 256]).into())?
+                .with_outputs_by_name(["c0qx"])?
+                .into_optimized()?
+                .into_runnable()?;
+            let expected: Vec<u8> = (0..768).map(|v| (v % 256) as u8).collect();
+            let input: Vec<f32> = expected.iter().map(|v| *v as f32 / 255.).collect();
+            let result = model.run(tvec!(tensor(&input, 1, 256)))?;
+            let view = result[0].try_as_plain_ram()?;
+            let codes = view.as_slice::<u8>()?;
+            ensure!(
+                codes == expected,
+                "RGB8 input quantizer changed a code value"
+            );
+            let record = serde_json::json!({
+                "binary_sha256": hash(&fs::read(std::env::current_exe()?)?),
+                "model_sha256": hash(&fs::read(model_path)?),
+                "selected_node": "c0qx",
+                "values_per_channel": 256,
+                "channels": 3,
+                "checked_values": codes.len(),
+                "exact": true,
+                "output_sha256": hash(codes),
+                "scope": "First input quantizer from the frozen integer graph; internal activations/weights and final RGB errors measured separately",
+            });
+            let mut file = fs::File::create_new(output)?;
+            file.write_all(&serde_json::to_vec_pretty(&record)?)?;
+            file.sync_all()?;
+            println!("RGB8 input quantizer preserves all 256 codes in each channel");
+        }
         Some("probe") => {
             let root = Path::new(&args[2]);
             let arm = &args[3];
@@ -456,7 +491,9 @@ fn main() -> TractResult<()> {
                 args.get(6).map(|s| s.parse().unwrap()),
             );
         }
-        _ => bail!("inspect EXPORTS H W OUTPUT | evaluate EXPORTS INPUTS.tsv OUTPUT JOBS [LIMIT]"),
+        _ => bail!(
+            "inspect EXPORTS H W OUTPUT | rgb-grid EXPORTS OUTPUT.json | probe EXPORTS ARM H W COUNT | evaluate EXPORTS INPUTS.tsv OUTPUT JOBS [LIMIT]"
+        ),
     };
     Ok(())
 }
