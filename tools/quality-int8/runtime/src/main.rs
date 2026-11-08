@@ -11,12 +11,16 @@ use std::{
     sync::Mutex,
 };
 use tract_onnx::prelude::*;
+use tract_onnx::tract_core::internal::{bail, ensure};
 use zensr_micro::{consist::*, guards::guarded_merge};
 use zensr_zenjpeg::{ProjectionConfig, RestoreConfig};
 #[path = "../../../../crates/zensr-zenjpeg/src/record/probe.rs"]
 mod record_probe;
 fn hash(b: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(b))
+    Sha256::digest(b)
+        .iter()
+        .map(|v| format!("{v:02x}"))
+        .collect()
 }
 fn decode(jpeg: &[u8], auto: bool) -> (Vec<f32>, usize, usize) {
     let mode = if auto {
@@ -219,4 +223,36 @@ fn main() -> TractResult<()> {
         _ => bail!("inspect EXPORTS H W OUTPUT | evaluate EXPORTS INPUTS.tsv OUTPUT JOBS [LIMIT]"),
     };
     Ok(())
+}
+
+impl Engine {
+    fn inspect(&self) -> String {
+        match self {
+            Self::Native(_) => "native f32 SIMD kernels".into(),
+            Self::Tract(p) => p
+                .model()
+                .nodes()
+                .iter()
+                .map(|n| {
+                    format!(
+                        "{} {} {:?} {:?}",
+                        n.name,
+                        n.op.name(),
+                        n.op.info(),
+                        n.outputs
+                            .iter()
+                            .map(|o| o.fact.datum_type)
+                            .collect::<Vec<_>>()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+}
+fn rgb8(input: &[f32], w: usize, h: usize) -> Vec<u8> {
+    let n = w * h;
+    (0..n)
+        .flat_map(|i| (0..3).map(move |c| (input[c * n + i] * 255. + 0.5).clamp(0., 255.) as u8))
+        .collect()
 }

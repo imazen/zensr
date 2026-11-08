@@ -153,3 +153,15 @@ jobs:
           cargo test --release --locked --manifest-path tools/qat/runtime/Cargo.toml
       - name: QAT runtime lint
         run: cargo clippy --locked --manifest-path tools/qat/runtime/Cargo.toml --all-targets -- -D warnings
+
+  quality-int8-runtime:
+    name: Quality model integer comparison tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/quality-int8/runtime -> target
+      - name: Compile and lint every comparison executable
+        run: cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings
