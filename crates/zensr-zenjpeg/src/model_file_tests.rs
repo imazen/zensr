@@ -296,7 +296,7 @@ fn decoded_container_preserves_default_decisions_and_pixels() {
     for (w, h, q, full) in [
         (8, 8, 5., false),
         (33, 19, 55., true),
-        (513, 8, 85., false),
+        (544, 8, 85., false),
         (17, 15, 98., true),
     ] {
         let data = jpeg(w, h, q, full);
