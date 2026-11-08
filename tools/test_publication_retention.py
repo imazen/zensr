@@ -140,6 +140,27 @@ class ScoredOutputRetention(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown artifact retention'):
             retained_artifact_columns(self.root)
 
+    def test_early_pilots_bind_available_identities_without_inventing_records(self):
+        (self.root / 'ENCODERS.tsv').unlink()
+        (self.root / 'FEATURES.tsv').unlink()
+        result = self.plan()
+        self.assertNotIn('ENCODERS.tsv', result['metadata'])
+        retention.apply(self.root, self.output)
+        self.assertTrue((self.root / self.row['reference_artifact']).exists())
+
+    def test_batch_requires_explicit_completed_children_and_protects_parent(self):
+        parent = self.root.parent
+        with self.assertRaisesRegex(ValueError, 'direct children'):
+            retention.batch(parent, parent / 'plans', ['../escape'])
+        pending = parent / 'pending'
+        pending.mkdir()
+        with self.assertRaisesRegex(ValueError, 'completed'):
+            retention.batch(parent, parent / 'plans', ['study', 'pending'])
+        self.assertFalse((self.root / 'ARTIFACT_RETENTION.json').exists())
+        result = retention.batch(parent, parent / 'plans', ['study'])
+        self.assertEqual(result['study']['removed_this_attempt'], 3)
+        self.assertTrue((self.root / self.row['reference_artifact']).exists())
+
 
 if __name__ == '__main__':
     unittest.main()

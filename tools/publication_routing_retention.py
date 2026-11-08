@@ -52,7 +52,11 @@ def stopped():
 
 
 def identity(root):
-    return {name: digest(root / name) for name in METADATA}
+    # Early scored pilots predate separate FEATURES/ENCODERS records. Preserve
+    # and bind every available identity; never manufacture missing provenance.
+    required = ('COMPLETE', 'COVERAGE.tsv', 'IDENTITY.tsv')
+    return {name: digest(root / name) for name in METADATA
+            if name in required or (root / name).exists()}
 
 
 def artifact(root, value):
@@ -232,15 +236,42 @@ def apply(root, output):
     return state
 
 
+def batch(root, output, runs):
+    root = root.resolve(strict=True)
+    if len(set(runs)) != len(runs):
+        raise ValueError('duplicate batch run')
+    for name in runs:
+        if not name or Path(name).name != name or name in ('.', '..'):
+            raise ValueError('batch runs must be direct children')
+        child = root / name
+        if child.is_symlink() or not (child / 'COMPLETE').is_file():
+            raise ValueError('every requested child must be a completed, non-symlink run')
+    output.mkdir(parents=True, exist_ok=True)
+    results = {}
+    for name in runs:
+        child = root / name
+        destination = output / name
+        if not (destination / 'PLAN.json').exists():
+            plan(child, child, destination)
+        results[name] = apply(child, destination)
+        persist(output / 'SUMMARY.json', dict(checked=now(), runs=results))
+    return results
+
+
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['plan', 'apply'])
+    p.add_argument('action', choices=['plan', 'apply', 'batch'])
     p.add_argument('root', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--tables', type=Path)
+    p.add_argument('--runs', help='explicit comma-separated completed child names for batch')
     a = p.parse_args()
     os.nice(19)
     if a.action == 'plan':
         plan(a.root, a.tables or a.root, a.output)
-    else:
+    elif a.action == 'apply':
         apply(a.root, a.output)
+    else:
+        if not a.runs:
+            p.error('batch requires an explicit --runs list')
+        batch(a.root, a.output, a.runs.split(','))
