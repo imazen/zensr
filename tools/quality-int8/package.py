@@ -73,6 +73,7 @@ def main(args):
     for name in ["results.tsv", "COMPLETE", "IDENTITY.json"]:
         copy(evaluation / name, "quality/" + name)
     copy(args.summary, "quality/SUMMARY.json")
+    copy(args.inputs, "quality/INPUTS-MANIFEST.tsv")
     for path in args.latency:
         copy(path, "latency/" + path.name)
     with args.inputs.open() as stream:

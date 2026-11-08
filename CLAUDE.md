@@ -2,6 +2,11 @@
 
 ## Known Bugs
 
+- Model archive packaging no longer imports pair-image processing dependencies.
+  A minimal-environment admission test exposed an unnecessary OpenCV import;
+  the existing archive helpers now live in a standard-library-only module.
+  All 73 members of the retained QAT model archive verify with the extracted helper.
+
 - Quality-model precision tooling: ONNX int64 counters can become Tract symbolic
   dimension tensors. Range instrumentation now uses bounded int32 counters and
   explicitly casts scalar results; it preserves model outputs bit for bit.
