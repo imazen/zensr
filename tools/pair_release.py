@@ -12,6 +12,7 @@ import tarfile
 
 import numpy as np
 
+from model_archive import make_archive
 from recover_pair_sources import digest
 
 ARRAYS = ['lr_u8.npy', 'hr_u8.npy', 'cond_scalar_f32.npy', 'dmap_u16.npy']
@@ -67,15 +68,6 @@ def copy_selection(source, destination, indices):
     del target
 
 
-def make_archive(folder, destination, names):
-    if destination.exists():
-        raise ValueError('archive already exists')
-    subprocess.run(['tar', '-I', 'zstd -T1 -3', '-cf', str(destination),
-                    '-C', str(folder), *names], check=True)
-    if destination.stat().st_size >= 2 ** 31:
-        raise ValueError('asset exceeds GitHub per-file limit')
-    return dict(name=destination.name, bytes=destination.stat().st_size,
-                sha256=digest(destination), members={n: digest(folder / n) for n in names})
 
 
 def extract_checked(archive, destination, members):

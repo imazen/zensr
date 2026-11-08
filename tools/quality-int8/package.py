@@ -9,7 +9,7 @@ import shutil
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pair_release import make_archive
+from model_archive import make_archive
 from qat.package import sha, verify_archive
 
 BASELINE = "7ac1b1f9bf7952336fb27ad0132378fd02b5e77b6b6958ea4ced6612317f0b39"
