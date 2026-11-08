@@ -179,8 +179,10 @@ def export(result, root, quantize, metadata):
 
 
 def checked_pairs(dataset, split_map):
-    splits = {r['id']: r['split'] for r in csv.DictReader(Path(split_map).open(), delimiter='\t')}
-    rows = list(csv.DictReader((dataset / 'pairs.tsv').open(), delimiter='\t'))
+    with Path(split_map).open() as stream:
+        splits = {r['id']: r['split'] for r in csv.DictReader(stream, delimiter='\t')}
+    with (dataset / 'pairs.tsv').open() as stream:
+        rows = list(csv.DictReader(stream, delimiter='\t'))
     meta = json.loads((dataset / 'meta.json').read_text())
     n, val = int(meta['n']), int(meta['val_tail'])
     if len(rows) != n or not 0 < val < n:

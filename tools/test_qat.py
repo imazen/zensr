@@ -1,4 +1,6 @@
 import os
+import csv
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -43,6 +45,24 @@ class QATTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(grad).all() and grad.abs().sum() > 0)
         with tempfile.TemporaryDirectory(dir=SCRATCH) as d:
             q.export(m, Path(d)/'export', True, dict(test_fixture=True))
+
+    def test_published_split_and_internal_origin_boundary_are_enforced(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as d:
+            root=Path(d)
+            (root/'meta.json').write_text(json.dumps(dict(n=3,val_tail=1)))
+            for name in ('lr_u8.npy','hr_u8.npy'):
+                np.save(root/name,np.zeros((3,128,128,3),dtype=np.uint8))
+            split=root/'split.tsv';split.write_text('id\tsplit\n1000\ttrain\n1002\ttrain\n1004\ttrain\n1001\tvalidate\n')
+            rows=[dict(idx=i,imazen_id=id,canonical_split='train',partition='model_train' if i<2 else 'internal_validation')
+                  for i,id in enumerate(['1000','1002','1004'])]
+            def save():
+                with (root/'pairs.tsv').open('w') as f:
+                    w=csv.DictWriter(f,fieldnames=list(rows[0]),delimiter='\t');w.writeheader();w.writerows(rows)
+            save();self.assertEqual(q.checked_pairs(root,split)[1],2)
+            rows[2]['imazen_id']='1000';save()
+            with self.assertRaisesRegex(ValueError,'overlap'):q.checked_pairs(root,split)
+            rows[2]['imazen_id']='1004';rows[0]['imazen_id']='1001';save()
+            with self.assertRaisesRegex(ValueError,'published'):q.checked_pairs(root,split)
 
     def test_packed_bounds_are_checked(self):
         packed = q.pack(self.baseline())

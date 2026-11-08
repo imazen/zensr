@@ -365,3 +365,18 @@ qat-tests:
 
 qat-train *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/train.py {{args}}
+
+qat-inputs *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/qat/inputs.py {{args}}
+
+qat-evaluator-build:
+    cargo build --release --locked --manifest-path tools/qat/runtime/Cargo.toml
+
+qat-evaluator-check:
+    cargo clippy --locked --manifest-path tools/qat/runtime/Cargo.toml --all-targets -- -D warnings
+
+qat-evaluator-tests:
+    cargo test --release --locked --manifest-path tools/qat/runtime/Cargo.toml
+
+qat-evaluate *args:
+    tools/qat/runtime/target/release/zensr-qat-eval {{args}}

@@ -1,0 +1,35 @@
+[package]
+name = "zensr-qat-eval"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+
+[workspace]
+
+[dependencies]
+zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
+zensr-micro = { path = "../../../crates/zensr-micro", features = ["avx512"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
+fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+butteraugli = "0.9.3"
+imgref = "1.12.2"
+rgb = "0.8.52"
+rayon = "1.11.1"
+enough = "0.4.4"
+sha2 = "0.11.1"
+
+[profile.release]
+lto = "thin"
+
+[patch.crates-io]
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+# zenjpeg 24b6d3fb (PR #253, the APP10 encode record) needs the zencodec 0.2
+# family and a zenpixels rev that are not on crates.io yet; this mirrors
+# zenjpeg's own patch table (dependency patches do not propagate). Drop when
+# those publish. zenanalyze keeps crates.io zencodec 0.1 — different major.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }

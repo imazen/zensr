@@ -135,3 +135,20 @@ jobs:
           export TMPDIR="$HOME/tmp/qat-ci"
           export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat.py
+
+  qat-runtime:
+    name: QAT portable decoder and artifact storage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/qat/runtime -> target
+      - name: Exact packed layout and storage regression tests
+        run: |
+          mkdir -p "$HOME/tmp/qat-runtime-ci"
+          export TMPDIR="$HOME/tmp/qat-runtime-ci"
+          cargo test --release --locked --manifest-path tools/qat/runtime/Cargo.toml
+      - name: QAT runtime lint
+        run: cargo clippy --locked --manifest-path tools/qat/runtime/Cargo.toml --all-targets -- -D warnings
