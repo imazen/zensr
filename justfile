@@ -412,3 +412,9 @@ quality-int8-export *args:
 
 quality-int8-run *args:
     tools/quality-int8/runtime/target/release/zensr-quality-int8 {{args}}
+
+quality-int8-bench *args:
+    tools/quality-int8/runtime/target/release/latency {{args}}
+
+quality-int8-check:
+    cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings
