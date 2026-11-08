@@ -17,6 +17,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- JPEG-quality × category reporting for the larger repair model, including harm
+  rates, worst losses and encoder/sampling breakdowns (`2092319a`). Each category
+  currently contains one source image. [Results](benchmarks/quality_by_category_2026-11-08.md).
+
 - Larger-model PTQ comparison with a complete 2,960-input cohort, RGB precision
   measurements, original float-head controls and independent ONNX reference
   execution (`aea36936`, `9b2b7d3f`). The tested activation-quantized formats lose

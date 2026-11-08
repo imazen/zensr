@@ -1,10 +1,13 @@
 # Routing publication study artifacts
 
-Status: primary development generation and full artifact audit complete:
-235,224 cells and 1,167,767 unique artifacts. The explicitly scoped primary-only
-fit is frozen; reserved evaluation is incomplete. No reserved routing frontier yet.
-The [protocol](publication_routing_protocol_2026-11-04.md) owns the scientific
-design. Runtime defaults remain unchanged; deployment selection follows review.
+Status: original primary development generation and full artifact audit complete:
+235,224 cells and 1,167,767 unique artifacts. The later primary-only fit and
+[reserved score comparison](publication_primary_reserved_2026-11-05.md) also
+completed; the owner cancelled the reserved pixel-artifact audit. The
+[protocol](publication_routing_protocol_2026-11-04.md) owns the scientific design;
+the [routing contract](../docs/DEFAULT_ROUTING.md) describes the subsequently
+adopted runtime policy. This pointer's directory is the original development
+stage, not the complete set of later study directories.
 
 Artifact root verified on i265 on 2026-11-04:
 
@@ -13,6 +16,25 @@ Artifact root verified on i265 on 2026-11-04:
 This is NAS-backed storage. No R2 mirror was created by this study. Generated
 images, compressed pixel buffers, metric maps, fitted models and large tables
 stay outside git. The content-addressed artifact paths are recorded in each cell.
+
+## Storage footprint
+
+A read-only `du -B1 --max-depth=1` inventory on 2026-11-08 measured
+**390,309,404,672 allocated bytes** for this directory; **385,234,767,872 bytes
+(98.70%)** belong to `development-primary`. Retained files include JPEGs,
+zstd-compressed RGB buffers and compressed Butteraugli maps. These support
+inspection and replay of the experiment; inference does not load this tree.
+This is not model-weight storage. Recheck with the same command on the actual
+storage directory before treating these dated counts as current usage.
+
+Within `development-primary`, `artifacts` accounts for **383,908,716,544 bytes**,
+`cells` for **963,477,504 bytes**, and `scratch` for **338,120,704 bytes**.
+These are allocated-byte counts, not sums of logical file lengths.
+
+The compressed primary cell-table archive is **172,706,671 bytes**, excluding
+the separately retained coverage and contract files. It preserves measurements,
+not the bulk pixel artifacts. Removing pixel artifacts would remove direct
+replay/inspection evidence; none was deleted by this inventory.
 
 ## Frozen inputs
 
@@ -97,8 +119,8 @@ plot directories are smoke tests only. They are not model-quality evidence.
 The owner-approved primary-first amendment uses `fit --primary-only` instead of
 the dense fitting recipe above. That fit is complete and frozen in
 `primary-fit-20261105-v1` in the canonical array archive; its identity is recorded
-in the protocol. Reserved primary generation and evaluation remain required for
-the initial frontier. Size-dense development, size generalization, encoder-mode
+in the protocol. The reserved primary score comparison subsequently completed,
+with its pixel-artifact audit cancelled. Size-dense development, size generalization, encoder-mode
 coverage and measured routing cost remain outstanding for broader claims.
 Primary 512-pixel results alone cannot establish full-resolution behavior.
 
@@ -142,7 +164,9 @@ coverage digest is
 `development-primary/AUDITED.json` records the tool/dependency identity and
 `development-primary/audit.log` retains the resource record.
 
-## Dense development execution
+## Historical dense development execution — 2026-11-04
+
+This section records that stage's configuration, not a current process check.
 
 The supplemented 45-reference, 44-origin grid has 402,408 required cells across
 all 20 sizes, the same 61 quality values and four encoders/subsampling pairs.
@@ -155,7 +179,7 @@ limits; these are polling guards. The original local stage remains preserved.
 The metadata and cell tables continue to reside on the canonical array.
 The original primary artifact root is unchanged. The complete manifest and
 selection metadata are retained beside the dense run. `IDENTITY.tsv` retains
-the frozen executable and encoder dependencies. Six workers run under a 16 GiB
+the frozen executable and encoder dependencies. Six workers ran under a 16 GiB
 cap. `first-cell-artifacts.json` records successful hash, decompression and JPEG
 inspection of the first sampled completed cell; a full audit remains mandatory.
 
