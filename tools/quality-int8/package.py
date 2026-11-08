@@ -15,6 +15,38 @@ from qat.package import sha, verify_archive
 BASELINE = "7ac1b1f9bf7952336fb27ad0132378fd02b5e77b6b6958ea4ced6612317f0b39"
 
 
+def auxiliary_inventory(root, plan, identity):
+    exports = root / "exports-v2"
+    shared = root / "exports-shared-v1"
+    if sha(shared / "PLAN.json") != identity["plan_sha256"]:
+        raise ValueError("shared evaluation graph plan differs")
+    shared_plan = json.loads((shared / "PLAN.json").read_text())
+    retained_auxiliary = []
+    auxiliary = [
+        (exports / (name + "-audit.onnx"), metadata["sha256"])
+        for name, metadata in plan["audited_exports"].items()
+    ] + [
+        (shared / (name + "-audit.onnx"), metadata["sha256"])
+        for name, metadata in shared_plan["audited_exports"].items()
+    ] + [
+        (shared / "PLAN.json", identity["plan_sha256"]),
+        (shared / "joint.onnx", identity["joint_sha256"]),
+        (shared / "joint-map.json", shared_plan["joint_map_sha256"]),
+    ]
+    for path, expected_hash in auxiliary:
+        if sha(path) != expected_hash:
+            raise ValueError("retained auxiliary graph identity differs")
+        retained_auxiliary.append(
+            dict(
+                path=str(path.relative_to(root)),
+                bytes=path.stat().st_size,
+                sha256=expected_hash,
+                uploaded=False,
+            )
+        )
+    return retained_auxiliary
+
+
 def main(args):
     root = args.root
     evaluation = root / "evaluation-v6"
@@ -58,30 +90,7 @@ def main(args):
     ):
         raise ValueError("wrong frozen export plan")
     plan = json.loads((exports / "PLAN.json").read_text())
-    shared = root / "exports-shared-v1"
-    if sha(shared / "PLAN.json") != identity["plan_sha256"]:
-        raise ValueError("shared evaluation graph plan differs")
-    shared_plan = json.loads((shared / "PLAN.json").read_text())
-    retained_auxiliary = []
-    auxiliary = [
-        (exports / (name + "-audit.onnx"), metadata["sha256"])
-        for name, metadata in plan["audited_exports"].items()
-    ] + [
-        (shared / "PLAN.json", identity["plan_sha256"]),
-        (shared / "joint.onnx", identity["joint_sha256"]),
-        (shared / "joint-map.json", shared_plan["joint_map_sha256"]),
-    ]
-    for path, expected_hash in auxiliary:
-        if sha(path) != expected_hash:
-            raise ValueError("retained auxiliary graph identity differs")
-        retained_auxiliary.append(
-            dict(
-                path=str(path.relative_to(root)),
-                bytes=path.stat().st_size,
-                sha256=expected_hash,
-                uploaded=False,
-            )
-        )
+    retained_auxiliary = auxiliary_inventory(root, plan, identity)
     catalog = []
     for name, metadata in plan["exports"].items():
         source = exports / (name + ".onnx")
