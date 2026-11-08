@@ -2,6 +2,12 @@
 
 ## Known Bugs
 
+- Quality-model precision tooling: ONNX int64 counters can become Tract symbolic
+  dimension tensors. Range instrumentation now uses bounded int32 counters and
+  explicitly casts scalar results; it preserves model outputs bit for bit.
+  Full-size independent-model/counter replay gates shared-prefix quality
+  evaluation. Timed models remain separate. See `docs/QUALITY_INT8.md`.
+
 - QAT archive transfer initially exceeded its 4 GiB cgroup through dirty NFS
   page-cache charges despite a bounded Python stream. Periodic fdatasync and
   DONTNEED now bound outstanding output pages; partial archives remain retained.
