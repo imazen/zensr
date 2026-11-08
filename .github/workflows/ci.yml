@@ -136,6 +136,7 @@ jobs:
           export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat.py
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat_report.py
+          .venv-qat-ci/bin/python -m unittest discover -s tools -p test_quality_int8_report.py
 
   qat-runtime:
     name: QAT portable decoder and artifact storage
