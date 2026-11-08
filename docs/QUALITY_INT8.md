@@ -121,6 +121,17 @@ This is separate from the table's native normalization/roundtrip field;
 internal weight/activation quantization and final RGB errors remain full-study
 measurements. Keeping an original float head is not a trained post-refiner.
 
+After completing the frozen cohort, `tools/quality-int8/oracle.py` compares all
+eight exports with ONNX's independent reference evaluator on the fixed
+`[1,3,17,13]` input. ONNX 1.23.2's reference quantizers require opset 19;
+official version conversion must leave every node, constant and input/output
+declaration unchanged. Only inferred value metadata and the opset declaration
+change. Both full-integer graphs match Tract bit for bit on this input. All
+eight variants produce identical RGB8 values; the largest normalized float
+difference is 7.1525574e-7. This is one-input interoperability evidence, not
+reference-backend validation of the complete cohort. The initial direct
+opset-13 reference attempt failed and remains retained.
+
 [Model asset layout and export reproduction](QUALITY_INT8_ASSETS.md).
 
 Modern confirmation invokes registration in the parent before dispatching its

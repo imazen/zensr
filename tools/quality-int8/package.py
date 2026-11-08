@@ -91,6 +91,13 @@ def main(args):
         raise ValueError("wrong frozen export plan")
     plan = json.loads((exports / "PLAN.json").read_text())
     retained_auxiliary = auxiliary_inventory(root, plan, identity)
+    reference_path = root / "reference-oracle-v2/REFERENCE-COMPARISON.json"
+    reference = json.loads(reference_path.read_text())
+    if set(reference["arms"]) != set(plan["exports"]):
+        raise ValueError("independent reference coverage differs")
+    for name, metadata in plan["exports"].items():
+        if reference["arms"][name]["model_sha256"] != metadata["sha256"]:
+            raise ValueError("independent reference used a different graph")
     catalog = []
     for name, metadata in plan["exports"].items():
         source = exports / (name + ".onnx")
@@ -109,6 +116,7 @@ def main(args):
         copy(evaluation / name, "quality/" + name)
     copy(args.summary, "quality/SUMMARY.json")
     copy(root / "rgb-grid-i270.json", "quality/RGB8-INPUT-QUANTIZER.json")
+    copy(reference_path, "quality/REFERENCE-COMPARISON.json")
     copy(args.inputs, "quality/INPUTS-MANIFEST.tsv")
     for path in args.latency:
         copy(path, "latency/" + path.name)
@@ -139,6 +147,7 @@ def main(args):
             "raw profiler captures and machine logs",
             "auxiliary shared-prefix and range-counter graphs",
             "latency raw-round objects retained in the experiment archive",
+            "ONNX reference golden tensors; their hashes are in the reference comparison",
         ],
     )
     name = "QUALITY-INT8-20261108.json"

@@ -442,3 +442,6 @@ quality-int8-package *args:
 
 quality-int8-rgb-grid exports output:
     tools/quality-int8/runtime/target/release/zensr-quality-int8 rgb-grid {{exports}} {{output}}
+
+quality-int8-oracle *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/oracle.py {{args}}

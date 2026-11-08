@@ -42,7 +42,8 @@ code grid. Its serialized weights are F32. It is a precision control.
 - `historical-reference/`: original unrounded F32 weights and retained metadata;
   these weights were not evaluated in this comparison.
 - `quality/`: complete measurements, summary, input identity and RGB8 input-grid
-  check. The original input manifest records staging paths for provenance.
+  check, plus the independent ONNX reference comparison on the fixed golden
+  input. The original input manifest records staging paths for provenance.
 - `latency/`: observed process means, actual sample counts and reliability flags.
 - `EVALUATION-INPUT-CATALOG.tsv`: source/rendition identities with pixel paths omitted.
 
