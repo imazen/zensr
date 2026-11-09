@@ -709,8 +709,11 @@ mod tests {
                     assert!(actual.is_nan(), "binary16 NaN {bits:04x}");
                     continue;
                 }
-                _ => (sign * (1.0 + f64::from(fraction) / 1024.0)
-                    * 2f64.powi(i32::from(exponent) - 15)) as f32,
+                _ => {
+                    (sign
+                        * (1.0 + f64::from(fraction) / 1024.0)
+                        * 2f64.powi(i32::from(exponent) - 15)) as f32
+                }
             };
             assert_eq!(actual.to_bits(), expected.to_bits(), "binary16 {bits:04x}");
         }
