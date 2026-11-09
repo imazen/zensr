@@ -41,8 +41,6 @@ try {
     await page.selectOption("#cpu-workers", process.env.ZENSR_CPU_WORKERS);
   if (await page.locator("#repair").isEnabled())
     await page.locator("#repair").setChecked(process.env.ZENSR_REPAIR === "1");
-  if (process.env.ZENSR_REPAIR_MATH)
-    await page.selectOption("#repair-math", process.env.ZENSR_REPAIR_MATH);
   await page.exposeFunction("recordProgress", async (progress) =>
     writeFile(
       out + "/progress.json",
@@ -65,7 +63,9 @@ try {
         });
     }).observe(document.getElementById("status"), { childList: true });
   });
-  await page.click("#start");
+  await page.click(
+    process.env.ZENSR_OPERATION === "repair" ? "#repair-only" : "#start",
+  );
   await page.waitForFunction(
     () => window.zensrState.done || window.zensrState.error,
     {},
@@ -91,6 +91,46 @@ try {
   await page.click("#download");
   await (await downloaded).saveAs(out + "/output.png");
   console.log(JSON.stringify(result));
+  if (process.env.ZENSR_INSPECT_NATIVE === "1") {
+    await page.click("#zoom-native");
+    const inspected = await page.evaluate(() => ({
+      core: window.zensrViewer.core,
+      visible: window.zensrViewer.visible().length,
+      ...window.zensrViewer.stats,
+    }));
+    await writeFile(
+      out + "/native-inspection.json",
+      JSON.stringify(inspected, null, 2) + "\n",
+    );
+    assert.ok(
+      inspected.visible > 0,
+      "At 100%, repair output must admit native tiles rather than the reduced preview",
+    );
+    await page.waitForFunction(
+      () =>
+        window.zensrViewer
+          .visible()
+          .every((t) => window.zensrViewer.cache.has(t.key)) &&
+        window.zensrViewer.stats.loading === 0,
+    );
+    await page.screenshot({ path: out + "/native.png", fullPage: true });
+    const witnesses = await page.evaluate(async () => {
+      const viewer = window.zensrViewer,
+        result = [];
+      for (const tile of viewer.visible()) {
+        const file = await (
+          await viewer.directory.getFileHandle(tile.key)
+        ).getFile();
+        result.push({
+          name: tile.key,
+          bytes: [...new Uint8Array(await file.arrayBuffer())],
+        });
+      }
+      return result;
+    });
+    for (const tile of witnesses)
+      await writeFile(out + "/" + tile.name, Buffer.from(tile.bytes));
+  }
 } finally {
   await browser.close();
 }

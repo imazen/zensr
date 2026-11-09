@@ -12,7 +12,7 @@ wasm-bindgen = "=0.2.129"
 zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
 zensr-micro = { path = "../../../crates/zensr-micro", default-features = false }
 zenpixels = "0.3.1"
-zenpixels-convert = "0.3.1"
+zenpixels-convert = { version = "0.3.1", features = ["cms-moxcms"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
 [patch.crates-io]
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }

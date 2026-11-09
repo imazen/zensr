@@ -6,6 +6,7 @@ import {
   planar,
   paste,
   rgbaFromRgb,
+  previewSize,
 } from "./core.mjs";
 import { capWasmMemory } from "./budgets.mjs";
 import { loadSession, modelBytes } from "./runtime.mjs";
@@ -40,6 +41,7 @@ self.onmessage = (event) => {
 
 async function run({
   file,
+  operation = "sr",
   model,
   scale,
   backend,
@@ -49,6 +51,12 @@ async function run({
   repairEnabled = false,
 }) {
   const jobStarted = performance.now();
+  if (operation === "repair") {
+    if (scale !== 1 || !repairEnabled)
+      throw new Error("Repair-only requires 1× output and JPEG repair.");
+  } else if (operation !== "sr" || ![2, 4].includes(scale)) {
+    throw new Error("Choose repair-only or 2×/4× super-resolution.");
+  }
   const codec = await import("./codec/zensr_browser_codec.js");
   await codec.default();
   if (file.size > 64 * 1024 * 1024)
@@ -156,7 +164,7 @@ async function run({
     await send({ type: "repair-complete", report });
   }
   encoded = null;
-  let width, height, canvas, context;
+  let width, height, canvas, context, repairPixels;
   if (repaired) {
     width = repaired.width;
     height = repaired.height;
@@ -176,7 +184,7 @@ async function run({
       rgba[i * 4 + 3] = 255;
     }
     context.putImageData(new ImageData(rgba, width, height), 0, 0);
-    if (detailTiles) {
+    if (detailTiles && operation === "sr") {
       await send({ type: "checkpoint-start" });
       const checkpoint = new codec.PngRows(width, height);
       const write = async (data) => {
@@ -195,6 +203,7 @@ async function run({
       await write(checkpoint.finish());
       await send({ type: "checkpoint-done", width, height });
     }
+    if (operation === "repair") repairPixels = repaired.rgb;
     repaired = null;
   } else {
     canvas = originalCanvas;
@@ -207,10 +216,11 @@ async function run({
   }
 
   const output = bounds(width, height, scale);
-  const ratio = Math.min(1, 1400 / width, 1400 / height);
+  const previewShape = previewSize(width, height);
+  const ratio = previewShape.ratio;
   const preview = await createImageBitmap(canvas, {
-    resizeWidth: Math.max(1, Math.round(width * ratio)),
-    resizeHeight: Math.max(1, Math.round(height * ratio)),
+    resizeWidth: previewShape.width,
+    resizeHeight: previewShape.height,
   });
   await send(
     {
@@ -221,9 +231,110 @@ async function run({
       outputWidth: output.width,
       outputHeight: output.height,
       scale,
+      detailCore: operation === "repair" ? 512 : CORE * scale,
     },
     [preview],
   );
+  if (operation === "repair") {
+    const started = performance.now();
+    const encoder = new codec.PngRows(width, height);
+    const emit = async (data) => {
+      if (data.byteLength) await send({ type: "chunk", data }, [data.buffer]);
+    };
+    const detailCore = 512;
+    const total =
+      Math.ceil(width / detailCore) * Math.ceil(height / detailCore);
+    let completed = 0,
+      maxBandBytes = 0;
+    await emit(encoder.drain());
+    for (let y = 0; y < height; y += detailCore) {
+      const rows = Math.min(detailCore, height - y);
+      for (let x = 0; x < width; x += detailCore) {
+        const columns = Math.min(detailCore, width - x),
+          rgb = new Uint8Array(columns * rows * 3);
+        for (let row = 0; row < rows; row++) {
+          const offset = ((y + row) * width + x) * 3;
+          rgb.set(
+            repairPixels.subarray(offset, offset + columns * 3),
+            row * columns * 3,
+          );
+        }
+        const image = await createImageBitmap(
+          new ImageData(rgbaFromRgb(rgb, columns, rows), columns, rows),
+          {
+            resizeWidth: Math.max(1, Math.ceil(columns * ratio)),
+            resizeHeight: Math.max(1, Math.ceil(rows * ratio)),
+          },
+        );
+        let png;
+        if (detailTiles) {
+          const tileEncoder = new codec.PngRows(columns, rows);
+          tileEncoder.push(rgb, rows);
+          png = tileEncoder.finish();
+        }
+        completed++;
+        await send(
+          {
+            type: "tile",
+            bitmap: image,
+            x: x * ratio,
+            y: y * ratio,
+            width: columns * ratio,
+            height: rows * ratio,
+            completed,
+            total,
+            seconds: (performance.now() - started) / 1000,
+            workers: 1,
+            png,
+            column: x / detailCore,
+            row: y / detailCore,
+          },
+          png ? [image, png.buffer] : [image],
+        );
+      }
+      // Preserve the original encoder strip/chunk boundaries independently of inspection tiles.
+      for (let line = y; line < y + rows; line += CORE) {
+        const stripRows = Math.min(CORE, y + rows - line);
+        const band = repairPixels.subarray(
+          line * width * 3,
+          (line + stripRows) * width * 3,
+        );
+        maxBandBytes = Math.max(maxBandBytes, band.byteLength);
+        encoder.push(band, stripRows);
+        await emit(encoder.drain());
+      }
+    }
+    await emit(encoder.finish());
+    repairPixels = null;
+    canvas.width = 1;
+    canvas.height = 1;
+    postMessage({
+      type: "done",
+      stats: {
+        operation,
+        backend: "wasm",
+        model: "canon4",
+        scale: 1,
+        width,
+        height,
+        outputWidth: width,
+        outputHeight: height,
+        tiles: completed,
+        seconds: (performance.now() - started) / 1000,
+        processingSeconds: (performance.now() - jobStarted) / 1000,
+        repair: repairReport,
+        decode: decodeReport,
+        workers: 1,
+        workerReservationMiB: 0,
+        peakInFlight: 1,
+        gpu: null,
+        wasmBytes: repairReport.wasmBytes,
+        maxBandBytes,
+        maxTileFloats: 0,
+      },
+    });
+    return;
+  }
   postMessage({ type: "status", text: "Loading model…" });
   const total = Math.ceil(width / CORE) * Math.ceil(height / CORE);
   const bytes = await modelBytes(model, codec);

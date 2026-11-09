@@ -1,0 +1,36 @@
+// Frozen pixel-definition identities shared by both routing models.
+pub(super) const PIXELS: [(&str, &str); 24] = [
+    ("edge_slope_stdev", "edge_slope_stdev@5ba2543a"),
+    ("patch_fraction_fast", "patch_fraction_fast@d19dc492"),
+    ("aq_map_std", "aq_map_std@575083ff"),
+    ("variance", "variance@8e9a50f1"),
+    ("colourfulness", "colourfulness@565ef18c"),
+    ("laplacian_variance", "laplacian_variance@4b241385"),
+    ("variance_spread", "variance_spread@1d5b275c"),
+    ("distinct_color_bins", "distinct_color_bins@4b461bf0"),
+    ("palette_density", "palette_density@726dd005"),
+    ("luma_histogram_entropy", "luma_histogram_entropy@b1683357"),
+    ("luma_kurtosis", "luma_kurtosis@cd0dd7d4"),
+    ("skin_tone_fraction", "skin_tone_fraction@6b3d9c3c"),
+    (
+        "chroma_luma_covariance_cb",
+        "chroma_luma_covariance_cb@3e5ca2e1",
+    ),
+    (
+        "chroma_luma_covariance_cr",
+        "chroma_luma_covariance_cr@ca45d43f",
+    ),
+    ("cr_peak_sharpness", "cr_peak_sharpness@bd31738c"),
+    (
+        "orientation_energy_ratio",
+        "orientation_energy_ratio@bc450f3f",
+    ),
+    ("aq_map_p90", "aq_map_p90@f0719a03"),
+    ("noise_floor_y_p25", "noise_floor_y_p25@8a2f313a"),
+    ("noise_floor_y_p90", "noise_floor_y_p90@20255e0e"),
+    ("noise_floor_uv_p50", "noise_floor_uv_p50@2f2b92d9"),
+    ("noise_floor_uv_p75", "noise_floor_uv_p75@e9c032c7"),
+    ("noise_floor_uv_p90", "noise_floor_uv_p90@9b89fd22"),
+    ("quant_survival_y", "quant_survival_y@0e06739e"),
+    ("xyb444_color_loss", "xyb444_color_loss@ef6982d1"),
+];

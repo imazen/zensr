@@ -9,7 +9,7 @@ SIMD_SHA='fa12285f44668d32830001bbfabfe1c0b225ac5eae7d4875f3c0de3129aa8ac7'
 
 def sha(data):return hashlib.sha256(data).hexdigest()
 
-def main(output):
+def main(output, mode="relaxed"):
     source=Path(__file__).resolve().parent
     repo=source.parents[1]
     simd=(repo/'crates/zensr-micro/src/simd.rs').read_bytes()
@@ -25,18 +25,19 @@ def main(output):
     patched=simd.replace(b'.mul_add_portable(',b'.mul_add(').replace(b'.mul_sub_portable(',b'.mul_sub(')
     replacements=simd.count(b'.mul_add_portable(')+simd.count(b'.mul_sub_portable(')
     if replacements!=15:raise ValueError('Unexpected CNN arithmetic patch size')
-    files['crates/zensr-micro/src/simd.rs']=b'// Generated relaxed-SIMD experiment; original portable-rounding comments describe the strict reference.\n'+patched
+    files['crates/zensr-micro/src/simd.rs']=f'// Generated {mode}-SIMD browser build; portable-rounding comments describe the strict reference.\n'.encode()+patched
     manifest=files['repair/Cargo.toml'].decode().replace('../../../crates/','../crates/')
     files['repair/Cargo.toml']=manifest.encode()
     output.mkdir(parents=True,exist_ok=False)
     for name,data in files.items():
         path=output/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
-    report=dict(source_simd_sha256=SIMD_SHA,replacements=replacements,
-        policy='Only CNN vector multiply-add/sub changes from portable one-rounding to engine relaxed madd; strict product source is unchanged.',
+    report=dict(mode=mode,source_simd_sha256=SIMD_SHA,replacements=replacements,
+        policy=f'Only CNN vector multiply-add/sub changes from portable one-rounding to engine {mode} arithmetic; strict product source is unchanged.',
         source=source_identity,generated={name:sha(data) for name,data in files.items()})
     (output/'RELAXED_SOURCE.json').write_text(json.dumps(report,indent=2)+'\n')
     print(str(output/'repair/Cargo.toml'))
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('output',type=Path)
-    main(parser.parse_args().output)
+    parser.add_argument('--mode',choices=['relaxed','unfused'],default='relaxed')
+    args=parser.parse_args();main(args.output,args.mode)

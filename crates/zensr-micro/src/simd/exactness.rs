@@ -730,7 +730,10 @@ fn adopted_models_tiled_equals_whole_bitwise() {
                     .zip(&whole)
                     .position(|(a, b)| a.to_bits() != b.to_bits())
                 {
-                    panic!("{name} {h}x{w} threads={threads} tile={tile}: element {i} {:e} != whole {:e}", tiled[i], whole[i]);
+                    panic!(
+                        "{name} {h}x{w} threads={threads} tile={tile}: element {i} {:e} != whole {:e}",
+                        tiled[i], whole[i]
+                    );
                 }
             }
         }

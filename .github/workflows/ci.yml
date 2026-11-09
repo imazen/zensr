@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Tile coverage and allocation bounds
-        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs
+        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs tools/browser-demo/repair-runtime.test.mjs
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown

@@ -134,7 +134,7 @@ export class DetailViewer {
     this.directory = directory;
     this.outputWidth = metadata.outputWidth;
     this.outputHeight = metadata.outputHeight;
-    this.core = metadata.scale * 128;
+    this.core = metadata.detailCore ?? metadata.scale * 128;
     const source =
       file instanceof ImageBitmap ? file : await createImageBitmap(file);
     if (generation !== this.generation) {
@@ -147,7 +147,7 @@ export class DetailViewer {
   }
   result(metadata, directory) {
     this.directory = directory;
-    this.core = metadata.scale * 128;
+    this.core = metadata.detailCore ?? metadata.scale * 128;
     this.outputWidth = metadata.outputWidth;
     this.outputHeight = metadata.outputHeight;
     this.render();

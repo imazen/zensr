@@ -1,6 +1,7 @@
 //! Browser glue for the unchanged native canon4 restoration request.
 #![forbid(unsafe_code)]
 use wasm_bindgen::prelude::*;
+use zenpixels_convert::cms::PluggableCms;
 use zensr_micro::{adopted::AdoptedModel, decode_all_f16};
 use zensr_zenjpeg::api::{Budget, Outcome, Restorer};
 
@@ -48,8 +49,9 @@ pub fn repair(jpeg: &[u8], weights: &[u8]) -> Result<RepairResult, JsValue> {
     let info = zenjpeg::decoder::Decoder::new()
         .read_info(jpeg)
         .map_err(|e| error(e.to_string()))?;
-    if info.has_icc_profile {
-        return Err(error("JPEG repair with embedded ICC profiles is not supported in this preview. Turn repair off for browser color-managed SR.".into()));
+    let icc = zenjpeg::decoder::extract_icc_profile(jpeg);
+    if info.has_icc_profile && icc.is_none() {
+        return Err(error("JPEG ICC profile is incomplete".into()));
     }
     let (width, height) = (info.dimensions.width, info.dimensions.height);
     if width == 0
@@ -103,7 +105,29 @@ pub fn repair(jpeg: &[u8], weights: &[u8]) -> Result<RepairResult, JsValue> {
     };
     let pixels = outcome.pixels();
     let (width, height) = (pixels.width() as u32, pixels.height() as u32);
-    let rgb = pixels.to_rgb8();
+    let mut rgb = pixels.to_rgb8();
+    // Projection stays in JPEG sample space. Convert repaired samples to display sRGB afterward.
+    if let Some(icc) = icc {
+        let mut transform = zenpixels_convert::MoxCms
+            .build_source_transform(
+                zenpixels::ColorProfileSource::Icc(&icc),
+                zenpixels::ColorProfileSource::Cicp(zenpixels::Cicp::SRGB),
+                zenpixels::PixelFormat::Rgb8,
+                zenpixels::PixelFormat::Rgb8,
+                &zenpixels_convert::ConvertOptions::retain_channels(),
+            )
+            .ok_or_else(|| error("JPEG ICC color space is unsupported for RGB repair".into()))?
+            .map_err(|e| error(e.to_string()))?;
+        transform.prepare(width).map_err(|e| error(e.to_string()))?;
+        let row_bytes = width as usize * 3;
+        let mut row = vec![0; row_bytes];
+        for source in rgb.chunks_exact_mut(row_bytes) {
+            transform
+                .try_transform_row(source, &mut row, width)
+                .map_err(|e| error(e.to_string()))?;
+            source.copy_from_slice(&row);
+        }
+    }
     let (width, height, rgb) = if orientation != 1 {
         let source = zenpixels::PixelSlice::new(
             &rgb,

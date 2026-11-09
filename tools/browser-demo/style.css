@@ -415,3 +415,8 @@ canvas {
   outline: 2px solid #5f8769;
   outline-offset: 3px;
 }
+
+#repair-only {
+  margin-top: 0;
+  margin-bottom: 8px;
+}

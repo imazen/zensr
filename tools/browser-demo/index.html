@@ -18,7 +18,8 @@
         <p class="eyebrow">SUPER-RESOLUTION PREVIEW</p>
         <h1>A closer look.</h1>
         <p class="intro">
-          Try SPANF or DSCF on your own image. Processing stays in this browser.
+          Repair JPEG artifacts at their original size, or upscale with SPANF or
+          DSCF. Processing stays in this browser.
         </p>
         <label class="file"
           >Choose an image<input
@@ -28,7 +29,7 @@
           /><span id="filename">JPEG or PNG · up to 12.6 MP</span></label
         >
         <label
-          >Model<select id="model">
+          >SR model<select id="model">
             <option value="spanf">SPANF</option>
             <option value="dscf">DSCF</option>
           </select></label
@@ -66,22 +67,19 @@
           ><input type="checkbox" id="repair" disabled />JPEG artifact repair
           before SR</label
         >
-        <label
-          >Repair arithmetic<select id="repair-math">
-            <option value="strict">Strict SIMD128</option>
-            <option value="relaxed">Relaxed SIMD128 (experimental)</option>
-          </select></label
-        >
         <p id="repair-report" class="detail">
           Optional canon4 auto routing · JPEG only. Full-resolution repair uses
-          one CPU worker. Strict arithmetic can take minutes; relaxed SIMD is
-          faster but may round differently across browsers.
+          one CPU worker. Relaxed SIMD is tried first, with unfused SIMD as its
+          fallback.
         </p>
         <p class="hint">
           JPEG decoding uses zenjpeg with ICC-to-sRGB conversion. Both models
           run at 4×. The 2× output is resized before its final 8-bit conversion.
           Optional canon4 repair runs first for JPEG inputs.
         </p>
+        <button id="repair-only" class="secondary" disabled>
+          Repair JPEG only (1×)
+        </button>
         <button id="start" disabled>Upscale image</button
         ><button id="cancel" class="secondary" hidden>Cancel</button>
         <div class="status" role="status" aria-live="polite">

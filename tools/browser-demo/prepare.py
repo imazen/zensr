@@ -19,7 +19,7 @@ def main(a):
     dist = source / 'dist'
     dist.mkdir(exist_ok=True)
     assets = ['index.html', 'style.css', 'app.mjs', 'worker.mjs', 'tile-worker.mjs',
-              'repair-worker.mjs', 'decode-worker.mjs', 'runtime.mjs', 'pool.mjs',
+              'repair-worker.mjs', 'repair-runtime.mjs', 'decode-worker.mjs', 'runtime.mjs', 'pool.mjs',
               'pool-plan.mjs', 'core.mjs', 'budgets.mjs', 'viewer.mjs', 'gallery.mjs']
     for name in assets:
         shutil.copy2(source / name, dist / name)
@@ -78,13 +78,14 @@ def main(a):
                               source_sha256=sha(path), precision='FP32 compute', halo=16 if name=='spanf' else 21)
     weights=source.parents[1]/'models/adopted/dejpeg_rt24i_canon4/weights_f16.raw'
     shutil.copy2(weights,models/'canon4.raw')
-    manifest['repair']=dict(url='./models/canon4.raw',sha256=sha(weights),precision='canon4 stored f16 weights, FP32 compute', relaxed=bool(a.relaxed_package))
+    manifest['repair']=dict(url='./models/canon4.raw',sha256=sha(weights),precision='canon4 stored f16 weights, FP32 compute', relaxed=bool(a.relaxed_package),unfused=bool(a.unfused_package))
     (dist/'models.json').write_text(json.dumps(manifest, indent=2)+'\n')
-    if a.relaxed_package:
-        target=dist/'repair-relaxed'
-        target.mkdir(exist_ok=True)
-        for name in ['zensr_browser_repair.js','zensr_browser_repair_bg.wasm']:
-            shutil.copy2(a.relaxed_package/name,target/name)
+    for mode, package in [('relaxed',a.relaxed_package),('unfused',a.unfused_package)]:
+        if package:
+            target=dist/('repair-'+mode)
+            target.mkdir(exist_ok=True)
+            for name in ['zensr_browser_repair.js','zensr_browser_repair_bg.wasm']:
+                shutil.copy2(package/name,target/name)
     print(json.dumps(dict(directory=str(dist),models=manifest),indent=2))
 
 
@@ -93,4 +94,5 @@ if __name__ == '__main__':
     p.add_argument('--sr',type=Path,required=True)
     p.add_argument('--dscf',type=Path,required=True)
     p.add_argument('--relaxed-package',type=Path)
+    p.add_argument('--unfused-package',type=Path)
     main(p.parse_args())

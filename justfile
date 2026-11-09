@@ -638,3 +638,12 @@ browser-decode-test *args:
 
 browser-archive *args:
     python3 tools/browser-demo/archive.py {{args}}
+
+browser-unfused-build output:
+    ~/work/claudehints/scripts/run-heavy --mem 6G --jobs 4 -- bash tools/browser-demo/build-relaxed.sh {{output}} unfused
+
+browser-repair-only-test *args:
+    node tools/browser-demo/repair-only-test.mjs {{args}}
+
+browser-unfused-drift *args:
+    node tools/browser-demo/unfused-drift.mjs {{args}}

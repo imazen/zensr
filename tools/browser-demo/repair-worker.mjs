@@ -1,17 +1,12 @@
 // A separate, window-owned worker releases the repair heap before SR starts.
-self.onmessage = async ({ data: { port, jpeg, weights, math = "strict" } }) => {
+import { repairRuntime } from "./repair-runtime.mjs";
+self.onmessage = async ({ data: { port, jpeg, weights } }) => {
   try {
-    if (!["strict", "relaxed"].includes(math))
-      throw new Error("Unknown repair arithmetic mode");
-    const codec = await import(
-      math === "relaxed"
-        ? "./repair-relaxed/zensr_browser_repair.js"
-        : "./repair/zensr_browser_repair.js"
-    );
-    await codec.default();
+    const { codec, math, fallbackReason } = await repairRuntime();
     const result = codec.repair(jpeg, weights);
     const report = {
       math,
+      fallbackReason,
       width: result.width,
       height: result.height,
       applied: result.applied,

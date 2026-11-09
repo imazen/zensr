@@ -12,6 +12,8 @@ zenpixels = { version = ">=0.2.14, <0.4.0", optional = true }
 bytemuck = { version = "1.25.2", optional = true }
 
 [features]
+# One-rounding WASM reference; default WASM follows the module SIMD capabilities.
+strict-fma = []
 # The already-shipped canon4 model, for codec-native restoration and its exact regressions.
 canon4 = []
 internals = []
