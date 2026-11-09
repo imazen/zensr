@@ -217,6 +217,10 @@ had a copied-binary executable-mode error and produced zero cells; it is kept
 separate and does not supply results.
 
 Artifact root verified on i265: `/mnt/v/output/zensr/sr-cascade-20261109/`.
+The verified NAS mirror is `output/zensr/sr-cascade-20261109/` in the project
+archive store. `ARCHIVE_VERIFIED-v1.json` records the identity/table/model/binary
+checks and seeded-random scored/reference PNG checks. Open `witnesses.html`
+from either artifact root for the six-case visual comparison.
 `summary-v1/rows.tsv` retains 2,788 arm records; `summary-v1/summary.json` retains
 all predefined paired/grouped summaries. `run-v1/cells/` gives routes, input
 and pixel hashes, exact scalar scores and PNG locations. The scored outputs,
