@@ -451,6 +451,15 @@ external-model-check:
     cargo fmt --manifest-path tools/quality-int8/runtime/Cargo.toml -- --check
     cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings
 
+external-sr-cpu-build:
+    cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin cpu_sr
+
+external-sr-cpu-worker *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/cpu_worker.py {{args}}
+
+external-sr-cpu-plan *args:
+    python3 tools/external-models/cpu_plan.py {{args}}
+
 external-model-pilot *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/pilot.py {{args}}
 
