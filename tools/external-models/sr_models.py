@@ -140,7 +140,35 @@ class ResShift:
         return (result[:,:,:h*4,:w*4].clamp(-1,1)*.5+.5).float()
 
 
+class DSCF:
+    """Pinned author DSCF26 ×4, without changing its normalization or forward."""
+    def __init__(self, root, device='cuda'):
+        path = root/'source/models/team23_DSCF.py'
+        spec = importlib.util.spec_from_file_location('zensr_author_dscf', path)
+        if device == 'cpu':
+            # The author constructor runs a CUDA warmup before loading weights.
+            spec = importlib.util.spec_from_loader('zensr_author_dscf', CPUDeviceLoader(path))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.model = module.DSCF(3, 3, feature_channels=26, upscale=4)
+        state = torch.load(root/'team23_DSCF.pth', map_location=device, weights_only=True)
+        # Fail on any absent/extra parameter, even though the author uses strict=False.
+        self.model.load_state_dict(state, strict=True)
+        self.model.to(device).eval().requires_grad_(False)
+        self.parameters = sum(p.numel() for p in self.model.parameters())
+
+    @torch.inference_mode()
+    def __call__(self, low):
+        return self.model(low)
+
+
 def load(root, name, device='cuda'):
     if device not in ('cuda', 'cpu'):
         raise ValueError('unsupported SR oracle device')
-    return S3Diff(root, device) if name=='s3diff' else ResShift(root, 'bicubic' if name=='resshift-bicubic' else 'real', device)
+    if name == 'dscf':
+        return DSCF(root, device)
+    if name == 's3diff':
+        return S3Diff(root, device)
+    if name in ('resshift-v3', 'resshift-bicubic'):
+        return ResShift(root, 'bicubic' if name=='resshift-bicubic' else 'real', device)
+    raise ValueError('unsupported SR model')

@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -21,9 +22,21 @@ def main(a):
     torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
     torch.use_deterministic_algorithms(True)
     model=load(a.root,a.name)
-    source=a.root/('source/src/inference_s3diff.py' if a.name=='s3diff' else 'source/sampler.py')
+    source=a.root/('source/test_demo.py' if a.name=='dscf' else ('source/src/inference_s3diff.py' if a.name=='s3diff' else 'source/sampler.py'))
     tree=ast.parse(source.read_text())
-    if a.name!='s3diff':
+    if a.name=='dscf':
+        sys.path.insert(0,str(a.root/'source'))
+        functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('select_model','forward')]
+        scope=dict(torch=torch,os=os)
+        exec(compile(ast.Module(body=functions,type_ignores=[]),str(source),'exec'),scope)
+        original_load=torch.load
+        def load_checkpoint(path,*args,**kwargs):
+            if path!='model_zoo/team23_DSCF.pth':raise ValueError('unexpected author checkpoint')
+            return original_load(a.root/'team23_DSCF.pth',map_location='cuda',weights_only=True)
+        with patch('torch.load',side_effect=load_checkpoint):
+            author_model,_,data_range,tile=scope['select_model'](SimpleNamespace(model_id=23),'cuda')
+        if data_range!=1.0 or tile is not None:raise ValueError('author input contract differs')
+    elif a.name!='s3diff':
         author=next(c for c in tree.body if isinstance(c,ast.ClassDef) and c.name=='ResShiftSampler')
         method=next(m for m in author.body if isinstance(m,ast.FunctionDef) and m.name=='sample_func')
         scope=dict(torch=torch,F=F,math=math)
@@ -32,9 +45,12 @@ def main(a):
             autoencoder=model.autoencoder,padding_offset=64,sf=4)
     records=[]
     for h,w in [(128,72),(65,71)]:
-        low=torch.linspace(0,1,3*h*w,device='cuda').reshape(1,3,h,w)
         torch.manual_seed(20261109)
-        if a.name=='s3diff':
+        low=(torch.rand(1,3,h,w,device='cuda') if a.name=='dscf' else torch.linspace(0,1,3*h*w,device='cuda').reshape(1,3,h,w))
+        torch.manual_seed(20261109)
+        if a.name=='dscf':
+            with torch.inference_mode():expected=scope['forward'](low,author_model,tile=tile)
+        elif a.name=='s3diff':
             from PIL import Image
             from torchvision import transforms
             from utils.wavelet_color import wavelet_color_fix, adain_color_fix
@@ -66,6 +82,6 @@ def main(a):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--root',type=Path,required=True);p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic'],required=True)
+    p.add_argument('--root',type=Path,required=True);p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic','dscf'],required=True)
     p.add_argument('--output',type=Path,required=True)
     main(p.parse_args())

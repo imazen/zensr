@@ -21,7 +21,7 @@ def main(a):
     torch.use_deterministic_algorithms(True)
     torch.backends.mkldnn.enabled=True
     model=load(a.root,a.name,device='cpu')
-    modules=[model.model,model.de] if a.name=='s3diff' else [model.model,model.autoencoder]
+    modules=([model.model,model.de] if a.name=='s3diff' else ([model.model] if a.name=='dscf' else [model.model,model.autoencoder]))
     if any(p.device.type!='cpu' or p.dtype!=torch.float32 for m in modules for p in m.parameters()):
         raise ValueError('CPU FP32 model parameter contract differs')
     data=np.fromfile(a.input,dtype='<f4')
@@ -55,7 +55,7 @@ def main(a):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic'],required=True)
+    p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic','dscf'],required=True)
     p.add_argument('--root',type=Path,required=True);p.add_argument('--input',type=Path,required=True)
     p.add_argument('--height',type=int,required=True);p.add_argument('--width',type=int,required=True)
     p.add_argument('--threads',type=int,required=True);p.add_argument('--samples',type=int,default=3)

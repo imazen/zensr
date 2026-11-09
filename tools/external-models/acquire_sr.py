@@ -10,6 +10,7 @@ import urllib.request
 REPOS = {
     's3diff': ('ArcticHare105/S3Diff', '6a2e0a47676f2f01fccdfd4e940077d3038d953e'),
     'resshift': ('zsyOAOA/ResShift', 'bb03b7d21614cace01787e097c8a6ab6b945227d'),
+    'dscf': ('Yaozzz666/DSCF-SR', 'ef4a32d01b792120707d4cfd64f3993789a84d53'),
 }
 
 
@@ -85,7 +86,13 @@ def main(root, name):
                     raise ValueError(f'extracted source changed: {path}')
             else:
                 path.write_bytes(data)
-    if name == 'resshift':
+    if name == 'dscf':
+        filename = 'model_zoo/team23_DSCF.pth'
+        path = target/'team23_DSCF.pth'
+        records['files'][path.name] = fetch(
+            f'https://raw.githubusercontent.com/{repo}/{revision}/{filename}', path, 535137,
+            '239e76bc4e4e738491c3963805c0a79f524400acf5fbde34b2cb1a855dd62cb1')
+    elif name == 'resshift':
         for filename, size in [('autoencoder_vq_f4.pth', 221364711), ('resshift_realsrx4_s4_v3.pth', 477917058), ('resshift_bicsrx4_s4.pth', 477917058)]:
             url = f'https://github.com/{repo}/releases/download/v2.0/{filename}'
             record = fetch(url, target/filename, size)
