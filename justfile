@@ -425,6 +425,9 @@ qat-package *args:
 quality-int8-build:
     cargo build --release --manifest-path tools/quality-int8/runtime/Cargo.toml
 
+external-model-acquire root:
+    python3 tools/external-models/acquire.py "{{root}}"
+
 quality-int8-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/export.py {{args}}
 
