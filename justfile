@@ -647,3 +647,18 @@ browser-repair-only-test *args:
 
 browser-unfused-drift *args:
     node tools/browser-demo/unfused-drift.mjs {{args}}
+
+browser-torch-reference *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/torch-reference.py {{args}}
+
+browser-torch-test *args:
+    node tools/browser-demo/torch-browser-test.mjs {{args}}
+
+browser-torch-score *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/torch-score.py {{args}}
+
+browser-sr-diff-build:
+    cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin sr_diff
+
+browser-preview-test *args:
+    node tools/browser-demo/preview-test.mjs {{args}}
