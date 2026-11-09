@@ -13,6 +13,25 @@ REPOS = {
 }
 
 
+def model_metadata(root, model, revision):
+    path = root/(model.replace('/', '-')+'-metadata.json')
+    if path.exists():
+        metadata = json.loads(path.read_text())
+    else:
+        url = f'https://huggingface.co/api/models/{model}/revision/{revision}?blobs=true'
+        with urllib.request.urlopen(url, timeout=60) as response:
+            data = response.read(2*1024*1024+1)
+        if len(data) > 2*1024*1024:
+            raise ValueError('model metadata exceeds bounded size')
+        metadata = json.loads(data)
+        if metadata['sha'] != revision:
+            raise ValueError('HF revision differs')
+        path.write_bytes(data)
+    if metadata['sha'] != revision:
+        raise ValueError('HF revision differs')
+    return metadata
+
+
 def fetch(url, path, limit, expected=None):
     if path.exists():
         h = hashlib.sha256()
@@ -83,9 +102,7 @@ def main(root, name):
                 'vae/config.json','vae/diffusion_pytorch_model.safetensors',
                 'tokenizer/merges.txt','tokenizer/special_tokens_map.json',
                 'tokenizer/tokenizer_config.json','tokenizer/vocab.json'])]:
-            metadata = json.loads((root/(model.replace('/','-')+'-metadata.json')).read_text())
-            if metadata['sha'] != revision:
-                raise ValueError('HF revision differs')
+            metadata = model_metadata(root, model, revision)
             inventory = {v['rfilename']: v for v in metadata['siblings']}
             base = target/('sd-turbo' if model.startswith('stabilityai/') else 'weights')
             for filename in filenames:
