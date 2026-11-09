@@ -463,6 +463,9 @@ external-sr-cpu-worker *args:
 external-sr-cpu-plan *args:
     python3 tools/external-models/cpu_plan.py {{args}}
 
+external-dscf-export *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/export_dscf.py {{args}}
+
 external-sr-cpu-report *args:
     python3 tools/external-models/cpu_report.py {{args}}
 

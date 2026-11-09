@@ -28,7 +28,8 @@ def main(a):
     low=a.external/'sr-inputs-v1/7109-0-clean.rgb'
     if reference.stat().st_size!=3*512*512 or low.stat().st_size!=3*128*128:
         raise ValueError('frozen source dimensions differ')
-    for n in ([256] if a.matrix=='native-large' else [64,128]):
+    sizes=([256] if a.matrix=='native-large' else ([64,128,256] if a.matrix=='dscf' else [64,128]))
+    for n in sizes:
         pixels=reference.read_bytes() if n==256 else low.read_bytes()
         sw=512 if n==256 else 128
         start=0 if n==256 else (128-n)//2
@@ -46,6 +47,9 @@ def main(a):
             assets.append(a.external/model/'ACQUISITION.json')
         for folder in ['s3diff/sd-turbo','s3diff/weights','resshift']:
             assets.extend(p for p in sorted((a.external/folder).glob('**/*')) if p.is_file() and p.suffix in ('.pth','.pkl','.safetensors'))
+    if a.matrix=='dscf':
+        assets.extend([a.external/'dscf/ACQUISITION.json',a.external/'dscf/team23_DSCF.pth',source/'export_dscf.py'])
+        assets.extend(p for p in sorted((a.external/'dscf/source').rglob('*')) if p.is_file() and p.suffix=='.py')
     assets=list(dict.fromkeys(assets))
     identity={str(p):sha(p) for p in assets}
     preserve(a.root/f'assets-{a.output.stem}.json',(json.dumps(identity,sort_keys=True,indent=2)+'\n').encode())
@@ -63,16 +67,19 @@ def main(a):
         native(name,'adopted',a.root/'models/adopted'/name)
     for name in ['EFDN_baseline','NanoSR','TSR','SPANF']:
         native(name+'-tract','tract',a.root/('models/'+name+'_x4_${n}x${n}.onnx'))
-    if a.matrix=='full':
-        for name in ['s3diff','resshift-v3','resshift-bicubic']:
+    if a.matrix=='dscf':
+        models=models[:1]
+        native('DSCF-tract','tract',a.root/('models/DSCF_x4_${n}x${n}.onnx'))
+    if a.matrix in ('full','dscf'):
+        for name in (['dscf'] if a.matrix=='dscf' else ['s3diff','resshift-v3','resshift-bicubic']):
             # Keep the venv interpreter path as argv, since the external runner
             # canonicalizes program symlinks. time also retains per-child RSS.
             models.append(dict(id=name,program='/usr/bin/time',args=['-v',str(a.python),str(source/'cpu_worker.py'),
-                '--name',name,'--root',str(a.external/('s3diff' if name=='s3diff' else 'resshift')),
+                '--name',name,'--root',str(a.external/('resshift' if name.startswith('resshift') else name)),
                 '--input','${input}','--height','${n}','--width','${n}','--threads','${threads}','--samples','3'],
                 cwd=str(source.parents[1]),env=env,revision='adapter-sha256:'+sha(source/'sr_models.py'),timeout_seconds=1200))
     cases=[]
-    for n in ([256] if a.matrix=='native-large' else [64,128]):
+    for n in sizes:
         for threads in [1,4]:
             cases.append(dict(id=f'{n}-t{threads}',fields=dict(n=str(n),threads=str(threads)),
                 inputs=dict(input=str(a.root/f'input-{n}.f32'),
@@ -91,6 +98,6 @@ def main(a):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for name in ['root','external','worker','python','output']:p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--matrix',choices=['full','native-large'],default='full')
+    p.add_argument('--matrix',choices=['full','native-large','dscf'],default='full')
     p.add_argument('--pilot',action='store_true')
     main(p.parse_args())

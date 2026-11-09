@@ -40,7 +40,8 @@ def main(a):
             for field in ['source_id','origin','content','cohort','size','encoder','ss','q','width','height','jpeg_sha256','reference_rgb8_sha256']:
                 if control_inputs[key][field]!=row[field]:
                     raise ValueError('canon4 input bytes or metadata differ')
-    runs=['jpeg-evaluation-v1'] if a.task=='jpeg' else ['sr-s3diff-v1','sr-resshift-v3-v1','sr-resshift-bicubic-v1']
+    if a.runs and a.task!='sr':raise ValueError('explicit run selection is SR only')
+    runs=a.runs or (['jpeg-evaluation-v1'] if a.task=='jpeg' else ['sr-s3diff-v1','sr-resshift-v3-v1','sr-resshift-bicubic-v1'])
     for run in runs:
         path=root/run
         complete=json.loads((path/'COMPLETE.json').read_text())
@@ -97,4 +98,5 @@ if __name__=='__main__':
     p.add_argument('--root',type=Path,required=True);p.add_argument('--task',choices=['jpeg','sr'],required=True)
     p.add_argument('--native',type=Path);p.add_argument('--inputs',type=Path);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--canon4-results',type=Path);p.add_argument('--canon4-inputs',type=Path)
+    p.add_argument('--runs',nargs='+')
     main(p.parse_args())
