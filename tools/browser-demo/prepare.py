@@ -18,9 +18,11 @@ def main(a):
     source = Path(__file__).resolve().parent
     dist = source / 'dist'
     dist.mkdir(exist_ok=True)
-    for path in source.iterdir():
-        if path.suffix in ('.html', '.css', '.mjs') and '.test.' not in path.name and not path.name.endswith(('-probe.mjs', '-test.mjs')):
-            shutil.copy2(path, dist / path.name)
+    assets = ['index.html', 'style.css', 'app.mjs', 'worker.mjs', 'tile-worker.mjs',
+              'repair-worker.mjs', 'decode-worker.mjs', 'runtime.mjs', 'pool.mjs',
+              'pool-plan.mjs', 'core.mjs', 'budgets.mjs', 'viewer.mjs', 'gallery.mjs']
+    for name in assets:
+        shutil.copy2(source / name, dist / name)
     vendor = dist / 'vendor'
     vendor.mkdir(exist_ok=True)
     runtime = source / 'node_modules/onnxruntime-web'
@@ -34,6 +36,10 @@ def main(a):
         generated = source / folder / 'pkg'
         for suffix in ['.js', '_bg.wasm']:
             shutil.copy2(generated / (stem + suffix), target / (stem + suffix))
+    repair_target=dist/'repair'
+    repair_target.mkdir(exist_ok=True)
+    for suffix in ['.js','_bg.wasm']:
+        shutil.copy2(source/'repair/pkg'/('zensr_browser_repair'+suffix),repair_target/('zensr_browser_repair'+suffix))
     models = dist / 'models'
     models.mkdir(exist_ok=True)
     manifest = {}
@@ -70,7 +76,15 @@ def main(a):
         onnx.save(graph, target)
         manifest[name] = dict(url='./models/' + target.name, sha256=sha(target),
                               source_sha256=sha(path), precision='FP32 compute', halo=16 if name=='spanf' else 21)
+    weights=source.parents[1]/'models/adopted/dejpeg_rt24i_canon4/weights_f16.raw'
+    shutil.copy2(weights,models/'canon4.raw')
+    manifest['repair']=dict(url='./models/canon4.raw',sha256=sha(weights),precision='canon4 stored f16 weights, FP32 compute', relaxed=bool(a.relaxed_package))
     (dist/'models.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    if a.relaxed_package:
+        target=dist/'repair-relaxed'
+        target.mkdir(exist_ok=True)
+        for name in ['zensr_browser_repair.js','zensr_browser_repair_bg.wasm']:
+            shutil.copy2(a.relaxed_package/name,target/name)
     print(json.dumps(dict(directory=str(dist),models=manifest),indent=2))
 
 
@@ -78,4 +92,5 @@ if __name__ == '__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--sr',type=Path,required=True)
     p.add_argument('--dscf',type=Path,required=True)
+    p.add_argument('--relaxed-package',type=Path)
     main(p.parse_args())
