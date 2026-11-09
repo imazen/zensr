@@ -66,7 +66,119 @@ Butteraugli score. ResShift bicubic improves mean Butteraugli at q65–100 as
 well as SSIM2. These metrics do not substitute for a human-preference study;
 none was performed. The owner-cancelled pixel-artifact audit was not restarted.
 
-## Category × quality
+## Butteraugli by category and JPEG quality
+
+Absolute arithmetic means of the per-image Butteraugli p-norm-3 scores:
+**lower is better**. Bold marks the lowest full-precision mean in each row,
+including the CatmullRom baseline. Scores are rounded to three decimals.
+These are not the metric’s overall/max-score field and are not deltas.
+
+Each category has one reused source image. Low quality has eight encodings per
+category (q5/10/15/20 × 420/444); middle and high quality each have 16. Clean
+has one uncompressed LR input per category. These repeated encodings do not
+establish category-wide or subjective-preference estimates. The same 697
+inputs are scored for each ×4 pipeline. No generation or scoring was rerun.
+
+### Butteraugli: JPEG q5–20
+
+| Category | CatmullRom | Native SPAN | S3Diff | ResShift real v3 | ResShift bicubic |
+|---|---:|---:|---:|---:|---:|
+| General photos | 13.485 | **11.692** | 15.018 | 13.150 | 12.727 |
+| Interiors | **12.753** | 12.794 | 14.318 | 14.519 | 13.453 |
+| Nature | **15.723** | 15.991 | 19.715 | 16.544 | 16.346 |
+| Food | 14.102 | **13.743** | 16.003 | 14.462 | 14.679 |
+| People | 10.297 | **10.168** | 13.367 | 11.541 | 11.072 |
+| Renders | **10.154** | 10.369 | 12.364 | 13.147 | 10.845 |
+| Textures | 9.466 | **9.257** | 12.638 | 9.539 | 10.047 |
+| Museum art (AIC) | 10.003 | **9.886** | 16.151 | 13.278 | 10.645 |
+| Museum art (Met) | **7.306** | 7.727 | 7.942 | 8.765 | 7.426 |
+| Brochures | 13.640 | 13.217 | 15.156 | 15.057 | **13.172** |
+| Weather documents | **7.993** | 9.954 | 11.701 | 13.168 | 8.421 |
+| Plots | 11.145 | 10.505 | **8.341** | 10.796 | 12.335 |
+| Mobile screenshots | **13.929** | 15.477 | 15.585 | 17.515 | 15.179 |
+| Web screenshots | 12.555 | **11.588** | 13.461 | 14.999 | 14.172 |
+| AI clipart | 15.802 | 15.437 | 13.717 | **13.431** | 16.690 |
+| AI illustrations | 11.763 | **11.650** | 19.283 | 13.844 | 12.327 |
+| AI products | 10.347 | 10.596 | 9.975 | **9.946** | 11.433 |
+
+### Butteraugli: JPEG q25–60
+
+| Category | CatmullRom | Native SPAN | S3Diff | ResShift real v3 | ResShift bicubic |
+|---|---:|---:|---:|---:|---:|
+| General photos | 11.482 | **8.940** | 12.070 | 10.082 | 9.533 |
+| Interiors | 10.882 | **10.671** | 13.331 | 11.699 | 11.156 |
+| Nature | 12.216 | 12.298 | 15.500 | 12.179 | **11.613** |
+| Food | 11.329 | **10.777** | 13.579 | 11.422 | 11.053 |
+| People | **8.001** | 8.183 | 12.214 | 9.274 | 8.781 |
+| Renders | **7.825** | 8.318 | 9.875 | 9.828 | 8.163 |
+| Textures | 7.440 | **7.226** | 10.533 | 7.977 | 8.003 |
+| Museum art (AIC) | 7.730 | **7.515** | 11.609 | 8.826 | 8.167 |
+| Museum art (Met) | **5.857** | 6.728 | 9.997 | 7.851 | 6.217 |
+| Brochures | 12.560 | **11.155** | 14.025 | 12.612 | 11.209 |
+| Weather documents | **6.360** | 8.901 | 10.622 | 10.359 | 6.972 |
+| Plots | 8.261 | 7.953 | **6.540** | 7.532 | 10.036 |
+| Mobile screenshots | 11.229 | **10.953** | 12.395 | 13.171 | 11.180 |
+| Web screenshots | 11.382 | 10.446 | 13.111 | 14.114 | **10.168** |
+| AI clipart | 12.270 | 10.583 | 10.395 | **9.880** | 12.491 |
+| AI illustrations | **8.569** | 8.999 | 16.631 | 10.843 | 9.113 |
+| AI products | 7.325 | 8.464 | 7.659 | **7.080** | 7.695 |
+
+### Butteraugli: JPEG q65–100
+
+| Category | CatmullRom | Native SPAN | S3Diff | ResShift real v3 | ResShift bicubic |
+|---|---:|---:|---:|---:|---:|
+| General photos | 10.191 | **7.183** | 10.026 | 8.329 | 7.569 |
+| Interiors | 9.877 | 9.005 | 12.144 | 9.879 | **8.713** |
+| Nature | 10.602 | 10.060 | 13.314 | 10.503 | **8.675** |
+| Food | 9.877 | 8.932 | 11.349 | 9.455 | **8.632** |
+| People | 6.430 | 6.694 | 9.777 | 7.135 | **6.405** |
+| Renders | 6.091 | 7.168 | 8.592 | 7.389 | **5.510** |
+| Textures | 6.310 | **5.731** | 10.270 | 6.886 | 5.845 |
+| Museum art (AIC) | 5.798 | **5.360** | 7.592 | 6.731 | 5.379 |
+| Museum art (Met) | **5.123** | 6.286 | 10.579 | 7.254 | 5.484 |
+| Brochures | 12.445 | **10.059** | 13.183 | 12.098 | 11.066 |
+| Weather documents | **5.134** | 7.975 | 9.124 | 6.895 | 5.561 |
+| Plots | 7.197 | 8.033 | **6.345** | 7.157 | 8.297 |
+| Mobile screenshots | 9.973 | **8.617** | 10.345 | 11.263 | 8.810 |
+| Web screenshots | 11.100 | 10.774 | 12.947 | 13.078 | **9.592** |
+| AI clipart | 10.497 | 8.285 | 9.083 | **7.186** | 8.609 |
+| AI illustrations | 7.059 | 7.382 | 14.549 | 8.773 | **6.624** |
+| AI products | 6.310 | 7.250 | 7.333 | 5.080 | **4.801** |
+
+### Butteraugli: Clean LR inputs
+
+| Category | CatmullRom | Native SPAN | S3Diff | ResShift real v3 | ResShift bicubic |
+|---|---:|---:|---:|---:|---:|
+| General photos | 9.732 | **6.433** | 9.698 | 8.462 | 8.792 |
+| Interiors | 9.594 | **8.108** | 11.707 | 9.462 | 9.294 |
+| Nature | 10.161 | **8.815** | 12.596 | 9.275 | 8.980 |
+| Food | 9.486 | **8.213** | 10.444 | 8.482 | 10.195 |
+| People | **5.999** | 6.629 | 8.857 | 6.272 | 7.241 |
+| Renders | 5.474 | 6.567 | 8.430 | 6.554 | **4.944** |
+| Textures | 5.878 | **4.847** | 9.661 | 6.367 | 5.169 |
+| Museum art (AIC) | 5.159 | **4.498** | 5.383 | 6.731 | 4.896 |
+| Museum art (Met) | **4.833** | 5.827 | 9.590 | 5.851 | 6.500 |
+| Brochures | 12.378 | 9.976 | 12.826 | 12.819 | **9.905** |
+| Weather documents | 4.584 | 7.406 | 7.999 | 5.438 | **4.538** |
+| Plots | **5.702** | 6.566 | 6.630 | 7.015 | 5.811 |
+| Mobile screenshots | 9.530 | **7.814** | 9.669 | 10.503 | 11.236 |
+| Web screenshots | 11.049 | **10.915** | 12.516 | 12.819 | 11.145 |
+| AI clipart | 9.887 | 7.612 | 8.674 | **6.448** | 8.752 |
+| AI illustrations | 6.663 | 6.467 | 13.112 | 6.784 | **6.218** |
+| AI products | 6.064 | 6.808 | 6.956 | 4.137 | **3.418** |
+
+S3Diff has the lowest mean on the plot source in all three JPEG bands.
+ResShift real v3 has the lowest mean on the clipart source in all four groups.
+Native SPAN has the lowest mean on the general-photo source in all four
+groups. For interiors/nature/renders at q5–20, all learned candidates score
+worse than the CatmullRom baseline. These are observations of those individual
+sources, not general rankings for all images of those categories.
+
+Source: the existing `sr-summary-v1/rows.tsv` with SHA-256
+`06fdb4c8a840dd7bc7bfd1d4870022bd8ac06a4c409127f12398f3f84684d282`.
+All 272 category/model/band aggregates reproduce the retained mean deltas.
+
+## SSIM2 by category × quality
 
 Each cell is mean SSIM2 gain / harm percentage. Categories have one source
 each, with 8 low-band and 16 middle/high-band encodings. These tables must not
