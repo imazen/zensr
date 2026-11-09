@@ -36,3 +36,5 @@
 - [VSR source review](VSR_REVIEW.md).
 - [API design proposal](API_DESIGN.md), retained as historical design context.
 - [ARM kernel audit](engineering/ARM_AUDIT_2026-08-01.md).
+
+[Browser workbench](BROWSER_DEMO.md) and [measured browser runs](../benchmarks/browser_sr_2026-11-09.md) cover local uploads, concurrent WASM, WebGPU, zoom/pan/flicker and optional JPEG repair.

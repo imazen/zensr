@@ -25,6 +25,13 @@ None queued by the canon4 update.
 
 ### Added
 
+- Browser workbench with bounded concurrent WASM tiles, WebGPU selection,
+  streaming PNG output, native-detail zoom/pan/flicker, zenjpeg JPEG decoding,
+  optional canon4 repair with a retained 1× checkpoint, and an isolated
+  experimental relaxed-SIMD repair build (`29dd340d`, `1b58fad3`, `a2479fae`).
+  [Behavior and build](docs/BROWSER_DEMO.md) ·
+  [Measured browser runs](benchmarks/browser_sr_2026-11-09.md).
+
 - Private SR memory experiments: native completed-tile RGB8/RGB16 storage and
   earlier DSCF feature release, with exact paired output and frozen float replay
   (`86682240`). [Measurements](benchmarks/sr_memory_2026-11-09.md).

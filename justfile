@@ -518,8 +518,8 @@ browser-format:
 browser-format-check:
     cd tools/browser-demo && npm run format:check
 
-browser-verify output:
-    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/verify_outputs.py {{output}}
+browser-verify *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/verify_outputs.py {{args}}
 
 browser-codec-test output:
     node tools/browser-demo/codec-test.mjs {{output}}
@@ -535,6 +535,21 @@ browser-lifecycle *args:
 
 browser-gpu-probe:
     node tools/browser-demo/gpu-probe.mjs
+
+browser-viewer-test *args:
+    node tools/browser-demo/viewer-test.mjs {{args}}
+
+browser-gallery-test output:
+    node tools/browser-demo/gallery-test.mjs {{output}}
+
+browser-repair-test *args:
+    node tools/browser-demo/repair-test.mjs {{args}}
+
+browser-jpeg-fixture *args:
+    cargo run --locked --release --manifest-path tools/browser-demo/repair/Cargo.toml --example fixture -- {{args}}
+
+browser-repair-oracle *args:
+    cargo run --locked --release --manifest-path tools/browser-demo/repair/Cargo.toml --example oracle -- {{args}}
 
 browser-serve *args:
     python3 tools/browser-demo/serve.py {{args}}
@@ -601,3 +616,25 @@ quality-int8-oracle *args:
 
 quality-int8-archive-remote *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/archive_remote.py {{args}}
+
+# Optional, isolated relaxed-SIMD repair experiment. Output must be a new directory.
+browser-relaxed-build output:
+    ~/work/claudehints/scripts/run-heavy --mem 6G --jobs 4 -- bash tools/browser-demo/build-relaxed.sh {{output}}
+
+browser-repair-compare *args:
+    node tools/browser-demo/repair-compare.mjs {{args}}
+
+browser-repair-matrix *args:
+    node tools/browser-demo/repair-matrix.mjs {{args}}
+
+browser-repair-large-compare *args:
+    node tools/browser-demo/repair-large-compare.mjs {{args}}
+
+browser-writer-test *args:
+    node tools/browser-demo/writer-test.mjs {{args}}
+
+browser-decode-test *args:
+    node tools/browser-demo/decode-test.mjs {{args}}
+
+browser-archive *args:
+    python3 tools/browser-demo/archive.py {{args}}

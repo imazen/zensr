@@ -29,6 +29,16 @@ jobs:
       - uses: actions/checkout@v6
       - name: Tile coverage and allocation bounds
         run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Browser WASM glue compiles
+        shell: bash
+        run: |
+          export RUSTFLAGS='-C target-feature=+simd128'
+          for module in codec jpeg-probe repair; do
+            cargo check --locked --target wasm32-unknown-unknown --manifest-path "tools/browser-demo/$module/Cargo.toml"
+          done
 
   # Only the restoration crates. zensr-bench is a measurement harness: it links
   # AGPL metric crates, shells out to cjpeg/cjpegli, and needs a corpus that is
