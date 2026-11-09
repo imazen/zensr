@@ -431,6 +431,18 @@ external-model-acquire root:
 external-sr-acquire root model:
     python3 tools/external-models/acquire_sr.py "{{root}}" "{{model}}"
 
+external-sr-evaluate *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/evaluate_sr.py {{args}}
+
+external-sr-verify *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/verify_sr.py {{args}}
+
+external-sr-build:
+    cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin superres
+
+external-model-summarize *args:
+    python3 tools/external-models/summarize.py {{args}}
+
 external-model-pilot *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/pilot.py {{args}}
 

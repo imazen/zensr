@@ -23,6 +23,7 @@ tract-onnx = "0.23.10"
 tract-linalg = { version = "0.23.10", features = ["multithread-mm"] }
 zenbench = "0.1.11"
 serde_json = "1.0.151"
+zenresize = "0.3.1"
 
 [profile.release]
 lto = "thin"
