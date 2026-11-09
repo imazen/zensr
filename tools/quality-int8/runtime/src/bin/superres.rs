@@ -156,6 +156,28 @@ fn reply(out: &mut impl Write, value: &Value) {
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args[1] == "render-rgb" {
+        assert_eq!(
+            args.len(),
+            7,
+            "render-rgb input width height stride artifacts"
+        );
+        let data = fs::read(&args[2]).unwrap();
+        let w = args[3].parse::<usize>().unwrap();
+        let h = args[4].parse::<usize>().unwrap();
+        let stride = args[5].parse::<usize>().unwrap();
+        assert!(w > 0 && h > 0 && stride >= w);
+        assert!(data.len() >= ((h - 1) * stride + w) * 3 && data.len().is_multiple_of(3));
+        use rgb::FromSlice;
+        println!(
+            "{}",
+            retain_png(
+                imgref::ImgRef::new_stride(data.as_rgb(), w, h, stride),
+                Path::new(&args[6])
+            )
+        );
+        return;
+    }
     if args[1] == "cascade" {
         cascade::run(&args);
         return;

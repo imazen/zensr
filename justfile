@@ -452,6 +452,9 @@ external-sr-sweep *args:
 external-sr-build:
     cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin superres
 
+external-sr-reference-png *args:
+    tools/quality-int8/runtime/target/release/superres render-rgb {{args}}
+
 external-model-summarize *args:
     python3 tools/external-models/summarize.py {{args}}
 
