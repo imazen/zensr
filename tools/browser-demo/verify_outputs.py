@@ -2,13 +2,14 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
 
-def verify(root):
+def verify(root,cases,tiles=None,tile_case=None):
     Image.MAX_IMAGE_PIXELS = 201_600_000
     source = root / 'input-12mp.png'
     with Image.open(source) as image:
@@ -20,8 +21,7 @@ def verify(root):
             if not np.array_equal(pixels[y], expected):
                 raise ValueError(f'Fixture differs at row {y}')
     records = []
-    for name in ['spanf-wasm', 'spanf-12mp', 'dscf-12mp',
-                 'dscf-swiftshader-v3', 'spanf-webgpu-jpeg']:
+    for name in cases:
         folder = root / name
         result = json.loads((folder / 'result.json').read_text())
         stats = result['stats']
@@ -40,10 +40,30 @@ def verify(root):
         records.append(dict(name=name, bytes=path.stat().st_size, sha256=digest,
                             width=stats['outputWidth'], height=stats['outputHeight']))
     (root / 'png-verification.json').write_text(json.dumps(records, indent=2) + '\n')
+    if tiles:
+        if not tile_case:raise ValueError('Native tile validation needs its output case')
+        count=0
+        with Image.open(root/tile_case/'output.png') as image:
+            full=np.asarray(image)
+            for path in tiles.iterdir():
+                match=re.fullmatch(r'(\d+)-(\d+)\.png',path.name)
+                if not match:continue
+                x,y=map(int,match.groups())
+                with Image.open(path) as tile:
+                    actual=np.asarray(tile)
+                    expected=full[y*512:y*512+tile.height,x*512:x*512+tile.width]
+                    if not np.array_equal(actual,expected):raise ValueError(f'Native inspection tile differs: {path}')
+                count+=1
+        if count!=12:raise ValueError(f'Expected 12 inspection witnesses, got {count}')
+        print(f'All {count} native inspection tiles match full-output RGB8 exactly')
     print(json.dumps(records, indent=2))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
-    verify(parser.parse_args().root)
+    parser.add_argument('--cases',nargs='+',default=['spanf-wasm','spanf-12mp','dscf-12mp','dscf-swiftshader-v3','spanf-webgpu-jpeg'])
+    parser.add_argument('--tiles',type=Path)
+    parser.add_argument('--tile-case')
+    args=parser.parse_args()
+    verify(args.root,args.cases,args.tiles,args.tile_case)

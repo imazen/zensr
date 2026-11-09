@@ -1,4 +1,12 @@
-import { CORE, HALO, bounds, tileAt, planar, paste } from "./core.mjs";
+import {
+  CORE,
+  HALO,
+  bounds,
+  tileAt,
+  planar,
+  paste,
+  rgbaFromRgb,
+} from "./core.mjs";
 import { capWasmMemory } from "./budgets.mjs";
 import { loadSession, modelBytes } from "./runtime.mjs";
 import { planWorkers } from "./pool-plan.mjs";
@@ -37,14 +45,18 @@ async function run({
   backend,
   cpuWorkers = 0,
   cpuBudgetMiB = 512,
+  detailTiles = false,
+  repairEnabled = false,
 }) {
+  const jobStarted = performance.now();
   const codec = await import("./codec/zensr_browser_codec.js");
   await codec.default();
   if (file.size > 64 * 1024 * 1024)
     throw new Error("The demo accepts files up to 64 MiB.");
   let encoded = new Uint8Array(await file.arrayBuffer());
   let size;
-  if (encoded[0] === 255 && encoded[1] === 216) {
+  const isJpeg = encoded[0] === 255 && encoded[1] === 216;
+  if (isJpeg) {
     const jpeg = await import("./jpeg/zensr_browser_jpeg_probe.js");
     await jpeg.default();
     size = jpeg.dimensions(encoded);
@@ -52,20 +64,149 @@ async function run({
     size = codec.dimensions(encoded);
   }
   bounds(size[0], size[1], scale);
+  let originalCanvas;
+  let decodeReport = null;
+  if (isJpeg) {
+    postMessage({ type: "status", text: "Decoding JPEG with zenjpeg…" });
+    const began = performance.now();
+    const reply = await send({ type: "decode", jpeg: encoded }, [
+      encoded.buffer,
+    ]);
+    const decoded = await new Promise((resolve, reject) => {
+      const port = reply.ports[0];
+      port.onmessage = ({ data }) => {
+        port.close();
+        data.error ? reject(new Error(data.error)) : resolve(data);
+      };
+    });
+    encoded = decoded.jpeg;
+    decodeReport = {
+      decoder: "zenjpeg",
+      width: decoded.width,
+      height: decoded.height,
+      wasmBytes: decoded.wasmBytes,
+      seconds: (performance.now() - began) / 1000,
+    };
+    originalCanvas = new OffscreenCanvas(decoded.width, decoded.height);
+    originalCanvas
+      .getContext("2d", { willReadFrequently: true, colorSpace: "srgb" })
+      .putImageData(
+        new ImageData(
+          rgbaFromRgb(decoded.rgb, decoded.width, decoded.height),
+          decoded.width,
+          decoded.height,
+        ),
+        0,
+        0,
+      );
+    await send({ type: "decode-complete", report: decodeReport });
+  } else {
+    // PNG decoding stays in the browser; JPEG bytes never reach this branch.
+    const bitmap = await createImageBitmap(file);
+    bounds(bitmap.width, bitmap.height, scale);
+    originalCanvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = originalCanvas.getContext("2d", {
+      willReadFrequently: true,
+      colorSpace: "srgb",
+    });
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+  }
+  const original = await createImageBitmap(originalCanvas);
+  await send(
+    {
+      type: "original",
+      bitmap: original,
+      width: originalCanvas.width,
+      height: originalCanvas.height,
+      outputWidth: originalCanvas.width * scale,
+      outputHeight: originalCanvas.height * scale,
+      scale,
+    },
+    [original],
+  );
+  let repaired,
+    repairReport = null;
+  if (repairEnabled) {
+    originalCanvas.width = 1;
+    originalCanvas.height = 1;
+    const repairStarted = performance.now();
+    if (!isJpeg) throw new Error("JPEG artifact repair requires a JPEG input.");
+    postMessage({
+      type: "status",
+      text: "Repairing JPEG with canon4 auto routing…",
+    });
+    const weights = await modelBytes("repair", codec);
+    const reply = await send({ type: "repair", jpeg: encoded, weights }, [
+      encoded.buffer,
+      weights.buffer,
+    ]);
+    repaired = await new Promise((resolve, reject) => {
+      const port = reply.ports[0];
+      port.onmessage = ({ data }) => {
+        port.close();
+        data.error ? reject(new Error(data.error)) : resolve(data);
+      };
+    });
+    const { rgb, ...report } = repaired;
+    report.seconds = (performance.now() - repairStarted) / 1000;
+    repairReport = report;
+    await send({ type: "repair-complete", report });
+  }
   encoded = null;
-  const bitmap = await createImageBitmap(file);
-  const width = bitmap.width,
-    height = bitmap.height;
+  let width, height, canvas, context;
+  if (repaired) {
+    width = repaired.width;
+    height = repaired.height;
+    bounds(width, height, scale);
+    if (repaired.rgb.byteLength !== width * height * 3)
+      throw new Error("Repair RGB shape differs.");
+    canvas = new OffscreenCanvas(width, height);
+    context = canvas.getContext("2d", {
+      willReadFrequently: true,
+      colorSpace: "srgb",
+    });
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+      rgba[i * 4] = repaired.rgb[i * 3];
+      rgba[i * 4 + 1] = repaired.rgb[i * 3 + 1];
+      rgba[i * 4 + 2] = repaired.rgb[i * 3 + 2];
+      rgba[i * 4 + 3] = 255;
+    }
+    context.putImageData(new ImageData(rgba, width, height), 0, 0);
+    if (detailTiles) {
+      await send({ type: "checkpoint-start" });
+      const checkpoint = new codec.PngRows(width, height);
+      const write = async (data) => {
+        if (data.byteLength)
+          await send({ type: "checkpoint-chunk", data }, [data.buffer]);
+      };
+      await write(checkpoint.drain());
+      for (let y = 0; y < height; y += 128) {
+        const rows = Math.min(128, height - y);
+        checkpoint.push(
+          repaired.rgb.subarray(y * width * 3, (y + rows) * width * 3),
+          rows,
+        );
+        await write(checkpoint.drain());
+      }
+      await write(checkpoint.finish());
+      await send({ type: "checkpoint-done", width, height });
+    }
+    repaired = null;
+  } else {
+    canvas = originalCanvas;
+    width = canvas.width;
+    height = canvas.height;
+    context = canvas.getContext("2d", {
+      willReadFrequently: true,
+      colorSpace: "srgb",
+    });
+  }
+
   const output = bounds(width, height, scale);
-  const canvas = new OffscreenCanvas(width, height);
-  const context = canvas.getContext("2d", {
-    willReadFrequently: true,
-    colorSpace: "srgb",
-  });
-  context.fillStyle = "#fff";
-  context.fillRect(0, 0, width, height);
-  context.drawImage(bitmap, 0, 0);
-  bitmap.close();
   const ratio = Math.min(1, 1400 / width, 1400 / height);
   const preview = await createImageBitmap(canvas, {
     resizeWidth: Math.max(1, Math.round(width * ratio)),
@@ -79,6 +220,7 @@ async function run({
       height,
       outputWidth: output.width,
       outputHeight: output.height,
+      scale,
     },
     [preview],
   );
@@ -193,6 +335,15 @@ async function run({
             resizeHeight: Math.max(1, Math.ceil(tile.ch * ratio)),
           },
         );
+        let png;
+        if (detailTiles) {
+          const tileEncoder = new codec.PngRows(
+            tile.cw * scale,
+            tile.ch * scale,
+          );
+          tileEncoder.push(rgb, tile.ch * scale);
+          png = tileEncoder.finish();
+        }
         completed++;
         await send(
           {
@@ -208,8 +359,11 @@ async function run({
             gpu: gpuStats(),
             wasmBytes: memoryBytes(),
             workers: plan.count,
+            png,
+            column: x / CORE,
+            row: y / CORE,
           },
-          [image],
+          png ? [image, png.buffer] : [image],
         );
       }
       encoder.push(band, Math.min(CORE, height - y) * scale);
@@ -226,8 +380,11 @@ async function run({
       outputHeight: output.height,
       tiles: completed,
       seconds: (performance.now() - started) / 1000,
+      processingSeconds: (performance.now() - jobStarted) / 1000,
       maxBandBytes,
       maxTileFloats,
+      repair: repairReport,
+      decode: decodeReport,
       workerReservationMiB: plan.reservedMiB ?? 0,
       peakInFlight: pool?.peakInFlight ?? 1,
       gpu: gpuStats(),

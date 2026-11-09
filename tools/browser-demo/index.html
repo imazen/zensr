@@ -40,7 +40,7 @@
               <option value="4">4×</option>
             </select></label
           ><label
-            >Run on<select id="backend">
+            >SR engine<select id="backend">
               <option value="webgpu">WebGPU</option>
               <option value="wasm">WASM CPU</option>
             </select></label
@@ -62,10 +62,25 @@
             </select></label
           >
         </div>
+        <label class="repair-option"
+          ><input type="checkbox" id="repair" disabled />JPEG artifact repair
+          before SR</label
+        >
+        <label
+          >Repair arithmetic<select id="repair-math">
+            <option value="strict">Strict SIMD128</option>
+            <option value="relaxed">Relaxed SIMD128 (experimental)</option>
+          </select></label
+        >
+        <p id="repair-report" class="detail">
+          Optional canon4 auto routing · JPEG only. Full-resolution repair uses
+          one CPU worker. Strict arithmetic can take minutes; relaxed SIMD is
+          faster but may round differently across browsers.
+        </p>
         <p class="hint">
-          Both models run at 4×. The 2× output is resized before its final 8-bit
-          conversion. This demo performs SR only; the gallery also includes JPEG
-          repair.
+          JPEG decoding uses zenjpeg with ICC-to-sRGB conversion. Both models
+          run at 4×. The 2× output is resized before its final 8-bit conversion.
+          Optional canon4 repair runs first for JPEG inputs.
         </p>
         <button id="start" disabled>Upscale image</button
         ><button id="cancel" class="secondary" hidden>Cancel</button>
@@ -74,6 +89,9 @@
         </div>
         <progress id="progress" max="1" value="0"></progress>
         <p id="detail" class="detail"></p>
+        <a id="repair-download" class="download" hidden
+          >Download 1× JPEG stage ↓</a
+        >
         <a id="download" class="download" hidden>Download full-size PNG ↓</a>
         <details>
           <summary>Memory and output</summary>
@@ -86,8 +104,10 @@
           <p>
             Each CPU tile worker has a 64 MiB WASM cap and an 80 MiB reservation
             including transferred tile buffers. Tracked GPU buffers at 256 MiB,
-            and each codec module at 128 MiB. Browser decoding, graphics-driver
-            overhead and the browser itself are outside those caps.
+            PNG encoding at 128 MiB and zenjpeg decoding at 512 MiB. Canvas,
+            graphics-driver overhead and the browser itself are outside those
+            caps. JPEG repair has a separate 1 GiB WASM cap; its worker exits
+            before SR workers start.
           </p>
           <p>
             PNG output streams into browser-local storage where supported. The
@@ -99,6 +119,22 @@
         <div id="saved"></div>
       </aside>
       <section class="workspace">
+        <div class="viewer-controls" aria-label="Image inspection controls">
+          <button id="zoom-out" aria-label="Zoom out">−</button
+          ><button id="zoom-in" aria-label="Zoom in">+</button>
+          <button id="zoom-fit">Fit</button
+          ><button id="zoom-native">100%</button>
+          <select id="view-mode" aria-label="Comparison mode">
+            <option value="split">Split</option>
+            <option value="result">Result</option>
+            <option value="original">Original</option>
+          </select>
+          <button id="flicker" aria-pressed="false">Flicker</button>
+          <label><input type="checkbox" id="pixelated" />Pixelated</label>
+          <span id="view-state"
+            >Wheel to zoom · drag to pan · hold Space for original</span
+          >
+        </div>
         <div class="toolbar">
           <span id="dimensions">Your image</span
           ><label class="compare"
@@ -121,15 +157,21 @@
           >
         </div>
         <div id="viewer" hidden>
-          <canvas id="before"></canvas><canvas id="after"></canvas
+          <canvas
+            id="display"
+            tabindex="0"
+            aria-label="Zoomable image comparison"
+          ></canvas>
+          <canvas id="before" hidden></canvas><canvas id="after" hidden></canvas
           ><span class="label before">Original</span
-          ><span class="label after">Upscaled preview</span>
+          ><span class="label after">Output</span>
           <div id="divider"></div>
         </div>
         <p class="footnote">
-          The preview fits this window. The download retains the full output
-          dimensions. Browser backends are experimental and can differ
-          numerically from the native CPU/CUDA studies.
+          Fit uses a reduced preview. Zoom to load native output tiles. Wheel to
+          zoom, drag to pan, or hold Space for the original. The download
+          retains full output dimensions. Browser backends are experimental and
+          can differ numerically from the native CPU/CUDA studies.
         </p>
       </section>
     </main>

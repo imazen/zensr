@@ -37,7 +37,34 @@ try {
   await page.selectOption("#model", model);
   await page.selectOption("#scale", scale);
   await page.selectOption("#backend", backend);
-  if(process.env.ZENSR_CPU_WORKERS)await page.selectOption("#cpu-workers",process.env.ZENSR_CPU_WORKERS);
+  if (process.env.ZENSR_CPU_WORKERS)
+    await page.selectOption("#cpu-workers", process.env.ZENSR_CPU_WORKERS);
+  if (await page.locator("#repair").isEnabled())
+    await page.locator("#repair").setChecked(process.env.ZENSR_REPAIR === "1");
+  if (process.env.ZENSR_REPAIR_MATH)
+    await page.selectOption("#repair-math", process.env.ZENSR_REPAIR_MATH);
+  await page.exposeFunction("recordProgress", async (progress) =>
+    writeFile(
+      out + "/progress.json",
+      JSON.stringify(
+        { pid: process.pid, ...progress, lastCheck: new Date().toISOString() },
+        null,
+        2,
+      ) + "\n",
+    ),
+  );
+  await page.evaluate(() => {
+    new MutationObserver(() => {
+      const text = document.getElementById("status").textContent;
+      const match = /^(\d+) \/ (\d+) tiles/.exec(text);
+      if (!match || Number(match[1]) % 32 === 0)
+        window.recordProgress({
+          status: text,
+          repair: window.zensrState.repairReport,
+          checkpoint: window.zensrState.checkpoint,
+        });
+    }).observe(document.getElementById("status"), { childList: true });
+  });
   await page.click("#start");
   await page.waitForFunction(
     () => window.zensrState.done || window.zensrState.error,
@@ -50,6 +77,11 @@ try {
     out + "/result.json",
     JSON.stringify({ ...result, requests }, null, 2) + "\n",
   );
+  if (result.checkpoint) {
+    const download = page.waitForEvent("download");
+    await page.click("#repair-download");
+    await (await download).saveAs(out + "/jpeg-stage.png");
+  }
   if (result.error) throw new Error(result.error);
   assert.ok(
     requests.every((r) => r.method === "GET"),
