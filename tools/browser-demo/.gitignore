@@ -1,0 +1,7 @@
+node_modules/
+dist/
+codec/target/
+jpeg-probe/target/
+codec/pkg/
+jpeg-probe/pkg/
+__pycache__/

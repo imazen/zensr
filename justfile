@@ -499,6 +499,46 @@ external-sr-memory-report root:
 external-dscf-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/export_dscf.py {{args}}
 
+# Standalone browser demo; generated assets and model bytes stay outside git.
+browser-deps:
+    cd tools/browser-demo && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund
+
+browser-build:
+    ~/work/claudehints/scripts/run-heavy --mem 8G --jobs 4 -- bash tools/browser-demo/build.sh
+
+browser-prepare sr dscf:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/prepare.py --sr {{sr}} --dscf {{dscf}}
+
+browser-unit:
+    cd tools/browser-demo && npm test
+
+browser-format:
+    cd tools/browser-demo && npm run format
+
+browser-format-check:
+    cd tools/browser-demo && npm run format:check
+
+browser-verify output:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/verify_outputs.py {{output}}
+
+browser-codec-test output:
+    node tools/browser-demo/codec-test.mjs {{output}}
+
+browser-test *args:
+    node tools/browser-demo/browser-test.mjs {{args}}
+
+browser-parity output:
+    node tools/browser-demo/parity-test.mjs {{output}}
+
+browser-lifecycle *args:
+    node tools/browser-demo/lifecycle-test.mjs {{args}}
+
+browser-gpu-probe:
+    node tools/browser-demo/gpu-probe.mjs
+
+browser-serve *args:
+    python3 tools/browser-demo/serve.py {{args}}
+
 external-dscf-cpu-report *args:
     python3 tools/external-models/cpu_dscf_report.py {{args}}
 

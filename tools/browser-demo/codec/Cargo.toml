@@ -1,0 +1,32 @@
+[package]
+name = "zensr-browser-codec"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "=0.2.129"
+zenresize = "0.3.1"
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "2802f8ee9ae5444b61c4b8f9da51645365bb1fd5", default-features = false }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+sha2 = "0.11.1"
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59", default-features = false }
+
+[patch.crates-io]
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
+
+[profile.release]
+lto = "thin"
+opt-level = 3
+
+[profile.release.package.zenflate]
+opt-level = 1

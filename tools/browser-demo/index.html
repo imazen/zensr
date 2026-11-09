@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>zensr — image workbench</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./">zensr<span> / image workbench</span></a
+      ><a href="gallery/witnesses.html" target="_blank" rel="noopener"
+        >View measured comparisons ↗</a
+      >
+    </header>
+    <main>
+      <aside>
+        <p class="eyebrow">SUPER-RESOLUTION PREVIEW</p>
+        <h1>A closer look.</h1>
+        <p class="intro">
+          Try SPANF or DSCF on your own image. Processing stays in this browser.
+        </p>
+        <label class="file"
+          >Choose an image<input
+            id="file"
+            type="file"
+            accept="image/jpeg,image/png"
+          /><span id="filename">JPEG or PNG · up to 12.6 MP</span></label
+        >
+        <label
+          >Model<select id="model">
+            <option value="spanf">SPANF</option>
+            <option value="dscf">DSCF</option>
+          </select></label
+        >
+        <div class="pair">
+          <label
+            >Output size<select id="scale">
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select></label
+          ><label
+            >Run on<select id="backend">
+              <option value="webgpu">WebGPU</option>
+              <option value="wasm">WASM CPU</option>
+            </select></label
+          >
+        </div>
+        <p class="hint">
+          Both models run at 4×. The 2× output is resized before its final 8-bit
+          conversion. This demo performs SR only; the gallery also includes JPEG
+          repair.
+        </p>
+        <button id="start" disabled>Upscale image</button
+        ><button id="cancel" class="secondary" hidden>Cancel</button>
+        <div class="status" role="status" aria-live="polite">
+          <span class="dot"></span><span id="status">Checking browser…</span>
+        </div>
+        <progress id="progress" max="1" value="0"></progress>
+        <p id="detail" class="detail"></p>
+        <a id="download" class="download" hidden>Download full-size PNG ↓</a>
+        <details>
+          <summary>Memory and output</summary>
+          <p>
+            One model tile is processed at a time. Finished pixels are encoded
+            in strips, with bounded preview size and backpressure. No full-size
+            float output is assembled.
+          </p>
+          <p>
+            Inference WASM memory is capped at 256 MiB per memory, tracked GPU
+            buffers at 256 MiB, and each codec module at 128 MiB. Browser
+            decoding, graphics-driver overhead and the browser itself are
+            outside those caps.
+          </p>
+          <p>
+            PNG output streams into browser-local storage where supported. The
+            fallback keeps at most 128 MiB of encoded data. Download your
+            finished result for a durable copy. Transparency is composited on
+            white; output is 8-bit sRGB.
+          </p>
+        </details>
+        <div id="saved"></div>
+      </aside>
+      <section class="workspace">
+        <div class="toolbar">
+          <span id="dimensions">Your image</span
+          ><label class="compare"
+            >Compare
+            <input
+              id="wipe"
+              type="range"
+              min="0"
+              max="100"
+              value="50"
+              aria-label="Before and after split"
+          /></label>
+        </div>
+        <div id="empty">
+          <div class="frame">↗</div>
+          <h2>Room for the details.</h2>
+          <p>Choose an image to begin, or explore the retained comparisons.</p>
+          <a href="gallery/witnesses.html" target="_blank" rel="noopener"
+            >Open comparison gallery ↗</a
+          >
+        </div>
+        <div id="viewer" hidden>
+          <canvas id="before"></canvas><canvas id="after"></canvas
+          ><span class="label before">Original</span
+          ><span class="label after">Upscaled preview</span>
+          <div id="divider"></div>
+        </div>
+        <p class="footnote">
+          The preview fits this window. The download retains the full output
+          dimensions. Browser backends are experimental and can differ
+          numerically from the native CPU/CUDA studies.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="app.mjs"></script>
+  </body>
+</html>

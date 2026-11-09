@@ -22,6 +22,14 @@ env:
   CI: true
 
 jobs:
+  browser-unit:
+    name: Browser tile and memory contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Tile coverage and allocation bounds
+        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs
+
   # Only the restoration crates. zensr-bench is a measurement harness: it links
   # AGPL metric crates, shells out to cjpeg/cjpegli, and needs a corpus that is
   # not distributed, so building it here would test the runner's tooling rather

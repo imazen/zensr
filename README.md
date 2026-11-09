@@ -70,6 +70,10 @@ latency, VRAM and transfers for SPANF and DSCF.
 [Memory experiments](benchmarks/sr_memory_2026-11-09.md) measure integer output
 storage and earlier activation release with exact paired output checks.
 
+[Browser workbench](docs/BROWSER_DEMO.md): upload JPEG/PNG locally, compare
+SPANF/DSCF ×2 or ×4, and download a streamed PNG. Worker inference supports WASM
+and experimental WebGPU with explicit memory caps; 12 MP inputs are supported.
+
 ## Development
 
 ```sh

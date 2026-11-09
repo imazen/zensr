@@ -1,0 +1,17 @@
+{
+  "name": "zensr-browser-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test core.test.mjs budgets.test.mjs",
+    "format": "prettier --write \"*.mjs\" \"*.html\" \"*.css\" package.json",
+    "format:check": "prettier --check \"*.mjs\" \"*.html\" \"*.css\" package.json"
+  },
+  "dependencies": {
+    "onnxruntime-web": "1.31.1"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0",
+    "prettier": "3.9.10"
+  }
+}
