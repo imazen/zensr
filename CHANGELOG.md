@@ -25,6 +25,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Two-call FP32 PyTorch CUDA 2048→8192 SPANF/DSCF measurements, including
+  allocated/reserved VRAM and separate pinned transfers (`065bbe06`).
+  [Results](benchmarks/sr_8k_gpu_2026-11-09.md).
+
 - Two-call 2048→8192 CPU measurements for native SPANF and tract/PyTorch DSCF,
   including peak process RSS and retained run identities (`ccbaeeab`).
   [Results](benchmarks/sr_8k_cpu_2026-11-09.md).

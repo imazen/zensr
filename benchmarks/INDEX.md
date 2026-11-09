@@ -20,6 +20,8 @@ block, so this directory stays small enough to clone.
 
 ## Precision and inference
 
+- [2048 → 8192 PyTorch CUDA](sr_8k_gpu_2026-11-09.md): two calls each for SPANF/DSCF, FP32 inference latency, allocated/reserved VRAM and pinned transfers.
+
 - [2048 → 8192 CPU SR](sr_8k_cpu_2026-11-09.md): two timed calls each for native SPANF and tract/PyTorch DSCF, with measured peak process RSS.
 
 - [Canon4 → SPANF/DSCF](sr_cascade_2026-11-09.md): four matched ×4 arms, default repair routing, final-HR quality by category/quality/chroma, retained PNGs and paired tails.

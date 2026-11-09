@@ -484,6 +484,9 @@ external-sr-8k-gpu-worker *args:
 external-sr-8k-gpu-plan *args:
     python3 tools/external-models/gpu_8k_plan.py {{args}}
 
+external-sr-8k-gpu-report root:
+    python3 tools/external-models/gpu_8k_report.py {{root}}
+
 external-sr-8k-mirror root archive:
     rsync -a --no-owner --no-group {{root}}/ {{archive}}/
 

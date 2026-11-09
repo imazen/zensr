@@ -65,6 +65,8 @@ MeanFlow JPEG repair and separate S3Diff/ResShift/DSCF ×4 research comparisons.
 SPAN/SPANF, the retained built-in SR models and those external ×4 models.
 [Repair followed by SR](benchmarks/sr_cascade_2026-11-09.md) compares direct
 SPANF/DSCF with routed canon4 repair before upscaling.
+[8K GPU measurements](benchmarks/sr_8k_gpu_2026-11-09.md) cover PyTorch CUDA
+latency, VRAM and transfers for SPANF and DSCF.
 
 ## Development
 
