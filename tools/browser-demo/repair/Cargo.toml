@@ -1,0 +1,26 @@
+[package]
+name = "zensr-browser-repair"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+[workspace]
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+wasm-bindgen = "=0.2.129"
+zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
+zensr-micro = { path = "../../../crates/zensr-micro", default-features = false }
+zenpixels = "0.3.1"
+zenpixels-convert = "0.3.1"
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
+[patch.crates-io]
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+[profile.release]
+lto = "thin"
+opt-level = 3

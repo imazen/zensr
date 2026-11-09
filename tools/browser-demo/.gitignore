@@ -5,3 +5,5 @@ jpeg-probe/target/
 codec/pkg/
 jpeg-probe/pkg/
 __pycache__/
+repair/target/
+repair/pkg/
