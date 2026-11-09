@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Fixed binary16 subnormal weight expansion: the normalization shift was one
+  bit too large, producing incorrect f32 values for nonzero subnormals. An
+  independent mathematical regression fails at `0x0001` before the fix and
+  covers all 65,536 binary16 patterns. Existing artifacts contain 889 such
+  weights in dejpeg7 and 45 in canon4. External-model comparison admission
+  caught differing native pixels; it remains blocked until exact replay passes.
+
 - Threaded precision timing correctly distinguishes confirmation registration in
   the parent from actual child execution. The first-process replay mode initially
   rejected the registration callback before any timings. Two context regressions

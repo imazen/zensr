@@ -11,6 +11,9 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Binary16 subnormal model weights now expand to their exact IEEE f32 values.
+  An exhaustive independent regression covers all binary16 bit patterns.
+
 - Routine routing and QAT scoring no longer persists every decoded/repaired RGB
   buffer or requests Butteraugli maps (`930476d7`). Explicit score-only identities
   preserve legacy artifact requirements; completed-run pruning protects source

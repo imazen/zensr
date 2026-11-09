@@ -173,7 +173,7 @@ pub fn f16_to_f32(bits: u16) -> f32 {
         (0, 0) => sign << 31,
         (0, m) => {
             // subnormal: normalize
-            let shift = m.leading_zeros() - 21;
+            let shift = m.leading_zeros() - 22;
             let m2 = (m << (shift + 1)) & 0x3ff;
             let e2 = 127 - 15 - shift;
             (sign << 31) | (e2 << 23) | (m2 << 13)
@@ -694,6 +694,27 @@ pub fn spanf_x4(input: &[f32], h: usize, wd: usize, w: &SpanfWeights) -> Vec<f32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn f16_ieee_values_match_independent_mathematical_definition() {
+        for bits in 0u16..=u16::MAX {
+            let sign = if bits & 0x8000 == 0 { 1.0f64 } else { -1.0f64 };
+            let exponent = (bits >> 10) & 31;
+            let fraction = bits & 1023;
+            let actual = f16_to_f32(bits);
+            let expected = match exponent {
+                0 => (sign * f64::from(fraction) * 2f64.powi(-24)) as f32,
+                31 if fraction == 0 => (sign * f64::INFINITY) as f32,
+                31 => {
+                    assert!(actual.is_nan(), "binary16 NaN {bits:04x}");
+                    continue;
+                }
+                _ => (sign * (1.0 + f64::from(fraction) / 1024.0)
+                    * 2f64.powi(i32::from(exponent) - 15)) as f32,
+            };
+            assert_eq!(actual.to_bits(), expected.to_bits(), "binary16 {bits:04x}");
+        }
+    }
     // internal paths so unit tests build without the `internals` re-exports
     #[allow(unused_imports)]
     use crate::{simd::spanf_x4_simd, tiled::spanf_x4_tiled};
