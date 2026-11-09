@@ -14,7 +14,10 @@ class CPUReportTests(unittest.TestCase):
         self.directory=tempfile.TemporaryDirectory(dir=scratch,prefix='zensr-cpu-report-test-')
         self.addCleanup(self.directory.cleanup)
         self.root=Path(self.directory.name)
-        self.packet=dict(complete=True,placement=dict(status='enforced_uniform'),
+        self.packet=dict(complete=True,placement=dict(status='enforced_uniform',enforcement='cpuset',
+                core_class='performance',effective_cpus=[0,1],topology=dict(classes=[
+                    dict(name='performance',cpus=[0,1],performance_rank=2),
+                    dict(name='efficiency',cpus=[2,3],performance_rank=1)])),
             plan=dict(blocks=3,aa=False,baseline=dict(id='model'),candidates=[],
                 cases=[dict(id='64-t1',fields=dict(n='64',threads='1'))],metric=dict(expected=3)),invocations=[])
         for block in range(3):
@@ -55,6 +58,18 @@ class CPUReportTests(unittest.TestCase):
     def test_missing_or_nonpositive_timing_is_rejected(self):
         self.packet['invocations'][0]['values_ns']=[0,1,2]
         with self.assertRaisesRegex(ValueError,'timing vector'):self.read()
+
+    def test_placement_status_is_not_a_substring_search(self):
+        self.packet['placement']['status']='uncontrolled'
+        self.packet['placement']['diagnostic']='enforced_uniform was unavailable'
+        with self.assertRaisesRegex(ValueError,'placement'):self.read()
+
+    def test_mixed_core_and_efficiency_placement_are_rejected(self):
+        for core_class,cpus in [('performance',[0,2]),('efficiency',[2,3])]:
+            with self.subTest(core_class=core_class,cpus=cpus):
+                self.packet['placement']['core_class']=core_class
+                self.packet['placement']['effective_cpus']=cpus
+                with self.assertRaisesRegex(ValueError,'placement'):self.read()
 
 
 if __name__=='__main__':unittest.main()

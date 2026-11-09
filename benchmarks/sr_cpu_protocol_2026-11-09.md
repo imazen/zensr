@@ -58,6 +58,12 @@ CPU observations, not a Confirm acceptance, a quality ranking or a production
 baseline promotion. Retain all samples and resource observations without
 outlier trimming or selecting the fastest process.
 
+The report requires complete three-block coverage, preserved stdout/stderr
+hashes, finite positive timing vectors and matching fresh-process output
+hashes. It checks the placement fields and resolved topology: an enforced
+cpuset wholly within the highest-ranked core class. Diagnostic prose that
+merely contains a placement status is not evidence of enforcement.
+
 Native SPANF's default core tile is 128. Its 64/128 cases use one tile, so a
 request for four threads still executes one tile worker. The 256 case supplies
 four tiles. Adopted models retain their existing adaptive default tiling;

@@ -22,8 +22,14 @@ def read_packet(path, matrix):
     if len(invocations)!=expected or any(i['status']!='completed' or i['exit_code']!=0 for i in invocations):
         raise ValueError('incomplete or failed benchmark invocations')
     placement=packet['placement']
-    if 'enforced_uniform' not in json.dumps(placement):
-        raise ValueError('uniform CPU placement not verified')
+    classes=placement.get('topology',{}).get('classes',[])
+    selected=[c for c in classes if c['name']==placement.get('core_class')]
+    cpus=placement.get('effective_cpus',[])
+    if (placement.get('status')!='enforced_uniform' or placement.get('enforcement')!='cpuset'
+            or len(selected)!=1 or not cpus or len(cpus)!=len(set(cpus))
+            or not set(cpus)<=set(selected[0]['cpus'])
+            or selected[0]['performance_rank']!=max(c['performance_rank'] for c in classes)):
+        raise ValueError('uniform performance-core CPU placement not verified')
     grouped=defaultdict(list)
     for invocation in invocations:
         case=plan['cases'][invocation['case']]
