@@ -73,13 +73,14 @@ on November 8 found these later papers worth evaluating:
 
 | Work | Method and relevance | Limits of this comparison |
 |---|---|---|
-| [Wavelet-domain MeanFlow JPEG restoration](https://arxiv.org/abs/2608.28730), August 28 | Invertible Haar transform and residual generation in one or two network evaluations | 65M parameters; authors report GPU throughput and LPIPS results. The abstract still says code will be released soon. |
+| [Wavelet-domain MeanFlow JPEG restoration](https://arxiv.org/abs/2608.28730), August 28 | Invertible Haar transform and residual generation in one or two network evaluations | The [public inference package](https://huggingface.co/asandeistefan/jpeg-restore-meanflows) is available; our count is 65,323,201 parameters. See the [external-model comparison](research/EXTERNAL_MODELS_2026-11-09.md). |
 | [PixelIR](https://arxiv.org/abs/2608.30782), August 31 | Separates faithful reconstruction from generated detail; useful for an explicit fidelity/perception control | 32.9M-parameter SR student; generated detail is not a guarantee of recovered source content. |
 | [FreeTransformSR v5](https://arxiv.org/abs/2609.05912v5), September 5, revised October 30 | Low-rank learnable transforms with adaptive local processing | Authors report 634K parameters at ×2 and 653K at ×4 on classical SR benchmarks, not our ×1 JPEG repair task. |
 
-These are research candidates, not measured replacements. We have not run them
-on zensr's cohort, and their PSNR/LPIPS or GPU results cannot establish a
-SSIMULACRA2 or CPU advantage here. A clean split-respecting reconstruction
+These are research candidates. MeanFlow has now run on the reused zensr cohort;
+FreeTransformSR and PixelIR still have no matching public checkpoint located.
+Paper PSNR/LPIPS or GPU results cannot establish a SSIMULACRA2 or CPU advantage
+here. A clean split-respecting reconstruction
 baseline followed by a controlled architecture comparison is the recommended
 next experiment; it has not been performed by this literature review.
 

@@ -7,7 +7,10 @@
   independent mathematical regression fails at `0x0001` before the fix and
   covers all 65,536 binary16 patterns. Existing artifacts contain 889 such
   weights in dejpeg7 and 45 in canon4. External-model comparison admission
-  caught differing native pixels; it remains blocked until exact replay passes.
+  caught differing native pixels. After `a01962d6`, all expanded quality-model
+  weights match NumPy, and eight encoder/sampling controls reproduce the retained
+  raw/projected pixel hashes and scores. Historical measurements retain their
+  original numerical identities.
 
 - Threaded precision timing correctly distinguishes confirmation registration in
   the parent from actual child execution. The first-process replay mode initially

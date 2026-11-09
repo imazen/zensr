@@ -11,6 +11,12 @@ these measurements do not calibrate arbitrary weights. See the
 The original 37-input policy and its published 0.5490% result remain preserved
 as the [historical baseline](../benchmarks/publication_primary_reserved_2026-11-05.md).
 
+These results predate the November 9 binary16 subnormal-loader correction
+(`a01962d6`). The study executable expanded canon4 weights through that loader.
+The corrected decoder is exhaustively verified and product tests pass, but the
+full routing cohort has not been rescored with corrected weights. Numeric
+predictor-vector replay alone does not revalidate delivered-pixel quality.
+
 `api::Restorer::restore(...).run()` uses this policy for default Fidelity requests
 on three-component 420/444 JPEGs at arbitrary resolutions whose shortest edge
 is at least eight pixels. Unsupported layouts and explicit caller routing keep

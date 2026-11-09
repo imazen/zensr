@@ -32,6 +32,10 @@ secondary check reuses the inspected cohort. Harm uses the quality-dependent
 loss curve; the worst loss is 18.534 SSIM2. Pixel-artifact auditing was cancelled by the owner.
 [Metadata-independent default, comparison and limitations](../../benchmarks/routing_feature_ablation_2026-11-06.md).
 
+Those observations predate `a01962d6`, which corrects binary16 subnormal weight
+expansion. The full routing cohort has not been rescored with the corrected
+loader; see [the current routing limits](../DEFAULT_ROUTING.md).
+
 Explicit `Routing` overrides, Conservative intent, unsupported JPEG layouts and
 `--no-default-features` builds use the calibrated coefficient/quality routing.
 The heads exclude file bpp and image dimensions, so opaque metadata padding

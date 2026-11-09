@@ -4,6 +4,12 @@ The agreed ×1 implementation is committed and its production code passed CI.
 The project is a locked-source integration with explicit measurement limits;
 it is not a packaged release or a fully validated general-resolution deployment.
 
+November 9 update: `a01962d6` corrects binary16 subnormal weight expansion.
+Exhaustive conversion and product tests pass. The quality/routing observations
+below describe the earlier executable; a full corrected-weight routing replay
+has not been performed. Existing numeric predictor goldens are not a substitute
+for rescoring delivered pixels.
+
 ## What is complete
 
 - Owner-approved 34-input routing default, excluding file bpp and dimensions.

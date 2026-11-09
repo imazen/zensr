@@ -45,6 +45,9 @@ The final policy was checked on a previously inspected cohort; these are not
 fresh held-out estimates or per-image guarantees. The worst observed loss was
 18.534 SSIM2. [Measurements and harm definition](benchmarks/routing_feature_ablation_2026-11-06.md).
 
+Those routing measurements predate the November 9 binary16 subnormal-loader
+correction; the full routing cohort has not been rescored with corrected weights.
+
 Arbitrary input resolutions are supported, but quality across resolutions and
 end-to-end deployment latency remain unmeasured. Coefficient projection does
 not guarantee exact re-encoding or better perceptual quality.
@@ -55,6 +58,9 @@ not guarantee exact re-encoding or better perceptual quality.
 The CPU runtime also supports ×2 and ×4 models. Upscaling is separate from the
 ×1 JPEG repair API. General SR quality results are historical; there is no
 production GPU backend.
+
+[Public-model evaluation](docs/research/EXTERNAL_MODELS_2026-11-09.md) covers
+MeanFlow JPEG repair and separate S3Diff/ResShift ×4 research comparisons.
 
 ## Development
 
