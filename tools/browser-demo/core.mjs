@@ -1,6 +1,21 @@
 export const MAX_PIXELS = 12_600_000;
 export const CORE = 128;
 export const HALO = { spanf: 16, dscf: 21 };
+export function rgbaFromRgb(rgb, width, height, stride = width * 3) {
+  if (stride < width * 3 || rgb.length < (height - 1) * stride + width * 3)
+    throw new Error("RGB row shape differs.");
+  const out = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = y * stride + x * 3,
+        j = (y * width + x) * 4;
+      out[j] = rgb[i];
+      out[j + 1] = rgb[i + 1];
+      out[j + 2] = rgb[i + 2];
+      out[j + 3] = 255;
+    }
+  return out;
+}
 export function bounds(width, height, scale) {
   if (
     !Number.isInteger(width) ||

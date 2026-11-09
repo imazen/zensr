@@ -1,0 +1,118 @@
+// Independent EXIF permutation oracle for the zenjpeg browser decoder.
+import assert from "node:assert/strict";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+const [jpegPath, profiledPath, out] = process.argv.slice(2);
+await mkdir(out, { recursive: true });
+const module = await import("./jpeg-probe/pkg/zensr_browser_jpeg_probe.js");
+await module.default({
+  module_or_path: await readFile(
+    new URL(
+      "./jpeg-probe/pkg/zensr_browser_jpeg_probe_bg.wasm",
+      import.meta.url,
+    ),
+  ),
+});
+const jpeg = await readFile(jpegPath),
+  base = module.decode(jpeg),
+  width = base.width,
+  height = base.height,
+  pixels = base.take_pixels();
+const profiled = module.decode(await readFile(profiledPath));
+assert.deepEqual([profiled.width, profiled.height], [width, height]);
+const profiledPixels = profiled.take_pixels();
+// This explicit fixture adds an sRGB profile to exactly the same JPEG scan.
+assert.deepEqual(
+  profiledPixels,
+  pixels,
+  "Identity sRGB ICC conversion preserves decoded RGB8",
+);
+const results = [];
+for (let orientation = 1; orientation <= 8; orientation++) {
+  // An independent, minimal EXIF test fixture. Runtime parsing uses the shared codec.
+  const payload = Buffer.from([
+    69,
+    120,
+    105,
+    102,
+    0,
+    0,
+    73,
+    73,
+    42,
+    0,
+    8,
+    0,
+    0,
+    0,
+    1,
+    0,
+    18,
+    1,
+    3,
+    0,
+    1,
+    0,
+    0,
+    0,
+    orientation,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]);
+  const bytes = Buffer.concat([
+    jpeg.subarray(0, 2),
+    Buffer.from([255, 225, 0, payload.length + 2]),
+    payload,
+    jpeg.subarray(2),
+  ]);
+  const result = module.decode(bytes),
+    w = result.width,
+    h = result.height;
+  assert.deepEqual(
+    [w, h],
+    orientation >= 5 ? [height, width] : [width, height],
+  );
+  const actual = result.take_pixels(),
+    expected = new Uint8Array(pixels.length);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const maps = [
+        [x, y],
+        [width - 1 - x, y],
+        [width - 1 - x, height - 1 - y],
+        [x, height - 1 - y],
+        [y, x],
+        [height - 1 - y, x],
+        [height - 1 - y, width - 1 - x],
+        [y, width - 1 - x],
+      ];
+      const [dx, dy] = maps[orientation - 1];
+      expected.set(
+        pixels.subarray((y * width + x) * 3, (y * width + x + 1) * 3),
+        (dy * w + dx) * 3,
+      );
+    }
+  assert.deepEqual(actual, expected, `EXIF orientation ${orientation}`);
+  await writeFile(out + `/decode-orientation-${orientation}.jpg`, bytes);
+  await writeFile(out + `/decode-orientation-${orientation}.rgb8`, actual);
+  results.push({
+    orientation,
+    width: w,
+    height: h,
+    sha256: createHash("sha256").update(actual).digest("hex"),
+  });
+}
+await writeFile(
+  out + "/decode.json",
+  JSON.stringify(
+    { profiledDecoded: true, identityIccExact: true, orientations: results },
+    null,
+    2,
+  ) + "\n",
+);
+console.log({ orientations: results.length, identityIccExact: true });

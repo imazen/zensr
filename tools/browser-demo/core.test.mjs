@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bounds, tileAt, planar, paste, CORE } from "./core.mjs";
+import { bounds, tileAt, planar, paste, CORE, rgbaFromRgb } from "./core.mjs";
+test("RGB source conversion respects strided input rows", () => {
+  assert.deepEqual(
+    [...rgbaFromRgb(new Uint8Array([1, 2, 3, 99, 4, 5, 6]), 1, 2, 4)],
+    [1, 2, 3, 255, 4, 5, 6, 255],
+  );
+  assert.throws(() => rgbaFromRgb(new Uint8Array(4), 2, 1));
+});
 test("12MP admission and oversized rejection", () => {
   assert.deepEqual(bounds(4000, 3000, 4), { width: 16000, height: 12000 });
   assert.throws(() => bounds(8000, 8000, 4));
