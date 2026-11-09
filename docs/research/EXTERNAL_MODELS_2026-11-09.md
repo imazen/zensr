@@ -1,15 +1,16 @@
 # External restoration candidates — 2026-11-09
 
-Status: the full JPEG comparison is complete; separate ×4 SR evaluation is running.
-No runtime or default-model change has been selected.
+Status: all public runnable candidates completed their fixed comparisons.
+No new default model or routing policy was selected. The native weight-decoding
+correction is recorded below.
 
 | Candidate | Verified availability | Evaluation status |
 |---|---|---|
 | [FreeTransformSR](https://arxiv.org/abs/2609.05912v5) | The paper's [cited repository](https://github.com/HJiLi/FreeTransformSR) returns GitHub API 404; exact-name repository and Hugging Face model searches return no matching release | No author implementation/checkpoint available to run; paper claims are not our measurements |
 | [PixelIR](https://arxiv.org/abs/2608.30782) | No implementation/checkpoint link found in the paper; GitHub repository search returns unrelated names and Hugging Face model search returns none | No author implementation/checkpoint available to run; no surrogate implementation is counted as this model |
 | [jpeg-restore](https://github.com/stefanasandei/jpeg-restore) | Public MIT code and [MIT-tagged inference weights](https://huggingface.co/asandeistefan/jpeg-restore-meanflows) | Both schedules, raw and projected: all 2,960 inputs scored; [results](../../benchmarks/external_jpeg_models_2026-11-09.md) |
-| [S3Diff](https://github.com/ArcticHare105/S3Diff) | Public Apache-2.0 code and adapters; SD-Turbo base weights have separate terms | Seven-input ×4 pilot passes; full 697-input comparison running |
-| [ResShift](https://github.com/zsyOAOA/ResShift/tree/journal) | Public code and four-step v3/bicubic checkpoints; code has a noncommercial S-Lab license | Seven-input v3 pilot and exact author-sampler parity pass; full ×4 comparison queued in the same sweep |
+| [S3Diff](https://github.com/ArcticHare105/S3Diff) | Public Apache-2.0 code and adapters; SD-Turbo base weights have separate terms | All 697 ×4 cases complete; exact author-loop parity passes; [results](../../benchmarks/external_sr_models_2026-11-09.md) |
+| [ResShift](https://github.com/zsyOAOA/ResShift/tree/journal) | Public code and four-step v3/bicubic checkpoints; code has a noncommercial S-Lab license | Both checkpoints complete all 697 cases; exact author-sampler parity passes; [results](../../benchmarks/external_sr_models_2026-11-09.md) |
 
 GitHub code revision: `cb68b163e43bf06ee98a6dd6d84e63e0b777def6`.
 Author inference-package revision: `33315831b6b342d3b8ddbdc70aa11cb84e55c66b`.
@@ -73,6 +74,38 @@ Compare existing native quality-model and canon4 pipeline controls on matching
 input IDs. Bind decoding, RGB8 conversion, model/source hashes and numerical
 settings. No score-based subset, seed or checkpoint selection; report both
 schedules. Support recommendations are exploratory, not a runtime-default change.
+
+The canon4 forced/default controls reuse the paired QAT study’s retained scores.
+All 2,960 JPEG/reference identities and source memberships match; its direct
+f32 weight payload is byte-identical to the corrected IEEE expansion of canon4’s
+f16 file. The [JPEG report](../../benchmarks/external_jpeg_models_2026-11-09.md)
+labels this cache reuse explicitly. It does not revalidate the original
+140,940-cell routing publication cohort.
+
+## Reproduction tools
+
+`just external-model-acquire <root>` acquires the pinned MeanFlow package;
+`just external-sr-acquire <root> s3diff` and the corresponding `resshift`
+command acquire the pinned SR sources/checkpoints. The SR downloader obtains
+pinned-revision Hugging Face metadata itself and verifies existing artifacts on
+repeat invocation. No model binaries are committed to Git.
+
+`just external-model-scorer-build` and `just external-sr-build` build the streaming
+Rust helpers. `just external-model-evaluate` and `just external-sr-evaluate`
+forward explicit manifest/model/output arguments to the Python evaluators;
+`just external-sr-sweep` runs the three fixed SR arms sequentially. Commands and
+effective numerical settings are retained in the run logs and `IDENTITY.json`.
+Use an isolated Python environment with the recorded Torch/CUDA versions and
+the compatibility pins above. GPU evaluation uses `CUBLAS_WORKSPACE_CONFIG=:4096:8`,
+one Torch thread and four SR scorers; the JPEG run used six scorers.
+
+The retained input manifests contain absolute local paths. Relocation must
+rewrite only execution-path fields while preserving all content hashes and
+source memberships, then use a new output directory/identity. Decoders verify
+the referenced bytes before scoring. `just external-model-summarize` recreates
+quality/category, exact-quality, encoder/sampling and size breakdowns;
+`just external-model-check` runs boundary/acquisition regressions, formatting
+and all-target Rust lint. `just external-sr-verify` runs author-code pixel parity.
 
 Admission found and corrected a binary16 subnormal-expansion bug in the native
 weight loader. After the fix, all 595,459 expanded quality-model weights match

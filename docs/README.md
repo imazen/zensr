@@ -15,6 +15,8 @@
 
 ## Evidence
 
+- [Public external-model comparison](research/EXTERNAL_MODELS_2026-11-09.md):
+  runnable releases, JPEG repair and separate ×4 SR results by quality/category.
 - [Current routing comparison](../benchmarks/routing_feature_ablation_2026-11-06.md).
 - [Original reserved frontier](../benchmarks/publication_primary_reserved_2026-11-05.md).
 - [Projection diagnostic](../benchmarks/projection_diagnostic_2026-11-06.md).

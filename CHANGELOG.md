@@ -12,7 +12,7 @@ None queued by the canon4 update.
 ### Fixed
 
 - Binary16 subnormal model weights now expand to their exact IEEE f32 values.
-  An exhaustive independent regression covers all binary16 bit patterns.
+  An exhaustive independent regression covers all binary16 bit patterns (`a01962d6`).
 
 - Routine routing and QAT scoring no longer persists every decoded/repaired RGB
   buffer or requests Butteraugli maps (`930476d7`). Explicit score-only identities
@@ -24,6 +24,12 @@ None queued by the canon4 update.
   422/440 chroma unprojected even when MCU padding masks the subsampling.
 
 ### Added
+
+- Public external-model evaluation with scalar-only streaming, pinned author
+  checkpoints, author inference parity and quality × category reports
+  (`788de6a8`, `6ff0d347`, `922326af`).
+  [JPEG repair](benchmarks/external_jpeg_models_2026-11-09.md) ·
+  [Super-resolution](benchmarks/external_sr_models_2026-11-09.md).
 
 - JPEG-quality × category reporting for the larger repair model, including harm
   rates, worst losses and encoder/sampling breakdowns (`2092319a`). Each category
