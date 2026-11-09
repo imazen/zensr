@@ -2,9 +2,19 @@
 
 Routine scoring retains scalar measurements, encoded JPEG candidates, source
 references, routing features and reproducible source/model/codec/metric identities.
-Decoded and repaired RGB buffers are temporary scoring inputs; discard them after
-their scores are recorded. Diagnostic metric maps are off by default. A separate
-diagnostic run requires explicit opt-in, a bounded witness set and a byte budget.
+Retain generated upscaled images with lossless compression, together with their
+pixel and encoded-file hashes. The RGB8 image retained must be exactly the image
+passed to IQA; compression must not change its pixels. Floating-point working
+buffers can be released after that artifact is safely written. Diagnostic metric
+maps are off by default. A separate map diagnostic requires explicit opt-in,
+a bounded witness set and a byte budget.
+
+The November 9 clarification distinguishes upscaled image retention from IQA
+map retention. The first external SR comparisons incorrectly applied a
+scores-only policy and never persisted their upscaled outputs. Their scores and
+hashes remain intact, but the images require regenerated inference. Historical
+run identities keep their actual retention labels. New SR comparisons use
+lossless PNG output retention; this does not authorize any further deletion.
 
 The routing-study and QAT evaluators record `retention=scores-only-v1` in their
 run identities. Their historical output-pixel/map path columns are empty; this
@@ -16,8 +26,11 @@ by these routine evaluators.
 
 ## Existing completed routing studies
 
-The owner authorized dropping their scored decoded/repaired pixels and diagnostic
-maps on November 8, 2026. The retention tool plans from completed cell roles and
+The earlier implementation interpreted the November 8 cleanup request as covering
+scored decoded/repaired pixels as well as diagnostic maps. The owner clarified
+on November 9 that the requested drop concerned IQA maps, not upscaled images.
+The existing tool and receipts describe historical behavior; they are not
+standing authorization to remove generated images. The tool plans from completed cell roles and
 excludes every reference/JPEG input, including reference/output deduplication.
 It never deletes unreferenced files, source references, encoded inputs, models,
 scores, coverage or tool identities. A completion marker is required; modern
