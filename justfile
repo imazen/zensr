@@ -437,6 +437,9 @@ external-sr-evaluate *args:
 external-sr-verify *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/verify_sr.py {{args}}
 
+external-sr-verify-images *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/verify_sr_images.py {{args}}
+
 external-sr-sweep *args:
     python3 tools/external-models/sweep_sr.py {{args}}
 

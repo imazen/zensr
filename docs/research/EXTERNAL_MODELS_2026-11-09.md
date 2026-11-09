@@ -16,6 +16,7 @@ durations and GPU FP16 ResShift quality results are separate measurements.
 | [jpeg-restore](https://github.com/stefanasandei/jpeg-restore) | Public MIT code and [MIT-tagged inference weights](https://huggingface.co/asandeistefan/jpeg-restore-meanflows) | Both schedules, raw and projected: all 2,960 inputs scored; [results](../../benchmarks/external_jpeg_models_2026-11-09.md) |
 | [S3Diff](https://github.com/ArcticHare105/S3Diff) | Public Apache-2.0 code and adapters; SD-Turbo base weights have separate terms | All 697 ×4 cases complete; exact author-loop parity passes; [results](../../benchmarks/external_sr_models_2026-11-09.md) |
 | [ResShift](https://github.com/zsyOAOA/ResShift/tree/journal) | Public code and four-step v3/bicubic checkpoints; code has a noncommercial S-Lab license | Both checkpoints complete all 697 cases; exact author-sampler parity passes; [results](../../benchmarks/external_sr_models_2026-11-09.md) |
+| [DSCF-SR](https://github.com/Yaozzz666/DSCF-SR) | Public MIT code and 535,137-byte DSCF26 ×4 checkpoint | Exact author-forward parity passes; [protocol and source pins](DSCF_SR_2026-11-09.md) |
 
 GitHub code revision: `cb68b163e43bf06ee98a6dd6d84e63e0b777def6`.
 Author inference-package revision: `33315831b6b342d3b8ddbdc70aa11cb84e55c66b`.
@@ -120,8 +121,12 @@ matches the actual serving pipeline. The exhaustive binary16 regression and
 product tests pass; historical runtime measurements are not retroactively
 relabelled as measurements of the corrected loader.
 
-Use score-only SSIMULACRA2 and Butteraugli, retaining scalars and output hashes.
-Decoded/restored pixels stay in memory or pipes and are dropped after scoring;
-no diagnostic maps or image-output sweep is requested. Geometry and resource
-probes are bounded separately. Benchmark or profiler results must identify
-hardware and timing boundaries and cannot be inferred from paper timings.
+Use score-only SSIMULACRA2 and Butteraugli. New SR comparisons retain the exact
+scored RGB8 upscaled images as lossless PNG, together with scalar scores,
+pixel hashes and PNG hashes. IQA maps remain off. The original SR v1 runs
+incorrectly discarded upscaled images under an overly broad interpretation
+of the map-cleanup request; their identities remain unchanged. Fresh retained
+runs regenerate those outputs and compare them to the original scores/hashes.
+See the [retention contract](../SCORING_RETENTION.md). Geometry and resource
+probes are bounded separately. Benchmark results identify hardware and timing
+boundaries; paper timings are not our CPU measurements.
