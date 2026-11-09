@@ -437,11 +437,19 @@ external-sr-evaluate *args:
 external-sr-verify *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/verify_sr.py {{args}}
 
+external-sr-sweep *args:
+    python3 tools/external-models/sweep_sr.py {{args}}
+
 external-sr-build:
     cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin superres
 
 external-model-summarize *args:
     python3 tools/external-models/summarize.py {{args}}
+
+external-model-check:
+    python3 -m unittest discover -s tools/external-models -p 'test_*.py'
+    cargo fmt --manifest-path tools/quality-int8/runtime/Cargo.toml -- --check
+    cargo clippy --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --all-targets -- -D warnings
 
 external-model-pilot *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/pilot.py {{args}}
