@@ -60,7 +60,7 @@ The CPU runtime also supports ×2 and ×4 models. Upscaling is separate from the
 production GPU backend.
 
 [Public-model evaluation](docs/research/EXTERNAL_MODELS_2026-11-09.md) covers
-MeanFlow JPEG repair and separate S3Diff/ResShift ×4 research comparisons.
+MeanFlow JPEG repair and separate S3Diff/ResShift/DSCF ×4 research comparisons.
 [Codec-excluded CPU timings](benchmarks/sr_cpu_2026-11-09.md) compare native
 SPAN/SPANF, the retained built-in SR models and those external ×4 models.
 

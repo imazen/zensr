@@ -2,6 +2,14 @@
 
 ## Known Bugs
 
+- Corrected SR retention scope: the first external ×4 comparisons incorrectly
+  interpreted the map-cleanup request as permission to discard upscaled images.
+  New scoring retains exact scored RGB8 images as lossless PNG with pixel/file
+  hashes; IQA maps stay off. All three earlier external candidates were
+  regenerated, matching every original pixel hash and scalar score. Independent
+  PNG decoding verifies 4,179 unique retained images including DSCF and controls.
+  Historical v1 identities remain unchanged. See `docs/SCORING_RETENTION.md`.
+
 - Fixed binary16 subnormal weight expansion: the normalization shift was one
   bit too large, producing incorrect f32 values for nonzero subnormals. An
   independent mathematical regression fails at `0x0001` before the fix and
