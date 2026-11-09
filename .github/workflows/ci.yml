@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Tile coverage and allocation bounds
-        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs
+        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs
 
   # Only the restoration crates. zensr-bench is a measurement harness: it links
   # AGPL metric crates, shells out to cjpeg/cjpegli, and needs a corpus that is

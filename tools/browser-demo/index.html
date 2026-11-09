@@ -46,6 +46,22 @@
             </select></label
           >
         </div>
+        <div id="cpu-options" class="pair">
+          <label
+            >CPU workers<select id="cpu-workers">
+              <option value="0">Auto</option>
+            </select></label
+          >
+          <label
+            >Inference budget<select id="cpu-memory">
+              <option value="128">128 MiB</option>
+              <option value="256">256 MiB</option>
+              <option value="512">512 MiB</option>
+              <option value="1024">1 GiB</option>
+              <option value="2048">2 GiB</option>
+            </select></label
+          >
+        </div>
         <p class="hint">
           Both models run at 4×. The 2× output is resized before its final 8-bit
           conversion. This demo performs SR only; the gallery also includes JPEG
@@ -62,15 +78,16 @@
         <details>
           <summary>Memory and output</summary>
           <p>
-            One model tile is processed at a time. Finished pixels are encoded
-            in strips, with bounded preview size and backpressure. No full-size
-            float output is assembled.
+            CPU tile concurrency follows reported logical CPUs and the selected
+            aggregate inference budget. WebGPU processes one tile at a time.
+            Finished pixels are encoded in strips, with bounded preview size and
+            backpressure. No full-size float output is assembled.
           </p>
           <p>
-            Inference WASM memory is capped at 256 MiB per memory, tracked GPU
-            buffers at 256 MiB, and each codec module at 128 MiB. Browser
-            decoding, graphics-driver overhead and the browser itself are
-            outside those caps.
+            Each CPU tile worker has a 64 MiB WASM cap and an 80 MiB reservation
+            including transferred tile buffers. Tracked GPU buffers at 256 MiB,
+            and each codec module at 128 MiB. Browser decoding, graphics-driver
+            overhead and the browser itself are outside those caps.
           </p>
           <p>
             PNG output streams into browser-local storage where supported. The

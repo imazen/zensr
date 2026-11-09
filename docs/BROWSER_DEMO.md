@@ -2,7 +2,7 @@
 
 `tools/browser-demo/` is a standalone local workbench for SPANF and DSCF.
 It runs ONNX Runtime Web 1.31.1 inside a module worker, with selectable WebGPU
-or single-threaded WASM inference. Uploaded JPEG/PNG pixels stay in the browser;
+or a pool of single-threaded WASM tile workers. Uploaded JPEG/PNG pixels stay in the browser;
 the server serves static assets and has no upload endpoint. This is an
 experimental browser integration, separate from the native Rust runtime.
 
@@ -15,14 +15,21 @@ JPEG artifact repair is not implemented in this browser demo.
 
 ## Memory behavior
 
-Inference keeps one 128×128 input core and its clamped halo at a time: 16 input
+Inference uses 128×128 input cores with clamped halos: 16 input
 pixels for SPANF, 21 for DSCF. At true image boundaries the model receives the
 actual edge shape. Padding raw input to a fixed shape would change hidden-layer
 boundary behavior. Completed RGB8 cores enter one horizontal band, which the
 shared zenpng WASM encoder consumes incrementally. Chunk acknowledgments provide
 backpressure. A preview is limited to 1400 pixels on its longest side.
 
-The worker caps each ONNX WASM memory at 256 MiB. Each codec module has a
+Auto CPU concurrency follows the reported logical CPU count, available tile
+work and an explicit aggregate inference budget. Each CPU worker has a 64 MiB
+WASM maximum and an 80 MiB reservation including transferred tile buffers.
+The default budget uses one quarter of the coarse `deviceMemory` report, capped
+at 2 GiB, or 512 MiB when that API is unavailable. It is not a free-RAM reading.
+A bounded raster-order queue keeps at most one outstanding result per worker;
+completed cores still enter a single output band. WebGPU remains one tile at a
+time, with a 256 MiB WASM support-memory cap. Each codec module has a
 128 MiB linker maximum. WebGPU allocation instrumentation caps the aggregate
 live sizes of buffers on the runtime's actual GPU device at 256 MiB, including
 buffers retained in its pool. Exceeding a cap fails the job explicitly. The

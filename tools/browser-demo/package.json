@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test core.test.mjs budgets.test.mjs",
+    "test": "node --test core.test.mjs budgets.test.mjs pool-plan.test.mjs",
     "format": "prettier --write \"*.mjs\" \"*.html\" \"*.css\" package.json",
     "format:check": "prettier --check \"*.mjs\" \"*.html\" \"*.css\" package.json"
   },

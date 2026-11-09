@@ -37,6 +37,7 @@ try {
   await page.selectOption("#model", model);
   await page.selectOption("#scale", scale);
   await page.selectOption("#backend", backend);
+  if(process.env.ZENSR_CPU_WORKERS)await page.selectOption("#cpu-workers",process.env.ZENSR_CPU_WORKERS);
   await page.click("#start");
   await page.waitForFunction(
     () => window.zensrState.done || window.zensrState.error,

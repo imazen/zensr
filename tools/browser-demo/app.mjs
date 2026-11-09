@@ -1,4 +1,5 @@
 import { BLOB_LIMIT } from "./budgets.mjs";
+import { defaultCpuBudget } from "./pool-plan.mjs";
 const $ = (id) => document.getElementById(id);
 let retainedBlobBytes = 0,
   savedUrls = [];
@@ -10,6 +11,11 @@ let worker,
   outputName,
   resultUrl,
   busy = false;
+let inferenceWorkers = [];
+function terminateInference() {
+  for (const child of inferenceWorkers) child.terminate();
+  inferenceWorkers = [];
+}
 const state = { done: false, stats: null, error: null };
 window.zensrState = state;
 function status(text) {
@@ -19,7 +25,14 @@ function controls(running) {
   busy = running;
   $("start").disabled = running || !$("file").files.length;
   $("cancel").hidden = !running;
-  for (const id of ["file", "model", "scale", "backend"])
+  for (const id of [
+    "file",
+    "model",
+    "scale",
+    "backend",
+    "cpu-workers",
+    "cpu-memory",
+  ])
     $(id).disabled = running;
 }
 function savedList() {
@@ -68,6 +81,7 @@ async function destination() {
   }
 }
 async function fail(error) {
+  terminateInference();
   worker?.terminate();
   worker = null;
   chunks = [];
@@ -115,6 +129,23 @@ $("start").addEventListener("click", async () => {
     worker.onmessage = async ({ data: m }) => {
       if (worker !== currentWorker) return;
       try {
+        if (m.type === "pool") {
+          const ports = [];
+          for (let i = 0; i < m.count; i++) {
+            const child = new Worker("./tile-worker.mjs", { type: "module" }),
+              channel = new MessageChannel();
+            child.onerror = (e) => {
+              if (worker === currentWorker) fail(e.message);
+            };
+            inferenceWorkers.push(child);
+            ports.push(channel.port1);
+            child.postMessage({ port: channel.port2, bytes: m.bytes }, [
+              channel.port2,
+            ]);
+          }
+          currentWorker.postMessage({ type: "ack", id: m.id, ports }, ports);
+          return;
+        }
         if (m.type === "status") status(m.text);
         else if (m.type === "input") {
           for (const id of ["before", "after"]) {
@@ -139,7 +170,7 @@ $("start").addEventListener("click", async () => {
           );
           $("detail").textContent = m.gpu
             ? `WebGPU · ${(m.gpu.peak / 1048576).toFixed(1)} MiB tracked GPU peak`
-            : "WASM CPU · one tile at a time";
+            : `WASM CPU · ${m.workers} tile worker${m.workers === 1 ? "" : "s"}`;
         } else if (m.type === "chunk") {
           encodedBytes += m.data.byteLength;
           if (writer) await writer.write(m.data);
@@ -179,6 +210,7 @@ $("start").addEventListener("click", async () => {
           state.done = true;
           state.stats = { ...m.stats, encodedBytes, outputName };
           worker.terminate();
+          terminateInference();
           worker = null;
           controls(false);
           await showSaved();
@@ -194,10 +226,20 @@ $("start").addEventListener("click", async () => {
       model: $("model").value,
       scale: Number($("scale").value),
       backend: $("backend").value,
+      cpuWorkers: Number($("cpu-workers").value),
+      cpuBudgetMiB: Number($("cpu-memory").value),
     });
   } catch (error) {
     await fail(error.message || error);
   }
+});
+const logical = navigator.hardwareConcurrency || 1;
+$("cpu-workers").options[0].textContent = `Auto (${logical} logical CPUs)`;
+for (let i = 1; i <= logical; i++)
+  $("cpu-workers").add(new Option(String(i), String(i)));
+$("cpu-memory").value = String(defaultCpuBudget(navigator.deviceMemory));
+$("backend").addEventListener("change", () => {
+  $("cpu-options").hidden = $("backend").value !== "wasm";
 });
 try {
   const adapter = await navigator.gpu?.requestAdapter({
@@ -218,3 +260,4 @@ try {
   status("WASM CPU ready. Choose an image.");
 }
 showSaved().catch(() => {});
+$("cpu-options").hidden = $("backend").value !== "wasm";
