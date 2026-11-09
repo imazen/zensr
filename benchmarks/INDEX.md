@@ -22,6 +22,7 @@ block, so this directory stays small enough to clone.
 
 - [Public JPEG repair models](external_jpeg_models_2026-11-09.md): MeanFlow one/two steps, projection, quality × category and harm.
 - [Public ×4 SR models](external_sr_models_2026-11-09.md): S3Diff and two ResShift checkpoints against matched native/filter baselines.
+- [Codec-excluded CPU SR](sr_cpu_2026-11-09.md): native SPAN/SPANF, built-in models through native/tract and CPU S3Diff/ResShift; 64/128 inputs plus larger native 256 inputs.
 - [Canon4 QAT](canon4_qat_2026-11-08.md): paired weight-compression controls and model-only draft assets.
 - [Quality-model float/INT8 comparison](quality_int8_2026-11-08.md): complete precision study, single/four-thread timing blocks on two CPUs and model-only draft assets.
 - [Executed VNNI profiles](quality_int8_profile_2026-11-08.md): integer kernels, packing and conversion costs on two CPUs.

@@ -4,6 +4,11 @@ Status: all public runnable candidates completed their fixed comparisons.
 No new default model or routing policy was selected. The native weight-decoding
 correction is recorded below.
 
+[Separate CPU inference timings](../../benchmarks/sr_cpu_2026-11-09.md) exclude
+codecs and IQA, and include the retained built-in ×4 models and native SPAN.
+All 216 planned invocations completed. They use CPU FP32 references; GPU sweep
+durations and GPU FP16 ResShift quality results are separate measurements.
+
 | Candidate | Verified availability | Evaluation status |
 |---|---|---|
 | [FreeTransformSR](https://arxiv.org/abs/2609.05912v5) | The paper's [cited repository](https://github.com/HJiLi/FreeTransformSR) returns GitHub API 404; exact-name repository and Hugging Face model searches return no matching release | No author implementation/checkpoint available to run; paper claims are not our measurements |

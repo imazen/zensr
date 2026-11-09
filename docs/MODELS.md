@@ -24,7 +24,10 @@ quality model. Their recorded scores are from different comparisons.
 
 Separate ×2/×4 SR models and teacher/student distillation experiments also
 precede canon4. See the [historical results](research/HISTORICAL_RESULTS.md) and
-[research plan](research/PLAN.md). The September
+[research plan](research/PLAN.md). The current
+[CPU timing comparison](../benchmarks/sr_cpu_2026-11-09.md) measures retained ×4
+models through native and tract runtimes alongside CPU S3Diff/ResShift;
+these latency results do not establish a quality ranking. The September
 [provenance audit](MODEL-PROVENANCE-AUDIT.md) recorded 47 checkpoints then;
 that is a dated inventory, not 47 models distributed in today's checkout.
 It also found corrupted targets in the older quality-model fine-tune lineage.
