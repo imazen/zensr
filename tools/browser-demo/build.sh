@@ -5,13 +5,14 @@ cd "$(dirname "$0")"
 export TMPDIR
 mkdir -p "$TMPDIR"
 export RUSTFLAGS='-C target-feature=+simd128 -C link-arg=--max-memory=134217728'
-for crate in codec jpeg-probe; do
-  if [ "$crate" = jpeg-probe ]; then export RUSTFLAGS="-C target-feature=+simd128 -C link-arg=--max-memory=536870912"; fi
-  cargo build --locked --release --target wasm32-unknown-unknown --manifest-path "$crate/Cargo.toml"
-  if [ "$crate" = codec ]; then stem=zensr_browser_codec; else stem=zensr_browser_jpeg_probe; fi
-  wasm-bindgen "$crate/target/wasm32-unknown-unknown/release/$stem.wasm" --target web --out-dir "$crate/pkg"
+cargo build --locked --release --target wasm32-unknown-unknown --manifest-path codec/Cargo.toml
+wasm-bindgen codec/target/wasm32-unknown-unknown/release/zensr_browser_codec.wasm --target web --out-dir codec/pkg
+for mode in relaxed unfused reference; do
+  features=+simd128
+  args=()
+  if [ "$mode" = relaxed ]; then features=+simd128,+relaxed-simd; fi
+  if [ "$mode" = reference ]; then args=(--features strict-fma); folder=pkg; else folder=pkg-$mode; fi
+  export RUSTFLAGS="-C target-feature=$features -C link-arg=--max-memory=1073741824"
+  cargo build --locked --release --target wasm32-unknown-unknown --manifest-path repair/Cargo.toml "${args[@]}"
+  wasm-bindgen repair/target/wasm32-unknown-unknown/release/zensr_browser_repair.wasm --target web --out-dir repair/$folder
 done
-
-export RUSTFLAGS='-C target-feature=+simd128 -C link-arg=--max-memory=1073741824'
-cargo build --locked --release --target wasm32-unknown-unknown --manifest-path repair/Cargo.toml
-wasm-bindgen repair/target/wasm32-unknown-unknown/release/zensr_browser_repair.wasm --target web --out-dir repair/pkg

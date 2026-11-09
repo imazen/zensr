@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           export RUSTFLAGS='-C target-feature=+simd128'
-          for module in codec jpeg-probe repair; do
+          for module in codec repair; do
             cargo check --locked --target wasm32-unknown-unknown --manifest-path "tools/browser-demo/$module/Cargo.toml"
           done
 

@@ -12,7 +12,7 @@ export async function repairRuntime(load = loadModule) {
     return { codec, math: "unfused", fallbackReason };
   } catch (error) {
     throw new Error(
-      `JPEG repair could not initialize relaxed SIMD (${fallbackReason}) or unfused SIMD (${error.message || error}).`,
+      `JPEG runtime could not initialize relaxed SIMD (${fallbackReason}) or unfused SIMD (${error.message || error}).`,
     );
   }
 }

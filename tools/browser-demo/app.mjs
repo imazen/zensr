@@ -189,16 +189,16 @@ async function startJob(repairOnly) {
       if (worker !== currentWorker) return;
       try {
         if (m.type === "decode") {
-          const child = new Worker("./decode-worker.mjs", { type: "module" }),
+          const child = new Worker("./jpeg-worker.mjs", { type: "module" }),
             channel = new MessageChannel();
           child.onerror = (e) => {
             if (worker === currentWorker) fail(e.message);
           };
           inferenceWorkers.push(child);
-          child.postMessage({ port: channel.port2, jpeg: m.jpeg }, [
-            channel.port2,
-            m.jpeg.buffer,
-          ]);
+          child.postMessage(
+            { port: channel.port2, jpeg: m.jpeg, operation: "decode" },
+            [channel.port2, m.jpeg.buffer],
+          );
           currentWorker.postMessage(
             { type: "ack", id: m.id, ports: [channel.port1] },
             [channel.port1],
@@ -218,7 +218,7 @@ async function startJob(repairOnly) {
                 `JPEG repair · ${Math.floor((performance.now() - began) / 1000)} s · one CPU worker`,
               );
           }, 1000);
-          const child = new Worker("./repair-worker.mjs", { type: "module" }),
+          const child = new Worker("./jpeg-worker.mjs", { type: "module" }),
             channel = new MessageChannel();
           child.onerror = (e) => {
             if (worker === currentWorker) fail(e.message);
@@ -229,6 +229,7 @@ async function startJob(repairOnly) {
               port: channel.port2,
               jpeg: m.jpeg,
               weights: m.weights,
+              operation: "repair",
             },
             [channel.port2, m.jpeg.buffer, m.weights.buffer],
           );

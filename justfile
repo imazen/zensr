@@ -617,7 +617,7 @@ quality-int8-oracle *args:
 quality-int8-archive-remote *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/archive_remote.py {{args}}
 
-# Optional, isolated relaxed-SIMD repair experiment. Output must be a new directory.
+# Build the shared codec/runtime with relaxed SIMD into a new artifact directory.
 browser-relaxed-build output:
     ~/work/claudehints/scripts/run-heavy --mem 6G --jobs 4 -- bash tools/browser-demo/build-relaxed.sh {{output}}
 

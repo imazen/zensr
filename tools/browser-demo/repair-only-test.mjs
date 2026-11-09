@@ -17,6 +17,7 @@ try {
     "blob",
     "unavailable",
     "profiled",
+    "bad-icc",
   ]) {
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,
@@ -60,9 +61,30 @@ try {
       buffer: Buffer.from("header only"),
     });
     assert.equal(await page.locator("#repair-only").isDisabled(), true);
-    await page
-      .locator("#file")
-      .setInputFiles(mode === "profiled" ? profiled : input);
+    if (mode === "bad-icc") {
+      const jpeg = await readFile(input),
+        payload = Buffer.concat([
+          Buffer.from("ICC_PROFILE\0", "binary"),
+          Buffer.from([1, 1]),
+          Buffer.from("invalid profile witness"),
+        ]);
+      const length = Buffer.alloc(2);
+      length.writeUInt16BE(payload.length + 2);
+      await page.locator("#file").setInputFiles({
+        name: "invalid-profile.jpg",
+        mimeType: "image/jpeg",
+        buffer: Buffer.concat([
+          jpeg.subarray(0, 2),
+          Buffer.from([255, 226]),
+          length,
+          payload,
+          jpeg.subarray(2),
+        ]),
+      });
+    } else
+      await page
+        .locator("#file")
+        .setInputFiles(mode === "profiled" ? profiled : input);
     await page.selectOption("#scale", "4");
     await page.selectOption("#model", "dscf");
     assert.equal(
@@ -82,14 +104,16 @@ try {
       !requests.some((r) => /\.onnx|ort.*\.mjs|\/repair\/zensr/.test(r.url)),
       "Repair-only must not load an SR model/runtime or strict fused reference",
     );
-    if (mode === "unavailable" || mode === "profiled") {
+    if (mode === "unavailable" || mode === "bad-icc") {
       assert.equal(result.done, false);
       assert.match(
         result.error,
-        mode === "profiled" ? /embedded ICC profiles/ : /relaxed.*unfused/,
+        mode === "bad-icc"
+          ? /[Ii][Cc][Cc]|profile|[Cc]olor/
+          : /relaxed.*unfused/,
       );
       assert.equal(await page.locator("#download").isHidden(), true);
-      if (mode === "profiled")
+      if (mode === "bad-icc")
         assert.ok(
           !requests.some((r) => r.url.includes("repair-unfused")),
           "Input errors must not be retried with another arithmetic mode",
@@ -101,7 +125,7 @@ try {
       assert.equal(result.stats.model, "canon4");
       assert.equal(
         result.stats.repair.math,
-        mode === "blob" ? "relaxed" : mode,
+        ["blob", "profiled"].includes(mode) ? "relaxed" : mode,
       );
       assert.ok(result.stats.repair.applied);
       assert.deepEqual(

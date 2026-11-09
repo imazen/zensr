@@ -64,14 +64,10 @@ async function run({
   let encoded = new Uint8Array(await file.arrayBuffer());
   let size;
   const isJpeg = encoded[0] === 255 && encoded[1] === 216;
-  if (isJpeg) {
-    const jpeg = await import("./jpeg/zensr_browser_jpeg_probe.js");
-    await jpeg.default();
-    size = jpeg.dimensions(encoded);
-  } else {
+  if (!isJpeg) {
     size = codec.dimensions(encoded);
+    bounds(size[0], size[1], scale);
   }
-  bounds(size[0], size[1], scale);
   let originalCanvas;
   let decodeReport = null;
   if (isJpeg) {
@@ -87,6 +83,7 @@ async function run({
         data.error ? reject(new Error(data.error)) : resolve(data);
       };
     });
+    bounds(decoded.width, decoded.height, scale);
     encoded = decoded.jpeg;
     decodeReport = {
       decoder: "zenjpeg",
