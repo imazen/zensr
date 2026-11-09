@@ -352,3 +352,158 @@ fn for_source_prepared_windows(
     }
     Ok(weakest)
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn replay(text: &str) -> usize {
+        replay_using(text, predict)
+    }
+
+    fn replay_using(
+        text: &str,
+        classifier: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
+    ) -> usize {
+        let mut count = 0;
+        for line in text.lines().skip(1) {
+            let fields: Vec<_> = line.split('\t').collect();
+            assert_eq!(fields.len(), 43);
+            let numeric = core::array::from_fn(|i| fields[i].parse::<f64>().unwrap());
+            let p = classifier(&numeric, &[fields[37], fields[38], fields[39]]).unwrap();
+            let gain: f64 = fields[40].parse().unwrap();
+            let risk: f64 = fields[41].parse().unwrap();
+            assert!((p.gain - gain).abs() < 1e-9, "gain mismatch at row {count}");
+            assert!(
+                (p.risk - risk).abs() < 1e-11,
+                "risk mismatch at row {count}"
+            );
+            assert_eq!(
+                p.restore(),
+                fields[42] == "1",
+                "decision mismatch at row {count}"
+            );
+            count += 1;
+        }
+        count
+    }
+
+    #[test]
+    fn sklearn_golden_predictions_and_decisions() {
+        assert_eq!(definitions::PIXELS, fitted::PIXELS);
+        assert_eq!(
+            (candidate::PENALTY, candidate::THRESHOLD),
+            (fitted::PENALTY, fitted::THRESHOLD)
+        );
+        assert_eq!(replay(include_str!("data/decoded_router_golden.tsv")), 16);
+    }
+
+    #[test]
+    fn candidate_sklearn_golden_predictions_and_decisions() {
+        assert_eq!(
+            replay_using(
+                include_str!("data/decoded_router_candidate_golden.tsv"),
+                predict_candidate
+            ),
+            16
+        );
+    }
+
+    #[test]
+    fn rejects_nonfinite_inputs() {
+        let mut numeric = [0.; 37];
+        numeric[4] = f64::NAN;
+        assert!(predict(&numeric, &["Unknown", "IjgQuality", "420"]).is_none());
+    }
+
+    #[test]
+    fn study_decimal_serialization_matches_halfway_values() {
+        assert_eq!(recorded_number(0.0001220703125), 0.000122070312);
+        assert_eq!(recorded_number(0.0003662109375), 0.000366210938);
+    }
+
+    #[test]
+    fn native_windows_are_bounded_aligned_and_deduplicated() {
+        for (w, h) in [
+            (8, 8),
+            (31, 17),
+            (256, 192),
+            (512, 384),
+            (513, 385),
+            (1024, 768),
+            (4096, 128),
+            (128, 4096),
+        ] {
+            let regions = windows(w, h);
+            assert!(!regions.is_empty() && regions.len() <= 5);
+            for (i, r) in regions.iter().enumerate() {
+                assert!(
+                    r.width <= 512 && r.height <= 512 && r.x + r.width <= w && r.y + r.height <= h
+                );
+                assert_eq!((r.x % 16, r.y % 16), (0, 0));
+                assert!(!regions[..i].contains(r));
+            }
+            if w <= 512 && h <= 512 {
+                assert_eq!(
+                    regions,
+                    vec![Window {
+                        x: 0,
+                        y: 0,
+                        width: w,
+                        height: h
+                    }]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn crop_handles_strided_rows_and_coefficient_windows_preserve_padding() {
+        let rgb = [1, 2, 3, 4, 5, 6, 99, 99, 7, 8, 9, 10, 11, 12];
+        let window = Window {
+            x: 1,
+            y: 0,
+            width: 1,
+            height: 2,
+        };
+        assert_eq!(
+            crop_rgb(&rgb, 2, 2, 8, window).unwrap(),
+            vec![4, 5, 6, 10, 11, 12]
+        );
+        let mut coeffs = vec![0i16; 4 * 4 * 64];
+        for (i, b) in coeffs.chunks_mut(64).enumerate() {
+            b[0] = i as i16;
+            b[1] = i as i16;
+        }
+        let whole = coefficient_window(
+            &coeffs,
+            4,
+            17,
+            17,
+            Window {
+                x: 0,
+                y: 0,
+                width: 17,
+                height: 17,
+            },
+        )
+        .unwrap();
+        let reference = crate::router_coefficients::features(&coeffs, 16, 4).unwrap();
+        assert_eq!(whole.mean_abs_ac, reference.mean_abs_ac);
+        assert_eq!(whole.zero_ac_blocks, reference.zero_ac_blocks);
+        let local = coefficient_window(
+            &coeffs,
+            4,
+            17,
+            17,
+            Window {
+                x: 8,
+                y: 8,
+                width: 8,
+                height: 8,
+            },
+        )
+        .unwrap();
+        assert_eq!(local.mean_abs_ac, 5.);
+        assert_eq!(local.dc_spread, 0.);
+    }
+}

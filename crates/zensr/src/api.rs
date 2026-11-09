@@ -401,6 +401,54 @@ impl Default for Routing {
     }
 }
 
+/// Per-image restoration choices shared by codec and direct engine callers.
+#[derive(Clone, Copy, Debug)]
+pub struct Options {
+    intent: Intent,
+    provenance: Provenance,
+    budget: Budget,
+    require_consistency: bool,
+    routing: Option<Routing>,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            intent: Intent::Fidelity,
+            provenance: Provenance::Unknown,
+            budget: Budget::Realtime,
+            require_consistency: false,
+            routing: None,
+        }
+    }
+}
+impl Options {
+    /// Set the requested quality/coverage tradeoff.
+    pub fn intent(mut self, value: Intent) -> Self {
+        self.intent = value;
+        self
+    }
+    /// Declare what the caller knows about the encoded input.
+    pub fn provenance(mut self, value: Provenance) -> Self {
+        self.provenance = value;
+        self
+    }
+    /// Select the caller-loaded model tier.
+    pub fn budget(mut self, value: Budget) -> Self {
+        self.budget = value;
+        self
+    }
+    /// Require projection of every supported component.
+    pub fn require_consistency(mut self, value: bool) -> Self {
+        self.require_consistency = value;
+        self
+    }
+    /// Override learned routing explicitly.
+    pub fn routing(mut self, value: Routing) -> Self {
+        self.routing = Some(value);
+        self
+    }
+}
+
 /// A reusable restorer. Build once, use for many images.
 ///
 /// Holds one model per [`Budget`] tier the caller chooses to load. Requesting
@@ -475,6 +523,16 @@ impl Default for Restorer {
 }
 
 impl<'a> Request<'a> {
+    /// Apply the same per-image choices used by codec integrations.
+    pub fn options(mut self, options: Options) -> Self {
+        self.intent = options.intent;
+        self.provenance = options.provenance;
+        self.budget = options.budget;
+        self.require_consistency = options.require_consistency;
+        self.routing = options.routing;
+        self
+    }
+
     /// What to optimise for. Defaults to [`Intent::Fidelity`].
     #[must_use]
     pub fn intent(mut self, intent: Intent) -> Self {
