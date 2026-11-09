@@ -67,6 +67,8 @@ SPAN/SPANF, the retained built-in SR models and those external ×4 models.
 SPANF/DSCF with routed canon4 repair before upscaling.
 [8K GPU measurements](benchmarks/sr_8k_gpu_2026-11-09.md) cover PyTorch CUDA
 latency, VRAM and transfers for SPANF and DSCF.
+[Memory experiments](benchmarks/sr_memory_2026-11-09.md) measure integer output
+storage and earlier activation release with exact paired output checks.
 
 ## Development
 

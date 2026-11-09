@@ -20,6 +20,8 @@ block, so this directory stays small enough to clone.
 
 ## Precision and inference
 
+- [SR memory experiment](sr_memory_2026-11-09.md): integer completed pixels and earlier DSCF tensor release, exact output parity, CPU/GPU memory and latency tradeoffs.
+
 - [2048 → 8192 PyTorch CUDA](sr_8k_gpu_2026-11-09.md): two calls each for SPANF/DSCF, FP32 inference latency, allocated/reserved VRAM and pinned transfers.
 
 - [2048 → 8192 CPU SR](sr_8k_cpu_2026-11-09.md): two timed calls each for native SPANF and tract/PyTorch DSCF, with measured peak process RSS.

@@ -493,6 +493,9 @@ external-sr-8k-mirror root archive:
 external-sr-memory-plans *args:
     python3 tools/external-models/sr_memory_plan.py {{args}}
 
+external-sr-memory-report root:
+    python3 tools/external-models/sr_memory_report.py {{root}}
+
 external-dscf-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/export_dscf.py {{args}}
 

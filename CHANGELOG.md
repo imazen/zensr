@@ -25,6 +25,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Private SR memory experiments: native completed-tile RGB8/RGB16 storage and
+  earlier DSCF feature release, with exact paired output and frozen float replay
+  (`86682240`). [Measurements](benchmarks/sr_memory_2026-11-09.md).
+
 - Two-call FP32 PyTorch CUDA 2048→8192 SPANF/DSCF measurements, including
   allocated/reserved VRAM and separate pinned transfers (`065bbe06`).
   [Results](benchmarks/sr_8k_gpu_2026-11-09.md).
