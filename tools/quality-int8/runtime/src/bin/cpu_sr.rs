@@ -5,6 +5,12 @@ use std::{fs, hint::black_box, path::Path, time::Instant};
 use tract_onnx::prelude::*;
 use tract_onnx::tract_core::internal::{anyhow, bail, ensure};
 use zensr_micro::{SpanfModel, adopted::AdoptedModel};
+#[path = "../sr_memory.rs"]
+mod memory;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../pipeline.rs"]
+mod pipeline;
 
 fn digest(data: &[f32]) -> String {
     let mut hash = Sha256::new();
@@ -56,6 +62,14 @@ impl Model {
 
 fn main() -> TractResult<()> {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "spanf-rgb8" | "spanf-rgb16" | "spanf-rgb8-reference" | "spanf-rgb16-reference"
+        )
+    }) {
+        return memory::run(&args);
+    }
     ensure!(
         args.len() == 8,
         "cpu_sr kind model input h w threads samples"

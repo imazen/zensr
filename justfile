@@ -490,6 +490,9 @@ external-sr-8k-gpu-report root:
 external-sr-8k-mirror root archive:
     rsync -a --no-owner --no-group {{root}}/ {{archive}}/
 
+external-sr-memory-plans *args:
+    python3 tools/external-models/sr_memory_plan.py {{args}}
+
 external-dscf-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/export_dscf.py {{args}}
 
