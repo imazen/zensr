@@ -662,3 +662,15 @@ browser-sr-diff-build:
 
 browser-preview-test *args:
     node tools/browser-demo/preview-test.mjs {{args}}
+
+sr-blend-prepare *args:
+    python3 tools/sr-blend/prepare.py {{args}}
+
+sr-blend-build:
+    cargo build --release --locked --manifest-path tools/sr-blend/Cargo.toml
+
+sr-blend-test:
+    cargo test --release --locked --manifest-path tools/sr-blend/Cargo.toml
+
+sr-blend-evaluate manifest output:
+    tools/sr-blend/target/release/zensr-blend-eval {{manifest}} {{output}}
