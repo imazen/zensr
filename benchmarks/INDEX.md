@@ -74,3 +74,5 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
   how damaged the input itself is.
 - `tools/model_ab.py` — per-file comparison of two models measured in separate
   eval runs.
+
+- [Browser SR and relaxed-SIMD repair](browser_sr_2026-11-09.md): 12 MP execution, concurrent CPU tiles, strict/relaxed RGB8 parity and retained evidence.

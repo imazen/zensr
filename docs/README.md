@@ -28,8 +28,8 @@
 
 ## Research and engineering
 
-- [Browser workbench](BROWSER_DEMO.md): SPANF/DSCF worker inference, streaming PNG
-  output, memory bounds and local serving.
+- [Browser workbench](BROWSER_DEMO.md): concurrent WASM/WebGPU SR, optional JPEG
+  repair, native-detail viewer and local serving. [Measured runs](../benchmarks/browser_sr_2026-11-09.md).
 - [Research record](research/README.md): plans, experiment history and previous results.
 - [Canon4 INT8 QAT](CANON4_QAT.md): controlled weight-compression experiment and measured limits.
 - [Quality model integer inference](QUALITY_INT8.md): frozen float/INT8 speed and RGB-precision comparison.
@@ -37,4 +37,3 @@
 - [API design proposal](API_DESIGN.md), retained as historical design context.
 - [ARM kernel audit](engineering/ARM_AUDIT_2026-08-01.md).
 
-[Browser workbench](BROWSER_DEMO.md) and [measured browser runs](../benchmarks/browser_sr_2026-11-09.md) cover local uploads, concurrent WASM, WebGPU, zoom/pan/flicker and optional JPEG repair.

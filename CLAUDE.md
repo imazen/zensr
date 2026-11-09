@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Fixed browser output lifetime: creating an OPFS writer before a long JPEG
+  repair led to a first-write NotFound failure after repair completed. The
+  browser now opens the SR destination after preprocessing and retains a
+  separate 1× repair PNG before SR begins. The writer-creation regression,
+  persistence test and complete 12 MP strict/relaxed pipelines pass. See
+  `benchmarks/browser_sr_2026-11-09.md`.
+
 - Corrected SR retention scope: the first external ×4 comparisons incorrectly
   interpreted the map-cleanup request as permission to discard upscaled images.
   New scoring retains exact scored RGB8 images as lossless PNG with pixel/file

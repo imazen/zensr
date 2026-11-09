@@ -115,7 +115,11 @@ Artifacts live outside git under `/mnt/v/output/zensr/browser-demo-20261109/`.
 `result.json`, full logs, screenshots and encoded outputs. `relaxed-cohort.json`
 identifies every matrix input by source and byte hash. CPU profiles, strict and
 relaxed WASM packages and generated source are retained separately from git.
-The project-storage archive is bound by `ARCHIVE_VERIFIED-v1.json`.
+The project-storage archive is bound by `ARCHIVE_VERIFIED-v1.json`: 444 files,
+1,363,321,963 bytes, copied and read back with matching SHA-256. The rebuildable
+`relaxed-target-v2` Cargo directory is excluded; its generated source, logs and
+loadable WASM package are retained. Archive wrapper: 21 seconds, peak RSS
+0.02 GiB, minimum available RAM 22,981 MiB, peak load 1.76.
 
 Reproduction recipes include `browser-build`, `browser-prepare`,
 `browser-relaxed-build`, `browser-test`, `browser-repair-matrix`,
