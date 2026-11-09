@@ -428,6 +428,18 @@ quality-int8-build:
 external-model-acquire root:
     python3 tools/external-models/acquire.py "{{root}}"
 
+external-sr-acquire root model:
+    python3 tools/external-models/acquire_sr.py "{{root}}" "{{model}}"
+
+external-model-pilot *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/pilot.py {{args}}
+
+external-model-evaluate *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/evaluate.py {{args}}
+
+external-model-scorer-build:
+    cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin external
+
 quality-int8-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/export.py {{args}}
 

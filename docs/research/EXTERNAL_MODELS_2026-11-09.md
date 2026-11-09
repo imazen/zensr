@@ -7,7 +7,9 @@ No runtime or default-model change has been selected.
 |---|---|---|
 | [FreeTransformSR](https://arxiv.org/abs/2609.05912v5) | The paper's [cited repository](https://github.com/HJiLi/FreeTransformSR) returns GitHub API 404; exact-name repository and Hugging Face model searches return no matching release | No author implementation/checkpoint available to run; paper claims are not our measurements |
 | [PixelIR](https://arxiv.org/abs/2608.30782) | No implementation/checkpoint link found in the paper; GitHub repository search returns unrelated names and Hugging Face model search returns none | No author implementation/checkpoint available to run; no surrogate implementation is counted as this model |
-| [jpeg-restore](https://github.com/stefanasandei/jpeg-restore) | Public MIT code and [MIT-tagged inference weights](https://huggingface.co/asandeistefan/jpeg-restore-meanflows) | Runnable author package selected for testing |
+| [jpeg-restore](https://github.com/stefanasandei/jpeg-restore) | Public MIT code and [MIT-tagged inference weights](https://huggingface.co/asandeistefan/jpeg-restore-meanflows) | CUDA feasibility and eight-input scoring admission pass for both schedules |
+| [S3Diff](https://github.com/ArcticHare105/S3Diff) | Public code, adapters and SD-Turbo base weights | Separate ×4 super-resolution comparison; acquisition in progress |
+| [ResShift](https://github.com/zsyOAOA/ResShift/tree/journal) | Public code and four-step v3/bicubic checkpoints; code has a noncommercial S-Lab license | Separate ×4 super-resolution comparison; acquisition in progress |
 
 GitHub code revision: `cb68b163e43bf06ee98a6dd6d84e63e0b777def6`.
 Author inference-package revision: `33315831b6b342d3b8ddbdc70aa11cb84e55c66b`.
@@ -32,7 +34,16 @@ zensr guard/coefficient-projection adapter separately. The trained checkpoint
 targets QF5–20; higher-quality bands are explicit out-of-training-range probes.
 Compare existing native quality-model and canon4 pipeline controls on matching
 input IDs. Bind decoding, RGB8 conversion, model/source hashes and numerical
-settings. No score-based subset, seed, model or routing-policy selection.
+settings. No score-based subset, seed or checkpoint selection; report both
+schedules. Support recommendations are exploratory, not a runtime-default change.
+
+Admission found and corrected a binary16 subnormal-expansion bug in the native
+weight loader. After the fix, all 595,459 expanded quality-model weights match
+NumPy's conversion byte for byte, and all eight encoder/sampling controls match
+the retained native raw/projected RGB8 hashes and SSIM2 scores. Projection also
+matches the actual serving pipeline. The exhaustive binary16 regression and
+product tests pass; historical runtime measurements are not retroactively
+relabelled as measurements of the corrected loader.
 
 Use score-only SSIMULACRA2 and Butteraugli, retaining scalars and output hashes.
 Decoded/restored pixels stay in memory or pipes and are dropped after scoring;
