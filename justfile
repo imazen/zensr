@@ -478,6 +478,12 @@ external-sr-8k-plan *args:
 external-sr-8k-report root:
     python3 tools/external-models/cpu_8k_report.py {{root}}
 
+external-sr-8k-gpu-worker *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/gpu_8k_worker.py {{args}}
+
+external-sr-8k-gpu-plan *args:
+    python3 tools/external-models/gpu_8k_plan.py {{args}}
+
 external-sr-8k-mirror root archive:
     rsync -a --no-owner --no-group {{root}}/ {{archive}}/
 
