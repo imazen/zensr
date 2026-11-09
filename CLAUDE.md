@@ -2,6 +2,13 @@
 
 ## Known Bugs
 
+- Browser SR overview used input dimensions, so a 259×263 input's 1036×1052
+  output was displayed through a 259×263 overview. Overviews now use output
+  dimensions within the existing 4 MP budget; native tiles and downloaded
+  pixels are unchanged. The browser regression reproduces the old dimensions.
+  See `benchmarks/browser_torch_2026-11-09.md`.
+
+
 - Fixed browser output lifetime: creating an OPFS writer before a long JPEG
   repair led to a first-write NotFound failure after repair completed. The
   browser now opens the SR destination after preprocessing and retains a

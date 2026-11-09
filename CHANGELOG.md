@@ -11,6 +11,11 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Browser SR overviews use output dimensions within the 4 MP budget, preserving
+  full overview resolution for smaller upscales. Independent author-PyTorch
+  comparisons cover both models, ×2/×4 and WASM/SwiftShader WebGPU.
+  [Results](benchmarks/browser_torch_2026-11-09.md).
+
 - Binary16 subnormal model weights now expand to their exact IEEE f32 values.
   An exhaustive independent regression covers all binary16 bit patterns (`a01962d6`).
 

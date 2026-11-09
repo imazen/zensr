@@ -213,7 +213,7 @@ async function run({
   }
 
   const output = bounds(width, height, scale);
-  const previewShape = previewSize(width, height);
+  const previewShape = previewSize(output.width, output.height);
   const ratio = previewShape.ratio;
   const preview = await createImageBitmap(canvas, {
     resizeWidth: previewShape.width,
@@ -439,8 +439,8 @@ async function run({
         const image = await createImageBitmap(
           new ImageData(display, tile.cw * scale, tile.ch * scale),
           {
-            resizeWidth: Math.max(1, Math.ceil(tile.cw * ratio)),
-            resizeHeight: Math.max(1, Math.ceil(tile.ch * ratio)),
+            resizeWidth: Math.max(1, Math.ceil(tile.cw * scale * ratio)),
+            resizeHeight: Math.max(1, Math.ceil(tile.ch * scale * ratio)),
           },
         );
         let png;
@@ -457,10 +457,10 @@ async function run({
           {
             type: "tile",
             bitmap: image,
-            x: x * ratio,
-            y: y * ratio,
-            width: tile.cw * ratio,
-            height: tile.ch * ratio,
+            x: x * scale * ratio,
+            y: y * scale * ratio,
+            width: tile.cw * scale * ratio,
+            height: tile.ch * scale * ratio,
             completed,
             total,
             seconds: (performance.now() - started) / 1000,

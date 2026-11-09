@@ -72,6 +72,8 @@ storage and earlier activation release with exact paired output checks.
 
 [Browser workbench](docs/BROWSER_DEMO.md): upload JPEG/PNG locally, compare
 SPANF/DSCF ×2 or ×4, optionally repair JPEG artifacts, and download a streamed PNG.
+[Browser versus author PyTorch](benchmarks/browser_torch_2026-11-09.md) records
+per-category SSIM2 differences and the overview-resolution correction.
 CPU tile workers and experimental WebGPU have explicit memory caps. The viewer
 supports zoom, pan, flicker and native output tiles; 12 MP inputs are supported.
 

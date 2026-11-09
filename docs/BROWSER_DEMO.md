@@ -12,25 +12,21 @@ resize to floating-point samples before their single final RGB8 conversion.
 JPEGs decode through zenjpeg with ICC-to-sRGB conversion and shared EXIF orientation.
 PNG inputs use browser decoding and an sRGB canvas. Transparency is
 composited on white; HDR, original metadata and 16-bit output are not preserved.
-Optional JPEG artifact repair runs the existing canon4 native Rust request in
-a separate WASM worker before SR. It uses the approved default router, guards
-and coefficient projection policy; routing may return an unchanged decode.
-The UI reports which outcome occurred. Repair is off initially and uses one
-CPU worker. Select experimental relaxed SIMD128 for faster repair, or strict
-SIMD128 for the portable fused-arithmetic reference. The strict CNN emulates
-one-rounding vector multiply-add in software; enabling SIMD128 alone does not
-remove that cost. Relaxed mode uses engine multiply-add and may round differently
-on another CPU/browser. Both modes retain the same router, guards and coefficient
-projection. Its 1 GiB WASM heap is
-released before the SR worker pool starts. This bounds the phases independently.
+Optional JPEG artifact repair uses zenjpeg's `restoration` feature, whose optional
+zensr dependency owns routing, canon4 inference, guards and coefficient projection.
+The browser calls the same decoder integration as native callers. zenjpeg owns
+ICC-to-sRGB conversion, EXIF orientation, crop and pixel layout; the browser has
+no separate ICC or EXIF repair implementation. Repair is off initially. The
+separate **Repair JPEG only (1×)** action creates a full-resolution PNG without
+loading an SR model. Routing may return an unchanged decode, reported in the UI.
 
-Repair keeps pixels and JPEG coefficients in physical orientation, using the
-shared marker/EXIF APIs to normalize the orientation tag on a private input
-copy, then the shared pixel permutation to orient the repaired RGB8 result.
-This browser preview explicitly rejects repair of JPEGs containing ICC profiles;
-turn repair off to use zenjpeg color-managed decoding for SR. It does not
-silently reinterpret a profiled repair result as sRGB. Original metadata is not
-copied to the output.
+The shared JPEG worker always tries relaxed SIMD first, then unfused SIMD if
+module initialization fails. Invalid input and inference errors propagate; they
+are not retried as capability failures. Both variants build the same pinned
+Rust sources. `strict-fma` provides a separate portable fused-arithmetic reference
+for verification. Different arithmetic backends may round differently. JPEG
+repair has a 1 GiB WASM heap limit; its worker exits before SR starts.
+Original metadata and profiles are not copied to the output PNG.
 
 ## Memory behavior
 
@@ -39,7 +35,8 @@ pixels for SPANF, 21 for DSCF. At true image boundaries the model receives the
 actual edge shape. Padding raw input to a fixed shape would change hidden-layer
 boundary behavior. Completed RGB8 cores enter one horizontal band, which the
 shared zenpng WASM encoder consumes incrementally. Chunk acknowledgments provide
-backpressure. A preview is limited to 1400 pixels on its longest side.
+backpressure. Overviews are bounded to 4 MP and 4096 pixels per side, calculated from the
+output dimensions. Smaller outputs retain their full overview resolution.
 
 Auto CPU concurrency follows the reported logical CPU count, available tile
 work and an explicit aggregate inference budget. Each CPU worker has a 64 MiB
@@ -49,8 +46,8 @@ at 2 GiB, or 512 MiB when that API is unavailable. It is not a free-RAM reading.
 A bounded raster-order queue keeps at most one outstanding result per worker;
 completed cores still enter a single output band. WebGPU remains one tile at a
 time, with a 256 MiB WASM support-memory cap. PNG encoding has a
-128 MiB linker maximum; zenjpeg decoding has 512 MiB. Its worker exits before
-repair or SR begins. WebGPU allocation instrumentation caps the aggregate
+128 MiB linker maximum; the shared JPEG module has a 1 GiB maximum. Its worker
+exits after each decode or repair phase. WebGPU allocation instrumentation caps the aggregate
 live sizes of buffers on the runtime's actual GPU device at 256 MiB, including
 buffers retained in its pool. Exceeding a cap fails the job explicitly. The
 browser's PNG decoder, canvas backing stores, JS garbage collector, GPU driver and
@@ -73,7 +70,8 @@ switches the canvas sampler between nearest-neighbor and browser smoothing.
 With OPFS, compressed PNGs of completed output cores are retained locally alongside
 the full PNG. At close zoom the viewer loads visible native tiles, with at most
 two decodes pending and a 32 MiB decoded tile cache. Zoomed-out views use the
-1400-pixel overview when the visible region would exceed 24 tiles. These extra
+bounded overview when the visible region would exceed 24 tiles. Repair uses
+512-pixel inspection tiles; SR uses 128 input pixels times the output scale. These extra
 compressed tiles use browser storage; the full output remains the download.
 Without OPFS, inspection uses the reduced overview and is labeled accordingly.
 
@@ -91,8 +89,7 @@ avoiding an idle file handle throughout a long repair.
 Required tools: Node/npm, Rust with `wasm32-unknown-unknown`, wasm-bindgen CLI
 0.2.129, and Python with ONNX and NumPy. The shared codec dependencies use pinned
 Git revisions because this demo needs their retained streaming/probe APIs.
-The PNG/resampling and JPEG-probe modules are separate to isolate their differing
-zencodec/zenpixels dependency versions. zenflate uses opt-level 1 for this WASM
+PNG/resampling glue and the shared JPEG decode/repair bindings build separately. zenflate uses opt-level 1 for this WASM
 build; the initial opt-level 3 compilation crashed rustc on the tested toolchain.
 
 ```sh
@@ -103,20 +100,18 @@ just browser-serve --assets tools/browser-demo/dist --gallery /path/to/sr-cascad
   --port 3331 --cert /path/to/cert.pem --key /path/to/key.pem
 ```
 
-The relaxed module is optional and built in a new artifact directory. The build
-copies the owned CNN source, verifies its pinned hash, and changes exactly 15
-vector multiply-add/sub calls. It leaves native crate source unchanged. Rebuild
-requires review if that source hash changes.
+`browser-build` builds PNG glue plus relaxed, unfused and reference JPEG modules.
+No source rewriting is used. For an independently retained arithmetic build:
 
 ```sh
 just browser-relaxed-build /path/to/new-relaxed-run
-python tools/browser-demo/prepare.py --sr /path/to/sr-cpu-run \
-  --dscf /path/to/dscf-cpu-run --relaxed-package /path/to/new-relaxed-run/pkg
+just browser-unfused-build /path/to/new-unfused-run
 ```
 
-The relaxed option is disabled when its package was not assembled. A browser
-without relaxed-SIMD support fails that explicitly selected mode; it does not
-silently change arithmetic. See [measured browser results](../benchmarks/browser_sr_2026-11-09.md).
+`prepare.py` accepts `--relaxed-package` and `--unfused-package` overrides and
+requires both runtime packages before changing live assets. See the
+[PyTorch comparison](../benchmarks/browser_torch_2026-11-09.md) and
+[earlier browser measurements](../benchmarks/browser_sr_2026-11-09.md).
 
 Use a locally trusted certificate for access from another computer. WebGPU and
 OPFS require a secure context. The read-only server binds on all interfaces and
@@ -141,7 +136,8 @@ small JPEG, a large PNG, a large JPEG and a JSON report path, checking cancellat
 in repair and SR, termination of every worker, restart, saved results after reload
 and malformed input rejection. Viewer and gallery tests exercise native detail,
 zoom/pan, flicker, held-original comparison and sampling controls. The repair test
-checks native API RGB8 parity, all eight EXIF permutations and profiled-input rejection.
+checks native API RGB8 parity, all eight EXIF permutations, identity sRGB ICC
+conversion and malformed-profile rejection.
 The decoder check covers all eight permutations and identity sRGB ICC conversion.
 The paired arithmetic matrix takes an explicit input/hash manifest and records
 every RGB8 difference; the large comparison consumes a retained strict RGB hash.
@@ -150,3 +146,8 @@ The writer test verifies deferred file creation and persistence of the 1× check
 Browser backend results are not established as numerically identical to native
 CPU or CUDA. The functional tests are not a perceptual quality study or a
 hardware WebGPU benchmark.
+
+The `browser-torch-reference`, `browser-torch-test` and `browser-torch-score`
+recipes compare end-to-end PNG output with full-frame author PyTorch inference.
+They keep original FP32 and stored-weight controls separate, cover odd sizes
+across tile boundaries, and score scalar SSIMULACRA2 with no IQA maps.
