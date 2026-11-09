@@ -344,6 +344,9 @@ Combined retained-run scalars: `sr-all-retained-summary-v2/rows.tsv`, SHA-256
 Retention verification: `retained-images-verification-v2.json`. Images are under
 `sr-images-retained-v2/`; each cell gives its PNG path/hash and scored RGB8 hash.
 The root on i265 is `/mnt/v/output/zensr/external-models-20261109/`.
+The verified NAS mirror is `output/zensr/external-models-20261109/` in the
+project archive store. `ARCHIVE_VERIFIED-retained-v2.json` records checkpoint,
+scorer, score-table and seeded-random PNG checksum comparisons.
 [Codec-excluded CPU results](sr_cpu_2026-11-09.md) and the separate
 [DSCF protocol](../docs/research/DSCF_SR_2026-11-09.md) preserve timing scope.
 

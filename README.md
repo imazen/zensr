@@ -56,8 +56,8 @@ not guarantee exact re-encoding or better perceptual quality.
 ## Super-resolution
 
 The CPU runtime also supports ×2 and ×4 models. Upscaling is separate from the
-×1 JPEG repair API. General SR quality results are historical; there is no
-production GPU backend.
+×1 JPEG repair API. Quality and timing coverage varies by model; GPU comparisons
+use research adapters.
 
 [Public-model evaluation](docs/research/EXTERNAL_MODELS_2026-11-09.md) covers
 MeanFlow JPEG repair and separate S3Diff/ResShift/DSCF ×4 research comparisons.
