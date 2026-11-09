@@ -81,7 +81,9 @@ Each category has one reused source image. Low quality has eight encodings per
 category (q5/10/15/20 × 420/444); middle and high quality each have 16. Clean
 has one uncompressed LR input per category. These repeated encodings do not
 establish category-wide or subjective-preference estimates. The same 697
-inputs are scored for each ×4 pipeline. No generation or scoring was rerun.
+inputs are scored for each ×4 pipeline. The original category tables summarized
+the v1 scores; the DSCF addition and image-retention recovery subsequently ran
+fresh inference/scoring, as recorded below.
 
 ### Butteraugli: JPEG q5–20
 
