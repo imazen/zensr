@@ -766,6 +766,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "lz4_flex"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
+
+[[package]]
 name = "magetypes"
 version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2113,7 +2119,7 @@ dependencies = [
  "magetypes",
  "zenanalyze-api",
  "zenpixels 0.3.1",
- "zenpixels-convert",
+ "zenpixels-convert 0.3.1",
 ]
 
 [[package]]
@@ -2182,6 +2188,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenflate"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8409543ad469f954834da58409f0d9c463156f01cfaf8a8a03fe277c73b1e0f5"
+dependencies = [
+ "archmage",
+ "enough",
+ "libm",
+]
+
+[[package]]
 name = "zenjpeg"
 version = "0.9.0"
 source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
@@ -2225,6 +2242,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
 dependencies = [
  "bytemuck",
+ "imgref",
+ "rgb",
  "whereat",
 ]
 
@@ -2237,6 +2256,26 @@ dependencies = [
  "imgref",
  "rgb",
  "whereat",
+]
+
+[[package]]
+name = "zenpixels-convert"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf516a64a98f08fa2aa19e86f1389e49894f750441044d65369687cf88a1b8dd"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "garb",
+ "libm",
+ "linear-srgb",
+ "lz4_flex",
+ "magetypes",
+ "once_cell",
+ "paste",
+ "rgb",
+ "whereat",
+ "zenpixels 0.2.16",
 ]
 
 [[package]]
@@ -2254,6 +2293,29 @@ dependencies = [
  "paste",
  "whereat",
  "zenpixels 0.3.1",
+]
+
+[[package]]
+name = "zenpng"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ef0ff0cfac28ce74a9241dbe8ba3abe60f385819d55675c4daced1ac8ac4bd"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "imgref",
+ "linear-srgb",
+ "memchr",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror 2.0.21",
+ "whereat",
+ "zencodec 0.1.26",
+ "zenflate",
+ "zenpixels 0.2.16",
+ "zenpixels-convert 0.2.16",
 ]
 
 [[package]]
@@ -2298,6 +2360,7 @@ dependencies = [
  "tract-onnx",
  "zenbench",
  "zenjpeg",
+ "zenpng",
  "zenresize",
  "zensr-micro",
  "zensr-zenjpeg",

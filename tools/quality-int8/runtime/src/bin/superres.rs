@@ -1,5 +1,7 @@
-//! Fixed ×4 corpus preparation and scalar-only SR scoring.
+//! Fixed ×4 corpus preparation, scalar IQA and lossless scored-image retention.
 #![forbid(unsafe_code)]
+#[path = "../../../../../crates/zensr-bench/src/bin/routing_study/storage.rs"]
+mod artifact_storage;
 #[allow(dead_code)]
 #[path = "../pipeline.rs"]
 mod pipeline;
@@ -108,12 +110,33 @@ fn prepare(manifest: &str, output: &str) {
         .collect::<String>();
     write_new(&root.join("inputs.jsonl"), bytes.as_bytes());
 }
-fn measure(reference: &[u8], planes: &[f32], w: usize, h: usize) -> Value {
+fn retain_png(image: imgref::ImgRef<rgb::Rgb<u8>>, root: &Path) -> Value {
+    let config = zenpng::EncodeConfig::default()
+        .with_compression(zenpng::Compression::Fast)
+        .with_parallel(false)
+        .with_srgb_intent(Some(0));
+    let bytes = zenpng::encode_rgb8(
+        image,
+        None,
+        &config,
+        &enough::Unstoppable,
+        &enough::Unstoppable,
+    )
+    .unwrap();
+    let digest = hash(&bytes);
+    fs::create_dir_all(root).unwrap();
+    let path = root.join(format!("{digest}.png"));
+    artifact_storage::publish(&path, &bytes);
+    json!({"path":path,"sha256":digest,"bytes":bytes.len(),"width":image.width(),"height":image.height(),"format":"PNG RGB8 sRGB lossless"})
+}
+fn measure(reference: &[u8], planes: &[f32], w: usize, h: usize, artifacts: &Path) -> Value {
+    use rgb::FromSlice;
     assert_eq!(planes.len(), 3 * w * h);
     assert!(planes.iter().all(|v| v.is_finite()));
     let pixels = rgb8(planes, w, h);
     let (ssim, max, pnorm) = metrics(reference, &pixels, w, h);
-    json!({"ssim2":format!("{ssim:.17}"),"butter_max":format!("{max:.17}"),"butter_pnorm3":format!("{pnorm:.17}"),"rgb8_sha256":hash(&pixels)})
+    let png = retain_png(imgref::ImgRef::new(pixels.as_rgb(), w, h), artifacts);
+    json!({"ssim2":format!("{ssim:.17}"),"butter_max":format!("{max:.17}"),"butter_pnorm3":format!("{pnorm:.17}"),"rgb8_sha256":hash(&pixels),"png":png})
 }
 fn planes(p: &[u8], w: usize, h: usize) -> Vec<f32> {
     let mut result = vec![0.; p.len()];
@@ -136,6 +159,12 @@ fn main() {
         return;
     }
     assert_eq!(args[1], "score");
+    assert_eq!(
+        args.len(),
+        4,
+        "score requires weights and retained-image directory"
+    );
+    let artifacts = Path::new(&args[3]);
     let span_bytes = fs::read(&args[2]).unwrap();
     let span = AdoptedModel::load_span48(&zensr_micro::decode_all_f16(&span_bytes), 4).unwrap();
     let stdin = io::stdin();
@@ -177,7 +206,7 @@ fn main() {
                 span.forward(&low, h / 4, w / 4, &mut native);
                 reply(
                     &mut output,
-                    &json!({"id":row["id"],"input_bytes":low.len()*4,"baseline":measure(&reference,&baseline,w,h),"native_span":measure(&reference,&native,w,h)}),
+                    &json!({"id":row["id"],"input_bytes":low.len()*4,"baseline":measure(&reference,&baseline,w,h,artifacts),"native_span":measure(&reference,&native,w,h,artifacts)}),
                 );
                 for v in low {
                     output.write_all(&v.to_le_bytes()).unwrap();
@@ -202,11 +231,40 @@ fn main() {
                     .collect();
                 reply(
                     &mut output,
-                    &json!({"id":row["id"],"score":measure(reference,&planes,w,h)}),
+                    &json!({"id":row["id"],"score":measure(reference,&planes,w,h,artifacts)}),
                 );
             }
             "quit" => break,
             _ => panic!("unknown action"),
         }
+    }
+}
+
+#[cfg(test)]
+mod retained_image_tests {
+    use super::*;
+
+    #[test]
+    fn stride_padding_never_enters_retained_pixels() {
+        let scratch = std::env::var_os("TMPDIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join("tmp")
+            });
+        let root = scratch.join(format!("zensr-png-test-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        let pixels: Vec<_> = (0..15u8)
+            .map(|i| rgb::Rgb::new(i.wrapping_mul(71), i.wrapping_mul(43), i.wrapping_mul(193)))
+            .collect();
+        let mut padded = vec![rgb::Rgb::new(255, 0, 255); 7 * 3];
+        for y in 0..3 {
+            padded[y * 7..y * 7 + 5].copy_from_slice(&pixels[y * 5..y * 5 + 5]);
+        }
+        let tight = retain_png(imgref::ImgRef::new(&pixels, 5, 3), &root);
+        let strided = retain_png(imgref::ImgRef::new_stride(&padded, 5, 3, 7), &root);
+        assert_eq!(tight, strided);
+        let path = Path::new(tight["path"].as_str().unwrap());
+        assert!(fs::read(path).unwrap().starts_with(b"\x89PNG\r\n\x1a\n"));
+        fs::remove_dir_all(root).unwrap();
     }
 }

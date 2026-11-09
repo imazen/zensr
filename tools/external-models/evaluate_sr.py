@@ -15,6 +15,7 @@ import sys
 import numpy as np
 import torch
 from sr_models import load
+from sr_artifacts import validate_png
 
 
 def sha(path):
@@ -35,7 +36,7 @@ class Scorer:
     def __init__(self,a,index):
         self.log=(a.output/f'scorer-{index}.log').open('a')
         env=dict(os.environ,RAYON_NUM_THREADS='1',OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1')
-        self.process=subprocess.Popen([str(a.scorer),'score',str(a.native_weights)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.log,env=env)
+        self.process=subprocess.Popen([str(a.scorer),'score',str(a.native_weights),str(a.artifacts)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.log,env=env)
         if self.receive()!=dict(ready=True,span_sha256=sha(a.native_weights)):raise ValueError('native model differs')
 
     def receive(self):
@@ -67,13 +68,14 @@ class Scorer:
         if status:raise RuntimeError(f'scorer exit {status}')
 
 
-def validate(cell,row):
+def validate(cell,row,artifacts):
     if cell['row']!=row:raise ValueError('resumed row differs')
     for name in ['baseline','native_span','candidate']:
         score=cell[name]
         for key in ['ssim2','butter_max','butter_pnorm3']:
             if not np.isfinite(float(score[key])):raise ValueError('nonfinite score')
         if len(score['rgb8_sha256'])!=64:raise ValueError('invalid output hash')
+        validate_png(score,row['width'],row['height'],artifacts)
 
 
 def main(a):
@@ -87,21 +89,23 @@ def main(a):
     if a.pilot:rows=[r for r in rows if r['source_id']=='1017' and r['q'] in (0,10,50,90)]
     if a.pilot and len(rows)!=7:raise ValueError('pilot controls missing')
     a.output.mkdir(exist_ok=True);(a.output/'cells').mkdir(exist_ok=True)
-    identity=dict(schema='zensr-external-sr-v1',inputs_sha256=sha(a.inputs),scorer_sha256=sha(a.scorer),native_weights_sha256=sha(a.native_weights),
+    identity=dict(schema='zensr-external-sr-v2',inputs_sha256=sha(a.inputs),scorer_sha256=sha(a.scorer),native_weights_sha256=sha(a.native_weights),
         acquisition_sha256=sha(a.model_root/'ACQUISITION.json'),script_sha256=sha(Path(__file__)),adapter_sha256=sha(Path(__file__).with_name('sr_models.py')),
         python=sys.version,packages={d.metadata['Name']:d.version for d in importlib.metadata.distributions()},
         cuda=torch.version.cuda,cudnn=torch.backends.cudnn.version(),device=torch.cuda.get_device_name(0),torch_native_sha256=sha(Path(torch._C.__file__)),
         jobs=a.jobs,deterministic=True,tf32=False,cublas=os.environ['CUBLAS_WORKSPACE_CONFIG'],name=a.name,pilot=a.pilot,
         source_files={str(p.relative_to(a.model_root/'source')):sha(p) for p in sorted((a.model_root/'source').rglob('*')) if p.is_file() and p.suffix in ('.py','.yaml','.yml')},
         seeds='input id prefix xor 20261109 mod 2^63; reset each input',input_ids=[r['id'] for r in rows],
-        precision='S3Diff f32; ResShift f32 weights with author fp16 autocast',retention='scalar scores, hashes and encoded inputs; no restored RGB or diagnostic maps')
+        precision='ResShift f32 weights with author fp16 autocast; S3Diff/DSCF f32',
+        artifact_root=str(a.artifacts.resolve()),artifact_validator_sha256=sha(Path(__file__).with_name('sr_artifacts.py')),
+        retention='lossless scored RGB8 PNG, scalars, pixel/file hashes and encoded inputs; no IQA maps')
     path=a.output/'IDENTITY.json'
     if path.exists() and json.loads(path.read_text())!=identity:raise ValueError('resumed identity differs')
     if not path.exists():save(path,identity)
     completed=0;pending=[]
     for row in rows:
         path=a.output/'cells'/(row['id']+'.json')
-        if path.exists():validate(json.loads(path.read_text()),row);completed+=1
+        if path.exists():validate(json.loads(path.read_text()),row,a.artifacts);completed+=1
         else:pending.append(row)
     progress_lock=threading.Lock()
     scorers=[]
@@ -130,7 +134,7 @@ def main(a):
                     result=scorers[index].send(dict(action='score',id=row['id'],bytes=len(payload)),payload)
                     if result['id']!=row['id']:raise ValueError('candidate output id differs')
                     cell=dict(row=row,baseline=header['baseline'],native_span=header['native_span'],candidate=result['score'],seed=seed)
-                    validate(cell,row);save(a.output/'cells'/(row['id']+'.json'),cell)
+                    validate(cell,row,a.artifacts);save(a.output/'cells'/(row['id']+'.json'),cell)
                     with progress_lock:
                         completed+=1
                         if completed%16==0 or completed==len(rows):progress('evaluating');print(f'completed {completed}/{len(rows)}',flush=True)
@@ -150,8 +154,8 @@ def main(a):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ['inputs','scorer','native-weights','model-root','output']:p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic'],required=True)
+    for name in ['inputs','scorer','native-weights','model-root','output','artifacts']:p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--name',choices=['s3diff','resshift-v3','resshift-bicubic','dscf'],required=True)
     p.add_argument('--jobs',type=int,default=4)
     p.add_argument('--pilot',action='store_true')
     main(p.parse_args())
