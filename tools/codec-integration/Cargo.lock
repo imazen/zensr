@@ -424,34 +424,6 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-dependencies = [
- "aligned-vec",
- "archmage",
- "bytemuck",
- "enough",
- "garb",
- "how-far",
- "imgref",
- "linear-srgb",
- "magetypes",
- "memchr",
- "moxcms",
- "rgb",
- "safe_unaligned_simd",
- "thiserror",
- "tinyvec",
- "ultrahdr-core",
- "whereat",
- "zencodec 0.2.0",
- "zenmeta",
- "zenpixels 0.3.1",
- "zensr",
- "zenyuv 0.1.3",
-]
-
-[[package]]
-name = "zenjpeg"
-version = "0.9.0"
 source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
  "aligned-vec",
@@ -474,6 +446,35 @@ dependencies = [
  "zenmeta",
  "zenpixels 0.3.1",
  "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=24b6d3fb)",
+]
+
+[[package]]
+name = "zenjpeg"
+version = "0.9.0"
+source = "git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3#56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3"
+dependencies = [
+ "aligned-vec",
+ "archmage",
+ "bytemuck",
+ "enough",
+ "garb",
+ "how-far",
+ "imgref",
+ "linear-srgb",
+ "magetypes",
+ "memchr",
+ "moxcms",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror",
+ "tinyvec",
+ "ultrahdr-core",
+ "whereat",
+ "zencodec 0.2.0",
+ "zenmeta",
+ "zenpixels 0.3.1",
+ "zensr",
+ "zenyuv 0.1.3 (git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3)",
 ]
 
 [[package]]
@@ -527,10 +528,11 @@ dependencies = [
 [[package]]
 name = "zensr"
 version = "0.0.1"
+source = "git+https://github.com/imazen/zensr?rev=e6bd12df3a65c354330918dc9f71e31a49713663#e6bd12df3a65c354330918dc9f71e31a49713663"
 dependencies = [
  "zenanalyze",
  "zenanalyze-api",
- "zensr-micro",
+ "zensr-micro 0.0.1 (git+https://github.com/imazen/zensr?rev=e6bd12df3a65c354330918dc9f71e31a49713663)",
 ]
 
 [[package]]
@@ -539,15 +541,24 @@ version = "0.0.0"
 dependencies = [
  "enough",
  "serde_json",
- "zenjpeg 0.9.0",
+ "zenjpeg 0.9.0 (git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3)",
  "zensr",
- "zensr-micro",
+ "zensr-micro 0.0.1",
  "zensr-zenjpeg",
 ]
 
 [[package]]
 name = "zensr-micro"
 version = "0.0.1"
+dependencies = [
+ "archmage",
+ "magetypes",
+]
+
+[[package]]
+name = "zensr-micro"
+version = "0.0.1"
+source = "git+https://github.com/imazen/zensr?rev=e6bd12df3a65c354330918dc9f71e31a49713663#e6bd12df3a65c354330918dc9f71e31a49713663"
 dependencies = [
  "archmage",
  "magetypes",
@@ -561,12 +572,13 @@ dependencies = [
  "zenanalyze",
  "zenanalyze-api",
  "zenjpeg 0.9.0 (git+https://github.com/imazen/zenjpeg?rev=24b6d3fb)",
- "zensr-micro",
+ "zensr-micro 0.0.1",
 ]
 
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
+source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
  "archmage",
  "imgref",
@@ -579,7 +591,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
+source = "git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3#56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3"
 dependencies = [
  "archmage",
  "imgref",

@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 [workspace]
 [dependencies]
-zenjpeg = { path = "../../../zenjpeg--restoration/zenjpeg", features = ["restoration", "moxcms"] }
-zensr = { path = "../../crates/zensr" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3", features = ["restoration", "moxcms"] }
+zensr = { git = "https://github.com/imazen/zensr", rev = "e6bd12df3a65c354330918dc9f71e31a49713663" }
 zensr-micro = { path = "../../crates/zensr-micro", default-features = false, features = ["canon4"] }
 legacy = { package = "zensr-zenjpeg", path = "../../crates/zensr-zenjpeg" }
 enough = "0.4.4"

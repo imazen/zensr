@@ -8,10 +8,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let rows: Vec<serde_json::Value> = serde_json::from_slice(&fs::read(&args[1])?)?;
     let weights = zensr_micro::decode_all_f16(zensr_micro::canon4::WEIGHTS_F16);
-    let model = || zensr_micro::adopted::AdoptedModel::load_compact(&weights, 24, 8, 1);
-    let old = legacy::api::Restorer::new().with_tier(legacy::api::Budget::Realtime, model()?);
-    let restorer =
-        Arc::new(zensr::api::Restorer::new().with_tier(zensr::api::Budget::Realtime, model()?));
+    let old = legacy::api::Restorer::new().with_tier(
+        legacy::api::Budget::Realtime,
+        legacy::AdoptedModel::load_compact(&weights, 24, 8, 1)?,
+    );
+    let restorer = Arc::new(zensr::api::Restorer::new().with_tier(
+        zensr::api::Budget::Realtime,
+        zensr::AdoptedModel::load_compact(&weights, 24, 8, 1)?,
+    ));
     let decoder = Decoder::new()
         .artifact_removal(restorer)
         .auto_orient(false)
