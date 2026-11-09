@@ -151,12 +151,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lz4_flex"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
-
-[[package]]
 name = "magetypes"
 version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -439,7 +433,6 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -451,6 +444,7 @@ dependencies = [
  "linear-srgb",
  "magetypes",
  "memchr",
+ "moxcms",
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
@@ -460,6 +454,7 @@ dependencies = [
  "zencodec 0.2.0",
  "zenmeta",
  "zenpixels 0.3.1",
+ "zensr",
  "zenyuv",
 ]
 
@@ -504,9 +499,7 @@ dependencies = [
  "garb",
  "libm",
  "linear-srgb",
- "lz4_flex",
  "magetypes",
- "moxcms",
  "once_cell",
  "paste",
  "whereat",
@@ -514,15 +507,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zensr"
+version = "0.0.1"
+dependencies = [
+ "zenanalyze",
+ "zenanalyze-api",
+ "zensr-micro",
+]
+
+[[package]]
 name = "zensr-browser-repair"
 version = "0.0.0"
 dependencies = [
+ "enough",
  "wasm-bindgen",
  "zenjpeg",
- "zenpixels 0.3.1",
- "zenpixels-convert",
- "zensr-micro",
- "zensr-zenjpeg",
+ "zensr",
 ]
 
 [[package]]
@@ -534,20 +534,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "zensr-zenjpeg"
-version = "0.1.0"
-dependencies = [
- "enough",
- "zenanalyze",
- "zenanalyze-api",
- "zenjpeg",
- "zensr-micro",
-]
-
-[[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
  "archmage",
  "imgref",

@@ -13,4 +13,5 @@ zenanalyze-api = { version = "0.1.0", optional = true }
 
 [features]
 default = ["chooser"]
+strict-fma = ["zensr-micro/strict-fma"]
 chooser = ["dep:zenanalyze", "dep:zenanalyze-api"]

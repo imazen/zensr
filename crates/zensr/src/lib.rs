@@ -38,6 +38,7 @@ use zensr_micro::guards::guarded_merge;
 
 // Narrow, deliberate re-exports — the full micro modules are NOT part of
 // this crate's contract.
+pub use zensr_micro::decode_all_f16;
 pub use zensr_micro::adopted::{AdoptedModel, ModelSpace};
 pub use zensr_micro::consist::{ProjectionConfig, ProjectionReport};
 pub use zensr_micro::guards::{GuardConfig, GuardReport};
