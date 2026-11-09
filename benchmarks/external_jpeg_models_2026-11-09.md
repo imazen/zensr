@@ -34,12 +34,23 @@ SSIMULACRA2 and Butteraugli are score-only; decoded/restored RGB exists only in
 RAM/pipes. Retained inputs, scalar records, output hashes and identities are
 outside Git. No diagnostic maps were generated.
 
+The retained canon4 QAT controls cover the same 2,960 input IDs, source
+memberships, JPEG/reference hashes, geometry and unchanged-decode SSIM2 values.
+They load f32 weight bytes directly; all 43,203 values match the corrected
+IEEE expansion of the shipped f16 weights exactly (SHA-256
+`e88dba1c37a97276f5ff5e1ac727f121e6fb89d53bed84a5b72ee5576d1275bb`).
+Both forced and default-routed controls are reused scalar observations, not
+newly generated model outputs. This does not replace rescoring the original
+140,940-cell publication cohort.
+
 ## Quality bands
 
 Each entry is mean SSIM2 gain / harmed cases. Baseline is the unchanged decode.
 
 | Pipeline | q5–20 (544) | q25–60 (1,088) | q65–100 (1,088) | Worst loss |
 |---|---:|---:|---:|---:|
+| canon4-forced (cached) | +4.933 / 21/544 (3.86%) | +1.983 / 81/1088 (7.44%) | +0.560 / 145/1088 (13.33%) | -4.444 |
+| canon4-routed (cached) | +4.893 / 4/544 (0.74%) | +1.900 / 3/1088 (0.28%) | +0.503 / 0/1088 (0.00%) | -3.412 |
 | dejpeg7-raw | +7.142 / 51/544 (9.38%) | +2.795 / 112/1088 (10.29%) | +0.043 / 279/1088 (25.64%) | -15.846 |
 | dejpeg7-projected | +6.958 / 32/544 (5.88%) | +2.849 / 68/1088 (6.25%) | +0.837 / 157/1088 (14.43%) | -6.628 |
 | meanflow-1-raw | +6.371 / 139/544 (25.55%) | +0.399 / 508/1088 (46.69%) | -5.985 / 1041/1088 (95.68%) | -25.366 |
@@ -49,29 +60,30 @@ Each entry is mean SSIM2 gain / harmed cases. Baseline is the unchanged decode.
 
 ## Category × quality
 
-One-step MeanFlow with projection compared with native dejpeg7 with projection.
-Each cell is **MeanFlow / dejpeg7** mean SSIM2 gain. Each category has 32 low-band
+One-step MeanFlow with projection, native dejpeg7 with projection and the
+cached routed canon4 control. Each cell is **MeanFlow / dejpeg7 / canon4**
+mean SSIM2 gain. Each category has 32 low-band
 and 64 middle/high-band encodings of one source image.
 
 | Category | q5–20 | q25–60 | q65–100 |
 |---|---:|---:|---:|
-| 1000-lilith-photos-general | +9.672 / +9.401 | +2.673 / +3.165 | -0.880 / +1.247 |
-| 1200-lilith-interiors | -0.832 / +2.770 | -0.769 / +0.820 | -1.477 / +0.367 |
-| 1400-lilith-nature | +1.150 / +4.193 | +1.116 / +2.293 | -0.420 / +1.139 |
-| 1600-lilith-food | +3.081 / +5.704 | +0.439 / +1.722 | -1.201 / +0.566 |
-| 2000-unsplash-people | +11.857 / +9.916 | +2.849 / +3.257 | -1.681 / +0.483 |
-| 2200-unsplash-renders | +14.473 / +10.511 | +3.569 / +3.909 | -0.842 / +0.905 |
-| 2400-unsplash-textures | +13.383 / +5.541 | +3.453 / +1.850 | -1.673 / +0.193 |
-| 3000-art-institute-of-chicago-photos | +30.078 / +20.622 | +7.290 / +7.362 | -0.773 / +1.172 |
-| 3300-met-museum-photos | +9.734 / +10.004 | +1.123 / +2.502 | -2.073 / +0.427 |
-| 5000-national-park-service-brochures | -2.489 / -2.270 | -1.430 / +0.156 | -1.401 / +0.041 |
-| 5300-noaa-hurricane-documents | +0.421 / +2.678 | -0.434 / +1.739 | -1.391 / +0.946 |
-| 7000-lilith-plots | +2.937 / +4.261 | -0.903 / +1.222 | -2.669 / +0.158 |
-| 8000-lilith-mobile-screenshots | +6.078 / +6.712 | +1.678 / +2.872 | -0.559 / +1.180 |
-| 8100-lilith-web-screenshots | +7.023 / +5.017 | +2.068 / +4.395 | -0.463 / +2.553 |
-| 9000-lilith-ai-clipart | +8.181 / +9.380 | +3.573 / +5.843 | -0.778 / +1.659 |
-| 9094-lilith-ai-illustrations | +2.825 / +4.977 | +0.160 / +1.408 | -1.486 / +0.183 |
-| 9226-lilith-ai-products | +8.177 / +8.866 | +3.415 / +3.925 | -0.670 / +1.010 |
+| 1000-lilith-photos-general | +9.672 / +9.401 / +7.418 | +2.673 / +3.165 / +2.726 | -0.880 / +1.247 / +0.498 |
+| 1200-lilith-interiors | -0.832 / +2.770 / +2.356 | -0.769 / +0.820 / +0.416 | -1.477 / +0.367 / +0.118 |
+| 1400-lilith-nature | +1.150 / +4.193 / +2.783 | +1.116 / +2.293 / +1.481 | -0.420 / +1.139 / +0.718 |
+| 1600-lilith-food | +3.081 / +5.704 / +4.172 | +0.439 / +1.722 / +1.336 | -1.201 / +0.566 / +0.428 |
+| 2000-unsplash-people | +11.857 / +9.916 / +7.441 | +2.849 / +3.257 / +2.490 | -1.681 / +0.483 / +0.601 |
+| 2200-unsplash-renders | +14.473 / +10.511 / +7.172 | +3.569 / +3.909 / +3.068 | -0.842 / +0.905 / +0.735 |
+| 2400-unsplash-textures | +13.383 / +5.541 / +2.535 | +3.453 / +1.850 / +0.377 | -1.673 / +0.193 / +0.012 |
+| 3000-art-institute-of-chicago-photos | +30.078 / +20.622 / +14.823 | +7.290 / +7.362 / +6.695 | -0.773 / +1.172 / +1.384 |
+| 3300-met-museum-photos | +9.734 / +10.004 / +6.956 | +1.123 / +2.502 / +0.205 | -2.073 / +0.427 / +0.000 |
+| 5000-national-park-service-brochures | -2.489 / -2.270 / +0.931 | -1.430 / +0.156 / +0.825 | -1.401 / +0.041 / +0.306 |
+| 5300-noaa-hurricane-documents | +0.421 / +2.678 / +0.939 | -0.434 / +1.739 / +0.153 | -1.391 / +0.946 / +0.000 |
+| 7000-lilith-plots | +2.937 / +4.261 / +2.706 | -0.903 / +1.222 / +0.669 | -2.669 / +0.158 / +0.000 |
+| 8000-lilith-mobile-screenshots | +6.078 / +6.712 / +4.142 | +1.678 / +2.872 / +1.987 | -0.559 / +1.180 / +0.778 |
+| 8100-lilith-web-screenshots | +7.023 / +5.017 / +2.694 | +2.068 / +4.395 / +1.786 | -0.463 / +2.553 / +0.760 |
+| 9000-lilith-ai-clipart | +8.181 / +9.380 / +5.991 | +3.573 / +5.843 / +4.535 | -0.778 / +1.659 / +1.378 |
+| 9094-lilith-ai-illustrations | +2.825 / +4.977 / +3.263 | +0.160 / +1.408 / +0.589 | -1.486 / +0.183 / +0.081 |
+| 9226-lilith-ai-products | +8.177 / +8.866 / +6.863 | +3.415 / +3.925 / +2.956 | -0.670 / +1.010 / +0.751 |
 
 The one-step low-band advantage is concentrated in particular sources: museum
 art +30.078 versus +20.622, textures +13.383 versus +5.541, renders +14.473
@@ -110,9 +122,9 @@ Full evaluation on i265, six CPU scorers and one serialized RTX 4080 worker:
 This is whole-study execution, including scoring, not model inference latency.
 
 Artifact root on i265: `/mnt/v/output/zensr/external-models-20261109/`.
-Full records: `jpeg-evaluation-v1/`; grouped scalars: `jpeg-summary-v1/`.
+Full records: `jpeg-evaluation-v1/`; grouped scalars: `jpeg-summary-v2/`.
 Input manifest SHA-256: `61ff80a858f910ce4eb92f2df1289ce27455c4a72e8a40ad56e65933497bb1c3`.
-Grouped rows SHA-256: `6f9d373482c754243cf4692ee0298d5a95e2d67838c32680aa3a991b9848e65a`.
+Grouped rows SHA-256: `604b7d856b6d9656175b4e2ae592c1bd0b696333b3df87a9efd96c748de0f1a4`.
 
 The product fix changes how subnormal weights are interpreted. Historical
 runtime and routing measurements keep their original identities; this bounded

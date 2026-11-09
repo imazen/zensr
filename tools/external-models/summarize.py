@@ -28,6 +28,18 @@ def main(a):
     output=[]
     native={r['id']:r for r in csv.DictReader(a.native.open(),delimiter='\t') if r['arm']=='native'} if a.native else {}
     inputs={r['id']:r for r in csv.DictReader(a.inputs.open(),delimiter='\t')} if a.inputs else {}
+    canon4={}
+    if a.task=='jpeg':
+        if not a.canon4_results or not a.canon4_inputs:
+            raise ValueError('JPEG comparison requires the frozen canon4 controls')
+        canon4={r['id']:r for r in csv.DictReader(a.canon4_results.open(),delimiter='\t') if r['arm']=='baseline'}
+        control_inputs={r['id']:r for r in csv.DictReader(a.canon4_inputs.open(),delimiter='\t')}
+        if set(canon4)!=set(inputs) or set(control_inputs)!=set(inputs):
+            raise ValueError('canon4 control coverage differs')
+        for key,row in inputs.items():
+            for field in ['source_id','origin','content','cohort','size','encoder','ss','q','width','height','jpeg_sha256','reference_rgb8_sha256']:
+                if control_inputs[key][field]!=row[field]:
+                    raise ValueError('canon4 input bytes or metadata differ')
     runs=['jpeg-evaluation-v1'] if a.task=='jpeg' else ['sr-s3diff-v1','sr-resshift-v3-v1','sr-resshift-bicubic-v1']
     for run in runs:
         path=root/run
@@ -42,6 +54,16 @@ def main(a):
                 arms=[(f'meanflow-{step}-{stage}',score[stage]) for step,score in cell['schedules'].items() for stage in ['raw','projected']]
                 n=native[row['id']]
                 arms += [(f'dejpeg7-{stage}',dict(ssim2=n[stage+'_ssim2'],butter_pnorm3=n[stage+'_butter_pnorm3'])) for stage in ['raw','projected']]
+                control=canon4[row['id']]
+                if abs(D(control['identity_ssim2'])-D(base))>D('1e-9'):
+                    raise ValueError('canon4 unchanged-decode score differs')
+                if control['default_restore'] not in ('0','1'):
+                    raise ValueError('invalid canon4 routing decision')
+                selected='forced' if control['default_restore']=='1' else 'identity'
+                if control['routed_ssim2']!=control[selected+'_ssim2']:
+                    raise ValueError('canon4 selected-path score differs')
+                arms += [('canon4-forced',dict(ssim2=control['forced_ssim2'],butter_pnorm3=control['forced_butter_pnorm3'])),
+                         ('canon4-routed',dict(ssim2=control['routed_ssim2'],butter_pnorm3=control[selected+'_butter_pnorm3']))]
             else:
                 row=cell['row'];base=cell['baseline']['ssim2'];base_butter=cell['baseline']['butter_pnorm3']
                 arms=[(run,cell['candidate'])]
@@ -64,7 +86,8 @@ def main(a):
         writer=csv.DictWriter(f,fieldnames=list(output[0]),delimiter='\t');writer.writeheader();writer.writerows(output)
     (a.output/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
     digest=hashlib.sha256((a.output/'rows.tsv').read_bytes()).hexdigest()
-    (a.output/'IDENTITY.json').write_text(json.dumps(dict(task=a.task,rows=len(output),rows_sha256=digest,runs=runs),sort_keys=True)+'\n')
+    sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [a.native,a.inputs,a.canon4_results,a.canon4_inputs] if p}
+    (a.output/'IDENTITY.json').write_text(json.dumps(dict(task=a.task,rows=len(output),rows_sha256=digest,runs=runs,sources=sources),sort_keys=True)+'\n')
     for row in report:
         if row['group'][0]=='q-band' and row['group'][1]=='primary':print(json.dumps(row))
 
@@ -73,4 +96,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root',type=Path,required=True);p.add_argument('--task',choices=['jpeg','sr'],required=True)
     p.add_argument('--native',type=Path);p.add_argument('--inputs',type=Path);p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--canon4-results',type=Path);p.add_argument('--canon4-inputs',type=Path)
     main(p.parse_args())
