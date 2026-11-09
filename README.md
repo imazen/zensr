@@ -63,6 +63,8 @@ use research adapters.
 MeanFlow JPEG repair and separate S3Diff/ResShift/DSCF ×4 research comparisons.
 [Codec-excluded CPU timings](benchmarks/sr_cpu_2026-11-09.md) compare native
 SPAN/SPANF, the retained built-in SR models and those external ×4 models.
+[Repair followed by SR](benchmarks/sr_cascade_2026-11-09.md) compares direct
+SPANF/DSCF with routed canon4 repair before upscaling.
 
 ## Development
 

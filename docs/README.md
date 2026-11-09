@@ -15,6 +15,9 @@
 
 ## Evidence
 
+- [Canon4 followed by ×4 SR](../benchmarks/sr_cascade_2026-11-09.md): matched
+  direct/repair-first SPANF and DSCF quality, routing coverage and retained PNGs.
+
 - [Public external-model comparison](research/EXTERNAL_MODELS_2026-11-09.md):
   runnable releases, JPEG repair and separate ×4 SR results by quality/category.
 - [Current routing comparison](../benchmarks/routing_feature_ablation_2026-11-06.md).

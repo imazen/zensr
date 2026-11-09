@@ -1,5 +1,9 @@
 # Canon4 repair followed by ×4 super-resolution
 
+All 697 inputs completed all four arms. The
+[results and category tables](../../benchmarks/sr_cascade_2026-11-09.md) record
+the measured gains, metric disagreements, retained images and limits.
+
 Frozen comparison: direct native SPANF, default-routed canon4 → native SPANF,
 direct author DSCF26, and default-routed canon4 → author DSCF26. No model,
 routing threshold, mixing coefficient or image subset is selected from outcomes.
