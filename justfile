@@ -475,6 +475,12 @@ external-sr-cpu-plan *args:
 external-sr-8k-plan *args:
     python3 tools/external-models/cpu_8k_plan.py {{args}}
 
+external-sr-8k-report root:
+    python3 tools/external-models/cpu_8k_report.py {{root}}
+
+external-sr-8k-mirror root archive:
+    rsync -a --no-owner --no-group {{root}}/ {{archive}}/
+
 external-dscf-export *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/export_dscf.py {{args}}
 

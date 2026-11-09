@@ -25,6 +25,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Two-call 2048→8192 CPU measurements for native SPANF and tract/PyTorch DSCF,
+  including peak process RSS and retained run identities (`ccbaeeab`).
+  [Results](benchmarks/sr_8k_cpu_2026-11-09.md).
+
 - Public external-model evaluation with scalar-only streaming, pinned author
   checkpoints, author inference parity and quality × category reports
   (`788de6a8`, `6ff0d347`, `922326af`).
