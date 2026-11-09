@@ -70,7 +70,7 @@ jobs:
           "$TMPDIR/routing-storage-tests.exe"
 
       - name: Test (default features)
-        run: cargo test -p zensr-micro -p zensr-zenjpeg
+        run: cargo test -p zensr -p zensr-micro -p zensr-zenjpeg
 
       - name: Test (no default features)
         run: cargo test -p zensr-micro --no-default-features
@@ -108,7 +108,7 @@ jobs:
       - name: Install cross
         run: cargo install cross --locked
       - name: Test
-        run: cross test --target i686-unknown-linux-gnu -p zensr-micro -p zensr-zenjpeg
+        run: cross test --target i686-unknown-linux-gnu -p zensr -p zensr-micro -p zensr-zenjpeg
 
   lint:
     name: fmt + clippy

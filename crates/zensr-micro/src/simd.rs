@@ -5,7 +5,7 @@
 //! Interior columns run vector FMA (loads at x-1/x/x+1 are guarded by
 //! `x + W + 1 <= wd`); the x edges and non-multiple tails run scalar.
 
-use crate::{CAT_CH, FC, NEAR_CH, S2, SpanfWeights};
+use crate::{SpanfWeights, CAT_CH, FC, NEAR_CH, S2};
 use archmage::prelude::*;
 
 // WASM uses the engine's relaxed madd when enabled at module build time, and
@@ -130,14 +130,14 @@ macro_rules! define_kernels {
                 assert!(cin * 3 <= 192, "conv3x3: cin {cin} exceeds rowtab capacity");
                 let q = oc0 / 4;
                 let qbase = q * cin * 36; // cin * 3ky * 12
-                // (row, weights) pairs for this output row, built ONCE and then
-                // walked by iterator. Indexing `rowtab[ic*3+ky]` and re-slicing
-                // `wts[o..o+12]` inside the tile loop cost a bounds check each,
-                // per (ic,ky), per tile — and the profile put 28% of this
-                // kernel's samples in branch/compare. Pairing them here turns
-                // both into pointer bumps. Order of iteration, and therefore of
-                // FP accumulation, is identical to the previous nesting, so the
-                // output is bit-identical (goldens unchanged).
+                                          // (row, weights) pairs for this output row, built ONCE and then
+                                          // walked by iterator. Indexing `rowtab[ic*3+ky]` and re-slicing
+                                          // `wts[o..o+12]` inside the tile loop cost a bounds check each,
+                                          // per (ic,ky), per tile — and the profile put 28% of this
+                                          // kernel's samples in branch/compare. Pairing them here turns
+                                          // both into pointer bumps. Order of iteration, and therefore of
+                                          // FP accumulation, is identical to the previous nesting, so the
+                                          // output is bit-identical (goldens unchanged).
                 const ZERO12: [f32; 12] = [0.0; 12];
                 let mut taps: [(&[f32], &[f32; 12]); 192] = [(&[], &ZERO12); 192];
                 let mut ntap = 0usize;
@@ -245,18 +245,18 @@ macro_rules! define_kernels {
                         x += W;
                     }
                 } // end channel block
-                // Overlapped final tile: cover the columns past the last full
-                // tile by re-running one tile ending at wd-1. It OVERLAPS
-                // columns the main loop already wrote, so it stores the
-                // COMPLETE sum — and `tile_complete` computes that sum with the
-                // main loop's own per-block sequence, so the overlapped columns
-                // are rewritten with the same bits and the new ones get the
-                // value a wider row would give them. (One chain over every tap
-                // here instead made these columns depend on wd and on the vector
-                // width whenever cin > IC_BLOCK: tiled and whole-image runs, and
-                // the AVX2 and AVX-512 tiers, disagreed in the last bit, and
-                // after quantisation in final pixels.) One tile per row, so
-                // touching all cin*3 pages here costs little.
+                  // Overlapped final tile: cover the columns past the last full
+                  // tile by re-running one tile ending at wd-1. It OVERLAPS
+                  // columns the main loop already wrote, so it stores the
+                  // COMPLETE sum — and `tile_complete` computes that sum with the
+                  // main loop's own per-block sequence, so the overlapped columns
+                  // are rewritten with the same bits and the new ones get the
+                  // value a wider row would give them. (One chain over every tap
+                  // here instead made these columns depend on wd and on the vector
+                  // width whenever cin > IC_BLOCK: tiled and whole-image runs, and
+                  // the AVX2 and AVX-512 tiers, disagreed in the last bit, and
+                  // after quantisation in final pixels.) One tile per row, so
+                  // touching all cin*3 pages here costs little.
                 if wd % W != 0 && wd >= W {
                     let xl = wd - W;
                     let acc = tile_complete(token, taps, nky, cin, bias, oc0, xl);
