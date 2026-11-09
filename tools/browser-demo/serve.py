@@ -8,6 +8,25 @@ from urllib.parse import unquote, urlsplit
 
 def main(a):
     class Handler(SimpleHTTPRequestHandler):
+        def gallery(self, head=False):
+            if urlsplit(self.path).path != '/gallery/witnesses.html':
+                return False
+            html=(a.gallery/'witnesses.html').read_text()
+            html=html.replace('</html>','<script type="module" src="/gallery.mjs"></script></html>')
+            data=html.encode()
+            self.send_response(200)
+            self.send_header('Content-Type','text/html; charset=utf-8')
+            self.send_header('Content-Length',str(len(data)))
+            self.end_headers()
+            if not head:self.wfile.write(data)
+            return True
+
+        def do_GET(self):
+            if not self.gallery():super().do_GET()
+
+        def do_HEAD(self):
+            if not self.gallery(head=True):super().do_HEAD()
+
         def translate_path(self, path):
             path=unquote(urlsplit(path).path)
             root=a.assets

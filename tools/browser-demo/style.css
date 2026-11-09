@@ -327,3 +327,91 @@ canvas {
     margin-bottom: 10px;
   }
 }
+
+.viewer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.viewer-controls button {
+  width: auto;
+  padding: 8px 11px;
+  font-size: 11px;
+  background: #e4e9dc;
+  color: #29452d;
+}
+.viewer-controls button[aria-pressed="true"] {
+  background: #2f5540;
+  color: white;
+}
+.viewer-controls select {
+  width: auto;
+  margin: 0;
+  padding: 7px;
+  font-size: 11px;
+}
+.viewer-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 400;
+}
+#view-state {
+  font-size: 11px;
+  color: #68796d;
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+#viewer {
+  height: min(68vh, 850px);
+  max-height: none;
+  touch-action: none;
+}
+#display {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+#display:active {
+  cursor: grabbing;
+}
+#display:focus-visible {
+  outline: 2px solid #5f8769;
+  outline-offset: -3px;
+}
+
+.label,
+#divider {
+  pointer-events: none;
+}
+
+.repair-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.5;
+}
+.repair-option input {
+  margin: 0;
+  flex-shrink: 0;
+}
+.file {
+  position: relative;
+}
+.file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.file:focus-within {
+  outline: 2px solid #5f8769;
+  outline-offset: 3px;
+}
