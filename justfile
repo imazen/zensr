@@ -434,6 +434,9 @@ external-sr-acquire root model:
 external-sr-evaluate *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/evaluate_sr.py {{args}}
 
+external-sr-cascade *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/cascade_sr.py {{args}}
+
 external-sr-verify *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/external-models/verify_sr.py {{args}}
 

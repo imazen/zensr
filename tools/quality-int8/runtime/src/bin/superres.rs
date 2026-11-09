@@ -2,6 +2,8 @@
 #![forbid(unsafe_code)]
 #[path = "../../../../../crates/zensr-bench/src/bin/routing_study/storage.rs"]
 mod artifact_storage;
+#[path = "../cascade.rs"]
+mod cascade;
 #[allow(dead_code)]
 #[path = "../pipeline.rs"]
 mod pipeline;
@@ -154,6 +156,10 @@ fn reply(out: &mut impl Write, value: &Value) {
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args[1] == "cascade" {
+        cascade::run(&args);
+        return;
+    }
     if args[1] == "prepare" {
         prepare(&args[2], &args[3]);
         return;
