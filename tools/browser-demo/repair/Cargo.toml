@@ -10,8 +10,8 @@ crate-type = ["cdylib"]
 [dependencies]
 wasm-bindgen = "=0.2.129"
 enough = "0.4.4"
-zensr = { path = "../../../crates/zensr" }
-zenjpeg = { path = "../../../../zenjpeg--restoration/zenjpeg", features = ["restoration", "moxcms"] }
+zensr = { git = "https://github.com/imazen/zensr", rev = "e6bd12df3a65c354330918dc9f71e31a49713663" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3", features = ["restoration", "moxcms"] }
 [patch.crates-io]
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
 zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
