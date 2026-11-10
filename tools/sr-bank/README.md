@@ -47,6 +47,12 @@ this bank does not establish fresh held-out quality for the base CNN.
 The extractor uses the existing zenanalyze-api `Request`, qualified feature
 names, `satisfies`, `reuse_for` and `schema_hash`. Feature schema/provenance is
 stored once; each vector binds its pixel hash, geometry and processing stage.
+Flat inputs can omit the undefined `spectral_slope_y` feature. Each observed
+offer schema is retained separately; missing features are not filled with zero.
+A model must request a compatible qualified subset. Completed shards can be
+reused after an orchestration correction only when the frozen executable,
+plan, model and generation dependencies agree; the original generation
+identity and source-record hash remain in every reused record.
 Matching feature definitions alone does not establish that two offers describe
 the same pixels. No compatibility API is added.
 

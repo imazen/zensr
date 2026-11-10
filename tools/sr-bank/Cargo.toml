@@ -9,6 +9,8 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 default = ["avx512"]
 avx512 = ["archmage/avx512", "magetypes/avx512"]
 [dependencies]
+zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "208ee7ecf5ffa97691d8e74fab35d9d4d9d2db81", default-features = false, features = ["std", "simd"] }
+zenpredict-bake = { git = "https://github.com/imazen/zenanalyze", rev = "208ee7ecf5ffa97691d8e74fab35d9d4d9d2db81" }
 imij = { git = "https://github.com/imazen/zqi", rev = "b3856304ed60ee232b792a18460aadaf3886a63e", default-features = false, features = ["std"] }
 imij-set = { git = "https://github.com/imazen/zqi", rev = "b3856304ed60ee232b792a18460aadaf3886a63e" }
 zensr-micro = { path = "../../crates/zensr-micro" }

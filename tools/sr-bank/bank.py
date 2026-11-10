@@ -282,6 +282,18 @@ def generate(a):
                     cuda=torch.version.cuda, cudnn=torch.backends.cudnn.version(),
                     device=torch.cuda.get_device_name(0), tf32=False, deterministic=True,
                     jobs=a.jobs, pilot=a.pilot, source_ids=[r['id'] for r in sources])
+    if a.reuse_from:
+        prior = a.output / a.reuse_from
+        prior_identity = json.loads((prior / 'IDENTITY.json').read_text())
+        for k in identity:
+            if k in ('source_revision', 'files'):
+                continue
+            if identity[k] != prior_identity[k]:
+                raise ValueError(f'Incompatible prior generation identity: {k}')
+        for path, digest in identity['files'].items():
+            if path != str(HERE / 'bank.py') and prior_identity['files'].get(path) != digest:
+                raise ValueError('Prior model or generation dependency changed')
+        identity['reused_prior_identity_sha256'] = sha(prior / 'IDENTITY.json')
     identity_path = run / 'IDENTITY.json'
     if identity_path.exists() and json.loads(identity_path.read_text()) != identity:
         raise ValueError('Resume identity differs')
@@ -315,8 +327,37 @@ def generate(a):
     for m in [repair_model, *models.values()]:
         if any(p.dtype != torch.float32 or p.device.type != 'cuda' for p in m.parameters()):
             raise ValueError('Models must retain FP32 CUDA parameters')
+    if a.reuse_from:
+        # The frozen executable, inputs and models must agree above. Only the
+        # Python orchestration differs; source records remain hash-bound.
+        from report import validate
+        prior = a.output / a.reuse_from
+        prior_schema = json.loads((prior / 'FEATURE_SCHEMA.json').read_text())
+        for name in ('FEATURE_SCHEMA.json', f"FEATURE_SCHEMA-{prior_schema['schema_hash']}.json"):
+            target = run / name
+            if not target.exists():
+                save(target, prior_schema)
+        for source in sources:
+            original_record = prior / 'shards' / (source['id'] + '.json')
+            target_record = run / 'shards' / (source['id'] + '.json')
+            if not original_record.exists() or target_record.exists():
+                continue
+            record = json.loads(original_record.read_text())
+            validate(record, source, plan, identity['reused_prior_identity_sha256'])
+            target_archive = run / 'shards' / (source['id'] + '.imijset')
+            if target_archive.exists():
+                raise ValueError('Unrecorded reuse target exists')
+            os.link(record['archive'], target_archive)
+            record['archive'] = str(target_archive)
+            record['generation_identity_sha256'] = record['identity_sha256']
+            record['identity_sha256'] = sha(identity_path)
+            record['reused_source_record_sha256'] = sha(original_record)
+            for cell in record['cells']:
+                cell['features']['schema_hash'] = prior_schema['schema_hash']
+            save(target_record, record)
     pending = []
     for source in sources:
+
         record = run / 'shards' / (source['id'] + '.json')
         if record.exists():
             r = json.loads(record.read_text())
@@ -377,10 +418,18 @@ def generate(a):
                                 schema_path = run / 'FEATURE_SCHEMA.json'
                                 if not schema_path.exists():
                                     save(schema_path, schema)
-                                elif json.loads(schema_path.read_text()) != schema:
-                                    raise ValueError('Feature extraction schema changed')
+                                master = json.loads(schema_path.read_text())
+                                if (any(schema[k] != master[k] for k in ('config_hash', 'descriptor_hash', 'analyzer_version'))
+                                        or not set(schema['names']) <= set(master['names'])):
+                                    raise ValueError('Feature definitions/configuration changed')
+                                variant = run / f"FEATURE_SCHEMA-{schema['schema_hash']}.json"
+                                if variant.exists() and json.loads(variant.read_text()) != schema:
+                                    raise ValueError('Feature-schema digest collision')
+                                if not variant.exists():
+                                    save(variant, schema)
                             for k in schema:
-                                feature.pop(k)
+                                if k != 'schema_hash':
+                                    feature.pop(k)
                             if q == 0:
                                 references.append(worker.send('references', hr_label=f'e{edge}/hr', lr_label=f'e{edge}/clean'))
                             decoded = worker.send('put', plain, width=w, height=h, label=case_id + '/decoded', score=False)
@@ -479,6 +528,7 @@ def main():
     f.add_argument('--revision', required=True)
     f.add_argument('--jobs', type=int, default=4)
     f.add_argument('--pilot', type=int, default=0)
+    f.add_argument('--reuse-from')
     f.set_defaults(function=generate)
     a = p.parse_args()
     a.function(a)

@@ -587,6 +587,45 @@ mod tests {
         assert_eq!(f["pixels_sha256"], hash(&p));
     }
     #[test]
+    fn undefined_flat_spectrum_is_missing_and_common_requests_still_reuse() {
+        use zenanalyze_api::{OwnedFeatureResult, OwnedOffer, Provenance};
+        let p: Vec<u8> = (0..32 * 32 * 3).map(|i| (i * 37 % 251) as u8).collect();
+        let full = features(&p, 32, 32).unwrap();
+        let flat = features(&vec![128; 32 * 32 * 3], 32, 32).unwrap();
+        let owned = |v: &Value| {
+            OwnedOffer::new(
+                v["names"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .zip(v["values"].as_array().unwrap())
+                    .map(|(n, x)| {
+                        OwnedFeatureResult::new(n.as_str().unwrap(), x.as_f64().unwrap() as f32)
+                    })
+                    .collect(),
+                Provenance::new("test"),
+            )
+        };
+        let full_offer = owned(&full);
+        let flat_offer = owned(&flat);
+        let spectral = full_offer
+            .features()
+            .iter()
+            .find(|f| f.name() == "spectral_slope_y")
+            .unwrap();
+        let spectral_want = [NamedFeature::parse(spectral.qualified_name()).unwrap()];
+        assert!(!flat_offer.satisfies(&Request::new(Select::Features(&spectral_want))));
+        let common: Vec<_> = flat_offer
+            .features()
+            .iter()
+            .map(|f| NamedFeature::parse(f.qualified_name()).unwrap())
+            .collect();
+        let request = Request::new(Select::Features(&common));
+        assert!(full_offer.satisfies(&request));
+        assert!(flat_offer.satisfies(&request));
+        assert_eq!(flat_offer.reuse_for(&request).unwrap().len(), common.len());
+    }
+    #[test]
     fn storage_is_exact_for_float_samples() {
         let p: Vec<u8> = [0.0f32, -0.0, 0.000001, 1.0, -0.4, 1.5]
             .iter()

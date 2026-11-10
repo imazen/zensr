@@ -700,3 +700,6 @@ sr-bank-generate *args:
 
 sr-bank-report *args:
     python3 tools/sr-bank/report.py {{args}}
+
+sr-bank-selector-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml --bin selector

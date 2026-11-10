@@ -2,6 +2,14 @@
 
 ## Known Bugs
 
+- Candidate-bank collection initially assumed `Select::All` always returned a
+  fixed feature set. Flat JPEG inputs can omit undefined `spectral_slope_y`.
+  Collection now retains each offer schema without imputing a value; models
+  request a compatible qualified subset through the existing offer API.
+  A real flat-image regression covers the missing-feature rejection and
+  common-subset reuse. Completed image generation remains bound to its
+  original executable/model identities when reused after orchestration fixes.
+
 - Browser SR overview used input dimensions, so a 259×263 input's 1036×1052
   output was displayed through a 259×263 overview. Overviews now use output
   dimensions within the existing 4 MP budget; native tiles and downloaded
