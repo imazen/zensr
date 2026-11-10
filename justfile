@@ -729,3 +729,6 @@ sr-bank-chroma-edges *args:
 
 sr-bank-projection-edges shard output:
     tools/sr-bank/target/release/projection_edges {{shard}} {{output}}
+
+sr-bank-archive-readback *args:
+    python3 tools/sr-bank/archive_readback.py {{args}}

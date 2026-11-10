@@ -30,6 +30,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Separate JPEG input chroma, partial-block constraint amplification and learned
+  RGB border effects with frozen replay controls and retained lossless images
+  (`040f7c55`). [Measurements](benchmarks/chroma_edges_2026-11-10.md).
+
 - Offline aspect-preserving CUDA repair/SR bank with official split intersection,
   existing feature-offer negotiation and lossless IMIJ storage.
   [Tool contract](tools/sr-bank/README.md).

@@ -85,3 +85,14 @@ No speed extrapolation, full-resolution quality claim or production selector
 follows from these small witnesses. The next runtime constraint change needs
 mixed-color partial-block tests and compatibility/quality replay; regenerated
 input banks must get a new identity rather than overwrite this study.
+
+Retained mirror (SSH streaming, no NFS):
+`tower:/mnt/disk1/coefficient/output/zensr/sr-bank-20261110-edges-v1.tar`,
+16,670,720 bytes, SHA-256
+`675ab13d576590f38fa1163d8f9e3c66dcb08778c84b29830405fc2d2290997d`.
+Sender/receiver hashes match, file/directory fsync completed, and three seeded
+random candidate members read back with matching hashes. `EDGE_STUDY.json`,
+`EDGE_BACKUP_RECEIPT.json` and `EDGE_READBACK.json` preserve the identities.
+Final-source projection output replays the first control results exactly.
+The live gallery's native-LR expansion now separates guarded CNN output from
+coefficient projection and links them through the existing flicker viewer.
