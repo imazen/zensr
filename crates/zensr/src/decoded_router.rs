@@ -291,7 +291,7 @@ fn for_source_prepared_windows(
             &crate::chooser::chooser_request(),
         )
         .map_err(|e| RestoreError::Decode(format!("router features: {e:?}")))?;
-        let c = coefficient_window(&plane.coeffs, plane.blocks_wide, width, height, window)?;
+        let c = coefficient_window(plane.coeffs, plane.blocks_wide, width, height, window)?;
         let window_gain = if window.width == width && window.height == height {
             legacy_gain
         } else {

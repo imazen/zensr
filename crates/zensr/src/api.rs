@@ -717,14 +717,14 @@ impl<'a> Request<'a> {
         } else {
             Consistency::Certified
         };
-        if self.require_consistency {
-            if let Consistency::NotEnforced(why) = consistency {
-                return Ok(Outcome::Unchanged {
-                    pixels,
-                    why: SkipReason::ConsistencyUnavailable(why),
-                    report,
-                });
-            }
+        if self.require_consistency
+            && let Consistency::NotEnforced(why) = consistency
+        {
+            return Ok(Outcome::Unchanged {
+                pixels,
+                why: SkipReason::ConsistencyUnavailable(why),
+                report,
+            });
         }
         Ok(Outcome::Restored {
             pixels,

@@ -505,7 +505,7 @@ pub(crate) fn restore_prepared(
                 continue;
             };
             let cv = CoeffView {
-                coeffs: &comp.coeffs,
+                coeffs: comp.coeffs,
                 blocks_wide: comp.blocks_wide,
                 blocks_high: comp.blocks_high,
                 order: CoeffOrder::Zigzag,
