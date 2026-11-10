@@ -9,6 +9,7 @@ import csv
 import datetime
 import hashlib
 import importlib.metadata
+import importlib.util
 import io
 import json
 import os
@@ -241,6 +242,15 @@ def freeze(a):
                           categories=len({r['category'] for r in selected}), exclusions=len(exclusions))), flush=True)
 
 
+def record_validator():
+    # Author/model adapters add search paths; resolve our verifier by its file,
+    # not the generic module name shared by unrelated research tools.
+    spec = importlib.util.spec_from_file_location('zensr_bank_report', HERE / 'report.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.validate
+
+
 def generate(a):
     import numpy as np
     import torch
@@ -330,7 +340,7 @@ def generate(a):
     if a.reuse_from:
         # The frozen executable, inputs and models must agree above. Only the
         # Python orchestration differs; source records remain hash-bound.
-        from report import validate
+        validate = record_validator()
         prior = a.output / a.reuse_from
         prior_schema = json.loads((prior / 'FEATURE_SCHEMA.json').read_text())
         for name in ('FEATURE_SCHEMA.json', f"FEATURE_SCHEMA-{prior_schema['schema_hash']}.json"):
@@ -531,7 +541,16 @@ def main():
     f.add_argument('--reuse-from')
     f.set_defaults(function=generate)
     a = p.parse_args()
-    a.function(a)
+    try:
+        a.function(a)
+    except BaseException as error:
+        if a.command == 'generate':
+            path = a.output / a.run / 'PROGRESS.json'
+            if path.exists():
+                state = json.loads(path.read_text())
+                state.update(stage='failed', error=repr(error), checked_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+                save(path, state)
+        raise
 
 
 if __name__ == '__main__':

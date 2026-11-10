@@ -14,6 +14,13 @@ spec.loader.exec_module(bank)
 
 
 class Splits(unittest.TestCase):
+    def test_verifier_cannot_be_shadowed_by_another_report_module(self):
+        import sys
+        with patch.dict(sys.modules, {'report': SimpleNamespace(validate=lambda *_: None)}):
+            validator = bank.record_validator()
+            with self.assertRaises(KeyError):
+                validator({}, {}, {}, 'missing')
+
     def test_export_ids_and_disagreeing_roles_cannot_enter_training(self):
         with TemporaryDirectory(dir=Path.home() / 'tmp', prefix='sr-bank-split-') as d:
             root = Path(d)

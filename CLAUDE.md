@@ -2,6 +2,11 @@
 
 ## Known Bugs
 
+- Candidate-bank reuse initially imported the unrelated QAT `report` module
+  after a model adapter extended Python's search path. The verifier now loads
+  by its exact file path; a shadowed-module regression covers this. Failures
+  during initialization/reuse also update the durable progress record.
+
 - Candidate-bank collection initially assumed `Select::All` always returned a
   fixed feature set. Flat JPEG inputs can omit undefined `spectral_slope_y`.
   Collection now retains each offer schema without imputing a value; models
