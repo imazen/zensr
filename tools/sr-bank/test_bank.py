@@ -22,7 +22,9 @@ class Splits(unittest.TestCase):
                 validator({}, {}, {}, 'missing')
 
     def test_export_ids_and_disagreeing_roles_cannot_enter_training(self):
-        with TemporaryDirectory(dir=Path.home() / 'tmp', prefix='sr-bank-split-') as d:
+        scratch = Path.home() / 'tmp'
+        scratch.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=scratch, prefix='sr-bank-split-') as d:
             root = Path(d)
             (root / 'manifests').mkdir()
             members = [('1000', 'train'), ('1001', 'validate'), ('1002', 'train'), ('1007', 'test')]
