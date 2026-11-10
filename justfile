@@ -716,3 +716,10 @@ sr-bank-blends-report *args:
 
 sr-bank-archive *args:
     python3 tools/quality-int8/archive_remote.py {{args}}
+
+# Export exact retained endpoints; OUTPUT must be a new directory.
+sr-bank-witness shard output:
+    tools/sr-bank/target/release/witness {{shard}} {{output}}
+
+sr-bank-witness-gallery output scores:
+    python3 tools/sr-bank/witness_gallery.py --output {{output}} --scores {{scores}}

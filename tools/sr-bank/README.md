@@ -105,3 +105,18 @@ bake. It is not a gate on the caller's offer: extra/reordered qualified features
 are allowed, and `reuse_for` gathers the model's requested subset. Missing or
 drifted requested definitions fail. Pixel framing remains the caller's external
 responsibility, bound by the bank records here.
+
+## Inspecting retained failures
+
+The `witness` binary exports a source shard's q40/q50 420 cases at each stored
+size into a new directory, including exact HR/LR/repair/SR PNGs and the four
+scored resize controls. Shared readers verify encoded and decoded pixel hashes;
+PNG exports round-trip exactly. `witness_gallery.py` checks every displayed
+candidate and resize control against the original scalar shard before building
+an overview. Use the existing browser demo server with this directory as its
+`--gallery` root and its assembled assets as `--assets`. The existing viewer
+provides zoom, pan, flicker and pixelated/smooth display. Native LR inputs are
+available separately; they are magnified only for display.
+
+`just sr-bank-witness SHARD_JSON NEW_OUTPUT` exports the images;
+`just sr-bank-witness-gallery OUTPUT SCALAR_PARQUET` builds the gallery.
