@@ -732,3 +732,9 @@ sr-bank-projection-edges shard output:
 
 sr-bank-archive-readback *args:
     python3 tools/sr-bank/archive_readback.py {{args}}
+
+sr-bank-projection-report *args:
+    python3 tools/sr-bank/projection_report.py {{args}}
+
+browser-fixed-gallery output url:
+    node tools/browser-demo/gallery-test.mjs {{output}} {{url}} fixed

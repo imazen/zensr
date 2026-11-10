@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
-const [jpegPath, weightsPath, oraclePath, profiledPath, out] =
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+const [jpegPath, weightsPath, oraclePath, profiledPath, out, packageDirectory] =
   process.argv.slice(2);
 await mkdir(out, { recursive: true });
-const module = await import("./repair/pkg/zensr_browser_repair.js");
+const moduleUrl = packageDirectory
+  ? pathToFileURL(resolve(packageDirectory, "zensr_browser_repair.js"))
+  : new URL("./repair/pkg/zensr_browser_repair.js", import.meta.url);
+const module = await import(moduleUrl.href);
 await module.default({
   module_or_path: await readFile(
-    new URL("./repair/pkg/zensr_browser_repair_bg.wasm", import.meta.url),
+    new URL("./zensr_browser_repair_bg.wasm", moduleUrl),
   ),
 });
 const jpeg = await readFile(jpegPath),

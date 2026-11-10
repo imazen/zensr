@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 const out = process.argv[2];
 const baseUrl = process.argv[3] || "https://localhost:3331";
+const corrected = process.argv[4] === "fixed";
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.ZENSR_CHROME,
@@ -22,12 +23,21 @@ try {
       .querySelector("section figure:nth-child(3) a")
       .search.includes("candidate="),
   );
-  const href = await page
-    .locator("section")
-    .first()
-    .locator("figure a")
-    .nth(2)
-    .getAttribute("href");
+  const href = corrected
+    ? await page
+        .locator("section")
+        .first()
+        .getByRole("link", {
+          name: "Compare SPANF: previous repair → corrected repair",
+          exact: true,
+        })
+        .getAttribute("href")
+    : await page
+        .locator("section")
+        .first()
+        .locator("figure a")
+        .nth(2)
+        .getAttribute("href");
   await page.goto(baseUrl + href);
   await page.waitForFunction(() =>
     document.getElementById("status").textContent.includes("Gallery ready"),
@@ -79,6 +89,7 @@ try {
     out + "/gallery.json",
     JSON.stringify(
       {
+        correctedComparison: corrected,
         referenceCompare: true,
         nativePixels: true,
         flicker: true,
