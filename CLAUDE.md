@@ -2,6 +2,11 @@
 
 ## Known Bugs
 
+- Ordinary parallel float means varied strict Pareto membership among nearly
+  tied offline blend settings. The report uses correctly rounded `math.fsum`
+  and sorted output rows. All four resulting Parquet tables replay byte for
+  byte with one versus two numerical threads; source scores are unchanged.
+
 - Candidate-bank reuse initially imported the unrelated QAT `report` module
   after a model adapter extended Python's search path. The verifier now loads
   by its exact file path; a shadowed-module regression covers this. Failures

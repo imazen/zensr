@@ -54,10 +54,16 @@ def main(a):
     summary = (raw.with_columns((pl.lit(255.**2) * pl.lit(10.).pow(-pl.col('psnr') / 10)).alias('mse'))
         .group_by(['split', *GROUP, *KNOBS])
         .agg(pl.col('source_id').n_unique().alias('origins'),
-             pl.col('zensim_a').mean(), pl.col('mse').mean(),
+             pl.col('zensim_a').alias('a_values'), pl.col('mse').alias('mse_values'),
              pl.col('zensim_a').min().alias('min_zensim_a'),
              pl.col('psnr').is_infinite().sum().alias('exact_matches'))
         .collect(engine='streaming'))
+    # Correctly rounded sums make equivalent endpoints and selection ties
+    # independent of hash-group/parallel reduction order.
+    summary = (summary.with_columns(
+        pl.col('a_values').map_elements(lambda v: math.fsum(v) / len(v), return_dtype=pl.Float64).alias('zensim_a'),
+        pl.col('mse_values').map_elements(lambda v: math.fsum(v) / len(v), return_dtype=pl.Float64).alias('mse'))
+        .drop(['a_values', 'mse_values']).sort(['split', *GROUP, *KNOBS]))
     a.output.mkdir(exist_ok=False)
     pq.write_table(summary.to_arrow(), a.output / 'all-settings.parquet', compression='zstd', compression_level=3)
     training = defaultdict(list)
@@ -107,7 +113,31 @@ def main(a):
                 overall.append(dict(objective=objective, model=model, scale=scale,
                     validation_comparisons=n, validate_mean_a_delta=sum(r['validate_a_delta'] * r['origins'] for r in rows) / n,
                     validate_psnr_delta=pooled_psnr(after) - pooled_psnr(before)))
-    result = dict(blend_identity_sha256=identity_sha, scores=done['completed_scores'],
+    selected = pl.DataFrame(anchors).select(['objective', *GROUP, *KNOBS])
+    val = raw.filter(pl.col('split') == 'validate')
+    baseline = (val.filter((pl.col('repair') == 'direct') & (pl.col('filter') == 'triangle') & (pl.col('intensity_quarter') == 4))
+        .select(['id', 'model', 'scale', pl.col('zensim_a').alias('baseline_a'), pl.col('psnr').alias('baseline_psnr')]))
+    paired = (val.join(selected.lazy(), on=[*GROUP, *KNOBS], how='inner')
+        .join(baseline, on=['id', 'model', 'scale'], how='left', validate='m:1')
+        .with_columns((pl.col('zensim_a') - pl.col('baseline_a')).alias('a_delta'),
+            (pl.col('baseline_psnr').is_infinite() & pl.col('psnr').is_finite()).alias('psnr_from_exact'),
+            (pl.col('baseline_psnr').is_finite() & pl.col('psnr').is_infinite()).alias('psnr_to_exact'),
+            pl.when(pl.col('baseline_psnr').is_infinite() & pl.col('psnr').is_infinite()).then(0.)
+              .otherwise(pl.col('psnr') - pl.col('baseline_psnr')).alias('psnr_delta'))
+        .collect(engine='streaming').sort(['objective', 'id', 'model', 'scale']))
+    if paired.height != sum(r['validation_comparisons'] for r in overall):
+        raise ValueError('Paired validation comparison count differs')
+    pq.write_table(paired.to_arrow(), a.output / 'anchor-validation-cells.parquet', compression='zstd', compression_level=3)
+    tails = paired.group_by(['objective', 'model', 'scale']).agg(
+        pl.col('source_id').n_unique().alias('validation_origins'),
+        pl.col('a_delta').min().alias('worst_a_delta'),
+        (pl.col('a_delta') < 0).mean().alias('lower_a_fraction'),
+        pl.col('psnr_delta').filter(pl.col('psnr_delta').is_finite()).min().alias('worst_finite_psnr_delta'),
+        pl.col('psnr_from_exact').sum(), pl.col('psnr_to_exact').sum())
+    tail_map = {(r['objective'], r['model'], r['scale']): r for r in tails.to_dicts()}
+    for row in overall:
+        row.update(tail_map[(row['objective'], row['model'], row['scale'])])
+    result = dict(report_script_sha256=sha(Path(__file__)), polars_version=pl.__version__, pyarrow_version=pa.__version__, numerical_threads=pl.thread_pool_size(), blend_identity_sha256=identity_sha, scores=done['completed_scores'],
                   source_origins=len(identity['sources']), groups=len(training),
                   pareto_rows=len(frontier), anchors=overall,
                   selection='frontier and two objective anchors chosen on train only, separately per category/q/sampling/edge/model/scale; all reported on validate',

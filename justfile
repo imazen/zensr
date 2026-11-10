@@ -713,3 +713,6 @@ sr-bank-blends *args:
 
 sr-bank-blends-report *args:
     python3 tools/sr-bank/blend_report.py {{args}}
+
+sr-bank-archive *args:
+    python3 tools/quality-int8/archive_remote.py {{args}}

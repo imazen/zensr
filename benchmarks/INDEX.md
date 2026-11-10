@@ -20,6 +20,10 @@ block, so this directory stays small enough to clone.
 
 ## Precision and inference
 
+- [Small-image candidate bank and blend frontiers](sr_bank_2026-11-10.md):
+  244 split-preserving origins, lossless IMIJ retention, 3.92 million resident
+  PSNR/zensim-A comparisons, train-side frontiers and validation loss tails.
+
 - [SR memory experiment](sr_memory_2026-11-09.md): integer completed pixels and earlier DSCF tensor release, exact output parity, CPU/GPU memory and latency tradeoffs.
 
 - [2048 → 8192 PyTorch CUDA](sr_8k_gpu_2026-11-09.md): two calls each for SPANF/DSCF, FP32 inference latency, allocated/reserved VRAM and pinned transfers.
