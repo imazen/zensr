@@ -85,7 +85,9 @@ filter/model endpoints must also agree. A source finishes only after the
 entire expected grid and Parquet row count agree. No blend-image variants or
 metric maps are written. The retained lossless source/SR entries reconstruct
 any mixture. This command uses a Python environment with PyArrow and Polars; it does not
-modify the frozen CUDA environment.
+modify the frozen CUDA environment. Install the pinned scalar-report packages
+from `report-requirements.txt`; public CI runs the split/frontier Python
+regressions without needing the private image codec or GPU checkpoints.
 
 The zenpredict bake/replay adapter is available for subsequent experiments.
 No learned selector has been fitted or adopted from this three-size bank.

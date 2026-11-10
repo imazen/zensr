@@ -168,6 +168,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: tools/sr-blend -> target
+      - name: Split admission and frontier reporting regressions
+        run: |
+          python3 -m venv .venv-sr-bank-ci
+          .venv-sr-bank-ci/bin/python -m pip install -r tools/sr-bank/report-requirements.txt
+          .venv-sr-bank-ci/bin/python -m unittest discover -s tools/sr-bank -p 'test_*.py'
       - name: PSNR parity and resident zensim-A contracts
         run: |
           mkdir -p "$HOME/tmp/sr-blend-ci"
