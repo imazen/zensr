@@ -120,3 +120,10 @@ available separately; they are magnified only for display.
 
 `just sr-bank-witness SHARD_JSON NEW_OUTPUT` exports the images;
 `just sr-bank-witness-gallery OUTPUT SCALAR_PARQUET` builds the gallery.
+
+`chroma_edges.py` separates clean-input chroma from inherited JPEG chroma on
+these witnesses. It replays the frozen default SR hashes, then tests unchanged
+author models with 16/32-pixel replicated input halos and matching output crops,
+in both orientations. Scalar ring statistics distinguish boundary/interior
+behavior; all candidate RGB8 images remain lossless IMIJ entries. These are
+counterfactual edge controls, not a change to model padding or runtime defaults.
