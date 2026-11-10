@@ -30,6 +30,10 @@ None queued by the canon4 update.
 
 ### Added
 
+- Offline aspect-preserving CUDA repair/SR bank with official split intersection,
+  existing feature-offer negotiation and lossless IMIJ storage.
+  [Tool contract](tools/sr-bank/README.md).
+
 - Resident SR blend evaluator using retained SPANF/DSCF PNGs, zenresize filters,
   zenmetrics PSNR and pinned adopted zensim-A. Scalar category/quality frontiers
   remain exploratory; no runtime default changes.

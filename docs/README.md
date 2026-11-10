@@ -28,6 +28,9 @@
 
 ## Research and engineering
 
+- [Small-image candidate bank](../tools/sr-bank/README.md): split-preserving
+  CUDA repair/SR generation and lossless IMIJ retention for offline tuning.
+
 - [Browser workbench](BROWSER_DEMO.md): concurrent WASM/WebGPU SR, optional JPEG
   repair, native-detail viewer and local serving. [Measured runs](../benchmarks/browser_sr_2026-11-09.md).
 - [Research record](research/README.md): plans, experiment history and previous results.

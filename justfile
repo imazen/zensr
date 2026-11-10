@@ -677,3 +677,23 @@ sr-blend-evaluate manifest output:
 
 sr-blend-report *args:
     python3 tools/sr-blend/report.py {{args}}
+
+# Private IMIJ research adapter; requires access to the pinned zqi source.
+sr-bank-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml
+
+sr-bank-test:
+    python3 tools/sr-bank/test_bank.py
+    cargo test --release --locked --manifest-path tools/sr-bank/Cargo.toml -- --test-threads=4
+
+sr-bank-check:
+    cargo clippy --locked --all-targets --manifest-path tools/sr-bank/Cargo.toml -- -D warnings
+
+sr-bank-fetch *args:
+    python3 tools/sr-bank/bank.py fetch {{args}}
+
+sr-bank-freeze *args:
+    python3 tools/sr-bank/bank.py freeze {{args}}
+
+sr-bank-generate *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/sr-bank/bank.py generate {{args}}
