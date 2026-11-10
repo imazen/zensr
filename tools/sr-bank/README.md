@@ -127,3 +127,8 @@ author models with 16/32-pixel replicated input halos and matching output crops,
 in both orientations. Scalar ring statistics distinguish boundary/interior
 behavior; all candidate RGB8 images remain lossless IMIJ entries. These are
 counterfactual edge controls, not a change to model padding or runtime defaults.
+
+`projection_edges SHARD_JSON NEW_OUTPUT` replays the original guarded/projection
+hashes on the two tiny 420 failures, then controls hidden block samples using
+the bitstream's decoded coefficients. It keeps the same projection kernels and
+limits; runtime projection is unchanged. Candidate images are retained as IMI.

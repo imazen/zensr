@@ -726,3 +726,6 @@ sr-bank-witness-gallery output scores:
 
 sr-bank-chroma-edges *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/sr-bank/chroma_edges.py {{args}}
+
+sr-bank-projection-edges shard output:
+    tools/sr-bank/target/release/projection_edges {{shard}} {{output}}

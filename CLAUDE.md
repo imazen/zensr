@@ -2,7 +2,15 @@
 
 ## Known Bugs
 
-- The frozen small-image bank’s pinned JPEG encoder (`24b6d3fb`) produces
+- Confirmed partial-block projection limitation: the original tiny 420 q40/q50
+  witness's guarded CNN has max RGB channel spreads 38/43, but default
+  coefficient projection raises them to 92/94. Reconstructing hidden samples
+  from the encoded blocks, with the same coefficient limits, restores the
+  exact guarded RGB8 in both controls. Runtime projection is unchanged; mixed
+  partial-block validation is still needed. See the chroma-edge benchmark.
+
+- Fixed on zenjpeg PR 261 by `0fee09ca` (the frozen bank is preserved):
+  the bank’s pinned JPEG encoder (`24b6d3fb`) produces
   non-neutral chroma on the grayscale 32×8 420 q40/q50 witness 3313. Native
   and libjpeg-turbo decodes are byte-identical; larger same-source controls
   stay gray. The encoded-input confound is disclosed and preserved; no claim

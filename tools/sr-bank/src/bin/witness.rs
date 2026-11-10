@@ -124,6 +124,16 @@ fn main() -> Result<()> {
             .find(|r| text(r, "label").ends_with("/project-default"))
             .ok_or("Missing full repair")?;
         row["repaired_lr"] = export(&mut reader, repaired, root)?;
+        row["repair_stages"] = json!([]);
+        for stage in cell["repair"].as_array().ok_or("Missing repair stages")? {
+            if stage["sample"] != "U8" {
+                continue;
+            }
+            let mut exported = export(&mut reader, stage, root)?;
+            exported["label"] = stage["label"].clone();
+            exported["scores"] = stage["scores"].clone();
+            row["repair_stages"].as_array_mut().unwrap().push(exported);
+        }
         for r in cell["sr"].as_array().ok_or("Missing SR")? {
             if !["direct", "repaired"].contains(&text(r, "repair")) {
                 continue;
