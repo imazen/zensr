@@ -170,7 +170,7 @@ export class DetailViewer {
       this.width / this.outputWidth,
       this.height / this.outputHeight,
     );
-    next = Math.max(fit / 4, Math.min(32, next));
+    next = Math.max(Math.min(1, fit / 4), Math.min(32, next));
     const wx = (x - this.ox) / this.zoom,
       wy = (y - this.oy) / this.zoom;
     this.zoom = next;

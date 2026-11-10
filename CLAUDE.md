@@ -2,6 +2,17 @@
 
 ## Known Bugs
 
+- The frozen small-image bank’s pinned JPEG encoder (`24b6d3fb`) produces
+  non-neutral chroma on the grayscale 32×8 420 q40/q50 witness 3313. Native
+  and libjpeg-turbo decodes are byte-identical; larger same-source controls
+  stay gray. The encoded-input confound is disclosed and preserved; no claim
+  that a newer encoder revision is affected. See the small-bank benchmark.
+
+- Fixed tiny-image inspection zoom: the fit-relative lower clamp could force
+  the 100% button above native scale for a 128×32 gallery witness. The clamp
+  now always admits 1:1; the real gallery browser check retains its exact
+  native-scale assertion.
+
 - Ordinary parallel float means varied strict Pareto membership among nearly
   tied offline blend settings. The report uses correctly rounded `math.fsum`
   and sorted output rows. All four resulting Parquet tables replay byte for

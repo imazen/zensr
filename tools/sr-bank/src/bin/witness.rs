@@ -36,9 +36,23 @@ fn png(root: &Path, pixels: &[u8], w: usize, h: usize) -> Result<Value> {
         &zenpng::PngDecodeConfig::strict(),
         &enough::Unstoppable,
     )?;
+    if (decoded.info.width as usize, decoded.info.height as usize) != (w, h) {
+        return Err("Witness PNG changed dimensions".into());
+    }
     let view = decoded.pixels.as_slice();
     for y in 0..h {
-        if view.row(y as u32) != &pixels[y * w * 3..(y + 1) * w * 3] {
+        let row = view.row(y as u32);
+        let expected = &pixels[y * w * 3..(y + 1) * w * 3];
+        // The pinned encoder can losslessly reduce RGB to Gray. Use the same
+        // exact channel replication as the bank's grayscale source admission.
+        let equal = if decoded.info.color_type == 0 && row.len() == w {
+            row.iter()
+                .flat_map(|&v| [v, v, v])
+                .eq(expected.iter().copied())
+        } else {
+            row == expected
+        };
+        if !equal {
             return Err("Witness PNG changed pixels".into());
         }
     }
@@ -72,12 +86,26 @@ fn main() -> Result<()> {
     let root = Path::new(&a[2]);
     fs::create_dir(root)?;
     fs::create_dir(root.join("images"))?;
+    fs::create_dir(root.join("jpegs"))?;
     let mut reader = Reader::open(SeekReader::new(File::open(text(&record, "archive"))?))?;
     let mut cases = vec![];
     for cell in record["cells"].as_array().ok_or("Missing cells")? {
         if ![40, 50].contains(&number(cell, "q")) || text(cell, "sampling") != "420" {
             continue;
         }
+        let jpeg = &cell["jpeg"];
+        let entry = reader
+            .get(jpeg["key"].as_u64().ok_or("Missing JPEG key")?)?
+            .ok_or("Missing retained JPEG")?;
+        let mut jpeg_bytes = vec![];
+        reader.copy_to(&entry, &mut jpeg_bytes)?;
+        if hash(&jpeg_bytes) != text(jpeg, "sha256") {
+            return Err("Retained JPEG identity changed".into());
+        }
+        let jpeg_path = format!("jpegs/{}.jpg", hash(&jpeg_bytes));
+        let mut file = File::create_new(root.join(&jpeg_path))?;
+        file.write_all(&jpeg_bytes)?;
+        file.sync_all()?;
         let (w, h) = (number(cell, "width"), number(cell, "height"));
         let reference = record["references"]
             .as_array()
@@ -86,7 +114,7 @@ fn main() -> Result<()> {
             .find(|r| text(&r["hr"], "label") == format!("e{}/hr", number(cell, "edge")))
             .ok_or("Missing HR reference")?;
         let mut row = json!({"id":cell["id"],"edge":cell["edge"],"q":cell["q"],"sampling":cell["sampling"],
-            "reference":export(&mut reader,&reference["hr"],root)?,
+            "jpeg":jpeg_path,"reference":export(&mut reader,&reference["hr"],root)?,
             "clean_lr":export(&mut reader,&reference["lr"],root)?,
             "decoded_lr":export(&mut reader,&cell["decoded"],root)?,"sr":[],"filters":[]});
         let repaired = cell["repair"]
