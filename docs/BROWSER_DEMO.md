@@ -155,3 +155,12 @@ across tile boundaries, and score scalar SSIMULACRA2 with no IQA maps.
 A separate [resident-image blend experiment](../benchmarks/sr_blends_2026-11-10.md)
 compares SR intensity with zenresize filters using PSNR and adopted zensim-A.
 It does not add an intensity control or select a new browser default.
+
+## November 10 projection correction
+
+The current repair packages pin zenjpeg `06d0e6f4` and zensr `0bb29cf6`.
+Native and browser callers share the partial-block projection correction.
+Strict WASM/native RGB8 parity, all eight EXIF orientations, identity/malformed
+ICC handling and real relaxed-first/unfused fallback checks pass on the bounded
+fixtures. SR model weights and boundary behavior are unchanged.
+[Measurements and limits](../benchmarks/projection_fix_2026-11-10.md).

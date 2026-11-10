@@ -2,13 +2,12 @@
 
 ## Known Bugs
 
-- Fixed in the shared runtime: partial-block projection previously the original tiny 420 q40/q50
-  witness's guarded CNN has max RGB channel spreads 38/43, but default
-  coefficient projection raises them to 92/94. Reconstructing hidden samples
-  from the encoded blocks, with the same coefficient limits, restores the
-  exact guarded RGB8 in both controls. The shared runtime now reconstructs
-  hidden samples without display clipping; regression and mixed-block
-  qualification are tracked in the chroma-edge benchmark.
+- Fixed by `0bb29cf6`: partial-block projection replicated candidate edges
+  into hidden samples. It now reconstructs those samples from the stored
+  coefficients without display clipping. The two tiny 420 witnesses fall
+  from max RGB channel spreads 92/94 to 38/43. All 16,104 frozen JPEG cases
+  replay; aligned cases remain exact. Quality tradeoffs and native/browser
+  checks are in `benchmarks/projection_fix_2026-11-10.md`.
 
 - Fixed on zenjpeg PR 261 by `0fee09ca` (the frozen bank is preserved):
   the bank’s pinned JPEG encoder (`24b6d3fb`) produces

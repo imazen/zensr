@@ -84,3 +84,5 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
 - [SR intensity/filter blends](sr_blends_2026-11-10.md): retained SPANF/DSCF outputs, resident PSNR and adopted zensim-A, category/quality frontiers.
 
 - [Chroma and partial-image boundaries](chroma_edges_2026-11-10.md): encoder defect, coefficient-padding amplification and independent neural RGB/halo controls.
+
+- [Partial-block projection fix](projection_fix_2026-11-10.md): shared runtime correction, all 16,104 retained JPEG cases, quality tails and refreshed native/browser results.

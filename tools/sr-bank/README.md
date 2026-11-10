@@ -128,10 +128,16 @@ in both orientations. Scalar ring statistics distinguish boundary/interior
 behavior; all candidate RGB8 images remain lossless IMIJ entries. These are
 counterfactual edge controls, not a change to model padding or runtime defaults.
 
-`projection_edges SHARD_JSON NEW_OUTPUT` replays the original guarded/projection
-hashes on the two tiny 420 failures, then controls hidden block samples using
-the bitstream's decoded coefficients. It keeps the same projection kernels and
-limits; runtime projection is unchanged. Candidate images are retained as IMI.
+`projection_edges SHARD_JSON NEW_OUTPUT` compares the original replicated-padding
+reference with the corrected runtime on the two tiny failures. `--all` covers
+the full source grid; passing a shard directory replays every source with bounded
+Rayon workers. The previous reference materializes full blocks so it continues to
+verify original hashes after the runtime correction. Fully visible outputs must
+remain byte-identical. Candidate images are retained as IMI.
+`projection_report.py` verifies complete source/candidate identities and writes
+paired and category/Q Parquet+zstd tables. This forced-repair comparison does not
+select or evaluate a new routing policy. `bank.py generate --source-ids` names an
+explicit subset of frozen-plan members for bounded before/after replays.
 
 `just sr-bank-archive-readback --help` verifies explicit member hashes from a
 retained tar through a read-only, bounded SSH container and writes a new receipt.

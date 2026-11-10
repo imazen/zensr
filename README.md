@@ -45,8 +45,9 @@ The final policy was checked on a previously inspected cohort; these are not
 fresh held-out estimates or per-image guarantees. The worst observed loss was
 18.534 SSIM2. [Measurements and harm definition](benchmarks/routing_feature_ablation_2026-11-06.md).
 
-Those routing measurements predate the November 9 binary16 subnormal-loader
-correction; the full routing cohort has not been rescored with corrected weights.
+Those routing measurements predate the November 9 weight-loader and November 10
+partial-block projection corrections; the full routing cohort has not been
+rescored. [Projection fix and qualification](benchmarks/projection_fix_2026-11-10.md).
 
 Arbitrary input resolutions are supported, but quality across resolutions and
 end-to-end deployment latency remain unmeasured. Coefficient projection does
