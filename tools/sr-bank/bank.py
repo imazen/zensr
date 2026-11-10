@@ -272,6 +272,11 @@ def generate(a):
         raise ValueError('Requires CUBLAS_WORKSPACE_CONFIG=:4096:8')
     plan = json.loads((a.output / 'PLAN.json').read_text())
     sources = plan['sources']
+    if getattr(a, 'source_ids', None):
+        requested = a.source_ids.split(',')
+        if a.pilot or len(set(requested)) != len(requested) or not set(requested) <= {r['id'] for r in sources}:
+            raise ValueError('Explicit source subset must name unique frozen-plan members and cannot combine with pilot')
+        sources = [r for r in sources if r['id'] in requested]
     if a.pilot:
         tokens = ('photos-general', 'plots', 'web-screenshots', 'manuscript-text')
         sources = [next(r for r in sources if token in r['category']) for token in tokens[:a.pilot]]
@@ -538,6 +543,7 @@ def main():
     f.add_argument('--revision', required=True)
     f.add_argument('--jobs', type=int, default=4)
     f.add_argument('--pilot', type=int, default=0)
+    f.add_argument('--source-ids', help='Explicit comma-separated frozen-plan members for a bounded replay')
     f.add_argument('--reuse-from')
     f.set_defaults(function=generate)
     a = p.parse_args()
