@@ -157,6 +157,25 @@ jobs:
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat_report.py
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_quality_int8_report.py
 
+  sr-blend:
+    name: Resident SR blend evaluator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/sr-blend -> target
+      - name: PSNR parity and resident zensim-A contracts
+        run: |
+          mkdir -p "$HOME/tmp/sr-blend-ci"
+          export TMPDIR="$HOME/tmp/sr-blend-ci"
+          cargo test --release --locked --manifest-path tools/sr-blend/Cargo.toml
+          cargo fmt --manifest-path tools/sr-blend/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path tools/sr-blend/Cargo.toml --all-targets -- -D warnings
+
   qat-runtime:
     name: QAT portable decoder and artifact storage
     runs-on: ubuntu-latest

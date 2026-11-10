@@ -674,3 +674,6 @@ sr-blend-test:
 
 sr-blend-evaluate manifest output:
     tools/sr-blend/target/release/zensr-blend-eval {{manifest}} {{output}}
+
+sr-blend-report *args:
+    python3 tools/sr-blend/report.py {{args}}

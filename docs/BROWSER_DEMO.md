@@ -151,3 +151,7 @@ The `browser-torch-reference`, `browser-torch-test` and `browser-torch-score`
 recipes compare end-to-end PNG output with full-frame author PyTorch inference.
 They keep original FP32 and stored-weight controls separate, cover odd sizes
 across tile boundaries, and score scalar SSIMULACRA2 with no IQA maps.
+
+A separate [resident-image blend experiment](../benchmarks/sr_blends_2026-11-10.md)
+compares SR intensity with zenresize filters using PSNR and adopted zensim-A.
+It does not add an intensity control or select a new browser default.

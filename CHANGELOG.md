@@ -30,6 +30,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Resident SR blend evaluator using retained SPANF/DSCF PNGs, zenresize filters,
+  zenmetrics PSNR and pinned adopted zensim-A. Scalar category/quality frontiers
+  remain exploratory; no runtime default changes.
+  [Results](benchmarks/sr_blends_2026-11-10.md).
+
 - Browser workbench with bounded concurrent WASM tiles, WebGPU selection,
   streaming PNG output, native-detail zoom/pan/flicker, zenjpeg JPEG decoding,
   optional canon4 repair with a retained 1× checkpoint, and an isolated

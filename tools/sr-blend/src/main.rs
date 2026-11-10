@@ -390,6 +390,14 @@ fn run() -> Result<()> {
             &json!({"cases":sink.cases,"rows":sink.rows,"scores_sha256":hash(&fs::read(root.join("scores.jsonl"))?),"identity_sha256":hash(&fs::read(root.join("IDENTITY.json"))?)}),
         )?,
     )?;
+    fs::write(
+        root.join("PROGRESS.json"),
+        serde_json::to_vec_pretty(&json!({
+            "pid":null,"stage":"completed","completed_cases":sink.cases,"required_cases":m.cases.len(),
+            "completed_rows":sink.rows,"required_rows":required,
+            "last_check_unix":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs()
+        }))?,
+    )?;
     Ok(())
 }
 fn main() -> Result<()> {
@@ -426,22 +434,67 @@ mod tests {
     }
     #[test]
     fn resident_reference_matches_cold_zensim_a() {
-        let pixels: Vec<[u8; 3]> = (0..19 * 23)
-            .map(|i| [(i * 71) as u8, (i * 13) as u8, (i * 193) as u8])
-            .collect();
-        let mut changed = pixels.clone();
-        changed[81] = [30, 40, 50];
-        let z = Zensim::new(ZensimProfile::A).with_parallel(false);
-        let source = RgbSlice::new(&pixels, 19, 23);
-        let candidate = RgbSlice::new(&changed, 19, 23);
-        let prepared = z.precompute_reference(&source).unwrap();
-        let mut scratch = ZensimScratch::new();
-        assert_eq!(
-            z.compute(&source, &candidate).unwrap().score(),
-            z.compute_with_ref_into(&prepared, &candidate, &mut scratch)
-                .unwrap()
-                .score()
-        );
+        for (w, h) in [(19, 23), (512, 384)] {
+            let pixels: Vec<[u8; 3]> = (0..w * h)
+                .map(|i| [(i * 71) as u8, (i * 13) as u8, (i * 193) as u8])
+                .collect();
+            let mut changed = pixels.clone();
+            changed[81] = [30, 40, 50];
+            let z = Zensim::new(ZensimProfile::A).with_parallel(false);
+            let source = RgbSlice::new(&pixels, w, h);
+            let candidate = RgbSlice::new(&changed, w, h);
+            let prepared = z.precompute_reference(&source).unwrap();
+            let mut scratch = ZensimScratch::new();
+            assert_eq!(z.compute(&source, &source).unwrap().score(), 100.0);
+            assert_eq!(
+                z.compute_with_ref_into(&prepared, &source, &mut scratch)
+                    .unwrap()
+                    .score(),
+                100.0
+            );
+            assert_eq!(
+                z.compute(&source, &candidate).unwrap().score(),
+                z.compute_with_ref_into(&prepared, &candidate, &mut scratch)
+                    .unwrap()
+                    .score()
+            );
+        }
+    }
+    #[test]
+    fn filter_resize_ignores_stride_padding() {
+        let tight: Vec<f32> = (0..27).map(|x| x as f32 / 27.0).collect();
+        let mut padded = vec![f32::NAN; 12 * 3];
+        for y in 0..3 {
+            padded[y * 12..y * 12 + 9].copy_from_slice(&tight[y * 9..y * 9 + 9]);
+        }
+        for name in ["triangle", "mitchell", "catmull_rom", "lanczos2"] {
+            let a = float_resize(
+                View {
+                    data: &tight,
+                    width: 3,
+                    height: 3,
+                    stride: 9,
+                },
+                12,
+                12,
+                filter(name).unwrap(),
+            )
+            .unwrap();
+            let b = float_resize(
+                View {
+                    data: &padded,
+                    width: 3,
+                    height: 3,
+                    stride: 12,
+                },
+                12,
+                12,
+                filter(name).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(a, b);
+            assert!(a.iter().all(|v| v.is_finite()));
+        }
     }
     #[test]
     fn psnr_identity_and_known_error_use_zenmetrics() {

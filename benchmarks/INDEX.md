@@ -76,3 +76,5 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
   eval runs.
 
 - [Browser SR and relaxed-SIMD repair](browser_sr_2026-11-09.md): 12 MP execution, concurrent CPU tiles, strict/relaxed RGB8 parity and retained evidence.
+
+- [SR intensity/filter blends](sr_blends_2026-11-10.md): retained SPANF/DSCF outputs, resident PSNR and adopted zensim-A, category/quality frontiers.
