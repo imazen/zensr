@@ -3,10 +3,12 @@
 set -euo pipefail
 output=$(realpath -m "${1:?provide a new artifact directory}")
 mode=${2:-relaxed}
+args=()
 case "$mode" in
+  reference) features=+simd128; args=(--features strict-fma) ;;
   relaxed) features=+simd128,+relaxed-simd ;;
   unfused) features=+simd128 ;;
-  *) echo "Expected relaxed or unfused arithmetic" >&2; exit 2 ;;
+  *) echo "Expected relaxed, unfused or reference arithmetic" >&2; exit 2 ;;
 esac
 : "${TMPDIR:=$HOME/tmp/zensr-browser}"
 export TMPDIR
@@ -14,7 +16,7 @@ mkdir -p "$TMPDIR"
 mkdir "$output"
 export RUSTFLAGS="-C target-feature=$features -C link-arg=--max-memory=1073741824"
 export CARGO_TARGET_DIR="${ZENSR_BROWSER_TARGET_DIR:-$output/target}"
-cargo build --locked --release --target wasm32-unknown-unknown --manifest-path "$(dirname "$0")/repair/Cargo.toml"
+cargo build --locked --release --target wasm32-unknown-unknown --manifest-path "$(dirname "$0")/repair/Cargo.toml" "${args[@]}"
 wasm-bindgen "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/zensr_browser_repair.wasm" --target web --out-dir "$output/pkg"
 python3 - "$mode" "$features" "$output" <<'IDENTITY'
 import hashlib,json,subprocess,sys

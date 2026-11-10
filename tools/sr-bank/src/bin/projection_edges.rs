@@ -110,15 +110,26 @@ fn decoded_blocks(cv: &CoeffView<'_>) -> Vec<f32> {
     }
     out
 }
-fn encoded_padding(
+fn explicit_padding(
     p: &mut [f32],
     w: usize,
     h: usize,
     cv: &CoeffView<'_>,
     cfg: &ProjectionConfig,
+    encoded: bool,
 ) -> Value {
     let (pw, ph) = (cv.blocks_wide * 8, cv.blocks_high * 8);
-    let mut extended = decoded_blocks(cv);
+    let mut extended = if encoded {
+        decoded_blocks(cv)
+    } else {
+        let mut values = vec![0.; pw * ph];
+        for y in 0..ph {
+            for x in 0..pw {
+                values[y * pw + x] = p[y.min(h - 1) * w + x.min(w - 1)];
+            }
+        }
+        values
+    };
     let row_means: Vec<_> = (0..ph.min(8))
         .map(|y| extended[y * pw..y * pw + w].iter().sum::<f32>() / w as f32 * 255.)
         .collect();
@@ -131,12 +142,13 @@ fn encoded_padding(
     }
     json!({"visible_width":w,"visible_height":h,"block_row_means":row_means})
 }
-fn encoded_chroma(
+fn explicit_chroma(
     p: &mut [f32],
     w: usize,
     h: usize,
     cv: &CoeffView<'_>,
     cfg: &ProjectionConfig,
+    encoded: bool,
 ) -> Value {
     let (cw, ch) = (w.div_ceil(2), h.div_ceil(2));
     let mut down = vec![0.; cw * ch];
@@ -151,31 +163,32 @@ fn encoded_chroma(
         }
     }
     let before = down.clone();
-    let detail = encoded_padding(&mut down, cw, ch, cv, cfg);
+    let detail = explicit_padding(&mut down, cw, ch, cv, cfg, encoded);
     for y in 0..h {
         for x in 0..w {
             let i = y * w + x;
             let j = (y / 2) * cw + x / 2;
-            p[i] = (p[i] + down[j] - before[j]).clamp(0., 1.);
+            let correction = down[j] - before[j];
+            p[i] = (p[i] + correction).clamp(0., 1.);
         }
     }
     detail
 }
 
-fn main() -> Result<()> {
-    let a: Vec<_> = std::env::args().collect();
-    if a.len() != 3 {
-        return Err("usage: projection_edges SHARD_JSON NEW_OUTPUT".into());
-    }
-    let bank: Value = serde_json::from_slice(&fs::read(&a[1])?)?;
-    let root = Path::new(&a[2]);
+fn process(shard: &Path, root: &Path, all: bool) -> Result<usize> {
+    let bank: Value = serde_json::from_slice(&fs::read(shard)?)?;
     fs::create_dir(root)?;
+    if hash(&fs::read(text(&bank, "archive"))?) != text(&bank, "archive_sha256") {
+        return Err("Source archive identity changed".into());
+    }
     let mut reader = Reader::open(SeekReader::new(File::open(text(&bank, "archive"))?))?;
     let mut rows = vec![];
     for cell in bank["cells"].as_array().ok_or("Missing cells")? {
-        if number(cell, "edge") != 32
-            || ![40, 50].contains(&number(cell, "q"))
-            || text(cell, "sampling") != "420"
+        if number(cell, "q") == 0
+            || (!all
+                && (number(cell, "edge") != 32
+                    || ![40, 50].contains(&number(cell, "q"))
+                    || text(cell, "sampling") != "420"))
         {
             continue;
         }
@@ -222,7 +235,24 @@ fn main() -> Result<()> {
             .with_slack_abs(zensr_zenjpeg::slack_abs_for(&probe));
         let coeff =
             zenjpeg::decoder::Decoder::new().decode_coefficients(&jpeg, enough::Unstoppable)?;
-        for encoded in [false, true] {
+        let max_h = coeff
+            .components
+            .iter()
+            .map(|c| c.h_samp)
+            .max()
+            .ok_or("Missing sampling")?;
+        let max_v = coeff
+            .components
+            .iter()
+            .map(|c| c.v_samp)
+            .max()
+            .ok_or("Missing sampling")?;
+        let modes: &[&str] = if all {
+            &["replicated-padding", "runtime-fixed"]
+        } else {
+            &["replicated-padding", "encoded-padding", "runtime-fixed"]
+        };
+        for &mode in modes {
             let (mut y, mut cb, mut cr) = (vec![0.; n], vec![0.; n], vec![0.; n]);
             rgb_to_ycbcr_planes(&guarded, n, &mut y, &mut cb, &mut cr);
             let mut details = vec![];
@@ -241,13 +271,17 @@ fn main() -> Result<()> {
                     1 => &mut cb,
                     _ => &mut cr,
                 };
-                if encoded {
-                    details.push(if ci == 0 {
-                        encoded_padding(p, w, h, &cv, &cfg)
+                let full = c.h_samp == max_h && c.v_samp == max_v;
+                if !full && !(c.h_samp * 2 == max_h && c.v_samp * 2 == max_v) {
+                    return Err("Unsupported study sampling".into());
+                }
+                if mode != "runtime-fixed" {
+                    details.push(if full {
+                        explicit_padding(p, w, h, &cv, &cfg, mode == "encoded-padding")
                     } else {
-                        encoded_chroma(p, w, h, &cv, &cfg)
+                        explicit_chroma(p, w, h, &cv, &cfg, mode == "encoded-padding")
                     });
-                } else if ci == 0 {
+                } else if full {
                     project_plane(p, w, h, &cv, &cfg);
                 } else {
                     project_chroma_420(p, w, h, &cv, &cfg);
@@ -256,7 +290,7 @@ fn main() -> Result<()> {
             let mut output = vec![0.; n * 3];
             ycbcr_to_rgb_planes(&y, &cb, &cr, &mut output, n);
             let pixels = rgb8(&output);
-            if !encoded {
+            if mode == "replicated-padding" {
                 let expected = stages
                     .iter()
                     .find(|r| text(r, "label").ends_with("/project-default"))
@@ -269,7 +303,7 @@ fn main() -> Result<()> {
                 .as_array()
                 .ok_or("Missing references")?
                 .iter()
-                .find(|r| text(&r["lr"], "label") == "e32/clean")
+                .find(|r| text(&r["lr"], "label") == format!("e{}/clean", number(cell, "edge")))
                 .ok_or("Missing clean")?;
             let clean = image(&mut reader, &clean["lr"])?;
             let z = zensim::Zensim::new(zensim::ZensimProfile::A).with_parallel(false);
@@ -279,21 +313,96 @@ fn main() -> Result<()> {
                     &zensim::RgbSlice::new(pixels.as_chunks::<3>().0, w, h),
                 )?
                 .score();
-            let mode = if encoded {
-                "encoded-padding"
+            let aa: Vec<[u8; 3]> = clean.as_chunks::<3>().0.to_vec();
+            let bb: Vec<[u8; 3]> = pixels.as_chunks::<3>().0.to_vec();
+            let ssim2 = fast_ssim2::compute_ssimulacra2(
+                imgref::Img::new(aa, w, h).as_ref(),
+                imgref::Img::new(bb, w, h).as_ref(),
+            )?;
+            let aligned = if text(cell, "sampling") == "420" {
+                w % 16 == 0 && h % 16 == 0
             } else {
-                "replicated-padding"
+                w % 8 == 0 && h % 8 == 0
             };
-            rows.push(json!({"id":cell["id"],"padding":mode,"chroma":stats(&pixels),"zensim_a":score,
-                "artifact":retain(root,&format!("q{}-{mode}",number(cell,"q")),&pixels,w,h)?,"details":details}));
+            if mode == "runtime-fixed" && aligned {
+                let expected = stages
+                    .iter()
+                    .find(|r| text(r, "label").ends_with("/project-default"))
+                    .unwrap();
+                if hash(&pixels) != text(expected, "pixels_sha256") {
+                    return Err("Fully visible blocks changed RGB8".into());
+                }
+            }
+            rows.push(json!({"id":cell["id"],"padding":mode,"chroma":stats(&pixels),"zensim_a":score,"ssim2":ssim2,"width":w,"height":h,"aligned":aligned,
+                "artifact":if mode=="replicated-padding" {json!({"pixels_sha256":hash(&pixels)})}else{retain(root,&format!("{}-{mode}",text(cell,"id").replace('/',"-")),&pixels,w,h)?},"details":details}));
         }
     }
     fs::write(
         root.join("RESULT.json"),
         serde_json::to_vec_pretty(
-            &json!({"rows":rows,"source_record_sha256":hash(&fs::read(&a[1])?),"runtime_changed":false}),
+            &json!({"rows":rows,"source_record_sha256":hash(&fs::read(shard)?),"runtime_changed":true}),
         )?,
     )?;
+    Ok(rows.len())
+}
+
+fn main() -> Result<()> {
+    use rayon::prelude::*;
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let a: Vec<_> = std::env::args().collect();
+    if !(3..=4).contains(&a.len()) {
+        return Err("usage: projection_edges SHARD_JSON_OR_DIRECTORY NEW_OUTPUT [--all]".into());
+    }
+    let source = Path::new(&a[1]);
+    let root = Path::new(&a[2]);
+    if source.is_file() {
+        process(source, root, a.get(3).is_some_and(|v| v == "--all"))?;
+        return Ok(());
+    }
+    let mut files = fs::read_dir(source)?
+        .map(|v| v.map(|e| e.path()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    files.retain(|p| p.extension().is_some_and(|e| e == "json"));
+    files.sort();
+    if files.is_empty() {
+        return Err("No source records".into());
+    }
+    fs::create_dir(root)?;
+    let identity: Vec<Value> = files
+        .iter()
+        .map(|p| Ok(json!({"file":p,"sha256":hash(&fs::read(p)?)})))
+        .collect::<Result<_>>()?;
+    fs::write(
+        root.join("IDENTITY.json"),
+        serde_json::to_vec_pretty(
+            &json!({"sources":identity,"binary_sha256":hash(&fs::read(std::env::current_exe()?)?),"threads":rayon::current_num_threads()}),
+        )?,
+    )?;
+    let count = AtomicUsize::new(0);
+    let rows = AtomicUsize::new(0);
+    let progress = Mutex::new(());
+    let result:Result<()>=files.par_iter().try_for_each(|p|{
+        let n=process(p,&root.join(p.file_stem().ok_or("Invalid source path")?),true)?;
+        rows.fetch_add(n,Ordering::Relaxed);count.fetch_add(1,Ordering::Relaxed);
+        let _guard=progress.lock().map_err(|_|"Progress lock poisoned")?;
+        fs::write(root.join("PROGRESS.json"),serde_json::to_vec_pretty(&json!({"stage":"running","completed_origins":count.load(Ordering::Relaxed),"required_origins":files.len(),"rows":rows.load(Ordering::Relaxed),"pid":std::process::id()}))?)?;
+        Ok(())
+    });
+    fs::write(
+        root.join("PROGRESS.json"),
+        serde_json::to_vec_pretty(
+            &json!({"stage":if result.is_ok(){"complete"}else{"failed"},"completed_origins":count.load(Ordering::Relaxed),"required_origins":files.len(),"rows":rows.load(Ordering::Relaxed),"error":result.as_ref().err().map(|e|e.to_string()),"pid":std::process::id()}),
+        )?,
+    )?;
+    result?;
+    println!(
+        "{} origins, {} rows",
+        count.load(Ordering::Relaxed),
+        rows.load(Ordering::Relaxed)
+    );
     Ok(())
 }
 

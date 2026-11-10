@@ -433,7 +433,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3#56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3"
+source = "git+https://github.com/imazen/zenjpeg?rev=06d0e6f468285cd9fccbf7abae195ef31a6bc4fa#06d0e6f468285cd9fccbf7abae195ef31a6bc4fa"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -510,7 +510,7 @@ dependencies = [
 [[package]]
 name = "zensr"
 version = "0.0.1"
-source = "git+https://github.com/imazen/zensr?rev=e6bd12df3a65c354330918dc9f71e31a49713663#e6bd12df3a65c354330918dc9f71e31a49713663"
+source = "git+https://github.com/imazen/zensr?rev=0bb29cf63a4ab8fa8864994acc659e61c890c5e6#0bb29cf63a4ab8fa8864994acc659e61c890c5e6"
 dependencies = [
  "zenanalyze",
  "zenanalyze-api",
@@ -530,7 +530,7 @@ dependencies = [
 [[package]]
 name = "zensr-micro"
 version = "0.0.1"
-source = "git+https://github.com/imazen/zensr?rev=e6bd12df3a65c354330918dc9f71e31a49713663#e6bd12df3a65c354330918dc9f71e31a49713663"
+source = "git+https://github.com/imazen/zensr?rev=0bb29cf63a4ab8fa8864994acc659e61c890c5e6#0bb29cf63a4ab8fa8864994acc659e61c890c5e6"
 dependencies = [
  "archmage",
  "magetypes",
@@ -539,7 +539,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3#56d94fdbe5fb98b9f9b92fce721fe62bc6c7c7c3"
+source = "git+https://github.com/imazen/zenjpeg?rev=06d0e6f468285cd9fccbf7abae195ef31a6bc4fa#06d0e6f468285cd9fccbf7abae195ef31a6bc4fa"
 dependencies = [
  "archmage",
  "imgref",
