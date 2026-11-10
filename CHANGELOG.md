@@ -11,6 +11,10 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Partial-block coefficient projection reconstructs hidden samples from the
+  stored block instead of replicating candidate edges, avoiding the observed
+  tiny-image chroma amplification (`1472cf5d` regression).
+
 - Browser SR overviews use output dimensions within the 4 MP budget, preserving
   full overview resolution for smaller upscales. Independent author-PyTorch
   comparisons cover both models, ×2/×4 and WASM/SwiftShader WebGPU.

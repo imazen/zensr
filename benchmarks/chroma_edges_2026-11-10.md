@@ -45,7 +45,7 @@ For q40 Cb, the four hidden decoded row means are 16.997, -11.277, 10.428,
 that visible row supplies a different virtual block and drives visible changes.
 This bounded control confirms the mechanism on these two JPEGs. It is not a
 validated replacement policy for arbitrary partial blocks, encoders or sampling.
-The runtime's partial-block projection limitation remains open.
+At the time of this diagnostic, runtime projection was unchanged; the runtime correction follows below.
 
 ## Learned model chroma and input borders
 
@@ -96,3 +96,18 @@ random candidate members read back with matching hashes. `EDGE_STUDY.json`,
 Final-source projection output replays the first control results exactly.
 The live gallery's native-LR expansion now separates guarded CNN output from
 coefficient projection and links them through the existing flicker viewer.
+
+## Runtime correction following the owner’s request
+
+The shared `zensr-micro::consist::project_plane` now reconstructs the hidden
+part of partial blocks from their dequantized coefficients. It preserves
+out-of-range hidden IDCT values in JPEG units, overlays only visible candidate
+samples, and applies the existing coefficient limits. Fully visible blocks
+retain their existing arithmetic. Completely invisible MCU blocks are ignored.
+No new public signatures or looser bounds are introduced.
+
+A decoded partial-block invariance regression fails before the fix and passes
+afterward for both natural and zigzag coefficient order, every 1–8 pixel
+width/height and three quantizer steps. Further controls exercise unclipped
+hidden samples, mixed partial geometries and error to an in-box decoded target.
+Runtime quality/integration measurements are distinct from the frozen bank above.

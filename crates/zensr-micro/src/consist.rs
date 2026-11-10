@@ -13,8 +13,9 @@
 //!
 //! Planes use decoder YCbCr units, level-shifted as value*255 - 128. Full-size
 //! components are projected directly; 420 chroma uses box-downsampled planes
-//! and replicated corrections. Edge replication, pixel clipping, color conversion
-//! and RGB8 rounding can change the final coefficients. Delivered-pixel
+//! and replicated corrections. Partial blocks reconstruct hidden samples from
+//! their stored coefficients. Pixel clipping, color conversion and RGB8 rounding
+//! can change the final coefficients. Delivered-pixel
 //! consistency requires a separate check using an explicit sampling operator.
 //!
 //! No SIMD here on purpose: plain separable matrix DCT auto-vectorizes and
@@ -119,9 +120,10 @@ fn basis() -> [[f32; B]; B] {
 ///
 /// `plane`: [0,1] samples, `w*h`, tight rows. Interpretation: this component's
 /// YCbCr value where JPEG stores `value*255 - 128` (Y straight; Cb/Cr with the
-/// +0.5 offset already folded into [0,1]). Blocks beyond `w`/`h` (partial edge
-/// blocks) are handled by edge replication. Encoder padding may differ; clipping
-/// and retaining only the visible part can invalidate the projected bounds.
+/// +0.5 offset already folded into [0,1]). Partial edge blocks take their hidden
+/// samples from the dequantized block, without clipping those hidden values.
+/// Candidate samples replace only the visible part before projection. Retaining
+/// only that visible part and pixel clipping can invalidate projected bounds.
 pub fn project_plane(
     plane: &mut [f32],
     w: usize,
@@ -144,12 +146,49 @@ pub fn project_plane(
 
     for by in 0..cv.blocks_high {
         for bx in 0..cv.blocks_wide {
-            // gather block, level-shifted to JPEG units, edge-replicated
-            for y in 0..B {
-                let sy = (by * B + y).min(h - 1);
-                for x in 0..B {
-                    let sx = (bx * B + x).min(w - 1);
-                    px[y][x] = plane[sy * w + sx] * 255.0 - 128.0;
+            let block_x = bx * B;
+            let block_y = by * B;
+            if block_x >= w || block_y >= h {
+                continue;
+            }
+            let blk = &cv.coeffs[(by * cv.blocks_wide + bx) * 64..][..64];
+            if block_x + B > w || block_y + B > h {
+                // The bitstream constrains a complete block, including samples
+                // outside the visible image. Replicating the candidate's edge
+                // invents hidden samples that need not match the encoder.
+                // Reconstruct that latent part directly in JPEG units. Do not
+                // clamp it: quantized IDCT values can be outside display range.
+                for k in 0..64 {
+                    let nat = match cv.order {
+                        CoeffOrder::Natural => k,
+                        CoeffOrder::Zigzag => ZIGZAG_TO_NATURAL[k],
+                    };
+                    fq[nat / B][nat % B] = blk[k] as f32 * cv.quant[nat] as f32;
+                }
+                for y in 0..B {
+                    for v in 0..B {
+                        let mut sum = 0.0;
+                        for u in 0..B {
+                            sum += m[u][y] * fq[u][v];
+                        }
+                        tmp[y][v] = sum;
+                    }
+                }
+                for y in 0..B {
+                    for x in 0..B {
+                        let mut sum = 0.0;
+                        for v in 0..B {
+                            sum += tmp[y][v] * m[v][x];
+                        }
+                        px[y][x] = sum;
+                    }
+                }
+            }
+            // Fully visible blocks follow the original arithmetic unchanged.
+            // In partial blocks, replace only samples the caller actually has.
+            for y in 0..B.min(h - block_y) {
+                for x in 0..B.min(w - block_x) {
+                    px[y][x] = plane[(block_y + y) * w + block_x + x] * 255.0 - 128.0;
                 }
             }
             // forward DCT: F = M * px * M^T (separable)
@@ -172,7 +211,6 @@ pub fn project_plane(
                 }
             }
             // clamp into per-band interval around the dequantized coefficient
-            let blk = &cv.coeffs[(by * cv.blocks_wide + bx) * 64..][..64];
             let mut any = false;
             for k in 0..64 {
                 let (nat, raw) = match cv.order {
@@ -450,6 +488,34 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn partial_block_keeps_out_of_range_hidden_idct_samples() {
+        let qt = qt_flat(1);
+        let mut coefficients = [0i16; 64];
+        coefficients[0] = -512;
+        coefficients[8] = 512;
+        let cv = CoeffView {
+            coeffs: &coefficients,
+            blocks_wide: 1,
+            blocks_high: 1,
+            order: CoeffOrder::Natural,
+            quant: &qt,
+        };
+        let m = basis();
+        let sample = |x: usize, y: usize| (-64. + 512. * m[1][y] * m[0][x] + 128.) / 255.;
+        assert!(
+            sample(0, 7) < 0.,
+            "hidden decoded samples exercise unclipped padding"
+        );
+        let before: Vec<_> = (0..4)
+            .flat_map(|y| (0..8).map(move |x| sample(x, y)))
+            .collect();
+        assert!(before.iter().all(|&v| (0.0..=1.0).contains(&v)));
+        let mut candidate = before.clone();
+        project_plane(&mut candidate, 8, 4, &cv, &ProjectionConfig::default());
+        assert_eq!(candidate, before);
     }
 
     #[test]
