@@ -417,6 +417,86 @@ mod tests {
     }
 
     #[test]
+    fn partial_block_decoded_pixels_are_unchanged_for_both_coefficient_orders() {
+        for step in [1, 8, 40] {
+            let qt = qt_flat(step);
+            let (decoded, coefficients) = simulate(8, 8, &qt, 7);
+            for w in 1..=8 {
+                for h in 1..=8 {
+                    for order in [CoeffOrder::Natural, CoeffOrder::Zigzag] {
+                        let coefficients = match order {
+                            CoeffOrder::Natural => coefficients.clone(),
+                            CoeffOrder::Zigzag => {
+                                ZIGZAG_TO_NATURAL.iter().map(|&k| coefficients[k]).collect()
+                            }
+                        };
+                        let cv = CoeffView {
+                            coeffs: &coefficients,
+                            blocks_wide: 1,
+                            blocks_high: 1,
+                            order,
+                            quant: &qt,
+                        };
+                        let before: Vec<f32> = (0..h)
+                            .flat_map(|y| decoded[y * 8..y * 8 + w].iter().copied())
+                            .collect();
+                        let mut candidate = before.clone();
+                        project_plane(&mut candidate, w, h, &cv, &ProjectionConfig::default());
+                        assert_eq!(
+                            candidate, before,
+                            "decoded {w}x{h}, Q={step} must remain unchanged"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn partial_blocks_do_not_increase_error_to_the_decoded_target() {
+        for (w, h) in [
+            (1usize, 1usize),
+            (3, 7),
+            (7, 3),
+            (9, 17),
+            (17, 9),
+            (31, 8),
+            (8, 31),
+        ] {
+            let (bw, bh) = (w.div_ceil(8), h.div_ceil(8));
+            let qt = qt_flat(8);
+            let (decoded, coefficients) = simulate(bw * 8, bh * 8, &qt, 19);
+            let target: Vec<f32> = (0..h)
+                .flat_map(|y| decoded[y * bw * 8..y * bw * 8 + w].iter().copied())
+                .collect();
+            let cv = CoeffView {
+                coeffs: &coefficients,
+                blocks_wide: bw,
+                blocks_high: bh,
+                order: CoeffOrder::Natural,
+                quant: &qt,
+            };
+            let mut candidate: Vec<f32> = target
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| (v + if i % 2 == 0 { 0.25 } else { -0.25 }).clamp(0., 1.))
+                .collect();
+            let error = |p: &[f32]| {
+                p.iter()
+                    .zip(&target)
+                    .map(|(&a, &b)| f64::from(a - b).powi(2))
+                    .sum::<f64>()
+            };
+            let before = error(&candidate);
+            project_plane(&mut candidate, w, h, &cv, &ProjectionConfig::default());
+            assert!(
+                error(&candidate) <= before + 1e-7,
+                "projection worsened {w}x{h}"
+            );
+        }
+    }
+
+    #[test]
     fn decode_is_inside_box_and_unchanged() {
         let (w, h) = (32, 24);
         let qt = qt_flat(24);
