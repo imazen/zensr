@@ -697,3 +697,6 @@ sr-bank-freeze *args:
 
 sr-bank-generate *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/sr-bank/bank.py generate {{args}}
+
+sr-bank-report *args:
+    python3 tools/sr-bank/report.py {{args}}

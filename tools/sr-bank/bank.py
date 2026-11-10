@@ -450,7 +450,7 @@ def generate(a):
         if progress_state['completed_cells'] != progress_state['required_cells']:
             raise ValueError('Incomplete bank coverage')
         progress('complete')
-        save(run / 'COMPLETE.json', dict(identity_sha256=sha(identity_path), **progress_state,
+        save(run / 'COMPLETE.json', dict(**progress_state,
                                         cuda_peak_allocated_bytes=torch.cuda.max_memory_allocated()))
     except BaseException as error:
         progress('failed', repr(error))
