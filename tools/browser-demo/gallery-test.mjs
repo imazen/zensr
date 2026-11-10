@@ -23,6 +23,8 @@ try {
       .querySelector("section figure:nth-child(3) a")
       .search.includes("candidate="),
   );
+  if (corrected)
+    await page.locator("section").first().locator("details summary").click();
   const href = corrected
     ? await page
         .locator("section")
