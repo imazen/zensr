@@ -69,3 +69,25 @@ The lockfile intentionally binds IMI's zencodec 0.1.27 to zenpixels 0.2.16,
 while JPEG uses zenpixels 0.3.1. Their broad dependency ranges permit an
 incompatible combination if resolved afresh. Use `--locked`; do not replace
 the committed dependency graph without rebuilding both paths.
+
+## Reusing the bank for filter/intensity sweeps
+
+`blend_bank.py` opens the completed bank and runs the same strided pixel
+operations as `tools/sr-blend`. Each case retains its references, LR variants
+and SR outputs in memory while it tries Triangle, Mitchell, CatmullRom and
+Lanczos2 at 0/25/50/75/100% SR, at ×2 and ×4. Both models share the filtered
+baseline for a given repair stage. The baseline uses the corresponding
+post-repair LR, matching a repair-then-upscale pipeline.
+
+Scalar results stream to Parquet+zstd. Pure-SR endpoints must match the
+retained generation pixel hashes and PSNR/zensim-A scores exactly; redundant
+filter/model endpoints must also agree. A source finishes only after the
+entire expected grid and Parquet row count agree. No blend-image variants or
+metric maps are written. The retained lossless source/SR entries reconstruct
+any mixture. This command uses a Python environment with PyArrow; it does not
+modify the frozen CUDA environment.
+
+The zenpredict bake/replay adapter is available for subsequent experiments.
+No learned selector has been fitted or adopted from this three-size bank.
+Production selection needs denser size/mode evidence than this exploratory
+small-image set supplies.

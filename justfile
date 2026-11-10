@@ -703,3 +703,9 @@ sr-bank-report *args:
 
 sr-bank-selector-build:
     cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml --bin selector
+
+sr-bank-blends-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml --bin blends
+
+sr-bank-blends *args:
+    python3 tools/sr-bank/blend_bank.py {{args}}
