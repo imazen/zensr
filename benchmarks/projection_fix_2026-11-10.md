@@ -90,3 +90,12 @@ receipts and frozen binaries. `paired-cells.parquet` and
 `category-quality.parquet` retain scalar results without maps. Witness v1 is
 also preserved; v2 records the explicit orchestration revision separately from
 the runtime revision. `FIXED_RUNTIME_RECEIPT.json` links the completed stages.
+
+Verified retained archive: `output/zensr/sr-bank-20261110-projection-fix-v1.tar`,
+188,467,200 bytes; SHA-256
+`11e7b9fa581e47419ec22aded9eb66d1ac3b68fc2b951c2e9b6a9ddc41095c98`.
+Sender/receiver hashes match; file and directory fsync completed, and three
+seeded random corrected-image members passed independent readback.
+The archive includes candidate images, scalar tables, browser packages, frozen
+binaries, prior browser assets, live gallery and full validation logs.
+`FIXED_BACKUP_RECEIPT.json` records transfer and readback identities.
