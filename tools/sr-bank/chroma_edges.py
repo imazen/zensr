@@ -78,6 +78,7 @@ def main(a):
     archive = a.output / 'candidates.imijset'
     worker.send('source', archive=source['archive'], key=source['entry']['key'], output=str(archive))
     rows, replay = [], []
+    failed = False
     required = len(inputs) * 2 * len(models) * 3
     try:
         for name, model, scale in models:
@@ -86,7 +87,9 @@ def main(a):
                 for transpose in [False, True]:
                     pixels = original.transpose(1, 0, 2).copy() if transpose else original
                     h, w = pixels.shape[:2]
-                    x = torch.from_numpy(pixels.transpose(2, 0, 1).copy()).float().cuda()[None] / 255
+                    # Match the frozen bank's CPU f32 division before CUDA transfer.
+                    values = pixels.transpose(2, 0, 1).copy().astype('<f4') / np.float32(255)
+                    x = torch.from_numpy(values[None]).cuda()
                     for halo in [0, 16, 32]:
                         padded = F.pad(x, (halo, halo, halo, halo), mode='replicate') if halo else x
                         output = model(padded)
@@ -105,7 +108,7 @@ def main(a):
                                               label=f'{rid}/{name}/transpose-{transpose}/halo-{halo}', score=False)
                         if expected is not None:
                             if encoded['pixels_sha256'] != expected['pixels_sha256']:
-                                raise ValueError('Default SR does not replay the frozen bank')
+                                raise ValueError(f'Default SR does not replay the frozen bank: {name} {rid} expected {expected["pixels_sha256"]}, got {encoded["pixels_sha256"]}')
                             replay.append(dict(id=rid, model=name, pixels_sha256=encoded['pixels_sha256']))
                         rows.append(dict(id=rid, model=name, transpose=transpose, halo=halo,
                                          width=w, height=h, input_chroma=chroma(pixels),
@@ -115,8 +118,12 @@ def main(a):
                                                             pid=os.getpid(), worker_pid=worker.process.pid))
             del model
         worker.send('finish')
+    except BaseException as error:
+        failed = True
+        save(a.output / 'PROGRESS.json', dict(stage='failed', completed=len(rows), required=required, pid=os.getpid(), error=repr(error)))
+        raise
     finally:
-        worker.close()
+        worker.close(check=not failed)
     if len(rows) != required or len(replay) != 18:
         raise ValueError('Incomplete control grid or default replay')
     save(a.output / 'RESULT.json', dict(rows=rows, replay=replay, archive_sha256=sha(archive),
