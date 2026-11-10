@@ -684,6 +684,7 @@ sr-bank-build:
 
 sr-bank-test:
     python3 tools/sr-bank/test_bank.py
+    python3 tools/sr-bank/test_blend_report.py
     cargo test --release --locked --manifest-path tools/sr-bank/Cargo.toml -- --test-threads=4
 
 sr-bank-check:
@@ -709,3 +710,6 @@ sr-bank-blends-build:
 
 sr-bank-blends *args:
     python3 tools/sr-bank/blend_bank.py {{args}}
+
+sr-bank-blends-report *args:
+    python3 tools/sr-bank/blend_report.py {{args}}

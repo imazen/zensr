@@ -84,10 +84,22 @@ retained generation pixel hashes and PSNR/zensim-A scores exactly; redundant
 filter/model endpoints must also agree. A source finishes only after the
 entire expected grid and Parquet row count agree. No blend-image variants or
 metric maps are written. The retained lossless source/SR entries reconstruct
-any mixture. This command uses a Python environment with PyArrow; it does not
+any mixture. This command uses a Python environment with PyArrow and Polars; it does not
 modify the frozen CUDA environment.
 
 The zenpredict bake/replay adapter is available for subsequent experiments.
 No learned selector has been fitted or adopted from this three-size bank.
 Production selection needs denser size/mode evidence than this exploratory
 small-image set supplies.
+
+`blend_report.py` retains all settings by split/category/q/sampling/size/model/
+scale and reports the train-side Pareto frontier on validation. It also reports
+train-best zensim-A and train-best mean-MSE anchors. PSNR aggregation uses mean
+MSE so exact matches remain exact. Ground-truth categories/q buckets are offline
+strata, not a deployed classifier; no validation scores select settings.
+
+The predictor replay input's `expected_model_schema_hash` identifies the loaded
+bake. It is not a gate on the caller's offer: extra/reordered qualified features
+are allowed, and `reuse_for` gathers the model's requested subset. Missing or
+drifted requested definitions fail. Pixel framing remains the caller's external
+responsibility, bound by the bank records here.
