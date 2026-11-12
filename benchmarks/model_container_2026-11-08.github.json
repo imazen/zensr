@@ -1,0 +1,68 @@
+{
+  "observed_utc": "2026-11-08T00:13:33.489749+00:00",
+  "runtime_source_commit": "a3fd299dad134a74ed1072647c9bd47355a41c4b",
+  "pull_request": "https://github.com/imazen/zensr/pull/1",
+  "release_id": 437464697,
+  "tag_name": "models-preview-2026-11-07",
+  "draft": true,
+  "prerelease": true,
+  "release_url": "https://github.com/imazen/zensr/releases/tag/untagged-4ee8556a90c13af66a9e",
+  "assets": [
+    {
+      "id": 722361329,
+      "name": "canon4.zensr",
+      "size": 90110,
+      "digest": "sha256:5e67e8319c024d6fde389e0896dcf6d5b69744795756a43662431cea11c197c6",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361327,
+      "name": "canon4-coefficients.zensr",
+      "size": 88570,
+      "digest": "sha256:c3043288b1265169a78ccf2efa65391b73c52fa14c569db1841ca914d81bef48",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361313,
+      "name": "dejpeg7-graphics.zensr",
+      "size": 1191103,
+      "digest": "sha256:41cbd020fe75e6a49901fb0c997c446aff804cdd7200dcfb93f59bcb1458343f",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361322,
+      "name": "dejpeg9-gfxycc.zensr",
+      "size": 1191101,
+      "digest": "sha256:3f41f5deccc35b6ca0408884bc2449148cdb18bc51138f05dfd8ee4b86c4601e",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361326,
+      "name": "CONTAINERS.json",
+      "size": 2570,
+      "digest": "sha256:86f4f2c696ddb1561a016ff3cc2b364fd8a1a62b4606b2ce5d21b9b5787f12a2",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361359,
+      "name": "CONTAINERS.sha256",
+      "size": 604,
+      "digest": "sha256:64ad154709d61dbffc66fe9ab483ff82dd4374fe8a4d3a99b3984213be9ad81c",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361360,
+      "name": "MODEL-CONTAINER-V1.md",
+      "size": 6386,
+      "digest": "sha256:acc5aa02608bf36cec4f7e336a806d134310956b75f18f06cbd65b84751c4b4e",
+      "state": "uploaded"
+    },
+    {
+      "id": 722361364,
+      "name": "CONTAINERS-README.md",
+      "size": 1490,
+      "digest": "sha256:aa57cd391bb8b50fd1f2c2b50f0795d2881abda20d7c94b24165450e8f1ca2c5",
+      "state": "uploaded"
+    }
+  ]
+}

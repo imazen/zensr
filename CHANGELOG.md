@@ -34,6 +34,11 @@ None queued by the canon4 update.
 
 ### Added
 
+- Versioned `.zensr` containers bundle CPU weights, architecture/color metadata
+  and bound routing/repair policy. Includes strict loading, a standard-library
+  packer, and `repair --model`; uncalibrated models require explicit routing.
+
+
 - Separate JPEG input chroma, partial-block constraint amplification and learned
   RGB border effects with frozen replay controls and retained lossless images
   (`040f7c55`). [Measurements](benchmarks/chroma_edges_2026-11-10.md).

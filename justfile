@@ -738,3 +738,28 @@ sr-bank-projection-report *args:
 
 browser-fixed-gallery output url:
     node tools/browser-demo/gallery-test.mjs {{output}} {{url}} fixed
+
+# Single-file CPU models; generated containers stay outside git.
+model-container *args:
+    python3 tools/model_container.py {{args}}
+
+test-model-container:
+    python3 -m unittest discover -s tools -p test_model_container.py
+
+repair-model input output model *args:
+    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}" --model "{{model}}" {{args}}
+
+container-check:
+    cargo clippy --locked -p zensr-zenjpeg --all-targets -- -D warnings
+
+container-tests:
+    cargo test --locked -p zensr-zenjpeg --all-targets
+
+container-check-no-chooser:
+    cargo clippy --locked -p zensr-zenjpeg --no-default-features --all-targets -- -D warnings
+
+container-tests-no-chooser:
+    cargo test --locked -p zensr-zenjpeg --no-default-features --all-targets
+
+container-doc-tests:
+    cargo test --locked -p zensr-zenjpeg --doc

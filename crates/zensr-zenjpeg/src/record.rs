@@ -25,12 +25,24 @@ use zenjpeg::detect::{JpegProbe, QualityScale};
 
 // Calibrated from paired canon4 projected gains on calibration images only.
 // Source: benchmarks/ship_rt24i_canon4_2026-11-04.md.
-use crate::calibration::{AQ_OFF_DELTA_420, AQ_OFF_DELTA_444};
 
 /// Adjustment to a predicted gain for a jpegli-lineage encode whose record
 /// says adaptive quantization was off. Zero without a verified record, when
 /// AQ was on, or for table families where AQ never applied.
+#[cfg(test)]
 pub(crate) fn aq_off_gain_delta(probe: &JpegProbe) -> f32 {
+    aq_off_gain_delta_with(
+        probe,
+        crate::calibration::AQ_OFF_DELTA_420,
+        crate::calibration::AQ_OFF_DELTA_444,
+    )
+}
+
+pub(crate) fn aq_off_gain_delta_with(
+    probe: &JpegProbe,
+    half: &[(f32, f32)],
+    full: &[(f32, f32)],
+) -> f32 {
     let Some(e) = current_entry(probe) else {
         return 0.0;
     };
@@ -44,9 +56,9 @@ pub(crate) fn aq_off_gain_delta(probe: &JpegProbe) -> f32 {
         return 0.0;
     }
     let pts: &[(f32, f32)] = if crate::chroma_full_of(probe) == Some(true) {
-        AQ_OFF_DELTA_444
+        full
     } else {
-        AQ_OFF_DELTA_420
+        half
     };
     crate::api::lerp(pts, probe.quality.value)
 }

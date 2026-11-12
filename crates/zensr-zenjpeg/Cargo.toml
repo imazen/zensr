@@ -32,6 +32,7 @@ zenanalyze = { version = "0.2.0", optional = true, features = ["api"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
 zensr-micro = { path = "../zensr-micro" }
 enough = "0.4.4"
+sha2 = "0.11.1"
 
 [dev-dependencies]
 rgb = "0.8.52"
