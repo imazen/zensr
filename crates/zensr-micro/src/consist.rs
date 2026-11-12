@@ -346,6 +346,17 @@ impl ChromaScratch {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Pre-allocates scratch capacity for half-resolution 4:2:0 chroma planes
+    /// up to `max_half_w × max_half_h`.
+    #[must_use]
+    pub fn with_capacity(max_half_w: usize, max_half_h: usize) -> Self {
+        let n = max_half_w.saturating_mul(max_half_h);
+        Self {
+            down: Vec::with_capacity(n),
+            before: Vec::with_capacity(n),
+        }
+    }
 }
 
 /// Project a FULL-resolution chroma plane whose bitstream constraint lives on

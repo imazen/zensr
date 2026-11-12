@@ -75,7 +75,10 @@ jobs:
         run: cargo test -p zensr -p zensr-micro -p zensr-zenjpeg
 
       - name: Test (no default features)
-        run: cargo test -p zensr-micro --no-default-features
+        run: cargo test -p zensr -p zensr-micro --no-default-features
+
+      - name: Test (zensr zenpixels bridge)
+        run: cargo test -p zensr --features zenpixels
 
       - name: Test (model containers without decoded routing)
         run: cargo test --locked -p zensr-zenjpeg --no-default-features
@@ -144,7 +147,11 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy -p zensr-micro -p zensr-zenjpeg --all-targets -- -D warnings
+        run: cargo clippy -p zensr -p zensr-micro -p zensr-zenjpeg --all-targets -- -D warnings
+      - name: Clippy (zensr feature matrix)
+        run: |
+          cargo clippy -p zensr --no-default-features --all-targets -- -D warnings
+          cargo clippy -p zensr --features zenpixels --all-targets -- -D warnings
       - name: Clippy (internals)
         run: cargo clippy -p zensr-micro --features internals,px --all-targets -- -D warnings
 
