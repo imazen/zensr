@@ -103,8 +103,34 @@ fn predict_heads(numeric: &[f64; 37], categories: &[&str; 3], heads: &Heads) -> 
 
 // The frozen tables serialize numeric inputs to twelve decimal places.
 fn recorded_number(value: f64) -> f64 {
-    // Match fixed-decimal serialization, including halfway ties. Multiplying
-    // then rounding can introduce a new tie or round it in the other direction.
+    struct StackFmt {
+        buf: [u8; 64],
+        len: usize,
+    }
+    impl core::fmt::Write for StackFmt {
+        fn write_str(&mut self, s: &str) -> core::fmt::Result {
+            let bytes = s.as_bytes();
+            let dst = self
+                .buf
+                .get_mut(self.len..self.len + bytes.len())
+                .ok_or(core::fmt::Error)?;
+            dst.copy_from_slice(bytes);
+            self.len += bytes.len();
+            Ok(())
+        }
+    }
+    // Match fixed-decimal serialization, including halfway ties, without heap
+    // allocation for moderate magnitudes. Multiplying then rounding can
+    // introduce a new tie or round it in the other direction.
+    let mut stack = StackFmt {
+        buf: [0u8; 64],
+        len: 0,
+    };
+    if core::fmt::Write::write_fmt(&mut stack, format_args!("{value:.12}")).is_ok()
+        && let Ok(s) = core::str::from_utf8(&stack.buf[..stack.len])
+    {
+        return s.parse().expect("formatted study scalar");
+    }
     format!("{value:.12}")
         .parse()
         .expect("formatted study scalar")
@@ -120,7 +146,7 @@ fn definitions_match() -> bool {
     })
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Window {
     x: usize,
     y: usize,
@@ -128,12 +154,28 @@ struct Window {
     height: usize,
 }
 
-fn windows(width: usize, height: usize) -> Vec<Window> {
+#[derive(Clone, Copy, Debug)]
+struct WindowList {
+    buf: [Window; 5],
+    len: usize,
+}
+
+impl core::ops::Deref for WindowList {
+    type Target = [Window];
+    fn deref(&self) -> &[Window] {
+        &self.buf[..self.len]
+    }
+}
+
+fn windows(width: usize, height: usize) -> WindowList {
     let (w, h) = (width.min(512), height.min(512));
     // Align with both 420 MCUs and luma DCT blocks; never resample pixels.
     let (last_x, last_y) = (((width - w) / 16) * 16, ((height - h) / 16) * 16);
     let (mid_x, mid_y) = (((width - w) / 32) * 16, ((height - h) / 32) * 16);
-    let mut out = Vec::with_capacity(5);
+    let mut out = WindowList {
+        buf: [Window::default(); 5],
+        len: 0,
+    };
     for (x, y) in [
         (mid_x, mid_y),
         (0, 0),
@@ -147,13 +189,23 @@ fn windows(width: usize, height: usize) -> Vec<Window> {
             width: w,
             height: h,
         };
-        if !out.contains(&window) {
-            out.push(window);
+        if !out[..out.len].contains(&window) {
+            out.buf[out.len] = window;
+            out.len += 1;
         }
     }
     out
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct DecodedRouterScratch {
+    crop: Vec<u8>,
+    selected_coeffs: Vec<i16>,
+    coeff_scratch: crate::router_coefficients::CoeffRouterScratch,
+    family: String,
+}
+
+#[cfg(test)]
 fn crop_rgb(
     rgb: &[u8],
     width: usize,
@@ -161,6 +213,19 @@ fn crop_rgb(
     stride: usize,
     window: Window,
 ) -> Result<Vec<u8>, RestoreError> {
+    let mut out = Vec::new();
+    crop_rgb_into(rgb, width, height, stride, window, &mut out)?;
+    Ok(out)
+}
+
+fn crop_rgb_into(
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    window: Window,
+    out: &mut Vec<u8>,
+) -> Result<(), RestoreError> {
     let row_bytes = width
         .checked_mul(3)
         .ok_or(RestoreError::UnsupportedPixels("router row size"))?;
@@ -175,20 +240,44 @@ fn crop_rgb(
     {
         return Err(RestoreError::UnsupportedPixels("router pixel geometry"));
     }
-    let mut out = Vec::with_capacity(window.width * window.height * 3);
+    out.clear();
+    out.reserve(window.width * window.height * 3);
     for y in window.y..window.y + window.height {
         let start = y * stride + window.x * 3;
         out.extend_from_slice(&rgb[start..start + window.width * 3]);
     }
-    Ok(out)
+    Ok(())
 }
 
+#[cfg(test)]
 fn coefficient_window(
     coeffs: &[i16],
     blocks_wide: usize,
     width: usize,
     height: usize,
     window: Window,
+) -> Result<crate::router_coefficients::Feats, RestoreError> {
+    let mut selected = Vec::new();
+    let mut scratch = crate::router_coefficients::CoeffRouterScratch::default();
+    coefficient_window_with_scratch(
+        coeffs,
+        blocks_wide,
+        width,
+        height,
+        window,
+        &mut selected,
+        &mut scratch,
+    )
+}
+
+fn coefficient_window_with_scratch(
+    coeffs: &[i16],
+    blocks_wide: usize,
+    width: usize,
+    height: usize,
+    window: Window,
+    selected: &mut Vec<i16>,
+    scratch: &mut crate::router_coefficients::CoeffRouterScratch,
 ) -> Result<crate::router_coefficients::Feats, RestoreError> {
     let error = || RestoreError::UnsupportedPixels("router coefficient geometry");
     if blocks_wide == 0
@@ -214,46 +303,56 @@ fn coefficient_window(
         return Err(error());
     }
     if x == 0 && y == 0 && bw == blocks_wide && bh == blocks_high {
-        return crate::router_coefficients::features(coeffs, coeffs.len() / 64, blocks_wide)
-            .ok_or_else(error);
+        return crate::router_coefficients::features_with_scratch(
+            coeffs,
+            coeffs.len() / 64,
+            blocks_wide,
+            scratch,
+        )
+        .ok_or_else(error);
     }
-    let mut selected = Vec::with_capacity(bw * bh * 64);
+    selected.clear();
+    selected.reserve(bw * bh * 64);
     for row in y..y + bh {
         let start = (row * blocks_wide + x) * 64;
         selected.extend_from_slice(&coeffs[start..start + bw * 64]);
     }
-    crate::router_coefficients::features(&selected, bw * bh, bw).ok_or_else(error)
+    crate::router_coefficients::features_with_scratch(selected, bw * bh, bw, scratch)
+        .ok_or_else(error)
 }
 
-pub(crate) fn for_source_prepared(
-    probe: &crate::source::JpegInfo,
+pub(crate) fn for_source_prepared_with_scratch(
     legacy_gain: f32,
     recorded: bool,
     prepared: &mut dyn crate::source::Source,
+    scratch: &mut DecodedRouterScratch,
 ) -> Result<Option<Prediction>, RestoreError> {
-    for_source_prepared_windows(
-        probe,
+    for_source_prepared_windows_with_scratch(
         legacy_gain,
         recorded,
         prepared,
         None,
         predict_candidate,
+        scratch,
     )
 }
 
-fn for_source_prepared_windows(
-    probe: &crate::source::JpegInfo,
+fn for_source_prepared_windows_with_scratch(
     legacy_gain: f32,
     recorded: bool,
     prepared: &mut dyn crate::source::Source,
     selected: Option<&[Window]>,
     classify: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
+    scratch: &mut DecodedRouterScratch,
 ) -> Result<Option<Prediction>, RestoreError> {
-    if probe.dimensions.width.min(probe.dimensions.height) < 8
-        || probe.num_components != 3
-        || crate::chroma_full_of(probe).is_none()
     {
-        return Ok(None);
+        let probe = prepared.info();
+        if probe.dimensions.width.min(probe.dimensions.height) < 8
+            || probe.num_components != 3
+            || crate::chroma_full_of(probe).is_none()
+        {
+            return Ok(None);
+        }
     }
     if !definitions_match() {
         return Err(RestoreError::UnsupportedModel(
@@ -264,12 +363,12 @@ fn for_source_prepared_windows(
         pixels: Some(crate::source::DecodeMode::Plain),
         coefficients: true,
     })?;
+    let probe = prepared.info();
     let decoded = prepared.pixels(crate::source::DecodeMode::Plain)?;
     let (w, h) = decoded.dimensions();
     let rgb = decoded.data;
-    let coefficients = prepared.coefficients()?;
+    let coefficients = prepared.coefficients_view()?;
     let plane = coefficients
-        .components
         .first()
         .ok_or(RestoreError::UnsupportedPixels("missing luma"))?;
     let (width, height) = (w as usize, h as usize);
@@ -283,15 +382,40 @@ fn for_source_prepared_windows(
         &default_windows
     };
     for &window in regions {
-        let crop = crop_rgb(rgb, width, height, stride, window)?;
+        let offer_slice: &[u8] = if window.x == 0
+            && window.y == 0
+            && window.width == width
+            && window.height == height
+            && stride == width * 3
+        {
+            let needed = width
+                .checked_mul(height)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or(RestoreError::UnsupportedPixels("router row size"))?;
+            if rgb.len() < needed {
+                return Err(RestoreError::UnsupportedPixels("router pixel geometry"));
+            }
+            &rgb[..needed]
+        } else {
+            crop_rgb_into(rgb, width, height, stride, window, &mut scratch.crop)?;
+            &scratch.crop
+        };
         let offer = zenanalyze::offer_for_request(
-            &crop,
+            offer_slice,
             window.width as u32,
             window.height as u32,
             &crate::chooser::chooser_request(),
         )
         .map_err(|e| RestoreError::Decode(format!("router features: {e:?}")))?;
-        let c = coefficient_window(plane.coeffs, plane.blocks_wide, width, height, window)?;
+        let c = coefficient_window_with_scratch(
+            plane.coeffs,
+            plane.blocks_wide,
+            width,
+            height,
+            window,
+            &mut scratch.selected_coeffs,
+            &mut scratch.coeff_scratch,
+        )?;
         let window_gain = if window.width == width && window.height == height {
             legacy_gain
         } else {
@@ -330,18 +454,21 @@ fn for_source_prepared_windows(
         numeric
             .iter_mut()
             .for_each(|value| *value = recorded_number(*value));
-        let family = if recorded {
-            format!("{:?} (recorded)", probe.encoder)
+        let family: &str = if recorded {
+            scratch.family.clear();
+            scratch.family.push_str(probe.encoder.as_str());
+            scratch.family.push_str(" (recorded)");
+            &scratch.family
         } else {
-            format!("{:?}", probe.encoder)
+            probe.encoder.as_str()
         };
-        let scale = format!("{:?}", probe.quality.scale);
+        let scale = probe.quality.scale.as_str();
         let ss = if crate::chroma_full_of(probe) == Some(true) {
             "444"
         } else {
             "420"
         };
-        let prediction = classify(&numeric, &[&family, &scale, ss])
+        let prediction = classify(&numeric, &[family, scale, ss])
             .ok_or(RestoreError::UnsupportedModel("non-finite router input"))?;
         if weakest
             .as_ref()
@@ -444,8 +571,8 @@ mod tests {
             }
             if w <= 512 && h <= 512 {
                 assert_eq!(
-                    regions,
-                    vec![Window {
+                    &*regions,
+                    &[Window {
                         x: 0,
                         y: 0,
                         width: w,

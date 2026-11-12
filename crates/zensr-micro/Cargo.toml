@@ -58,7 +58,7 @@ name = "sat_probe"
 # First ARM tier measurement for this crate (2026-08-01). `testable_dispatch`
 # lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON
 # kernels can be compared against a real forced-scalar arm.
-zenbench = "0.1.9"
+zenbench = { version = "0.1.11", features = ["heap-profiling"] }
 archmage = { version = "0.9.30", features = ["testable_dispatch"] }
 
 [[bench]]

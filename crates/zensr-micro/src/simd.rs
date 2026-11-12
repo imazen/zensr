@@ -605,6 +605,37 @@ macro_rules! define_kernels {
                 wd: usize,
                 cs: usize,
             ) {
+                let mut pin_buf = Vec::new();
+                conv3x3_with_scratch(
+                    token,
+                    inp,
+                    cin,
+                    wts,
+                    bias,
+                    out,
+                    cout,
+                    h,
+                    wd,
+                    cs,
+                    &mut pin_buf,
+                );
+            }
+
+            #[inline(always)]
+            #[allow(clippy::too_many_arguments)]
+            pub(crate) fn conv3x3_with_scratch<T: Backend>(
+                token: T,
+                inp: &[f32],
+                cin: usize,
+                wts: &[f32],
+                bias: &[f32],
+                out: &mut [f32],
+                cout: usize,
+                h: usize,
+                wd: usize,
+                cs: usize,
+                pin_buf: &mut Vec<f32>,
+            ) {
                 // Row OUTER, output-quad INNER. The other nesting walks every
                 // row for one quad before returning to row 0 for the next, so
                 // the cin*3 input rows a given `oy` needs are evicted long
@@ -649,7 +680,12 @@ macro_rules! define_kernels {
                 // one zero-padded tile at x = 0 (see `conv3x3_row4`).
                 let pwd = (wd + 18).max(2 * $w);
                 let pcs = 3 * pwd; // per channel: 3 row slots
-                let mut pin = vec![0.0f32; cin * pcs];
+                let need = cin * pcs;
+                if pin_buf.len() < need {
+                    pin_buf.resize(need, 0.0);
+                }
+                let pin = &mut pin_buf[..need];
+                pin.fill(0.0);
                 // `slot(y)` is where input row y lives. The zero columns at
                 // index 0 and wd+1..pwd are written once and never touched
                 // again — the trailing ones exist so the tile loop's second load
@@ -661,9 +697,9 @@ macro_rules! define_kernels {
                     }
                 };
                 // Rows 0 and 1 are needed before the first output row.
-                fill(&mut pin, 0);
+                fill(pin, 0);
                 if h > 1 {
-                    fill(&mut pin, 1);
+                    fill(pin, 1);
                 }
                 // Row OUTER, output-quad INNER. The other nesting walks every
                 // row for one quad before returning to row 0 for the next, so
@@ -677,11 +713,11 @@ macro_rules! define_kernels {
                     // Row oy+1 becomes reachable now; rows oy-1 and oy are
                     // already resident from previous iterations.
                     if oy + 1 < h && oy > 0 {
-                        fill(&mut pin, oy + 1);
+                        fill(pin, oy + 1);
                     }
                     for oc0 in (0..cout).step_by(4) {
                         conv3x3_row4(
-                            token, &pin, cin, wts, bias, out, h, wd, oy, oc0, cs, pwd, pcs,
+                            token, pin, cin, wts, bias, out, h, wd, oy, oc0, cs, pwd, pcs,
                         );
                     }
                 }
@@ -709,6 +745,7 @@ macro_rules! define_kernels {
             ///
             /// A tiled caller must keep pixels within 2 of a buffer edge out of
             /// the region it keeps (see `AdoptedModel::halo`).
+            #[cfg(test)]
             #[inline(always)]
             #[allow(clippy::too_many_arguments)]
             pub(crate) fn wino_mid<T: Backend>(
@@ -725,6 +762,43 @@ macro_rules! define_kernels {
                 cs: usize,
                 ox: usize,
                 oy: usize,
+            ) {
+                let mut wino_buf = Vec::new();
+                wino_mid_with_scratch(
+                    token,
+                    inp,
+                    cin,
+                    uq,
+                    raw,
+                    bias,
+                    out,
+                    cout,
+                    h,
+                    wd,
+                    cs,
+                    ox,
+                    oy,
+                    &mut wino_buf,
+                );
+            }
+
+            #[inline(always)]
+            #[allow(clippy::too_many_arguments)]
+            pub(crate) fn wino_mid_with_scratch<T: Backend>(
+                token: T,
+                inp: &[f32],
+                cin: usize,
+                uq: &[f32],
+                raw: &[f32],
+                bias: &[f32],
+                out: &mut [f32],
+                cout: usize,
+                h: usize,
+                wd: usize,
+                cs: usize,
+                ox: usize,
+                oy: usize,
+                wino_buf: &mut Vec<f32>,
             ) {
                 const W: usize = $w;
                 if h == 0 || wd == 0 {
@@ -761,9 +835,17 @@ macro_rules! define_kernels {
                 // Even/odd-deinterleaved patch columns: patch column k of tile j
                 // is buffer column 2j + xa - 1 + k, i.e. E[j], O[j], E[j+1], O[j+1].
                 let half = ntp + 1;
-                let mut eo = vec![0.0f32; cin * 4 * 2 * half];
-                let mut vb = vec![0.0f32; 16 * cin * ntp];
-                let mut mb = vec![0.0f32; 16 * cout * ntp];
+                let eo_len = cin * 4 * 2 * half;
+                let vb_len = 16 * cin * ntp;
+                let mb_len = 16 * cout * ntp;
+                let need = eo_len + vb_len + mb_len;
+                if wino_buf.len() < need {
+                    wino_buf.resize(need, 0.0);
+                }
+                let scratch = &mut wino_buf[..need];
+                scratch.fill(0.0);
+                let (eo, rest) = scratch.split_at_mut(eo_len);
+                let (vb, mb) = rest.split_at_mut(vb_len);
                 for ti in 0..nty {
                     let y0 = 2 * ti + ya;
                     for ic in 0..cin {
@@ -1128,6 +1210,7 @@ pub(crate) fn prelu_dispatch(
 
 // --- packed-weight kernel families for adopted graphs ----------------------
 
+#[cfg(test)]
 #[magetypes(v3, neon, wasm128, scalar)]
 #[allow(clippy::too_many_arguments)]
 fn conv3x3_lay(
@@ -1144,7 +1227,7 @@ fn conv3x3_lay(
 ) {
     k8::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
 }
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[cfg(all(test, target_arch = "x86_64", feature = "tier_v4"))]
 #[arcane]
 #[allow(clippy::too_many_arguments)]
 fn conv3x3_lay_v4(
@@ -1161,7 +1244,7 @@ fn conv3x3_lay_v4(
 ) {
     k16::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
 }
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(test, target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
 #[allow(clippy::too_many_arguments)]
 fn conv3x3_lay_v4x(
@@ -1242,8 +1325,10 @@ fn conv1x1_gen_lay_v4x(
     k16::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
 }
 
+#[magetypes(v3, neon, wasm128, scalar)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn conv3x3_packed_dispatch(
+fn conv3x3_scratch_lay(
+    token: Token,
     inp: &[f32],
     cin: usize,
     packed: &[f32],
@@ -1253,9 +1338,62 @@ pub(crate) fn conv3x3_packed_dispatch(
     h: usize,
     wd: usize,
     cs: usize,
+    pin_buf: &mut Vec<f32>,
+) {
+    k8::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv3x3_scratch_lay_v4(
+    token: X64V4Token,
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    pin_buf: &mut Vec<f32>,
+) {
+    k16::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn conv3x3_scratch_lay_v4x(
+    token: X64V4xToken,
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    pin_buf: &mut Vec<f32>,
+) {
+    k16::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn conv3x3_packed_dispatch_with_scratch(
+    inp: &[f32],
+    cin: usize,
+    packed: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    pin_buf: &mut Vec<f32>,
 ) {
     incant!(
-        conv3x3_lay(inp, cin, packed, bias, out, cout, h, wd, cs),
+        conv3x3_scratch_lay(inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf),
         [
             v4x(cfg(avx512)),
             v4(cfg(tier_v4)),
@@ -1267,6 +1405,7 @@ pub(crate) fn conv3x3_packed_dispatch(
     );
 }
 
+#[cfg(test)]
 #[magetypes(v3, neon, wasm128, scalar)]
 #[allow(clippy::too_many_arguments)]
 fn wino_lay(
@@ -1286,7 +1425,7 @@ fn wino_lay(
 ) {
     k8::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[cfg(all(test, target_arch = "x86_64", feature = "tier_v4"))]
 #[arcane]
 #[allow(clippy::too_many_arguments)]
 fn wino_lay_v4(
@@ -1306,7 +1445,7 @@ fn wino_lay_v4(
 ) {
     k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(test, target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
 #[allow(clippy::too_many_arguments)]
 fn wino_lay_v4x(
@@ -1327,9 +1466,79 @@ fn wino_lay_v4x(
     k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
 }
 
+#[magetypes(v3, neon, wasm128, scalar)]
+#[allow(clippy::too_many_arguments)]
+fn wino_scratch_lay(
+    token: Token,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    ox: usize,
+    oy: usize,
+    wino_buf: &mut Vec<f32>,
+) {
+    k8::wino_mid_with_scratch(
+        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
+    );
+}
+#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn wino_scratch_lay_v4(
+    token: X64V4Token,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    ox: usize,
+    oy: usize,
+    wino_buf: &mut Vec<f32>,
+) {
+    k16::wino_mid_with_scratch(
+        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
+    );
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn wino_scratch_lay_v4x(
+    token: X64V4xToken,
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    ox: usize,
+    oy: usize,
+    wino_buf: &mut Vec<f32>,
+) {
+    k16::wino_mid_with_scratch(
+        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
+    );
+}
+
 /// Winograd middle-layer conv through the tier dispatch. `ox`/`oy`: image
 /// parity of the buffer's column 0 / row 0 (0 for a whole image); see
 /// `wino_mid` for why the tile grid is anchored to the image.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn conv3x3_wino_dispatch(
     inp: &[f32],
@@ -1347,6 +1556,35 @@ pub(crate) fn conv3x3_wino_dispatch(
 ) {
     incant!(
         wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy),
+        [
+            v4x(cfg(avx512)),
+            v4(cfg(tier_v4)),
+            v3,
+            neon,
+            wasm128,
+            scalar
+        ]
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn conv3x3_wino_dispatch_with_scratch(
+    inp: &[f32],
+    cin: usize,
+    uq: &[f32],
+    raw: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    cout: usize,
+    h: usize,
+    wd: usize,
+    cs: usize,
+    ox: usize,
+    oy: usize,
+    wino_buf: &mut Vec<f32>,
+) {
+    incant!(
+        wino_scratch_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf),
         [
             v4x(cfg(avx512)),
             v4(cfg(tier_v4)),

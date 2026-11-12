@@ -27,23 +27,44 @@ pub(crate) struct Feats {
     pub(crate) gutted_clustering: f64,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct CoeffRouterScratch {
+    accounts: Vec<f64>,
+    dcs: Vec<f64>,
+    gutted: Vec<bool>,
+}
+
+#[cfg(test)]
 pub(crate) fn features(coeffs: &[i16], nblocks: usize, blocks_wide: usize) -> Option<Feats> {
+    let mut scratch = CoeffRouterScratch::default();
+    features_with_scratch(coeffs, nblocks, blocks_wide, &mut scratch)
+}
+
+pub(crate) fn features_with_scratch(
+    coeffs: &[i16],
+    nblocks: usize,
+    blocks_wide: usize,
+    scratch: &mut CoeffRouterScratch,
+) -> Option<Feats> {
     if nblocks == 0 {
         return None;
     }
     // Per-block surviving-AC count, kept in raster order so neighbours can be
     // found for the clustering measure.
-    let accounts: Vec<f64> = coeffs[..nblocks * 64]
-        .as_chunks::<64>()
-        .0
-        .iter()
-        .map(|b| b[1..].iter().filter(|&&c| c != 0).count() as f64)
-        .collect();
+    scratch.accounts.clear();
+    scratch.accounts.extend(
+        coeffs[..nblocks * 64]
+            .as_chunks::<64>()
+            .0
+            .iter()
+            .map(|b| b[1..].iter().filter(|&&c| c != 0).count() as f64),
+    );
     let (mut zblk, mut zcoef, mut hf, mut lf, mut absac, mut nac) =
         (0u64, 0u64, 0f64, 0f64, 0f64, 0u64);
-    let mut dcs: Vec<f64> = Vec::with_capacity(nblocks);
+    scratch.dcs.clear();
+    scratch.dcs.reserve(nblocks);
     for b in coeffs[..nblocks * 64].as_chunks::<64>().0.iter() {
-        dcs.push(b[0] as f64);
+        scratch.dcs.push(b[0] as f64);
         if b[1..].iter().all(|&c| c == 0) {
             zblk += 1;
         }
@@ -63,17 +84,30 @@ pub(crate) fn features(coeffs: &[i16], nblocks: usize, blocks_wide: usize) -> Op
         }
     }
     let n = nblocks as f64;
-    let mean_dc = dcs.iter().sum::<f64>() / n;
-    let var_dc = dcs.iter().map(|d| (d - mean_dc).powi(2)).sum::<f64>() / n;
+    let mean_dc = scratch.dcs.iter().sum::<f64>() / n;
+    let var_dc = scratch
+        .dcs
+        .iter()
+        .map(|d| (d - mean_dc).powi(2))
+        .sum::<f64>()
+        / n;
 
-    let mean_ac = accounts.iter().sum::<f64>() / n;
-    let var_ac = accounts.iter().map(|a| (a - mean_ac).powi(2)).sum::<f64>() / n;
+    let mean_ac = scratch.accounts.iter().sum::<f64>() / n;
+    let var_ac = scratch
+        .accounts
+        .iter()
+        .map(|a| (a - mean_ac).powi(2))
+        .sum::<f64>()
+        / n;
     let cut = mean_ac * 0.25;
-    let gutted: Vec<bool> = accounts.iter().map(|&a| a <= cut).collect();
-    let ngut = gutted.iter().filter(|&&g| g).count();
+    scratch.gutted.clear();
+    scratch
+        .gutted
+        .extend(scratch.accounts.iter().map(|&a| a <= cut));
+    let ngut = scratch.gutted.iter().filter(|&&g| g).count();
     let bw = blocks_wide.max(1);
     let mut clustered = 0usize;
-    for (i, &g) in gutted.iter().enumerate() {
+    for (i, &g) in scratch.gutted.iter().enumerate() {
         if !g {
             continue;
         }
@@ -82,9 +116,9 @@ pub(crate) fn features(coeffs: &[i16], nblocks: usize, blocks_wide: usize) -> Op
             (x > 0).then(|| i - 1),
             (x + 1 < bw).then(|| i + 1),
             (y > 0).then(|| i.wrapping_sub(bw)),
-            (i + bw < gutted.len()).then(|| i + bw),
+            (i + bw < scratch.gutted.len()).then(|| i + bw),
         ];
-        if neigh.into_iter().flatten().any(|j| gutted[j]) {
+        if neigh.into_iter().flatten().any(|j| scratch.gutted[j]) {
             clustered += 1;
         }
     }
