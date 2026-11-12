@@ -763,3 +763,10 @@ container-tests-no-chooser:
 
 container-doc-tests:
     cargo test --locked -p zensr-zenjpeg --doc
+
+# Requires access to the Git dependencies of these standalone research roots.
+container-dependent-locks target="x86_64-unknown-linux-gnu":
+    @for root in tools/qat/runtime tools/quality-int8/runtime tools/sr-bank tools/codec-integration tools/exactness/product; do cargo metadata --locked --format-version 1 --filter-platform {{target}} --manifest-path "$root/Cargo.toml" > /dev/null || exit; done
+
+quality-int8-regression-tests:
+    cargo test --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin scaling --bin superres

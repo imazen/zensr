@@ -129,3 +129,13 @@ publisher-authentication mechanism.
 The original [quality limitations](REPAIR_READINESS.md), provenance and tail
 losses still apply. Packaging does not produce new quality evidence or establish
 that a model/policy is optimal.
+
+## Dependent standalone tools
+
+The container loader adds `sha2` to the compatibility crate. Its standalone
+consumers retain separate lockfiles; changing that crate's dependencies requires
+resolving those lockfiles as well as the root lockfile.
+`just container-dependent-locks` checks all five consumers with `--locked`
+(Git-source access is required). The exactness product root mirrors the same
+codec dependency patches as the workspace; its older lockfile alone was not
+a current source build. No historical pixel expectation was changed.
