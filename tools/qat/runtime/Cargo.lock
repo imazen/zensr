@@ -798,6 +798,7 @@ name = "zensr-zenjpeg"
 version = "0.1.0"
 dependencies = [
  "enough",
+ "sha2",
  "zenanalyze",
  "zenanalyze-api",
  "zenjpeg",

@@ -11,6 +11,7 @@ cargo tree --locked -p zensr-micro-abi -e normal --depth 2
 ```text
 application
 └── zensr-zenjpeg 0.1.0
+    ├── sha2 0.11.1 (single-file model checksums)
     ├── enough 0.4.5
     ├── zenanalyze 0.2.0 @ e676651e (default chooser feature)
     ├── zenanalyze-api 0.1.1 @ e676651e (default chooser feature)
@@ -31,7 +32,7 @@ application
 `zensr-micro-abi` is a separate entry point into `zensr-micro`; it does not
 provide the JPEG restoration pipeline. `zensr-micro` has no JPEG decoder,
 PyTorch, ONNX, or GPU dependency. The f16 model weights are a separate artifact,
-loaded into the runtime; committing a model directory does not embed a default
+loaded into the runtime or [bundled with their policy](MODEL_CONTAINER.md); committing a model directory does not embed a default
 model into the public library.
 
 With `chooser` (now enabled by default), `zensr-zenjpeg` additionally uses `zenanalyze 0.2.0` and
@@ -65,9 +66,10 @@ serving inference.
 ## Distribution constraints
 
 The tree is not a crates.io release: `zensr-micro` is `publish = false`, and
-JPEG integration uses git dependencies and root patches. The zenjpeg revision
-is the encode-record work associated with its PR 253; this task does not alter
-or merge that PR. Application builds can use this locked source tree. A crate
+JPEG integration uses git dependencies and root patches. The compatibility integration still pins the historical encode-record revision
+`24b6d3fb`; it does not acquire later encoder fixes just because zenjpeg main
+advances. In particular, that pin predates the padding correction merged in
+zenjpeg PR 262. Application builds can use this locked source tree. A crate
 release requires a separate dependency/publication plan and release approval.
 The model artifact is 86,406 bytes of f16 weights; runtime code and dependencies
 are additional and have not been size-measured in this task.
@@ -86,5 +88,7 @@ browser repair binding / native codec caller
 Pins are in `tools/browser-demo/repair/Cargo.toml` and
 `tools/codec-integration/Cargo.toml`; resolve them with
 `cargo tree --locked --manifest-path tools/browser-demo/repair/Cargo.toml -e normal`.
-The shared projection correction adds no public signatures. Both review PRs
-remain unmerged. [Correction and validation](../benchmarks/projection_fix_2026-11-10.md).
+The shared projection correction adds no public signatures. The engine and
+browser work merged in zensr PR 4 (`5042bccd`). The pinned zenjpeg adapter
+remains draft PR 261 and conflicts with current main; it is a review preview,
+not the current zenjpeg release. [Correction and validation](../benchmarks/projection_fix_2026-11-10.md).

@@ -20,6 +20,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
+  # System Git handles nested dependency submodules without Cargo libgit2 TLS.
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   browser-unit:
@@ -74,6 +76,9 @@ jobs:
 
       - name: Test (no default features)
         run: cargo test -p zensr-micro --no-default-features
+
+      - name: Test (model containers without decoded routing)
+        run: cargo test --locked -p zensr-zenjpeg --no-default-features
 
       # `internals` exposes the SIMD kernels and their equivalence tests — the
       # ones that would catch a per-tier divergence, so they must actually run.
@@ -131,6 +136,11 @@ jobs:
           .venv-routing-ci/bin/python -m pip install -r tools/publication-routing-requirements.txt
           .venv-routing-ci/bin/python -m unittest discover -s tools -p 'test_publication_routing.py'
           .venv-routing-ci/bin/python -m unittest discover -s tools -p 'test_publication_retention.py'
+      - name: Single-file model packer
+        run: |
+          mkdir -p "$HOME/tmp/model-container-ci"
+          export TMPDIR="$HOME/tmp/model-container-ci"
+          python3 -m unittest discover -s tools -p test_model_container.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy

@@ -1362,7 +1362,7 @@ Also measured on the same runs: THE PROJECTION'S VALUE GROWS WITH QUALITY, on
 both subsamplings — +0.39 to +1.31 (turbo 420, q90->q100), +0.32 to +1.09
 (turbo 444), monotone, no crossover anywhere in either grid. So the composite
 crossovers above are the model degrading while the projection increasingly
-offsets it. require_consistency in docs/API_DESIGN.md is load-bearing, not
+offsets it. require_consistency in the historical API proposal (current guide: docs/API.md) is load-bearing, not
 merely a safety property.
 
 ### FEATURE/AFFINITY KD PASSES AT LOW Q (2026-08-02) — roadmap 1.4, task #13

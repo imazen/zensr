@@ -5,7 +5,7 @@
 //! no way to reason about one — they cannot know whether a projection slack of
 //! 0.15 is right, but they can know whether they just encoded the file.
 //!
-//! Design and the measurements forcing each decision: `docs/API_DESIGN.md`.
+//! Current entry points and result semantics: `docs/API.md`.
 
 use crate::calibration::*;
 use crate::{Projection, RestoreConfig, RestoreError};
@@ -67,7 +67,7 @@ pub enum Provenance {
     // n -> slack_abs mapping is measured end to end (ROADMAP 1.9).
 }
 
-/// Select a caller-loaded model tier. The library does not load weights itself.
+/// Select a model tier supplied by the caller or a single-file model container.
 /// Current routing calibration targets canon4; other model weights need their
 /// own quality measurements. Runtime cost depends on the selected model and host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -268,7 +268,15 @@ pub(crate) fn classify_content(jpeg: &[u8]) -> Option<Content> {
     classify_coefficients(prepared.coefficients(jpeg).ok()?)
 }
 
+#[cfg(test)]
 fn classify_coefficients(coeffs: &zenjpeg::decoder::DecodedCoefficients) -> Option<Content> {
+    classify_coefficients_at(coeffs, GRAPHIC_ZERO_AC_THRESHOLD)
+}
+
+fn classify_coefficients_at(
+    coeffs: &zenjpeg::decoder::DecodedCoefficients,
+    threshold: f32,
+) -> Option<Content> {
     let luma = coeffs.components.first()?;
     let nblocks = luma.coeffs.len() / 64;
     if nblocks == 0 {
@@ -280,13 +288,11 @@ fn classify_coefficients(coeffs: &zenjpeg::decoder::DecodedCoefficients) -> Opti
         .iter()
         .filter(|b| b[1..].iter().all(|&c| c == 0))
         .count();
-    Some(
-        if zero_ac as f32 / nblocks as f32 >= GRAPHIC_ZERO_AC_THRESHOLD {
-            Content::Graphic
-        } else {
-            Content::Photographic
-        },
-    )
+    Some(if zero_ac as f32 / nblocks as f32 >= threshold {
+        Content::Graphic
+    } else {
+        Content::Photographic
+    })
 }
 
 /// [`estimate_gain`] with an optional content class. `None` reproduces the
@@ -295,27 +301,57 @@ pub(crate) fn estimate_gain_for(
     probe: &zenjpeg::detect::JpegProbe,
     content: Option<Content>,
 ) -> f32 {
+    estimate_gain_with_curves(
+        probe,
+        content,
+        [
+            G420,
+            GRAPHIC420,
+            PHOTO420,
+            G444,
+            GRAPHIC444,
+            PHOTO444,
+            DIST420,
+            GRAPHIC_DIST420,
+            PHOTO_DIST420,
+            DIST444,
+            GRAPHIC_DIST444,
+            PHOTO_DIST444,
+            AQ_OFF_DELTA_420,
+            AQ_OFF_DELTA_444,
+        ],
+    )
+}
+
+pub(crate) fn estimate_gain_with_curves(
+    probe: &zenjpeg::detect::JpegProbe,
+    content: Option<Content>,
+    curves: [&[(f32, f32)]; 14],
+) -> f32 {
     let full = crate::chroma_full_of(probe) == Some(true);
     let scale = format!("{:?}", probe.quality.scale);
-    if scale == "ButteraugliDistance" {
-        // The AQ term is zero without a verified record (record.rs).
-        return gain_at_distance(full, probe.quality.value, content)
-            + crate::record::aq_off_gain_delta(probe);
-    }
-    if scale != "IjgQuality" && scale != "MozjpegQuality" {
-        // An uncalibrated scale is not an IJG quality dial.
+    let distance = scale == "ButteraugliDistance";
+    if !distance && scale != "IjgQuality" && scale != "MozjpegQuality" {
         return 0.0;
     }
-    let q = probe.quality.value;
-    match content {
-        None => gain_at(full, q),
-        Some(Content::Graphic) => lerp(if full { GRAPHIC444 } else { GRAPHIC420 }, q),
-        Some(Content::Photographic) => lerp(if full { PHOTO444 } else { PHOTO420 }, q),
+    let index = usize::from(distance) * 6
+        + usize::from(full) * 3
+        + match content {
+            None => 0,
+            Some(Content::Graphic) => 1,
+            Some(Content::Photographic) => 2,
+        };
+    let gain = lerp(curves[index], probe.quality.value);
+    if distance {
+        gain + crate::record::aq_off_gain_delta_with(probe, curves[12], curves[13])
+    } else {
+        gain
     }
 }
 
 /// Gain curve for distance-quantised encoders, separated from probing so it can
 /// be tested at exact distances.
+#[cfg(test)]
 fn gain_at_distance(full: bool, d: f32, content: Option<Content>) -> f32 {
     let pts = match (content, full) {
         (Some(Content::Graphic), false) => GRAPHIC_DIST420,
@@ -350,6 +386,7 @@ pub(crate) fn lerp(pts: &[(f32, f32)], x: f32) -> f32 {
 /// recovers a quality a point or two off what the encoder was asked for, and
 /// that slack is indistinguishable from a mistyped anchor. Both are worth
 /// testing — this is the half that says what the calibration claims.
+#[cfg(test)]
 fn gain_at(full: bool, q: f32) -> f32 {
     lerp(if full { G444 } else { G420 }, q)
 }
@@ -385,6 +422,9 @@ impl Default for Routing {
 pub struct Restorer {
     realtime: Option<zensr_micro::adopted::AdoptedModel>,
     quality: Option<zensr_micro::adopted::AdoptedModel>,
+    realtime_policy: Option<std::sync::Arc<crate::model_file::RuntimePolicy>>,
+    quality_policy: Option<std::sync::Arc<crate::model_file::RuntimePolicy>>,
+    default_budget: Budget,
 }
 
 impl Restorer {
@@ -394,6 +434,9 @@ impl Restorer {
         Self {
             realtime: None,
             quality: None,
+            realtime_policy: None,
+            quality_policy: None,
+            default_budget: Budget::Realtime,
         }
     }
 
@@ -402,10 +445,37 @@ impl Restorer {
     #[must_use]
     pub fn with_tier(mut self, tier: Budget, model: zensr_micro::adopted::AdoptedModel) -> Self {
         match tier {
-            Budget::Realtime => self.realtime = Some(model),
-            Budget::Quality => self.quality = Some(model),
+            Budget::Realtime => {
+                self.realtime = Some(model);
+                self.realtime_policy = None;
+            }
+            Budget::Quality => {
+                self.quality = Some(model);
+                self.quality_policy = None;
+            }
         }
         self
+    }
+
+    pub(crate) fn from_bundle(
+        model: crate::AdoptedModel,
+        budget: Budget,
+        policy: std::sync::Arc<crate::model_file::RuntimePolicy>,
+    ) -> Self {
+        let mut restorer = Self::new().with_tier(budget, model);
+        match budget {
+            Budget::Realtime => restorer.realtime_policy = Some(policy),
+            Budget::Quality => restorer.quality_policy = Some(policy),
+        }
+        restorer.default_budget = budget;
+        restorer
+    }
+
+    fn policy(&self, budget: Budget) -> Option<&crate::model_file::RuntimePolicy> {
+        match budget {
+            Budget::Realtime => self.realtime_policy.as_deref(),
+            Budget::Quality => self.quality_policy.as_deref(),
+        }
     }
 
     fn tier(&self, b: Budget) -> Option<&zensr_micro::adopted::AdoptedModel> {
@@ -423,7 +493,7 @@ impl Restorer {
             jpeg,
             intent: Intent::Fidelity,
             provenance: Provenance::Unknown,
-            budget: Budget::Realtime,
+            budget: self.default_budget,
             routing: None,
             require_consistency: false,
             threads: 0,
@@ -465,7 +535,8 @@ impl<'a> Request<'a> {
         self
     }
 
-    /// Compute budget. Defaults to [`Budget::Realtime`].
+    /// Compute budget. Defaults to [`Budget::Realtime`] for raw models, or
+    /// the tier stored in a loaded model container.
     #[must_use]
     pub fn budget(mut self, b: Budget) -> Self {
         self.budget = b;
@@ -507,6 +578,14 @@ impl<'a> Request<'a> {
             .tier(self.budget)
             .ok_or(RestoreError::TierNotLoaded)?;
 
+        let policy = self.restorer.policy(self.budget);
+        let manual = policy.is_some_and(|p| p.mode == 0);
+        if manual && !matches!(self.routing, Some(Routing::Always | Routing::Never)) {
+            return Err(RestoreError::UnsupportedModel(
+                "uncalibrated model requires explicit Routing::Always or Routing::Never",
+            ));
+        }
+
         // Routing decides before restoration inference. The learned default
         // also pays for plain decoded-pixel features; explicit overrides keep
         // their existing coefficient/quality routing behavior.
@@ -519,15 +598,31 @@ impl<'a> Request<'a> {
         // quality and cost depend on the corpus and implementation. `None` falls back to
         // the pooled curve, so an unparseable file routes exactly as before.
         let mut prepared = crate::prepared::Prepared::default();
-        let routing = self.routing.unwrap_or_default();
+        let routing = self.routing.unwrap_or(Routing::Auto {
+            min_gain: policy.map_or(0.25, |p| p.min_gain),
+        });
         let content = match routing {
-            Routing::Auto { .. } => prepared
-                .coefficients(self.jpeg)
-                .ok()
-                .and_then(classify_coefficients),
+            Routing::Auto { .. } => prepared.coefficients(self.jpeg).ok().and_then(|c| {
+                classify_coefficients_at(
+                    c,
+                    policy.map_or(GRAPHIC_ZERO_AC_THRESHOLD, |p| p.graphic_threshold),
+                )
+            }),
             _ => None,
         };
-        let predicted = estimate_gain_for(&probe_for_routing, content);
+        let predicted = if manual {
+            0.0
+        } else {
+            policy.map_or_else(
+                || estimate_gain_for(&probe_for_routing, content),
+                |p| p.gain(&probe_for_routing, content),
+            )
+        };
+        if !predicted.is_finite() {
+            return Err(RestoreError::UnsupportedModel(
+                "non-finite calibrated gain estimate",
+            ));
+        }
         let skip = match routing {
             Routing::Always => false,
             Routing::Never => true,
@@ -535,27 +630,30 @@ impl<'a> Request<'a> {
         };
         let learned = false;
         #[cfg(feature = "chooser")]
-        let (predicted, skip, learned) =
-            if self.routing.is_none() && self.intent == Intent::Fidelity {
-                match crate::decoded_router::for_jpeg_prepared(
-                    self.jpeg,
-                    &probe_for_routing,
-                    predicted,
-                    _recorded,
-                    &mut prepared,
-                )? {
-                    Some(decision) => (decision.score() as f32, !decision.restore(), true),
-                    None => (predicted, skip, learned),
-                }
-            } else {
-                (predicted, skip, learned)
-            };
+        let (predicted, skip, learned) = if self.routing.is_none()
+            && self.intent == Intent::Fidelity
+            && policy.is_none_or(|p| p.mode == 1)
+        {
+            match crate::decoded_router::for_jpeg_prepared_with_policy(
+                self.jpeg,
+                &probe_for_routing,
+                predicted,
+                _recorded,
+                &mut prepared,
+                policy,
+            )? {
+                Some(decision) => (decision.score() as f32, !decision.restore(), true),
+                None => (predicted, skip, learned),
+            }
+        } else {
+            (predicted, skip, learned)
+        };
 
         // Slack, gate thresholds and deblock policy are derived from the probe
         // and the caller's declarations — never surfaced.
         let mut cfg = RestoreConfig::default()
             .with_threads(self.threads)
-            .with_high_q_identity(!learned)
+            .with_high_q_identity(!learned && !manual)
             .with_projection(Projection::Auto);
 
         // Conservative gates earlier, trading restoration coverage for fewer
@@ -563,8 +661,16 @@ impl<'a> Request<'a> {
         // quality guarantee; alternative routing policies are evaluated separately.
         cfg = cfg.with_high_q_margin(match self.intent {
             Intent::Fidelity => 0.0,
-            Intent::Conservative => 6.0,
+            Intent::Conservative => policy.map_or(6.0, |p| p.conservative_margin),
         });
+
+        if let Some(policy) = policy {
+            cfg.guard = policy.guard;
+            cfg.tile = policy.tile;
+            cfg.deblock_max_quality = policy.deblock_max_quality;
+            cfg.model_gates = (policy.mode != 0).then_some(policy.gates);
+            cfg.projection = Projection::Fixed(policy.projection(&probe_for_routing));
+        }
 
         // Provenance currently affects only whether the strict box is
         // available. `FreshEncode` is the one claim that unlocks anything, and

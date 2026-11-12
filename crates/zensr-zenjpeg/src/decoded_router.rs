@@ -15,18 +15,20 @@ mod spatial;
 #[path = "decoded_router_candidate.rs"]
 mod candidate;
 
-struct Heads {
-    mean: &'static [f64; 37],
-    scale: &'static [f64; 37],
-    gain: &'static [f64; 47],
-    risk: &'static [f64; 47],
+struct Heads<'a, S> {
+    mean: &'a [f64; 37],
+    scale: &'a [f64; 37],
+    gain: &'a [f64; 47],
+    risk: &'a [f64; 47],
     gain_bias: f64,
     risk_bias: f64,
-    categories: [&'static [&'static str]; 3],
+    categories: [&'a [S]; 3],
+    penalty: f64,
+    threshold: f64,
 }
 
 #[cfg(test)]
-const FROZEN: Heads = Heads {
+const FROZEN: Heads<'static, &str> = Heads {
     mean: &fitted::MEAN,
     scale: &fitted::SCALE,
     gain: &fitted::GAIN,
@@ -34,9 +36,11 @@ const FROZEN: Heads = Heads {
     gain_bias: fitted::GAIN_BIAS,
     risk_bias: fitted::RISK_BIAS,
     categories: fitted::CATEGORIES,
+    penalty: fitted::PENALTY,
+    threshold: fitted::THRESHOLD,
 };
 
-const CANDIDATE: Heads = Heads {
+const CANDIDATE: Heads<'static, &str> = Heads {
     mean: &candidate::MEAN,
     scale: &candidate::SCALE,
     gain: &candidate::GAIN,
@@ -44,6 +48,8 @@ const CANDIDATE: Heads = Heads {
     gain_bias: candidate::GAIN_BIAS,
     risk_bias: candidate::RISK_BIAS,
     categories: candidate::CATEGORIES,
+    penalty: candidate::PENALTY,
+    threshold: candidate::THRESHOLD,
 };
 
 fn predict_candidate(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
@@ -53,15 +59,17 @@ fn predict_candidate(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Pred
 pub(crate) struct Prediction {
     gain: f64,
     risk: f64,
+    penalty: f64,
+    threshold: f64,
 }
 
 impl Prediction {
     pub(crate) fn score(&self) -> f64 {
-        self.gain - candidate::PENALTY * self.risk
+        self.gain - self.penalty * self.risk
     }
 
     pub(crate) fn restore(&self) -> bool {
-        self.score() >= candidate::THRESHOLD
+        self.score() >= self.threshold
     }
 }
 
@@ -70,7 +78,11 @@ fn predict(numeric: &[f64; 37], categories: &[&str; 3]) -> Option<Prediction> {
     predict_heads(numeric, categories, &FROZEN)
 }
 
-fn predict_heads(numeric: &[f64; 37], categories: &[&str; 3], heads: &Heads) -> Option<Prediction> {
+fn predict_heads<S: AsRef<str>>(
+    numeric: &[f64; 37],
+    categories: &[&str; 3],
+    heads: &Heads<'_, S>,
+) -> Option<Prediction> {
     if !numeric.iter().all(|v| v.is_finite()) {
         return None;
     }
@@ -84,7 +96,7 @@ fn predict_heads(numeric: &[f64; 37], categories: &[&str; 3], heads: &Heads) -> 
     let mut offset = numeric.len();
     for (value, known) in categories.iter().zip(heads.categories) {
         for (i, category) in known.iter().enumerate() {
-            if value == category {
+            if *value == category.as_ref() {
                 gain += heads.gain[offset + i];
                 risk += heads.risk[offset + i];
             }
@@ -98,7 +110,12 @@ fn predict_heads(numeric: &[f64; 37], categories: &[&str; 3], heads: &Heads) -> 
         let e = risk.exp();
         e / (1.0 + e)
     };
-    (gain.is_finite() && risk.is_finite()).then_some(Prediction { gain, risk })
+    (gain.is_finite() && risk.is_finite()).then_some(Prediction {
+        gain,
+        risk,
+        penalty: heads.penalty,
+        threshold: heads.threshold,
+    })
 }
 
 // The frozen tables serialize numeric inputs to twelve decimal places.
@@ -261,6 +278,44 @@ pub(crate) fn for_jpeg_prepared(
     )
 }
 
+pub(crate) fn for_jpeg_prepared_with_policy(
+    data: &[u8],
+    probe: &zenjpeg::detect::JpegProbe,
+    legacy_gain: f32,
+    recorded: bool,
+    prepared: &mut crate::prepared::Prepared,
+    policy: Option<&crate::model_file::RuntimePolicy>,
+) -> Result<Option<Prediction>, RestoreError> {
+    let Some(policy) = policy else {
+        return for_jpeg_prepared(data, probe, legacy_gain, recorded, prepared);
+    };
+    let router = policy
+        .router
+        .as_ref()
+        .ok_or(RestoreError::UnsupportedModel("missing model router"))?;
+    let heads = Heads {
+        mean: &router.mean,
+        scale: &router.scale,
+        gain: &router.gain,
+        risk: &router.risk,
+        gain_bias: router.gain_bias,
+        risk_bias: router.risk_bias,
+        penalty: router.penalty,
+        threshold: router.threshold,
+        categories: std::array::from_fn(|i| router.categories[i].as_slice()),
+    };
+    for_jpeg_windows_policy(
+        data,
+        probe,
+        legacy_gain,
+        recorded,
+        prepared,
+        None,
+        |n, c| predict_heads(n, c, &heads),
+        Some(policy),
+    )
+}
+
 fn for_jpeg_prepared_windows(
     data: &[u8],
     probe: &zenjpeg::detect::JpegProbe,
@@ -269,6 +324,29 @@ fn for_jpeg_prepared_windows(
     prepared: &mut crate::prepared::Prepared,
     selected: Option<&[Window]>,
     classify: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
+) -> Result<Option<Prediction>, RestoreError> {
+    for_jpeg_windows_policy(
+        data,
+        probe,
+        legacy_gain,
+        recorded,
+        prepared,
+        selected,
+        classify,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn for_jpeg_windows_policy(
+    data: &[u8],
+    probe: &zenjpeg::detect::JpegProbe,
+    legacy_gain: f32,
+    recorded: bool,
+    prepared: &mut crate::prepared::Prepared,
+    selected: Option<&[Window]>,
+    classify: impl Fn(&[f64; 37], &[&str; 3]) -> Option<Prediction>,
+    policy: Option<&crate::model_file::RuntimePolicy>,
 ) -> Result<Option<Prediction>, RestoreError> {
     if probe.dimensions.width.min(probe.dimensions.height) < 8
         || probe.num_components != 3
@@ -318,13 +396,18 @@ fn for_jpeg_prepared_windows(
         let window_gain = if window.width == width && window.height == height {
             legacy_gain
         } else {
-            let content =
-                if c.zero_ac_blocks as f32 >= crate::calibration::GRAPHIC_ZERO_AC_THRESHOLD {
-                    crate::api::Content::Graphic
-                } else {
-                    crate::api::Content::Photographic
-                };
-            crate::api::estimate_gain_for(probe, Some(content))
+            let content = if c.zero_ac_blocks as f32
+                >= policy.map_or(crate::calibration::GRAPHIC_ZERO_AC_THRESHOLD, |p| {
+                    p.graphic_threshold
+                }) {
+                crate::api::Content::Graphic
+            } else {
+                crate::api::Content::Photographic
+            };
+            policy.map_or_else(
+                || crate::api::estimate_gain_for(probe, Some(content)),
+                |p| p.gain(probe, Some(content)),
+            )
         };
         let mut numeric = [0.; 37];
         numeric[..13].copy_from_slice(&[
@@ -442,6 +525,32 @@ mod tests {
         assert_eq!(
             replay_using(&std::fs::read_to_string(path).unwrap(), predict_candidate),
             140940
+        );
+    }
+
+    #[test]
+    fn container_heads_match_independent_sklearn_goldens() {
+        let bundle =
+            crate::model_file::ModelBundle::from_bytes(&crate::model_file::tests::canon4_bytes(1))
+                .unwrap();
+        let r = bundle.policy.router.as_ref().unwrap();
+        let heads = Heads {
+            mean: &r.mean,
+            scale: &r.scale,
+            gain: &r.gain,
+            risk: &r.risk,
+            gain_bias: r.gain_bias,
+            risk_bias: r.risk_bias,
+            penalty: r.penalty,
+            threshold: r.threshold,
+            categories: std::array::from_fn(|i| r.categories[i].as_slice()),
+        };
+        assert_eq!(
+            replay_using(
+                include_str!("../tests/data/decoded_router_candidate_golden.tsv"),
+                |n, c| predict_heads(n, c, &heads)
+            ),
+            16
         );
     }
 

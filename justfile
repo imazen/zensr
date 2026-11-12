@@ -738,3 +738,35 @@ sr-bank-projection-report *args:
 
 browser-fixed-gallery output url:
     node tools/browser-demo/gallery-test.mjs {{output}} {{url}} fixed
+
+# Single-file CPU models; generated containers stay outside git.
+model-container *args:
+    python3 tools/model_container.py {{args}}
+
+test-model-container:
+    python3 -m unittest discover -s tools -p test_model_container.py
+
+repair-model input output model *args:
+    cargo run --release --locked -p zensr-zenjpeg --example repair -- "{{input}}" "{{output}}" --model "{{model}}" {{args}}
+
+container-check:
+    cargo clippy --locked -p zensr-zenjpeg --all-targets -- -D warnings
+
+container-tests:
+    cargo test --locked -p zensr-zenjpeg --all-targets
+
+container-check-no-chooser:
+    cargo clippy --locked -p zensr-zenjpeg --no-default-features --all-targets -- -D warnings
+
+container-tests-no-chooser:
+    cargo test --locked -p zensr-zenjpeg --no-default-features --all-targets
+
+container-doc-tests:
+    cargo test --locked -p zensr-zenjpeg --doc
+
+# Requires access to the Git dependencies of these standalone research roots.
+container-dependent-locks target="x86_64-unknown-linux-gnu":
+    @for root in tools/qat/runtime tools/quality-int8/runtime tools/sr-bank tools/codec-integration tools/exactness/product; do cargo metadata --locked --format-version 1 --filter-platform {{target}} --manifest-path "$root/Cargo.toml" > /dev/null || exit; done
+
+quality-int8-regression-tests:
+    cargo test --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin scaling --bin superres

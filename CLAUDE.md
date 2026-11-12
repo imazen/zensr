@@ -9,7 +9,8 @@
   replay; aligned cases remain exact. Quality tradeoffs and native/browser
   checks are in `benchmarks/projection_fix_2026-11-10.md`.
 
-- Fixed on zenjpeg PR 261 by `0fee09ca` (the frozen bank is preserved):
+- Fixed on zenjpeg main through PR 262, merge `a9c34a86`
+  (original extraction `0fee09ca`; the frozen bank is preserved):
   the bank’s pinned JPEG encoder (`24b6d3fb`) produces
   non-neutral chroma on the grayscale 32×8 420 q40/q50 witness 3313. Native
   and libjpeg-turbo decodes are byte-identical; larger same-source controls

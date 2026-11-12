@@ -158,7 +158,9 @@ It does not add an intensity control or select a new browser default.
 
 ## November 10 projection correction
 
-The current repair packages pin zenjpeg `06d0e6f4` and zensr `0bb29cf6`.
+The retained repair packages pin zenjpeg `06d0e6f4` and zensr `0bb29cf6`.
+The engine/browser source is merged in zensr PR 4. The zenjpeg decoder adapter
+remains draft PR 261; these pins do not track current zenjpeg main.
 Native and browser callers share the partial-block projection correction.
 Strict WASM/native RGB8 parity, all eight EXIF orientations, identity/malformed
 ICC handling and real relaxed-first/unfused fallback checks pass on the bounded
