@@ -61,7 +61,10 @@ PR 261 is the concrete next integration task. Reconcile its adapter onto
 current zenjpeg main, preserving the already-merged encoder fixes. Review the
 new public API, then cover admitted pixel layouts, borrowed/owned rows,
 `decode_into`, crop, arbitrary ICC profiles, cancellation/error propagation and
-memory limits. Review repeated parsing/entropy decoding and allocations.
+memory limits. Review repeated parsing/entropy decoding and allocations (`zensr`
+now provides strided/`zenpixels` pixel writers, stack `CoefficientsView`,
+`JpegDctBlocks` zigzag views and zero-allocation `RepairWorkspace` /
+`ModelWorkspace` scratch reuse for `decode_into` integration).
 Required-platform integration CI must pass before that draft is merge-ready.
 The 136-case RGB8 comparison and identity ICC fixtures do not establish those
 missing paths. Do not merge the conflicting historical branch merely to close it.
@@ -114,3 +117,13 @@ Transfer hashes, server synchronization and seeded member readbacks were
 verified at generation time; local receipts and reports retain the identities.
 No source images, candidates, scores, model files or failed probes were deleted.
 Only superseded prose/API dumps were removed; Git history retains them.
+
+### Corpus and dataset repository convention
+
+Training, calibration and evaluation corpora follow the workspace `*-datasets`
+separation pattern alongside `imazen-26` (and sibling `zensally-datasets`):
+inference crates (`zensr`, `zensr-micro`) stay free of corpus dependencies, Git
+tracks deterministic manifests, SHA-256 content identities and image-separated
+split provenance ([split definitions](SPLIT_DEFINITIONS.md)), and bulk image or
+candidate bytes live in dedicated dataset repositories (`zensr-datasets` / R2 /
+retained `/mnt/v` mirrors) rather than inside library source trees.

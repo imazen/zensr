@@ -7,11 +7,17 @@ publish = false
 description = "Codec-independent artifact restoration, learned routing and coefficient constraints"
 
 [dependencies]
-zensr-micro = { path = "../zensr-micro", default-features = false }
+rgb = { version = "0.8", default-features = false, optional = true }
 zenanalyze = { version = "0.2.0", optional = true, features = ["api"] }
 zenanalyze-api = { version = "0.1.0", optional = true }
+zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false, features = ["rgb"], optional = true }
+zensr-micro = { path = "../zensr-micro", default-features = false }
+
+[dev-dependencies]
+zenbench = { version = "0.1.11", features = ["heap-profiling"] }
 
 [features]
 default = ["chooser"]
 strict-fma = ["zensr-micro/strict-fma"]
 chooser = ["dep:zenanalyze", "dep:zenanalyze-api"]
+zenpixels = ["dep:zenpixels", "dep:rgb"]

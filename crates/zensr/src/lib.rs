@@ -31,17 +31,19 @@ mod router_coefficients;
 pub mod source;
 
 use zensr_micro::consist::{
-    CoeffOrder, CoeffView, project_chroma_420, project_plane, rgb_to_ycbcr_planes,
-    ycbcr_to_rgb_planes,
+    CoeffOrder, CoeffView, project_chroma_420_with_scratch, project_plane,
+    rgb_to_ycbcr_planes_inplace, ycbcr_to_rgb_planes_inplace,
 };
-use zensr_micro::guards::guarded_merge;
+use zensr_micro::guards::guarded_merge_with_scratch;
 
 // Narrow, deliberate re-exports — the full micro modules are NOT part of
 // this crate's contract.
-pub use zensr_micro::adopted::{AdoptedModel, ModelSpace};
-pub use zensr_micro::consist::{ProjectionConfig, ProjectionReport};
+pub use crate::api::{PixelsRef, RepairWorkspace, WorkspaceOutcome};
+pub use crate::source::{CoefficientsView, JpegDctBlocks};
+pub use zensr_micro::adopted::{AdoptedModel, ModelSpace, ModelWorkspace};
+pub use zensr_micro::consist::{ChromaScratch, ProjectionConfig, ProjectionReport};
 pub use zensr_micro::decode_all_f16;
-pub use zensr_micro::guards::{GuardConfig, GuardReport};
+pub use zensr_micro::guards::{GuardConfig, GuardReport, GuardScratch};
 
 /// Measured deployment rule for zenjpeg's deblocker under the model.
 /// Inputs are exact at the qualities where it matters (probe q5/8/12 verified
@@ -52,8 +54,8 @@ pub use zensr_micro::guards::{GuardConfig, GuardReport};
 /// ">=0.8.4, <0.10" — string prefixes stay stable across that range where a
 /// `match` would not.
 pub fn policy_wants_auto(probe: &crate::source::JpegInfo) -> bool {
-    let fam = format!("{:?}", probe.encoder);
-    let scale = format!("{:?}", probe.quality.scale);
+    let fam = probe.encoder.as_str();
+    let scale = probe.quality.scale.as_str();
     !fam.starts_with("Cjpegli")
         && (scale == "IjgQuality" || scale == "MozjpegQuality")
         && probe.quality.value <= 9.5
@@ -81,12 +83,12 @@ pub fn policy_wants_auto(probe: &crate::source::JpegInfo) -> bool {
 /// probe as `Unknown` with a table no known preset produces
 /// (`benchmarks/dqt_survey_2026-08-02.md`).
 pub fn slack_for(probe: &crate::source::JpegInfo) -> f32 {
-    let fam = format!("{:?}", probe.encoder);
+    let fam = probe.encoder.as_str();
     if fam.starts_with("Cjpegli") {
         0.45
     } else if fam == "Mozjpeg" {
         0.35
-    } else if is_round_to_nearest_family(&fam) {
+    } else if is_round_to_nearest_family(fam) {
         0.15
     } else {
         // Unknown / unrecognised: assume the worst-behaved encoder we have
@@ -118,7 +120,7 @@ fn is_round_to_nearest_family(fam: &str) -> bool {
 /// measured violations sit on coded coefficients too (mozjpeg-nz p99 up to
 /// 1.7, max 15Q); their tail stays a documented approximation.
 pub fn slack_abs_for(probe: &crate::source::JpegInfo) -> f32 {
-    let fam = format!("{:?}", probe.encoder);
+    let fam = probe.encoder.as_str();
     if fam.starts_with("Cjpegli") { 0.5 } else { 1.5 }
 }
 
@@ -137,7 +139,7 @@ pub fn policy_high_q_identity(probe: &crate::source::JpegInfo) -> bool {
 /// `Some(false)` for 4:2:0, `None` for 4:2:2, 4:4:0, grayscale and anything
 /// else. Separated out so the mapping is testable without model weights.
 pub(crate) fn chroma_full_of(probe: &crate::source::JpegInfo) -> Option<bool> {
-    match format!("{:?}", probe.subsampling).as_str() {
+    match probe.subsampling.as_str() {
         "S444" => Some(true),
         "S420" => Some(false),
         _ => None,
@@ -152,17 +154,14 @@ pub(crate) fn chroma_full_of(probe: &crate::source::JpegInfo) -> Option<bool> {
 /// "conservative" caller restore MORE, which is why it is one function rather
 /// than two call sites.
 pub fn policy_high_q_identity_with_margin(probe: &crate::source::JpegInfo, margin: f32) -> bool {
-    let mut corrected = probe.clone();
-    record::apply_record(&mut corrected);
-    let probe = &corrected;
-    // Debug-string match for the same reason as `policy_wants_auto`: the probe
-    // enums are `#[non_exhaustive]` upstream and `zenjpeg::types` is not a
+    let _ = record::is_recorded(probe);
+    // String-spelling match for the same reason as `policy_wants_auto`: the
+    // probe enums are `#[non_exhaustive]` upstream and `zenjpeg::types` is not a
     // public path, so the name is the stable handle across the version range.
-    let full_chroma = format!("{:?}", probe.subsampling) == "S444";
-    let scale = format!("{:?}", probe.quality.scale);
-    match scale.as_str() {
+    let full_chroma = probe.subsampling.as_str() == "S444";
+    match probe.quality.scale.as_str() {
         "IjgQuality" | "MozjpegQuality" => {
-            let mozjpeg = format!("{:?}", probe.encoder) == "Mozjpeg";
+            let mozjpeg = probe.encoder.as_str() == "Mozjpeg";
             let threshold = match (mozjpeg, full_chroma) {
                 (false, false) => calibration::GATE_IJG_420,
                 (false, true) => calibration::GATE_IJG_444,
@@ -339,20 +338,10 @@ enum PlaneGeometry {
 fn plane_geometry(
     h_samp: u8,
     v_samp: u8,
-    coefficients: &crate::source::Coefficients<'_>,
+    coefficients: &crate::source::CoefficientsView<'_>,
 ) -> PlaneGeometry {
-    let max_h = coefficients
-        .components
-        .iter()
-        .map(|c| c.h_samp)
-        .max()
-        .unwrap_or(0);
-    let max_v = coefficients
-        .components
-        .iter()
-        .map(|c| c.v_samp)
-        .max()
-        .unwrap_or(0);
+    let max_h = coefficients.iter().map(|c| c.h_samp).max().unwrap_or(0);
+    let max_v = coefficients.iter().map(|c| c.v_samp).max().unwrap_or(0);
     if max_h == 0 || max_v == 0 || h_samp == 0 || v_samp == 0 {
         return PlaneGeometry::Other;
     }
@@ -368,37 +357,59 @@ fn plane_geometry(
     }
 }
 
-pub(crate) fn restore_prepared(
+pub(crate) fn restore_prepared_into(
     model: &AdoptedModel,
     cfg: &RestoreConfig,
     skip_model: bool,
     prepared: &mut dyn source::Source,
-) -> Result<Restored, RestoreError> {
+    ws: &mut crate::api::RepairWorkspace,
+) -> Result<(), RestoreError> {
     if model.scale != 1 {
         return Err(RestoreError::UnsupportedModel(
             "restore_jpeg is the x1 pipeline",
         ));
     }
-    let mut report = RestoreReport::default();
 
-    // 1. fingerprint + deblock policy
-    let mut probe = prepared.info().clone();
-    // A verified encode record overrides the fingerprint (record.rs); the
-    // report says so, since every policy below then runs on exact inputs.
-    let recorded = record::apply_record(&mut probe);
-    report.encoder_family = if recorded {
-        format!("{:?} (recorded)", probe.encoder)
-    } else {
-        format!("{:?}", probe.encoder)
+    // Reset reusable RestoreReport fields in place without reallocating capacity.
+    ws.restore_report.encoder_family.clear();
+    ws.restore_report.quality_scale.clear();
+    ws.restore_report.used_deblock_auto = false;
+    ws.restore_report.chroma_full = None;
+    ws.restore_report.skipped_model_high_q = false;
+    ws.restore_report.guard = GuardReport::default();
+    ws.restore_report.projection.clear();
+
+    // 1. fingerprint + deblock policy (read directly from `&JpegInfo` without cloning Strings)
+    let (want_auto, skip_high_q, pcfg) = {
+        let probe = prepared.info();
+        let recorded = record::is_recorded(probe);
+        ws.restore_report
+            .encoder_family
+            .push_str(probe.encoder.as_str());
+        if recorded {
+            ws.restore_report.encoder_family.push_str(" (recorded)");
+        }
+        ws.restore_report.est_quality = probe.quality.value;
+        ws.restore_report
+            .quality_scale
+            .push_str(probe.quality.scale.as_str());
+        ws.restore_report.chroma_full = chroma_full_of(probe);
+        let want_auto = !skip_model && cfg.deblock_policy && policy_wants_auto(probe);
+        ws.restore_report.used_deblock_auto = want_auto;
+        let skip_high_q = skip_model
+            || (cfg.high_q_identity
+                && policy_high_q_identity_with_margin(probe, cfg.high_q_margin));
+        let pcfg = match cfg.projection {
+            Projection::Off => None,
+            Projection::Auto => Some(
+                ProjectionConfig::with_slack_q(slack_for(probe))
+                    .with_slack_abs(slack_abs_for(probe)),
+            ),
+            Projection::Fixed(c) => Some(c),
+        };
+        (want_auto, skip_high_q, pcfg)
     };
-    report.est_quality = probe.quality.value;
-    report.quality_scale = format!("{:?}", probe.quality.scale);
-    // Debug-string match for the reason documented on `policy_wants_auto`:
-    // the probe enums are non_exhaustive upstream and zenjpeg::types is not a
-    // public path.
-    report.chroma_full = chroma_full_of(&probe);
-    let want_auto = !skip_model && cfg.deblock_policy && policy_wants_auto(&probe);
-    report.used_deblock_auto = want_auto;
+
     let mode = if want_auto {
         source::DecodeMode::Deblocked
     } else {
@@ -422,86 +433,78 @@ pub(crate) fn restore_prepared(
         return Err(RestoreError::UnsupportedPixels("expected strided RGB8"));
     }
     let plane = w * h;
-    let mut planes = vec![0.0f32; 3 * plane];
+    let total = 3 * plane;
+    ws.buf_a.resize(total, 0.0);
     for y in 0..h {
+        let row = &px[y * dec.stride..y * dec.stride + w * 3];
         for x in 0..w {
-            for c in 0..3 {
-                planes[c * plane + y * w + x] = px[y * dec.stride + x * 3 + c] as f32 / 255.0;
-            }
+            ws.buf_a[y * w + x] = row[x * 3] as f32 / 255.0;
+            ws.buf_a[plane + y * w + x] = row[x * 3 + 1] as f32 / 255.0;
+            ws.buf_a[2 * plane + y * w + x] = row[x * 3 + 2] as f32 / 255.0;
         }
     }
+    ws.width = w;
+    ws.height = h;
 
     // 2b. high-q identity gate: near-pristine input — the model can only
     // do harm here (measured; see policy_high_q_identity). The decode is
-    // already consistent, so projection is a no-op too: return it.
-    if skip_model
-        || (cfg.high_q_identity && policy_high_q_identity_with_margin(&probe, cfg.high_q_margin))
-    {
-        report.skipped_model_high_q = !skip_model;
-        return Ok(Restored {
-            planes,
-            width: w,
-            height: h,
-            report,
-        });
+    // already consistent, so projection is a no-op too: return it in `ws.buf_a`.
+    if skip_high_q {
+        ws.restore_report.skipped_model_high_q = !skip_model;
+        return Ok(());
     }
 
     // 3. model space: YCbCr-native models run directly in the space where
     // quantization happened (S5b); RGB models keep the legacy path.
     let ycbcr_native = model.space() == ModelSpace::Ycbcr;
-    let model_in = if ycbcr_native {
-        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
-        rgb_to_ycbcr_planes(&planes, plane, &mut y, &mut cb, &mut cr);
-        let mut p = y;
-        p.extend_from_slice(&cb);
-        p.extend_from_slice(&cr);
-        p
-    } else {
-        planes
-    };
+    if ycbcr_native {
+        rgb_to_ycbcr_planes_inplace(&mut ws.buf_a[..total], plane);
+    }
 
     // 4. guarded model (guard anchors in the model's own space)
-    let mut sr = model.upscale_tiled(&model_in, h, w, cfg.threads, cfg.tile);
-    report.guard = guarded_merge(&mut sr, &model_in, h, w, 1, &cfg.guard);
+    ws.buf_b.resize(total, 0.0);
+    model.upscale_tiled_into(
+        &ws.buf_a[..total],
+        h,
+        w,
+        cfg.threads,
+        cfg.tile,
+        &mut ws.buf_b[..total],
+        &mut ws.model_ws,
+    );
+    ws.restore_report.guard = guarded_merge_with_scratch(
+        &mut ws.buf_b[..total],
+        &ws.buf_a[..total],
+        h,
+        w,
+        1,
+        &cfg.guard,
+        &mut ws.guard_scratch,
+    );
 
     // 5. quantization-consistency projection (S10): luma via direct box clamp,
     // full-res chroma (4:4:4) likewise, subsampled chroma (4:2:0) via exact
     // one-pass back-projection on the half-res lattice.
-    let pcfg = match cfg.projection {
-        Projection::Off => None,
-        Projection::Auto => Some(
-            ProjectionConfig::with_slack_q(slack_for(&probe)).with_slack_abs(slack_abs_for(&probe)),
-        ),
-        Projection::Fixed(c) => Some(c),
-    };
-    let mut ycc = if ycbcr_native {
-        sr
-    } else {
-        let (mut y, mut cb, mut cr) = (vec![0.0; plane], vec![0.0; plane], vec![0.0; plane]);
-        rgb_to_ycbcr_planes(&sr, plane, &mut y, &mut cb, &mut cr);
-        let mut p = y;
-        p.extend_from_slice(&cb);
-        p.extend_from_slice(&cr);
-        p
-    };
+    if !ycbcr_native {
+        rgb_to_ycbcr_planes_inplace(&mut ws.buf_b[..total], plane);
+    }
     if let Some(pcfg) = pcfg {
         prepared.prepare(source::Needs {
             pixels: None,
             coefficients: true,
         })?;
-        let coeffs = prepared.coefficients()?;
+        let coeffs = prepared.coefficients_view()?;
         // Only geometries whose color model we know: 1 (grayscale luma) or 3
         // (YCbCr). 4-component (Adobe CMYK/YCCK) coefficients do NOT live in
         // the YCbCr space we reconstruct here — skip projection entirely.
-        let ncomp = coeffs.components.len();
+        let ncomp = coeffs.total_components();
         let projectable = ncomp == 1 || ncomp == 3;
         for (ci, comp) in coeffs
-            .components
             .iter()
             .enumerate()
             .take(if projectable { 3 } else { 0 })
         {
-            let Some(qt) = coeffs.quant_tables[comp.quant_table_idx as usize] else {
+            let Some(qt) = coeffs.quant_table_natural(comp.quant_table_idx) else {
                 continue;
             };
             let cv = CoeffView {
@@ -509,19 +512,26 @@ pub(crate) fn restore_prepared(
                 blocks_wide: comp.blocks_wide,
                 blocks_high: comp.blocks_high,
                 order: CoeffOrder::Zigzag,
-                quant: &qt,
+                quant: qt,
             };
-            let target = &mut ycc[ci * plane..(ci + 1) * plane];
+            let target = &mut ws.buf_b[ci * plane..(ci + 1) * plane];
             match plane_geometry(comp.h_samp, comp.v_samp, &coeffs) {
                 PlaneGeometry::Full => {
-                    report
+                    ws.restore_report
                         .projection
                         .push(project_plane(target, w, h, &cv, &pcfg));
                 }
                 PlaneGeometry::HalfBoth => {
-                    report
+                    ws.restore_report
                         .projection
-                        .push(project_chroma_420(target, w, h, &cv, &pcfg));
+                        .push(project_chroma_420_with_scratch(
+                            target,
+                            w,
+                            h,
+                            &cv,
+                            &pcfg,
+                            &mut ws.chroma_scratch,
+                        ));
                 }
                 // 4:2:2 / 4:4:0 (half in ONE axis only): the 2x2 box
                 // back-projection would be wrong — leave unprojected.
@@ -529,19 +539,7 @@ pub(crate) fn restore_prepared(
             }
         }
     }
-    let mut out = vec![0.0f32; 3 * plane];
-    ycbcr_to_rgb_planes(
-        &ycc[..plane],
-        &ycc[plane..2 * plane],
-        &ycc[2 * plane..],
-        &mut out,
-        plane,
-    );
-
-    Ok(Restored {
-        planes: out,
-        width: w,
-        height: h,
-        report,
-    })
+    ycbcr_to_rgb_planes_inplace(&mut ws.buf_b[..total], plane);
+    core::mem::swap(&mut ws.buf_a, &mut ws.buf_b);
+    Ok(())
 }

@@ -4159,8 +4159,11 @@ dependencies = [
 name = "zensr"
 version = "0.0.1"
 dependencies = [
+ "rgb",
  "zenanalyze",
  "zenanalyze-api",
+ "zenbench",
+ "zenpixels 0.3.1",
  "zensr-micro",
 ]
 

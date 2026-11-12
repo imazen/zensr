@@ -149,6 +149,44 @@ impl GuardScratch {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Pre-allocates scratch capacity for `x1` inputs up to `max_h × max_w`.
+    #[must_use]
+    pub fn with_capacity(max_h: usize, max_w: usize) -> Self {
+        Self::with_scale_capacity(max_h, max_w, 1)
+    }
+
+    /// Pre-allocates scratch capacity for inputs up to `max_h × max_w` at
+    /// upscale factor `max_scale`.
+    #[must_use]
+    pub fn with_scale_capacity(max_h: usize, max_w: usize, max_scale: usize) -> Self {
+        let mut sc = Self::default();
+        let cells = max_h.div_ceil(16).saturating_mul(max_w.div_ceil(16));
+        let plane = max_h.saturating_mul(max_w);
+        let oh = max_h.saturating_mul(max_scale.max(1));
+        let ow = max_w.saturating_mul(max_scale.max(1));
+        sc.tmap.reserve(cells);
+        sc.cnt.reserve(cells);
+        sc.luma.reserve(plane);
+        sc.xt.x0.reserve(ow);
+        sc.xt.x1.reserve(ow);
+        sc.xt.tx.reserve(ow);
+        sc.yt.reserve(oh);
+        sc.cxt.i0.reserve(ow);
+        sc.cxt.i1.reserve(ow);
+        sc.cxt.tt.reserve(ow);
+        sc.cyt.i0.reserve(oh);
+        sc.cyt.i1.reserve(oh);
+        sc.cyt.tt.reserve(oh);
+        sc.h0.reserve(ow);
+        sc.h1.reserve(ow);
+        sc.base_row.reserve(ow);
+        sc.alpha_row.reserve(ow);
+        sc.arow0.reserve(ow);
+        sc.arow1.reserve(ow);
+        sc.rowacc.reserve(ow);
+        sc
+    }
 }
 
 /// Horizontal bilinear interpolation of one LR row into width-`ow` `dst`.

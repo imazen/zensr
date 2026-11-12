@@ -228,6 +228,280 @@ pub struct Summary {
     pub report: Report,
 }
 
+fn write_planar_to_rgb8_strided(
+    planes: &[f32],
+    width: usize,
+    height: usize,
+    dst: &mut [u8],
+    stride_bytes: usize,
+) -> Result<(), RestoreError> {
+    let row_bytes = width
+        .checked_mul(3)
+        .ok_or(RestoreError::UnsupportedPixels("RGB8 row width overflow"))?;
+    if stride_bytes < row_bytes {
+        return Err(RestoreError::UnsupportedPixels(
+            "RGB8 destination stride smaller than width * 3",
+        ));
+    }
+    let needed = if height == 0 {
+        0
+    } else {
+        (height - 1)
+            .checked_mul(stride_bytes)
+            .and_then(|n| n.checked_add(row_bytes))
+            .ok_or(RestoreError::UnsupportedPixels(
+                "RGB8 destination size overflow",
+            ))?
+    };
+    if dst.len() < needed {
+        return Err(RestoreError::UnsupportedPixels(
+            "RGB8 destination buffer too small for dimensions and stride",
+        ));
+    }
+    let plane = width * height;
+    let (r_plane, rest) = planes.split_at(plane);
+    let (g_plane, b_plane) = rest.split_at(plane);
+    for y in 0..height {
+        let row = &mut dst[y * stride_bytes..y * stride_bytes + row_bytes];
+        let p_off = y * width;
+        for x in 0..width {
+            row[x * 3] = (r_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+            row[x * 3 + 1] = (g_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+            row[x * 3 + 2] = (b_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        }
+    }
+    Ok(())
+}
+
+fn write_planar_to_rgb_f32_strided(
+    planes: &[f32],
+    width: usize,
+    height: usize,
+    dst: &mut [f32],
+    stride_floats: usize,
+) -> Result<(), RestoreError> {
+    let row_floats = width.checked_mul(3).ok_or(RestoreError::UnsupportedPixels(
+        "RGB f32 row width overflow",
+    ))?;
+    if stride_floats < row_floats {
+        return Err(RestoreError::UnsupportedPixels(
+            "RGB f32 destination stride smaller than width * 3",
+        ));
+    }
+    let needed = if height == 0 {
+        0
+    } else {
+        (height - 1)
+            .checked_mul(stride_floats)
+            .and_then(|n| n.checked_add(row_floats))
+            .ok_or(RestoreError::UnsupportedPixels(
+                "RGB f32 destination size overflow",
+            ))?
+    };
+    if dst.len() < needed {
+        return Err(RestoreError::UnsupportedPixels(
+            "RGB f32 destination buffer too small for dimensions and stride",
+        ));
+    }
+    let plane = width * height;
+    let (r_plane, rest) = planes.split_at(plane);
+    let (g_plane, b_plane) = rest.split_at(plane);
+    for y in 0..height {
+        let row = &mut dst[y * stride_floats..y * stride_floats + row_floats];
+        let p_off = y * width;
+        for x in 0..width {
+            row[x * 3] = r_plane[p_off + x];
+            row[x * 3 + 1] = g_plane[p_off + x];
+            row[x * 3 + 2] = b_plane[p_off + x];
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "zenpixels")]
+fn write_planar_to_pixel_slice<P>(
+    planes: &[f32],
+    width: usize,
+    height: usize,
+    dst: &mut zenpixels::PixelSliceMut<'_, P>,
+) -> Result<(), RestoreError> {
+    if dst.width() as usize != width || dst.rows() as usize != height {
+        return Err(RestoreError::UnsupportedPixels(
+            "destination PixelSliceMut dimensions do not match restored image",
+        ));
+    }
+    let desc = dst.descriptor();
+    if desc.layout() != zenpixels::ChannelLayout::Rgb {
+        return Err(RestoreError::UnsupportedPixels(
+            "destination PixelSliceMut must use 3-channel Rgb layout",
+        ));
+    }
+    let plane = width * height;
+    let (r_plane, rest) = planes.split_at(plane);
+    let (g_plane, b_plane) = rest.split_at(plane);
+    match desc.channel_type() {
+        zenpixels::ChannelType::U8 => {
+            for y in 0..height {
+                let row = dst.row_mut(y as u32);
+                let p_off = y * width;
+                for x in 0..width {
+                    row[x * 3] = (r_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                    row[x * 3 + 1] = (g_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                    row[x * 3 + 2] = (b_plane[p_off + x] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                }
+            }
+            Ok(())
+        }
+        zenpixels::ChannelType::F32 => {
+            for y in 0..height {
+                let row = dst.row_mut(y as u32);
+                let p_off = y * width;
+                for (x, px_bytes) in row.as_chunks_mut::<12>().0.iter_mut().enumerate() {
+                    px_bytes[0..4].copy_from_slice(&r_plane[p_off + x].to_ne_bytes());
+                    px_bytes[4..8].copy_from_slice(&g_plane[p_off + x].to_ne_bytes());
+                    px_bytes[8..12].copy_from_slice(&b_plane[p_off + x].to_ne_bytes());
+                }
+            }
+            Ok(())
+        }
+        _ => Err(RestoreError::UnsupportedPixels(
+            "destination PixelSliceMut channel type must be U8 or F32",
+        )),
+    }
+}
+
+/// Borrowed planar f32 pixels (`[3, height, width]` in `0.0..=1.0`) backed by a
+/// [`RepairWorkspace`] or [`Pixels`].
+///
+/// Samples remain in the JPEG's coding RGB space prior to ICC profile
+/// conversion; callers using the `zenpixels` helpers should attach or preserve
+/// color context on the codec side.
+#[derive(Clone, Copy, Debug)]
+pub struct PixelsRef<'a> {
+    planes: &'a [f32],
+    width: usize,
+    height: usize,
+}
+
+impl<'a> PixelsRef<'a> {
+    #[must_use]
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    #[must_use]
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    /// Planar f32, three planes of `width * height`, values in `0.0..=1.0`.
+    #[must_use]
+    pub fn planes(&self) -> &'a [f32] {
+        self.planes
+    }
+
+    /// Allocate tightly packed interleaved `f32` RGB (`width * height * 3`).
+    #[must_use]
+    pub fn to_rgb_f32(&self) -> Vec<f32> {
+        let mut out = vec![0.0f32; self.width * self.height * 3];
+        write_planar_to_rgb_f32_strided(
+            self.planes,
+            self.width,
+            self.height,
+            &mut out,
+            self.width * 3,
+        )
+        .expect("tightly packed RGB f32 buffer matches dimensions");
+        out
+    }
+
+    /// Allocate tightly packed interleaved 8-bit RGB (`width * height * 3`).
+    #[must_use]
+    pub fn to_rgb8(&self) -> Vec<u8> {
+        let mut out = vec![0u8; self.width * self.height * 3];
+        write_planar_to_rgb8_strided(
+            self.planes,
+            self.width,
+            self.height,
+            &mut out,
+            self.width * 3,
+        )
+        .expect("tightly packed RGB8 buffer matches dimensions");
+        out
+    }
+
+    /// Write interleaved 8-bit RGB into caller-owned strided storage with zero
+    /// heap allocations. Row padding bytes (`width * 3 .. stride_bytes`) are
+    /// left untouched.
+    pub fn write_rgb8_strided(
+        &self,
+        dst: &mut [u8],
+        stride_bytes: usize,
+    ) -> Result<(), RestoreError> {
+        write_planar_to_rgb8_strided(self.planes, self.width, self.height, dst, stride_bytes)
+    }
+
+    /// Write interleaved `f32` RGB into caller-owned strided storage (`stride_floats >= width * 3`)
+    /// with zero heap allocations. Row padding elements (`width * 3 .. stride_floats`)
+    /// are left untouched.
+    pub fn write_rgb_f32_strided(
+        &self,
+        dst: &mut [f32],
+        stride_floats: usize,
+    ) -> Result<(), RestoreError> {
+        write_planar_to_rgb_f32_strided(self.planes, self.width, self.height, dst, stride_floats)
+    }
+
+    /// Write interleaved RGB (`U8` or `F32`) directly into a caller-owned
+    /// [`zenpixels::PixelSliceMut`] (typed or type-erased) with zero heap
+    /// allocations, preserving any row-stride padding.
+    #[cfg(feature = "zenpixels")]
+    pub fn write_pixel_slice<P>(
+        &self,
+        dst: &mut zenpixels::PixelSliceMut<'_, P>,
+    ) -> Result<(), RestoreError> {
+        write_planar_to_pixel_slice(self.planes, self.width, self.height, dst)
+    }
+
+    /// Allocate an owned [`zenpixels::PixelBuffer<rgb::Rgb<u8>>`] tagged with
+    /// [`zenpixels::PixelDescriptor::RGB8`] (`TransferFunction::Unknown`, coding RGB).
+    #[cfg(feature = "zenpixels")]
+    pub fn to_pixel_buffer_rgb8(
+        &self,
+    ) -> Result<zenpixels::PixelBuffer<rgb::Rgb<u8>>, zenpixels::BufferError> {
+        let mut buf = zenpixels::PixelBuffer::<rgb::Rgb<u8>>::try_new_typed(
+            self.width as u32,
+            self.height as u32,
+        )
+        .map_err(|e| e.decompose().0)?;
+        {
+            let mut slice = buf.as_slice_mut();
+            write_planar_to_pixel_slice(self.planes, self.width, self.height, &mut slice)
+                .expect("freshly allocated Rgb<u8> PixelBuffer matches dimensions");
+        }
+        Ok(buf)
+    }
+
+    /// Allocate an owned [`zenpixels::PixelBuffer<rgb::Rgb<f32>>`] tagged with
+    /// [`zenpixels::PixelDescriptor::RGBF32`] (`TransferFunction::Unknown`, coding RGB).
+    #[cfg(feature = "zenpixels")]
+    pub fn to_pixel_buffer_rgb_f32(
+        &self,
+    ) -> Result<zenpixels::PixelBuffer<rgb::Rgb<f32>>, zenpixels::BufferError> {
+        let mut buf = zenpixels::PixelBuffer::<rgb::Rgb<f32>>::try_new_typed(
+            self.width as u32,
+            self.height as u32,
+        )
+        .map_err(|e| e.decompose().0)?;
+        {
+            let mut slice = buf.as_slice_mut();
+            write_planar_to_pixel_slice(self.planes, self.width, self.height, &mut slice)
+                .expect("freshly allocated Rgb<f32> PixelBuffer matches dimensions");
+        }
+        Ok(buf)
+    }
+}
+
 /// Decoded pixels, planar f32 in 0..=1, three components.
 #[derive(Debug)]
 pub struct Pixels {
@@ -237,6 +511,16 @@ pub struct Pixels {
 }
 
 impl Pixels {
+    /// Borrow these pixels as a [`PixelsRef`].
+    #[must_use]
+    pub fn as_pixels_ref(&self) -> PixelsRef<'_> {
+        PixelsRef {
+            planes: &self.planes,
+            width: self.width,
+            height: self.height,
+        }
+    }
+
     #[must_use]
     pub fn width(&self) -> usize {
         self.width
@@ -252,26 +536,63 @@ impl Pixels {
     }
     /// Consume unquantized planes into interleaved f32 RGB.
     pub fn into_rgb_f32(self) -> Vec<f32> {
-        let plane = self.width * self.height;
-        let mut output = vec![0.; self.planes.len()];
-        for i in 0..plane {
-            for c in 0..3 {
-                output[i * 3 + c] = self.planes[c * plane + i];
-            }
-        }
-        output
+        self.as_pixels_ref().to_rgb_f32()
+    }
+    /// Allocate tightly packed interleaved `f32` RGB (`width * height * 3`).
+    #[must_use]
+    pub fn to_rgb_f32(&self) -> Vec<f32> {
+        self.as_pixels_ref().to_rgb_f32()
     }
     /// Interleaved 8-bit RGB.
     #[must_use]
     pub fn to_rgb8(&self) -> Vec<u8> {
-        let plane = self.width * self.height;
-        let mut out = vec![0u8; plane * 3];
-        for i in 0..plane {
-            for c in 0..3 {
-                out[i * 3 + c] = (self.planes[c * plane + i] * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
-            }
-        }
-        out
+        self.as_pixels_ref().to_rgb8()
+    }
+    /// Write interleaved 8-bit RGB into caller-owned strided storage with zero
+    /// heap allocations. Row padding bytes (`width * 3 .. stride_bytes`) are
+    /// left untouched.
+    pub fn write_rgb8_strided(
+        &self,
+        dst: &mut [u8],
+        stride_bytes: usize,
+    ) -> Result<(), RestoreError> {
+        self.as_pixels_ref().write_rgb8_strided(dst, stride_bytes)
+    }
+    /// Write interleaved `f32` RGB into caller-owned strided storage (`stride_floats >= width * 3`)
+    /// with zero heap allocations.
+    pub fn write_rgb_f32_strided(
+        &self,
+        dst: &mut [f32],
+        stride_floats: usize,
+    ) -> Result<(), RestoreError> {
+        self.as_pixels_ref()
+            .write_rgb_f32_strided(dst, stride_floats)
+    }
+    /// Write interleaved RGB (`U8` or `F32`) directly into a caller-owned
+    /// [`zenpixels::PixelSliceMut`] (typed or type-erased) with zero heap
+    /// allocations, preserving any row-stride padding.
+    #[cfg(feature = "zenpixels")]
+    pub fn write_pixel_slice<P>(
+        &self,
+        dst: &mut zenpixels::PixelSliceMut<'_, P>,
+    ) -> Result<(), RestoreError> {
+        self.as_pixels_ref().write_pixel_slice(dst)
+    }
+    /// Allocate an owned [`zenpixels::PixelBuffer<rgb::Rgb<u8>>`] tagged with
+    /// [`zenpixels::PixelDescriptor::RGB8`] (`TransferFunction::Unknown`, coding RGB).
+    #[cfg(feature = "zenpixels")]
+    pub fn to_pixel_buffer_rgb8(
+        &self,
+    ) -> Result<zenpixels::PixelBuffer<rgb::Rgb<u8>>, zenpixels::BufferError> {
+        self.as_pixels_ref().to_pixel_buffer_rgb8()
+    }
+    /// Allocate an owned [`zenpixels::PixelBuffer<rgb::Rgb<f32>>`] tagged with
+    /// [`zenpixels::PixelDescriptor::RGBF32`] (`TransferFunction::Unknown`, coding RGB).
+    #[cfg(feature = "zenpixels")]
+    pub fn to_pixel_buffer_rgb_f32(
+        &self,
+    ) -> Result<zenpixels::PixelBuffer<rgb::Rgb<f32>>, zenpixels::BufferError> {
+        self.as_pixels_ref().to_pixel_buffer_rgb_f32()
     }
 }
 
@@ -284,9 +605,8 @@ impl Pixels {
 /// the quality/work/harm tradeoff. Other models require separate calibration.
 #[must_use]
 pub fn estimate_gain(probe: &crate::source::JpegInfo) -> f32 {
-    let mut corrected = probe.clone();
-    crate::record::apply_record(&mut corrected);
-    estimate_gain_for(&corrected, None)
+    let _ = crate::record::is_recorded(probe);
+    estimate_gain_for(probe, None)
 }
 
 /// Coefficient-domain content class used by the calibrated routing curves.
@@ -296,8 +616,8 @@ pub(crate) enum Content {
     Photographic,
 }
 
-fn classify_coefficients(coeffs: &crate::source::Coefficients<'_>) -> Option<Content> {
-    let luma = coeffs.components.first()?;
+fn classify_coefficients_view(coeffs: &crate::source::CoefficientsView<'_>) -> Option<Content> {
+    let luma = coeffs.first()?;
     let nblocks = luma.coeffs.len() / 64;
     if nblocks == 0 {
         return None;
@@ -321,7 +641,7 @@ fn classify_coefficients(coeffs: &crate::source::Coefficients<'_>) -> Option<Con
 /// quality-only estimate exactly.
 pub(crate) fn estimate_gain_for(probe: &crate::source::JpegInfo, content: Option<Content>) -> f32 {
     let full = crate::chroma_full_of(probe) == Some(true);
-    let scale = format!("{:?}", probe.quality.scale);
+    let scale = probe.quality.scale.as_str();
     if scale == "ButteraugliDistance" {
         // The AQ term is zero without a verified record (record.rs).
         return gain_at_distance(full, probe.quality.value, content)
@@ -500,8 +820,161 @@ impl Restorer {
             routing: None,
             require_consistency: false,
             threads: 0,
+            workspace: None,
         }
     }
+}
+
+/// Reusable scratch buffers for zero-allocation steady-state restoration.
+///
+/// Allocate one `RepairWorkspace` per worker thread (or pipeline instance) and
+/// pass it across images via [`Request::run_into_workspace`] (zero warm heap
+/// allocations when paired with caller-owned strided output buffers) or
+/// [`Request::workspace`] (reuses internal scratch while returning an owned
+/// [`Outcome`]).
+#[derive(Debug)]
+pub struct RepairWorkspace {
+    pub(crate) model_ws: zensr_micro::adopted::ModelWorkspace,
+    pub(crate) guard_scratch: zensr_micro::guards::GuardScratch,
+    pub(crate) chroma_scratch: zensr_micro::consist::ChromaScratch,
+    #[cfg(feature = "chooser")]
+    pub(crate) router_scratch: crate::decoded_router::DecodedRouterScratch,
+    pub(crate) buf_a: Vec<f32>,
+    pub(crate) buf_b: Vec<f32>,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) restore_report: crate::RestoreReport,
+    pub(crate) api_report: Report,
+}
+
+impl RepairWorkspace {
+    /// Create an empty workspace whose buffers grow lazily on first use and are
+    /// reused across subsequent frames without reallocation.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            model_ws: zensr_micro::adopted::ModelWorkspace::new(),
+            guard_scratch: zensr_micro::guards::GuardScratch::new(),
+            chroma_scratch: zensr_micro::consist::ChromaScratch::new(),
+            #[cfg(feature = "chooser")]
+            router_scratch: crate::decoded_router::DecodedRouterScratch::default(),
+            buf_a: Vec::new(),
+            buf_b: Vec::new(),
+            width: 0,
+            height: 0,
+            restore_report: crate::RestoreReport::default(),
+            api_report: Report {
+                encoder_family: String::new(),
+                quality: 0.0,
+                quality_scale: String::new(),
+                chroma: Chroma::Other,
+                deblocked: false,
+                clamped_fraction: Vec::new(),
+            },
+        }
+    }
+
+    /// Create a pre-sized workspace for frames up to `max_width × max_height`
+    /// and a specific [`AdoptedModel`](zensr_micro::adopted::AdoptedModel) /
+    /// tile geometry (`tile == 0` uses 192, the largest automatic tile size).
+    #[must_use]
+    pub fn with_capacity(
+        max_width: usize,
+        max_height: usize,
+        model: &zensr_micro::adopted::AdoptedModel,
+        tile: usize,
+    ) -> Self {
+        let max_tile = if tile == 0 { 192 } else { tile };
+        let tile_h = max_height.min(max_tile).max(32);
+        let tile_w = max_width.min(max_tile).max(32);
+        let plane = max_width.saturating_mul(max_height);
+        let total = plane.saturating_mul(3);
+        let mut ws = Self::new();
+        ws.model_ws =
+            zensr_micro::adopted::ModelWorkspace::with_tile_capacity(model, tile_h, tile_w);
+        ws.guard_scratch = zensr_micro::guards::GuardScratch::with_capacity(max_height, max_width);
+        ws.chroma_scratch = zensr_micro::consist::ChromaScratch::with_capacity(
+            max_width.div_ceil(16) * 8,
+            max_height.div_ceil(16) * 8,
+        );
+        ws.buf_a.reserve(total);
+        ws.buf_b.reserve(total);
+        ws.restore_report.encoder_family.reserve(64);
+        ws.restore_report.quality_scale.reserve(32);
+        ws.restore_report.projection.reserve(3);
+        ws.api_report.encoder_family.reserve(64);
+        ws.api_report.quality_scale.reserve(32);
+        ws.api_report.clamped_fraction.reserve(3);
+        ws
+    }
+}
+
+impl Default for RepairWorkspace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Borrowed outcome of [`Request::run_into_workspace`], referencing pixels and
+/// provenance metadata stored inside the caller's [`RepairWorkspace`].
+#[derive(Debug)]
+pub enum WorkspaceOutcome<'a> {
+    /// Policy determined restoration would not help, or could not be applied
+    /// safely. `pixels` is the plain decode.
+    Unchanged {
+        pixels: PixelsRef<'a>,
+        why: SkipReason,
+        report: &'a Report,
+    },
+    /// Restoration applied.
+    Restored {
+        pixels: PixelsRef<'a>,
+        consistency: Consistency,
+        report: &'a Report,
+    },
+}
+
+impl<'a> WorkspaceOutcome<'a> {
+    /// True when restoration ran (`WorkspaceOutcome::Restored`).
+    #[must_use]
+    pub fn applied(&self) -> bool {
+        matches!(self, Self::Restored { .. })
+    }
+
+    /// Borrow the decoded or restored planar pixels.
+    #[must_use]
+    pub fn pixels(&self) -> PixelsRef<'a> {
+        match *self {
+            Self::Unchanged { pixels, .. } | Self::Restored { pixels, .. } => pixels,
+        }
+    }
+
+    /// Borrow the provenance and policy report.
+    #[must_use]
+    pub fn report(&self) -> &'a Report {
+        match self {
+            Self::Unchanged { report, .. } | Self::Restored { report, .. } => report,
+        }
+    }
+
+    /// Allocate an owned [`Summary`] snapshot.
+    #[must_use]
+    pub fn summary(&self) -> Summary {
+        Summary {
+            applied: self.applied(),
+            reason: match self {
+                Self::Restored { .. } => "Restoration and coefficient projection applied".into(),
+                Self::Unchanged { why, .. } => format!("Restoration bypassed: {why:?}"),
+            },
+            report: self.report().clone(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum OutcomeKind {
+    Unchanged(SkipReason),
+    Restored(Consistency),
 }
 
 /// A pending restoration request.
@@ -514,6 +987,7 @@ pub struct Request<'a> {
     routing: Option<Routing>,
     require_consistency: bool,
     threads: usize,
+    workspace: Option<&'a mut RepairWorkspace>,
 }
 
 impl Default for Restorer {
@@ -583,20 +1057,43 @@ impl<'a> Request<'a> {
         self
     }
 
-    /// Run it.
-    pub fn run(self) -> Result<Outcome, RestoreError> {
-        let model = self
-            .restorer
-            .tier(self.budget)
-            .ok_or(RestoreError::TierNotLoaded)?;
+    /// Reuse `ws` scratch buffers when executing [`Request::run`].
+    ///
+    /// For zero-allocation steady-state execution that also avoids allocating
+    /// an owned [`Outcome`] per frame, call [`Request::run_into_workspace`].
+    #[must_use]
+    pub fn workspace(mut self, ws: &'a mut RepairWorkspace) -> Self {
+        self.workspace = Some(ws);
+        self
+    }
+
+    fn execute_into_workspace(
+        restorer: &Restorer,
+        prepared: &mut dyn crate::source::Source,
+        options: Options,
+        threads: usize,
+        ws: &mut RepairWorkspace,
+    ) -> Result<OutcomeKind, RestoreError> {
+        let Options {
+            intent,
+            provenance,
+            budget,
+            require_consistency,
+            routing: routing_override,
+        } = options;
+        let model = restorer.tier(budget).ok_or(RestoreError::TierNotLoaded)?;
 
         // Routing decides before restoration inference. The learned default
         // also pays for plain decoded-pixel features; explicit overrides keep
         // their existing coefficient/quality routing behavior.
-        let prepared = self.source;
-        let mut probe_for_routing = prepared.info().clone();
-        let _recorded = crate::record::apply_record(&mut probe_for_routing);
-        let routing = self.routing.unwrap_or_default();
+        let (recorded, geometry_unavailable) = {
+            let probe = prepared.info();
+            (
+                crate::record::is_recorded(probe),
+                crate::chroma_full_of(probe).is_none(),
+            )
+        };
+        let routing = routing_override.unwrap_or_default();
         let content = match routing {
             Routing::Auto { .. } => {
                 prepared.prepare(crate::source::Needs {
@@ -604,14 +1101,14 @@ impl<'a> Request<'a> {
                     coefficients: true,
                 })?;
                 prepared
-                    .coefficients()
+                    .coefficients_view()
                     .ok()
                     .as_ref()
-                    .and_then(classify_coefficients)
+                    .and_then(classify_coefficients_view)
             }
             _ => None,
         };
-        let predicted = estimate_gain_for(&probe_for_routing, content);
+        let predicted = estimate_gain_for(prepared.info(), content);
         let skip = match routing {
             Routing::Always => false,
             Routing::Never => true,
@@ -619,32 +1116,35 @@ impl<'a> Request<'a> {
         };
         let learned = false;
         #[cfg(feature = "chooser")]
-        let (predicted, skip, learned) =
-            if self.routing.is_none() && self.intent == Intent::Fidelity {
-                match crate::decoded_router::for_source_prepared(
-                    &probe_for_routing,
-                    predicted,
-                    _recorded,
-                    prepared,
-                )? {
-                    Some(decision) => (decision.score() as f32, !decision.restore(), true),
-                    None => (predicted, skip, learned),
-                }
-            } else {
-                (predicted, skip, learned)
-            };
+        let (predicted, skip, learned) = if routing_override.is_none() && intent == Intent::Fidelity
+        {
+            match crate::decoded_router::for_source_prepared_with_scratch(
+                predicted,
+                recorded,
+                prepared,
+                &mut ws.router_scratch,
+            )? {
+                Some(decision) => (decision.score() as f32, !decision.restore(), true),
+                None => (predicted, skip, learned),
+            }
+        } else {
+            let _ = recorded;
+            (predicted, skip, learned)
+        };
+        #[cfg(not(feature = "chooser"))]
+        let _ = recorded;
 
         // Slack, gate thresholds and deblock policy are derived from the probe
         // and the caller's declarations — never surfaced.
         let mut cfg = RestoreConfig::default()
-            .with_threads(self.threads)
+            .with_threads(threads)
             .with_high_q_identity(!learned)
             .with_projection(Projection::Auto);
 
         // Conservative gates earlier, trading restoration coverage for fewer
         // observed regressions on the calibration grid. It is not a per-file
         // quality guarantee; alternative routing policies are evaluated separately.
-        cfg = cfg.with_high_q_margin(match self.intent {
+        cfg = cfg.with_high_q_margin(match intent {
             Intent::Fidelity => 0.0,
             Intent::Conservative => 6.0,
         });
@@ -653,83 +1153,177 @@ impl<'a> Request<'a> {
         // available. `FreshEncode` is the one claim that unlocks anything, and
         // even that is left to the family calibration today rather than
         // hard-coded here.
-        let _ = self.provenance;
+        let _ = provenance;
 
         // A routed-out file still gets a faithful decode; the caller needs
         // pixels either way, and Unchanged is a first-class outcome.
         if skip {
             cfg = cfg.with_projection(Projection::Off);
         }
-        let geometry_unavailable = crate::chroma_full_of(&probe_for_routing).is_none();
-        let mut r = crate::restore_prepared(
+        crate::restore_prepared_into(
             model,
             &cfg,
-            skip || (self.require_consistency && geometry_unavailable),
+            skip || (require_consistency && geometry_unavailable),
             prepared,
+            ws,
         )?;
-        let consistency_unavailable = geometry_unavailable || r.report.projection.len() != 3;
-        if self.require_consistency
+        let consistency_unavailable =
+            geometry_unavailable || ws.restore_report.projection.len() != 3;
+        if require_consistency
             && consistency_unavailable
             && !skip
-            && !r.report.skipped_model_high_q
+            && !ws.restore_report.skipped_model_high_q
             && !geometry_unavailable
         {
             // A partial projection cannot satisfy the request. Return the
             // decode, never restored pixels labeled Unchanged.
-            r = crate::restore_prepared(model, &cfg, true, prepared)?;
+            crate::restore_prepared_into(model, &cfg, true, prepared, ws)?;
         }
-        let chroma = match r.report.chroma_full {
+        let chroma = match ws.restore_report.chroma_full {
             Some(true) => Chroma::Full,
             Some(false) => Chroma::HalfBoth,
             None => Chroma::Other,
         };
-        let report = Report {
-            encoder_family: r.report.encoder_family.clone(),
-            quality: r.report.est_quality,
-            quality_scale: r.report.quality_scale.clone(),
-            chroma,
-            deblocked: r.report.used_deblock_auto,
-            clamped_fraction: r.report.projection.iter().map(|p| p.clamped_frac).collect(),
-        };
-        let pixels = Pixels {
-            planes: r.planes,
-            width: r.width,
-            height: r.height,
-        };
+        ws.api_report.encoder_family.clear();
+        ws.api_report
+            .encoder_family
+            .push_str(&ws.restore_report.encoder_family);
+        ws.api_report.quality = ws.restore_report.est_quality;
+        ws.api_report.quality_scale.clear();
+        ws.api_report
+            .quality_scale
+            .push_str(&ws.restore_report.quality_scale);
+        ws.api_report.chroma = chroma;
+        ws.api_report.deblocked = ws.restore_report.used_deblock_auto;
+        ws.api_report.clamped_fraction.clear();
+        ws.api_report
+            .clamped_fraction
+            .extend(ws.restore_report.projection.iter().map(|p| p.clamped_frac));
+
         if skip {
-            return Ok(Outcome::Unchanged {
-                pixels,
-                why: SkipReason::NotWorthIt {
-                    estimated_gain: predicted,
-                },
-                report,
-            });
+            return Ok(OutcomeKind::Unchanged(SkipReason::NotWorthIt {
+                estimated_gain: predicted,
+            }));
         }
-        if r.report.skipped_model_high_q {
-            return Ok(Outcome::Unchanged {
-                pixels,
-                why: SkipReason::NearPristine,
-                report,
-            });
+        if ws.restore_report.skipped_model_high_q {
+            return Ok(OutcomeKind::Unchanged(SkipReason::NearPristine));
         }
         let consistency = if consistency_unavailable {
             Consistency::NotEnforced(NotCertified::ChromaGeometry)
         } else {
             Consistency::Certified
         };
-        if self.require_consistency
-            && let Consistency::NotEnforced(why) = consistency
-        {
-            return Ok(Outcome::Unchanged {
-                pixels,
-                why: SkipReason::ConsistencyUnavailable(why),
-                report,
-            });
+        if require_consistency && let Consistency::NotEnforced(why) = consistency {
+            return Ok(OutcomeKind::Unchanged(SkipReason::ConsistencyUnavailable(
+                why,
+            )));
         }
-        Ok(Outcome::Restored {
-            pixels,
-            consistency,
-            report,
+        Ok(OutcomeKind::Restored(consistency))
+    }
+
+    /// Execute into `ws`, returning borrowed planar pixels and report views
+    /// without allocating an owned [`Outcome`].
+    ///
+    /// When `ws` has already warmed up to the frame/tile dimensions (or was
+    /// constructed with [`RepairWorkspace::with_capacity`]) and the caller's
+    /// [`Source`](crate::source::Source) reuses its decode buffers (including
+    /// [`Source::coefficients_view`](crate::source::Source::coefficients_view)),
+    /// engine execution, guards, projection, and strided output writers perform
+    /// zero heap allocations.
+    ///
+    /// (Note: when the `chooser` feature is enabled and default `Intent::Fidelity`
+    /// routing runs without an explicit [`Request::routing`] override, the
+    /// external `zenanalyze::offer_for_request` feature scanner allocates its
+    /// internal `OwnedOffer`.)
+    pub fn run_into_workspace<'w>(
+        self,
+        ws: &'w mut RepairWorkspace,
+    ) -> Result<WorkspaceOutcome<'w>, RestoreError> {
+        let options = Options {
+            intent: self.intent,
+            provenance: self.provenance,
+            budget: self.budget,
+            require_consistency: self.require_consistency,
+            routing: self.routing,
+        };
+        let kind =
+            Self::execute_into_workspace(self.restorer, self.source, options, self.threads, ws)?;
+        let total = ws.width * ws.height * 3;
+        let pixels = PixelsRef {
+            planes: &ws.buf_a[..total],
+            width: ws.width,
+            height: ws.height,
+        };
+        let report = &ws.api_report;
+        Ok(match kind {
+            OutcomeKind::Unchanged(why) => WorkspaceOutcome::Unchanged {
+                pixels,
+                why,
+                report,
+            },
+            OutcomeKind::Restored(consistency) => WorkspaceOutcome::Restored {
+                pixels,
+                consistency,
+                report,
+            },
+        })
+    }
+
+    /// Run it.
+    pub fn run(self) -> Result<Outcome, RestoreError> {
+        let Self {
+            restorer,
+            source,
+            intent,
+            provenance,
+            budget,
+            routing,
+            require_consistency,
+            threads,
+            workspace,
+        } = self;
+
+        let mut temp_ws;
+        let (ws, take_planes) = match workspace {
+            Some(ws) => (ws, false),
+            None => {
+                temp_ws = RepairWorkspace::new();
+                (&mut temp_ws, true)
+            }
+        };
+
+        let options = Options {
+            intent,
+            provenance,
+            budget,
+            require_consistency,
+            routing,
+        };
+        let kind = Self::execute_into_workspace(restorer, source, options, threads, ws)?;
+        let total = ws.width * ws.height * 3;
+        let planes = if take_planes {
+            ws.buf_a.truncate(total);
+            core::mem::take(&mut ws.buf_a)
+        } else {
+            ws.buf_a[..total].to_vec()
+        };
+        let pixels = Pixels {
+            planes,
+            width: ws.width,
+            height: ws.height,
+        };
+        let report = ws.api_report.clone();
+        Ok(match kind {
+            OutcomeKind::Unchanged(why) => Outcome::Unchanged {
+                pixels,
+                why,
+                report,
+            },
+            OutcomeKind::Restored(consistency) => Outcome::Restored {
+                pixels,
+                consistency,
+                report,
+            },
         })
     }
 }

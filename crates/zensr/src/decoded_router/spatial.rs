@@ -11,7 +11,7 @@ pub(super) fn select(
 ) -> Vec<Window> {
     let baseline = windows(width, height);
     if width <= 512 && height <= 512 {
-        return baseline;
+        return baseline.to_vec();
     }
     let (bw, bh) = (width.div_ceil(8), height.div_ceil(8));
     assert!(blocks_wide >= bw && coefficients.len() >= blocks_wide * bh * 64);
