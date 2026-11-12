@@ -68,3 +68,12 @@ Pixel-artifact auditing was explicitly cancelled by the owner. Its incomplete
 status must remain disclosed; this readiness review does not restart it or
 pretend it passed. Spatial-window alternatives and local-guard proposals remain
 experimental and are not included in the active policy's quality claims.
+
+The 2026-11-10 edge investigation confirmed severe amplification from partial-
+block padding on two tiny 420 witnesses. The shared runtime now reconstructs
+hidden samples from the stored block rather than replicating candidate edges.
+Decoded partial-block invariance, unclipped hidden samples and error controls
+pass. This correction does not establish general-resolution routing quality;
+new runtime measurements are reported separately from the frozen old bank.
+The separate JPEG input-generation padding fix is on zenjpeg PR 261. See
+[the mechanism and controls](../benchmarks/chroma_edges_2026-11-10.md).

@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bounds, tileAt, planar, paste, CORE, rgbaFromRgb } from "./core.mjs";
+import {
+  bounds,
+  tileAt,
+  planar,
+  paste,
+  CORE,
+  rgbaFromRgb,
+  previewSize,
+} from "./core.mjs";
 test("RGB source conversion respects strided input rows", () => {
   assert.deepEqual(
     [...rgbaFromRgb(new Uint8Array([1, 2, 3, 99, 4, 5, 6]), 1, 2, 4)],
@@ -9,6 +17,7 @@ test("RGB source conversion respects strided input rows", () => {
   assert.throws(() => rgbaFromRgb(new Uint8Array(4), 2, 1));
 });
 test("12MP admission and oversized rejection", () => {
+  assert.deepEqual(bounds(4000, 3000, 1), { width: 4000, height: 3000 });
   assert.deepEqual(bounds(4000, 3000, 4), { width: 16000, height: 12000 });
   assert.throws(() => bounds(8000, 8000, 4));
   assert.throws(() => bounds(200, 200, 3));
@@ -54,4 +63,14 @@ test("RGBA extraction preserves RGB order", () => {
   const out = planar(new Uint8Array([255, 0, 128, 255, 0, 255, 64, 255]), 2, 1);
   assert.deepEqual([...out.slice(0, 4)], [1, 0, 0, 1]);
   assert.equal(out[4], Math.fround(128 / 255));
+});
+
+test("previews cover HiDPI display detail within a four-megapixel allocation", () => {
+  const size = previewSize(4000, 3000);
+  assert.ok(size.width > 1400);
+  assert.ok(size.width * size.height <= 4_000_000);
+  assert.deepEqual(previewSize(10, 20), { width: 10, height: 20, ratio: 1 });
+  const wide = previewSize(8192, 1);
+  assert.equal(wide.width, 4096);
+  assert.equal(wide.height, 1);
 });

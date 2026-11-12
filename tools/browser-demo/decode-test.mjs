@@ -4,13 +4,10 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 const [jpegPath, profiledPath, out] = process.argv.slice(2);
 await mkdir(out, { recursive: true });
-const module = await import("./jpeg-probe/pkg/zensr_browser_jpeg_probe.js");
+const module = await import("./repair/pkg/zensr_browser_repair.js");
 await module.default({
   module_or_path: await readFile(
-    new URL(
-      "./jpeg-probe/pkg/zensr_browser_jpeg_probe_bg.wasm",
-      import.meta.url,
-    ),
+    new URL("./repair/pkg/zensr_browser_repair_bg.wasm", import.meta.url),
   ),
 });
 const jpeg = await readFile(jpegPath),

@@ -25,7 +25,7 @@ export function bounds(width, height, scale) {
     width > 8192 ||
     height > 8192 ||
     width * height > MAX_PIXELS ||
-    ![2, 4].includes(scale)
+    ![1, 2, 4].includes(scale)
   ) {
     throw new Error("Choose an image up to 12.6 MP and 8192 pixels per side.");
   }
@@ -68,4 +68,19 @@ export function paste(rgb, band, tile, width, scale) {
       (y * width * scale + tile.x * scale) * 3,
     );
   }
+}
+
+// Match the display's bounded backing-store budget, including HiDPI fit views.
+export function previewSize(width, height) {
+  const ratio = Math.min(
+    1,
+    Math.sqrt(4_000_000 / (width * height)),
+    4096 / width,
+    4096 / height,
+  );
+  return {
+    width: Math.max(1, Math.floor(width * ratio)),
+    height: Math.max(1, Math.floor(height * ratio)),
+    ratio,
+  };
 }

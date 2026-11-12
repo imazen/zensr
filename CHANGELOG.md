@@ -11,6 +11,15 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Partial-block coefficient projection reconstructs hidden samples from the
+  stored block instead of replicating candidate edges, avoiding the observed
+  tiny-image chroma amplification (`1472cf5d` regression).
+
+- Browser SR overviews use output dimensions within the 4 MP budget, preserving
+  full overview resolution for smaller upscales. Independent author-PyTorch
+  comparisons cover both models, ×2/×4 and WASM/SwiftShader WebGPU.
+  [Results](benchmarks/browser_torch_2026-11-09.md).
+
 - Binary16 subnormal model weights now expand to their exact IEEE f32 values.
   An exhaustive independent regression covers all binary16 bit patterns (`a01962d6`).
 
@@ -24,6 +33,19 @@ None queued by the canon4 update.
   422/440 chroma unprojected even when MCU padding masks the subsampling.
 
 ### Added
+
+- Separate JPEG input chroma, partial-block constraint amplification and learned
+  RGB border effects with frozen replay controls and retained lossless images
+  (`040f7c55`). [Measurements](benchmarks/chroma_edges_2026-11-10.md).
+
+- Offline aspect-preserving CUDA repair/SR bank with official split intersection,
+  existing feature-offer negotiation and lossless IMIJ storage.
+  [Tool contract](tools/sr-bank/README.md).
+
+- Resident SR blend evaluator using retained SPANF/DSCF PNGs, zenresize filters,
+  zenmetrics PSNR and pinned adopted zensim-A. Scalar category/quality frontiers
+  remain exploratory; no runtime default changes.
+  [Results](benchmarks/sr_blends_2026-11-10.md).
 
 - Browser workbench with bounded concurrent WASM tiles, WebGPU selection,
   streaming PNG output, native-detail zoom/pan/flicker, zenjpeg JPEG decoding,

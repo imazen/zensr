@@ -14,7 +14,12 @@ map retention. The first external SR comparisons incorrectly applied a
 scores-only policy and never persisted their upscaled outputs. Their scores and
 hashes remain intact, but the images require regenerated inference. Historical
 run identities keep their actual retention labels. New SR comparisons use
-lossless PNG output retention; this does not authorize any further deletion.
+lossless PNG output retention. The November 10 expanded candidate bank uses
+lossless IMIJ entries in per-origin `imij-set` archives, preserving exact
+scored RGB8 and encoded JPEGs. It also retains raw CNN F32 so native guard and
+coefficient settings can be reapplied without inference. Pixel/file hashes,
+original links, split identities and scalar scores stay in companion records.
+Neither storage format authorizes any further deletion.
 
 The routing-study and QAT evaluators record `retention=scores-only-v1` in their
 run identities. Their historical output-pixel/map path columns are empty; this

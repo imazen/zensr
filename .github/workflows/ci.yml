@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Tile coverage and allocation bounds
-        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs
+        run: node --test tools/browser-demo/core.test.mjs tools/browser-demo/budgets.test.mjs tools/browser-demo/pool-plan.test.mjs tools/browser-demo/repair-runtime.test.mjs
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           export RUSTFLAGS='-C target-feature=+simd128'
-          for module in codec jpeg-probe repair; do
+          for module in codec repair; do
             cargo check --locked --target wasm32-unknown-unknown --manifest-path "tools/browser-demo/$module/Cargo.toml"
           done
 
@@ -70,7 +70,7 @@ jobs:
           "$TMPDIR/routing-storage-tests.exe"
 
       - name: Test (default features)
-        run: cargo test -p zensr-micro -p zensr-zenjpeg
+        run: cargo test -p zensr -p zensr-micro -p zensr-zenjpeg
 
       - name: Test (no default features)
         run: cargo test -p zensr-micro --no-default-features
@@ -108,7 +108,7 @@ jobs:
       - name: Install cross
         run: cargo install cross --locked
       - name: Test
-        run: cross test --target i686-unknown-linux-gnu -p zensr-micro -p zensr-zenjpeg
+        run: cross test --target i686-unknown-linux-gnu -p zensr -p zensr-micro -p zensr-zenjpeg
 
   lint:
     name: fmt + clippy
@@ -156,6 +156,32 @@ jobs:
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat.py
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_qat_report.py
           .venv-qat-ci/bin/python -m unittest discover -s tools -p test_quality_int8_report.py
+
+  sr-blend:
+    name: Resident SR blend evaluator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/sr-blend -> target
+      - name: Split admission and frontier reporting regressions
+        run: |
+          mkdir -p "$HOME/tmp/sr-bank-ci"
+          export TMPDIR="$HOME/tmp/sr-bank-ci"
+          python3 -m venv .venv-sr-bank-ci
+          .venv-sr-bank-ci/bin/python -m pip install -r tools/sr-bank/report-requirements.txt
+          .venv-sr-bank-ci/bin/python -m unittest discover -s tools/sr-bank -p 'test_*.py'
+      - name: PSNR parity and resident zensim-A contracts
+        run: |
+          mkdir -p "$HOME/tmp/sr-blend-ci"
+          export TMPDIR="$HOME/tmp/sr-blend-ci"
+          cargo test --release --locked --manifest-path tools/sr-blend/Cargo.toml
+          cargo fmt --manifest-path tools/sr-blend/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path tools/sr-blend/Cargo.toml --all-targets -- -D warnings
 
   qat-runtime:
     name: QAT portable decoder and artifact storage

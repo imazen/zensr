@@ -617,7 +617,7 @@ quality-int8-oracle *args:
 quality-int8-archive-remote *args:
     {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/quality-int8/archive_remote.py {{args}}
 
-# Optional, isolated relaxed-SIMD repair experiment. Output must be a new directory.
+# Build the shared codec/runtime with relaxed SIMD into a new artifact directory.
 browser-relaxed-build output:
     ~/work/claudehints/scripts/run-heavy --mem 6G --jobs 4 -- bash tools/browser-demo/build-relaxed.sh {{output}}
 
@@ -638,3 +638,103 @@ browser-decode-test *args:
 
 browser-archive *args:
     python3 tools/browser-demo/archive.py {{args}}
+
+browser-unfused-build output:
+    ~/work/claudehints/scripts/run-heavy --mem 6G --jobs 4 -- bash tools/browser-demo/build-relaxed.sh {{output}} unfused
+
+browser-repair-only-test *args:
+    node tools/browser-demo/repair-only-test.mjs {{args}}
+
+browser-unfused-drift *args:
+    node tools/browser-demo/unfused-drift.mjs {{args}}
+
+browser-torch-reference *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/torch-reference.py {{args}}
+
+browser-torch-test *args:
+    node tools/browser-demo/torch-browser-test.mjs {{args}}
+
+browser-torch-score *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/browser-demo/torch-score.py {{args}}
+
+browser-sr-diff-build:
+    cargo build --release --locked --manifest-path tools/quality-int8/runtime/Cargo.toml --bin sr_diff
+
+browser-preview-test *args:
+    node tools/browser-demo/preview-test.mjs {{args}}
+
+sr-blend-prepare *args:
+    python3 tools/sr-blend/prepare.py {{args}}
+
+sr-blend-build:
+    cargo build --release --locked --manifest-path tools/sr-blend/Cargo.toml
+
+sr-blend-test:
+    cargo test --release --locked --manifest-path tools/sr-blend/Cargo.toml
+
+sr-blend-evaluate manifest output:
+    tools/sr-blend/target/release/zensr-blend-eval {{manifest}} {{output}}
+
+sr-blend-report *args:
+    python3 tools/sr-blend/report.py {{args}}
+
+# Private IMIJ research adapter; requires access to the pinned zqi source.
+sr-bank-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml
+
+sr-bank-test:
+    python3 tools/sr-bank/test_bank.py
+    python3 tools/sr-bank/test_blend_report.py
+    cargo test --release --locked --manifest-path tools/sr-bank/Cargo.toml -- --test-threads=4
+
+sr-bank-check:
+    cargo clippy --locked --all-targets --manifest-path tools/sr-bank/Cargo.toml -- -D warnings
+
+sr-bank-fetch *args:
+    python3 tools/sr-bank/bank.py fetch {{args}}
+
+sr-bank-freeze *args:
+    python3 tools/sr-bank/bank.py freeze {{args}}
+
+sr-bank-generate *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/sr-bank/bank.py generate {{args}}
+
+sr-bank-report *args:
+    python3 tools/sr-bank/report.py {{args}}
+
+sr-bank-selector-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml --bin selector
+
+sr-bank-blends-build:
+    cargo build --release --locked --manifest-path tools/sr-bank/Cargo.toml --bin blends
+
+sr-bank-blends *args:
+    python3 tools/sr-bank/blend_bank.py {{args}}
+
+sr-bank-blends-report *args:
+    python3 tools/sr-bank/blend_report.py {{args}}
+
+sr-bank-archive *args:
+    python3 tools/quality-int8/archive_remote.py {{args}}
+
+# Export exact retained endpoints; OUTPUT must be a new directory.
+sr-bank-witness shard output:
+    tools/sr-bank/target/release/witness {{shard}} {{output}}
+
+sr-bank-witness-gallery output scores:
+    python3 tools/sr-bank/witness_gallery.py --output {{output}} --scores {{scores}}
+
+sr-bank-chroma-edges *args:
+    {{env_var_or_default("ZENSR_PYTHON", "python3")}} tools/sr-bank/chroma_edges.py {{args}}
+
+sr-bank-projection-edges shard output:
+    tools/sr-bank/target/release/projection_edges {{shard}} {{output}}
+
+sr-bank-archive-readback *args:
+    python3 tools/sr-bank/archive_readback.py {{args}}
+
+sr-bank-projection-report *args:
+    python3 tools/sr-bank/projection_report.py {{args}}
+
+browser-fixed-gallery output url:
+    node tools/browser-demo/gallery-test.mjs {{output}} {{url}} fixed

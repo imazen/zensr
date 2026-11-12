@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 const out = process.argv[2];
+const baseUrl = process.argv[3] || "https://localhost:3331";
+const corrected = process.argv[4] === "fixed";
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.ZENSR_CHROME,
@@ -15,19 +17,30 @@ try {
     }),
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("https://localhost:3331/gallery/witnesses.html");
+  await page.goto(baseUrl + "/gallery/witnesses.html");
   await page.waitForFunction(() =>
     document
       .querySelector("section figure:nth-child(3) a")
       .search.includes("candidate="),
   );
-  const href = await page
-    .locator("section")
-    .first()
-    .locator("figure a")
-    .nth(2)
-    .getAttribute("href");
-  await page.goto("https://localhost:3331" + href);
+  if (corrected)
+    await page.locator("section").first().locator("details summary").click();
+  const href = corrected
+    ? await page
+        .locator("section")
+        .first()
+        .getByRole("link", {
+          name: "Compare SPANF: previous repair → corrected repair",
+          exact: true,
+        })
+        .getAttribute("href")
+    : await page
+        .locator("section")
+        .first()
+        .locator("figure a")
+        .nth(2)
+        .getAttribute("href");
+  await page.goto(baseUrl + href);
   await page.waitForFunction(() =>
     document.getElementById("status").textContent.includes("Gallery ready"),
   );
@@ -38,7 +51,33 @@ try {
     true,
   );
   assert.ok(await page.evaluate(() => !!window.zensrViewer.staticResult));
+  const beforePan = await page.evaluate(() => ({
+    x: window.zensrViewer.ox,
+    y: window.zensrViewer.oy,
+  }));
+  const box = await page.locator("#display").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    box.x + box.width / 2 + 31,
+    box.y + box.height / 2 + 17,
+  );
+  await page.mouse.up();
+  const afterPan = await page.evaluate(() => ({
+    x: window.zensrViewer.ox,
+    y: window.zensrViewer.oy,
+  }));
+  assert.equal(afterPan.x - beforePan.x, 31);
+  assert.equal(afterPan.y - beforePan.y, 17);
   await page.click("#pixelated");
+  assert.equal(
+    await page.evaluate(
+      () =>
+        document.getElementById("display").getContext("2d")
+          .imageSmoothingEnabled,
+    ),
+    false,
+  );
   await page.click("#flicker");
   const initial = await page.evaluate(() => window.zensrViewer.stats.mode);
   await page.waitForFunction(
@@ -51,7 +90,15 @@ try {
   await writeFile(
     out + "/gallery.json",
     JSON.stringify(
-      { referenceCompare: true, nativePixels: true, flicker: true, href },
+      {
+        correctedComparison: corrected,
+        referenceCompare: true,
+        nativePixels: true,
+        flicker: true,
+        panDelta: { x: 31, y: 17 },
+        pixelated: true,
+        href,
+      },
       null,
       2,
     ) + "\n",

@@ -71,3 +71,20 @@ or merge that PR. Application builds can use this locked source tree. A crate
 release requires a separate dependency/publication plan and release approval.
 The model artifact is 86,406 bytes of f16 weights; runtime code and dependencies
 are additional and have not been size-measured in this task.
+
+## Native decoder and browser integration — 2026-11-10
+
+The review integration resolves separately from the compatibility tree above:
+
+```text
+browser repair binding / native codec caller
+└── zenjpeg @ 06d0e6f4 (restoration feature; decoder/color/orientation)
+    └── zensr @ 0bb29cf6 (routing, guards and repair policy)
+        └── zensr-micro @ 0bb29cf6 (inference and corrected projection)
+```
+
+Pins are in `tools/browser-demo/repair/Cargo.toml` and
+`tools/codec-integration/Cargo.toml`; resolve them with
+`cargo tree --locked --manifest-path tools/browser-demo/repair/Cargo.toml -e normal`.
+The shared projection correction adds no public signatures. Both review PRs
+remain unmerged. [Correction and validation](../benchmarks/projection_fix_2026-11-10.md).

@@ -12,6 +12,7 @@ zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
 zensr-micro = { path = "../../../crates/zensr-micro", features = ["avx512", "internals"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+ssim2-reference = { package = "fast-ssim2", version = "=0.9.0" }
 butteraugli = "0.9.3"
 imgref = "1.12.2"
 rgb = "0.8.52"

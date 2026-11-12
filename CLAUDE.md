@@ -2,6 +2,50 @@
 
 ## Known Bugs
 
+- Fixed by `0bb29cf6`: partial-block projection replicated candidate edges
+  into hidden samples. It now reconstructs those samples from the stored
+  coefficients without display clipping. The two tiny 420 witnesses fall
+  from max RGB channel spreads 92/94 to 38/43. All 16,104 frozen JPEG cases
+  replay; aligned cases remain exact. Quality tradeoffs and native/browser
+  checks are in `benchmarks/projection_fix_2026-11-10.md`.
+
+- Fixed on zenjpeg PR 261 by `0fee09ca` (the frozen bank is preserved):
+  the bank’s pinned JPEG encoder (`24b6d3fb`) produces
+  non-neutral chroma on the grayscale 32×8 420 q40/q50 witness 3313. Native
+  and libjpeg-turbo decodes are byte-identical; larger same-source controls
+  stay gray. The encoded-input confound is disclosed and preserved; no claim
+  that a newer encoder revision is affected. See the small-bank benchmark.
+
+- Fixed tiny-image inspection zoom: the fit-relative lower clamp could force
+  the 100% button above native scale for a 128×32 gallery witness. The clamp
+  now always admits 1:1; the real gallery browser check retains its exact
+  native-scale assertion.
+
+- Ordinary parallel float means varied strict Pareto membership among nearly
+  tied offline blend settings. The report uses correctly rounded `math.fsum`
+  and sorted output rows. All four resulting Parquet tables replay byte for
+  byte with one versus two numerical threads; source scores are unchanged.
+
+- Candidate-bank reuse initially imported the unrelated QAT `report` module
+  after a model adapter extended Python's search path. The verifier now loads
+  by its exact file path; a shadowed-module regression covers this. Failures
+  during initialization/reuse also update the durable progress record.
+
+- Candidate-bank collection initially assumed `Select::All` always returned a
+  fixed feature set. Flat JPEG inputs can omit undefined `spectral_slope_y`.
+  Collection now retains each offer schema without imputing a value; models
+  request a compatible qualified subset through the existing offer API.
+  A real flat-image regression covers the missing-feature rejection and
+  common-subset reuse. Completed image generation remains bound to its
+  original executable/model identities when reused after orchestration fixes.
+
+- Browser SR overview used input dimensions, so a 259×263 input's 1036×1052
+  output was displayed through a 259×263 overview. Overviews now use output
+  dimensions within the existing 4 MP budget; native tiles and downloaded
+  pixels are unchanged. The browser regression reproduces the old dimensions.
+  See `benchmarks/browser_torch_2026-11-09.md`.
+
+
 - Fixed browser output lifetime: creating an OPFS writer before a long JPEG
   repair led to a first-write NotFound failure after repair completed. The
   browser now opens the SR destination after preprocessing and retains a

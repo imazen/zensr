@@ -1,0 +1,48 @@
+[package]
+name = "zensr-candidate-bank"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+[workspace]
+[features]
+default = ["avx512"]
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+[dependencies]
+zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "208ee7ecf5ffa97691d8e74fab35d9d4d9d2db81", default-features = false, features = ["std", "simd"] }
+zenpredict-bake = { git = "https://github.com/imazen/zenanalyze", rev = "208ee7ecf5ffa97691d8e74fab35d9d4d9d2db81" }
+imij = { git = "https://github.com/imazen/zqi", rev = "b3856304ed60ee232b792a18460aadaf3886a63e", default-features = false, features = ["std"] }
+imij-set = { git = "https://github.com/imazen/zqi", rev = "b3856304ed60ee232b792a18460aadaf3886a63e" }
+zensr-micro = { path = "../../crates/zensr-micro" }
+zensr-zenjpeg = { path = "../../crates/zensr-zenjpeg" }
+zenanalyze = { version = "0.2.0", features = ["api"] }
+zenanalyze-api = "0.1.0"
+fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+zensim = { git = "https://github.com/imazen/zensim", rev = "6060039d8c0ace71d47c722ea76233bb2d745a22", default-features = false, features = ["avx512"] }
+zenresize = "=0.3.1"
+zenpng = { version = "=0.1.4", default-features = false }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.1"
+enough = "0.4.4"
+rgb = "0.8.52"
+imgref = "1.12.2"
+archmage = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["macros"] }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1" }
+rayon = "1.11.1"
+[profile.release]
+lto = "thin"
+[patch.crates-io]
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+# zenjpeg 24b6d3fb (PR #253, the APP10 encode record) needs the zencodec 0.2
+# family and a zenpixels rev that are not on crates.io yet; this mirrors
+# zenjpeg's own patch table (dependency patches do not propagate). Drop when
+# those publish. zenanalyze keeps crates.io zencodec 0.1 — different major.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels-v02 = { package = "zenpixels", git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }

@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
-const [jpegPath, weightsPath, oraclePath, profiledPath, out] =
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+const [jpegPath, weightsPath, oraclePath, profiledPath, out, packageDirectory] =
   process.argv.slice(2);
 await mkdir(out, { recursive: true });
-const module = await import("./repair/pkg/zensr_browser_repair.js");
+const moduleUrl = packageDirectory
+  ? pathToFileURL(resolve(packageDirectory, "zensr_browser_repair.js"))
+  : new URL("./repair/pkg/zensr_browser_repair.js", import.meta.url);
+const module = await import(moduleUrl.href);
 await module.default({
   module_or_path: await readFile(
-    new URL("./repair/pkg/zensr_browser_repair_bg.wasm", import.meta.url),
+    new URL("./zensr_browser_repair_bg.wasm", moduleUrl),
   ),
 });
 const jpeg = await readFile(jpegPath),
@@ -23,11 +28,29 @@ assert.deepEqual(
   oracle,
   "WASM/native public API RGB8 parity",
 );
-const awaitProfiled = await readFile(profiledPath);
-assert.throws(
-  () => module.repair(awaitProfiled, weights),
-  /embedded ICC profiles/,
+const profiled = module.repair(await readFile(profiledPath), weights);
+assert.deepEqual([profiled.width, profiled.height], [width, height]);
+assert.equal(profiled.applied, applied);
+assert.deepEqual(
+  profiled.take_pixels(),
+  pixels,
+  "Identity sRGB ICC preserves repaired RGB8",
 );
+const payload = Buffer.concat([
+  Buffer.from("ICC_PROFILE\0", "binary"),
+  Buffer.from([1, 1]),
+  Buffer.from("invalid profile witness"),
+]);
+const length = Buffer.alloc(2);
+length.writeUInt16BE(payload.length + 2);
+const malformed = Buffer.concat([
+  jpeg.subarray(0, 2),
+  Buffer.from([255, 226]),
+  length,
+  payload,
+  jpeg.subarray(2),
+]);
+assert.throws(() => module.repair(malformed, weights), /ICC|profile|color/i);
 const results = [];
 for (let orientation = 1; orientation <= 8; orientation++) {
   // An independent, minimal EXIF test fixture. Runtime parsing uses the shared codec.
@@ -114,7 +137,12 @@ assert.throws(() => module.repair(jpeg, new Uint8Array(2)));
 await writeFile(
   out + "/repair.json",
   JSON.stringify(
-    { nativeRgb8Exact: true, profiledRejected: true, orientations: results },
+    {
+      nativeRgb8Exact: true,
+      identityIccExact: true,
+      malformedIccRejected: true,
+      orientations: results,
+    },
     null,
     2,
   ) + "\n",

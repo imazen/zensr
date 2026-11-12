@@ -16,10 +16,20 @@ def sha(path):
 
 def main(a):
     source = Path(__file__).resolve().parent
-    dist = source / 'dist'
+    # Validate every generated module before replacing any live asset.
+    packages = {'relaxed': a.relaxed_package or source/'repair/pkg-relaxed',
+                'unfused': a.unfused_package or source/'repair/pkg-unfused'}
+    required = [source/'codec/pkg'/('zensr_browser_codec'+suffix) for suffix in ['.js','_bg.wasm']]
+    required += [folder/('zensr_browser_repair'+suffix)
+                 for folder in [source/'repair/pkg', *packages.values()]
+                 for suffix in ['.js','_bg.wasm']]
+    for path in required:
+        if not path.is_file():
+            raise FileNotFoundError(f'Build the required browser package first: {path}')
+    dist = source / 'dist' 
     dist.mkdir(exist_ok=True)
     assets = ['index.html', 'style.css', 'app.mjs', 'worker.mjs', 'tile-worker.mjs',
-              'repair-worker.mjs', 'decode-worker.mjs', 'runtime.mjs', 'pool.mjs',
+              'jpeg-worker.mjs', 'repair-runtime.mjs', 'runtime.mjs', 'pool.mjs',
               'pool-plan.mjs', 'core.mjs', 'budgets.mjs', 'viewer.mjs', 'gallery.mjs']
     for name in assets:
         shutil.copy2(source / name, dist / name)
@@ -30,7 +40,7 @@ def main(a):
         if path.suffix == '.wasm' or path.name.startswith('ort-wasm-') and path.suffix == '.mjs' or path.name in ['ort.webgpu.bundle.min.mjs', 'ort.wasm.bundle.min.mjs']:
             shutil.copy2(path, vendor / path.name)
     shutil.copy2(source / 'ORT-LICENSE', vendor / 'ORT-LICENSE')
-    for name, folder, stem in [('codec', 'codec', 'zensr_browser_codec'), ('jpeg', 'jpeg-probe', 'zensr_browser_jpeg_probe')]:
+    for name, folder, stem in [('codec', 'codec', 'zensr_browser_codec')]:
         target = dist / name
         target.mkdir(exist_ok=True)
         generated = source / folder / 'pkg'
@@ -78,13 +88,14 @@ def main(a):
                               source_sha256=sha(path), precision='FP32 compute', halo=16 if name=='spanf' else 21)
     weights=source.parents[1]/'models/adopted/dejpeg_rt24i_canon4/weights_f16.raw'
     shutil.copy2(weights,models/'canon4.raw')
-    manifest['repair']=dict(url='./models/canon4.raw',sha256=sha(weights),precision='canon4 stored f16 weights, FP32 compute', relaxed=bool(a.relaxed_package))
+    manifest['repair']=dict(url='./models/canon4.raw',sha256=sha(weights),precision='canon4 stored f16 weights, FP32 compute', relaxed=True,unfused=True)
     (dist/'models.json').write_text(json.dumps(manifest, indent=2)+'\n')
-    if a.relaxed_package:
-        target=dist/'repair-relaxed'
-        target.mkdir(exist_ok=True)
-        for name in ['zensr_browser_repair.js','zensr_browser_repair_bg.wasm']:
-            shutil.copy2(a.relaxed_package/name,target/name)
+    for mode, package in packages.items():
+        if package:
+            target=dist/('repair-'+mode)
+            target.mkdir(exist_ok=True)
+            for name in ['zensr_browser_repair.js','zensr_browser_repair_bg.wasm']:
+                shutil.copy2(package/name,target/name)
     print(json.dumps(dict(directory=str(dist),models=manifest),indent=2))
 
 
@@ -93,4 +104,5 @@ if __name__ == '__main__':
     p.add_argument('--sr',type=Path,required=True)
     p.add_argument('--dscf',type=Path,required=True)
     p.add_argument('--relaxed-package',type=Path)
+    p.add_argument('--unfused-package',type=Path)
     main(p.parse_args())

@@ -20,6 +20,10 @@ block, so this directory stays small enough to clone.
 
 ## Precision and inference
 
+- [Small-image candidate bank and blend frontiers](sr_bank_2026-11-10.md):
+  244 split-preserving origins, lossless IMIJ retention, 3.92 million resident
+  PSNR/zensim-A comparisons, train-side frontiers and validation loss tails.
+
 - [SR memory experiment](sr_memory_2026-11-09.md): integer completed pixels and earlier DSCF tensor release, exact output parity, CPU/GPU memory and latency tradeoffs.
 
 - [2048 → 8192 PyTorch CUDA](sr_8k_gpu_2026-11-09.md): two calls each for SPANF/DSCF, FP32 inference latency, allocated/reserved VRAM and pinned transfers.
@@ -76,3 +80,9 @@ HIGH-Q GATE", `docs/research/ROADMAP.md` 1.1.
   eval runs.
 
 - [Browser SR and relaxed-SIMD repair](browser_sr_2026-11-09.md): 12 MP execution, concurrent CPU tiles, strict/relaxed RGB8 parity and retained evidence.
+
+- [SR intensity/filter blends](sr_blends_2026-11-10.md): retained SPANF/DSCF outputs, resident PSNR and adopted zensim-A, category/quality frontiers.
+
+- [Chroma and partial-image boundaries](chroma_edges_2026-11-10.md): encoder defect, coefficient-padding amplification and independent neural RGB/halo controls.
+
+- [Partial-block projection fix](projection_fix_2026-11-10.md): shared runtime correction, all 16,104 retained JPEG cases, quality tails and refreshed native/browser results.

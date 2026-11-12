@@ -7,3 +7,6 @@ jpeg-probe/pkg/
 __pycache__/
 repair/target/
 repair/pkg/
+
+repair/pkg-relaxed/
+repair/pkg-unfused/

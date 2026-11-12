@@ -4156,6 +4156,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zensr"
+version = "0.0.1"
+dependencies = [
+ "zenanalyze",
+ "zenanalyze-api",
+ "zensr-micro",
+]
+
+[[package]]
 name = "zensr-bench"
 version = "0.0.1"
 dependencies = [

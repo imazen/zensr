@@ -978,3 +978,11 @@ mod tests {
         assert_close_finite(&b, &a, 5e-4, "full forward simd vs scalar");
     }
 }
+
+/// Compact JPEG artifact-removal model shipped with this source distribution.
+#[cfg(feature = "canon4")]
+pub mod canon4 {
+    /// Existing canon4 f16 model bytes; inference expands these through `crate::decode_all_f16`.
+    pub const WEIGHTS_F16: &[u8] =
+        include_bytes!("../../../models/adopted/dejpeg_rt24i_canon4/weights_f16.raw");
+}

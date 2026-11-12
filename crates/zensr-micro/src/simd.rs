@@ -8,6 +8,21 @@
 use crate::{SpanfWeights, CAT_CH, FC, NEAR_CH, S2};
 use archmage::prelude::*;
 
+// WASM uses the engine's relaxed madd when enabled at module build time, and
+// separate multiply/add otherwise. Native tiers retain portable one-rounding.
+macro_rules! cnn_madd {
+    ($a:expr,$b:expr,$c:expr $(,)?) => {{
+        #[cfg(all(target_arch = "wasm32", not(feature = "strict-fma")))]
+        {
+            $a.mul_add($b, $c)
+        }
+        #[cfg(any(not(target_arch = "wasm32"), feature = "strict-fma"))]
+        {
+            $a.mul_add_portable($b, $c)
+        }
+    }};
+}
+
 macro_rules! define_kernels {
     ($modname:ident, $vec:ident, $bnd:ident, $w:expr) => {
         pub(crate) mod $modname {
@@ -39,8 +54,9 @@ macro_rules! define_kernels {
             /// [-126, 128)), but every polynomial step is a ONE-rounding
             /// `mul_add_portable`. On x86 v3/v4 and NEON that is the FMA
             /// `exp_midp` already uses, so those tiers give the same bits;
-            /// on the scalar backend and WASM, whose `mul_add` rounds twice,
-            /// it is what makes them agree with the FMA tiers. The clamps use
+            /// on the scalar backend, whose `mul_add` rounds twice,
+            /// it is what makes them agree with the FMA tiers. WASM defaults to engine
+            /// arithmetic; `strict-fma` retains this reference math. The clamps use
             /// `max_x86`/`min_x86`, so a NaN input gives the same result as on
             /// x86 (the low clamp) on every backend.
             #[inline(always)]
@@ -59,12 +75,12 @@ macro_rules! define_kernels {
                 let c = min_x86(max_x86(x, lo), hi);
                 let xi = min_x86(c.round(), sp(127.0));
                 let xf = c - xi;
-                let poly = sp(C6).mul_add_portable(xf, sp(C5));
-                let poly = poly.mul_add_portable(xf, sp(C4));
-                let poly = poly.mul_add_portable(xf, sp(C3));
-                let poly = poly.mul_add_portable(xf, sp(C2));
-                let poly = poly.mul_add_portable(xf, sp(C1));
-                let poly = poly.mul_add_portable(xf, sp(C0));
+                let poly = cnn_madd!(sp(C6), xf, sp(C5));
+                let poly = cnn_madd!(poly, xf, sp(C4));
+                let poly = cnn_madd!(poly, xf, sp(C3));
+                let poly = cnn_madd!(poly, xf, sp(C2));
+                let poly = cnn_madd!(poly, xf, sp(C1));
+                let poly = cnn_madd!(poly, xf, sp(C0));
                 // xi is an integer in [-126, 127], so xi + 127 is exact and
                 // equals magetypes' integer `xi + 127` before the shift.
                 let scale = (xi + sp(127.0))
@@ -193,15 +209,15 @@ macro_rules! define_kernels {
                             let m = V::<T>::from_slice_t(token, &win[1..]);
                             let r = V::<T>::from_slice_t(token, &win[2..]);
                             for ob in 0..4 {
-                                acc_lm[ob] = l.mul_add_portable(
-                                    V::<T>::splat_t(token, w12[ob * 3]),
-                                    acc_lm[ob],
-                                );
-                                acc_lm[ob] = m.mul_add_portable(
+                                acc_lm[ob] =
+                                    cnn_madd!(l, V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob],);
+                                acc_lm[ob] = cnn_madd!(
+                                    m,
                                     V::<T>::splat_t(token, w12[ob * 3 + 1]),
                                     acc_lm[ob],
                                 );
-                                acc_r[ob] = r.mul_add_portable(
+                                acc_r[ob] = cnn_madd!(
+                                    r,
                                     V::<T>::splat_t(token, w12[ob * 3 + 2]),
                                     acc_r[ob],
                                 );
@@ -301,15 +317,11 @@ macro_rules! define_kernels {
                         let r = V::<T>::from_slice_t(token, &win[2..]);
                         for ob in 0..4 {
                             acc_lm[ob] =
-                                l.mul_add_portable(V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
-                            acc_lm[ob] = m.mul_add_portable(
-                                V::<T>::splat_t(token, w12[ob * 3 + 1]),
-                                acc_lm[ob],
-                            );
-                            acc_r[ob] = r.mul_add_portable(
-                                V::<T>::splat_t(token, w12[ob * 3 + 2]),
-                                acc_r[ob],
-                            );
+                                cnn_madd!(l, V::<T>::splat_t(token, w12[ob * 3]), acc_lm[ob]);
+                            acc_lm[ob] =
+                                cnn_madd!(m, V::<T>::splat_t(token, w12[ob * 3 + 1]), acc_lm[ob],);
+                            acc_r[ob] =
+                                cnn_madd!(r, V::<T>::splat_t(token, w12[ob * 3 + 2]), acc_r[ob],);
                         }
                     }
                     for ob in 0..4 {
@@ -434,8 +446,7 @@ macro_rules! define_kernels {
                                 let o = qbase + wi * 4;
                                 let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
                                 for ob in 0..4 {
-                                    acc[ob] =
-                                        v.mul_add_portable(V::<T>::splat_t(token, w4[ob]), acc[ob]);
+                                    acc[ob] = cnn_madd!(v, V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                 }
                                 wi += 1;
                             }
@@ -470,8 +481,7 @@ macro_rules! define_kernels {
                                 let o = qbase + wi * 4;
                                 let w4: &[f32; 4] = (&wts[o..o + 4]).try_into().unwrap();
                                 for ob in 0..4 {
-                                    acc[ob] =
-                                        v.mul_add_portable(V::<T>::splat_t(token, w4[ob]), acc[ob]);
+                                    acc[ob] = cnn_madd!(v, V::<T>::splat_t(token, w4[ob]), acc[ob]);
                                 }
                                 wi += 1;
                             }
@@ -827,10 +837,8 @@ macro_rules! define_kernels {
                                         .try_into()
                                         .unwrap();
                                     for ob in 0..4 {
-                                        acc[ob] = vv.mul_add_portable(
-                                            V::<T>::splat_t(token, w4[ob]),
-                                            acc[ob],
-                                        );
+                                        acc[ob] =
+                                            cnn_madd!(vv, V::<T>::splat_t(token, w4[ob]), acc[ob],);
                                     }
                                 }
                                 for ob in 0..4 {

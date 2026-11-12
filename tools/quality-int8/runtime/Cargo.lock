@@ -532,6 +532,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast-ssim2"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50973c465e3bcf20814e7087bb85bd37eaeaa463072a5d32fb66499003ee6aba"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "enough",
+ "linear-srgb",
+ "magetypes",
+ "num-traits",
+ "thiserror 2.0.21",
+ "zenpixels 0.3.1",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2350,7 +2366,8 @@ version = "0.0.0"
 dependencies = [
  "butteraugli",
  "enough",
- "fast-ssim2",
+ "fast-ssim2 0.8.2",
+ "fast-ssim2 0.9.0",
  "imgref",
  "rayon",
  "rgb",

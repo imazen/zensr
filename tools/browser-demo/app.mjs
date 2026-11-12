@@ -43,9 +43,10 @@ function controls(running) {
     "cpu-workers",
     "cpu-memory",
     "repair",
-    "repair-math",
+    "repair-only",
   ])
     $(id).disabled = running;
+  $("repair-only").disabled = running || !isJpegInput();
   $("repair").disabled =
     running ||
     !(
@@ -81,13 +82,13 @@ async function showSaved() {
     }
   }
 }
-async function destination() {
+async function destination(repairOnly) {
   const stem =
     $("file")
       .files[0].name.replace(/\.[^.]+$/, "")
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 45) || "image";
-  outputName = `${stem}-${$("model").value}-${$("scale").value}x-${Date.now()}.png`;
+  outputName = `${stem}-${repairOnly ? "repair-1x" : $("model").value + "-" + $("scale").value + "x"}-${Date.now()}.png`;
   writer = null;
   outputHandle = null;
   tileDirectory = null;
@@ -127,6 +128,10 @@ async function fail(error) {
   status(state.error);
   controls(false);
 }
+function isJpegInput() {
+  const file = $("file").files[0];
+  return file?.type === "image/jpeg" || /\.jpe?g$/i.test(file?.name || "");
+}
 $("file").addEventListener("change", () => {
   $("filename").textContent =
     $("file").files[0]?.name || "JPEG or PNG · up to 12.6 MP";
@@ -135,6 +140,7 @@ $("file").addEventListener("change", () => {
     $("file").files[0]?.type === "image/jpeg" ||
     /\.jpe?g$/i.test($("file").files[0]?.name || "");
   $("repair").disabled = !jpeg;
+  $("repair-only").disabled = !jpeg;
   $("repair").checked = jpeg && repairPreference;
 });
 $("repair").addEventListener("change", () => {
@@ -148,7 +154,9 @@ $("wipe").addEventListener("input", () => {
 $("cancel").addEventListener("click", () =>
   fail("Cancelled. No completed result was replaced."),
 );
-$("start").addEventListener("click", async () => {
+$("start").addEventListener("click", () => startJob(false));
+$("repair-only").addEventListener("click", () => startJob(true));
+async function startJob(repairOnly) {
   if (busy) return;
   controls(true);
   $("cancel").disabled = true;
@@ -162,11 +170,15 @@ $("start").addEventListener("click", async () => {
   $("download").hidden = true;
   $("progress").value = 0;
   $("detail").textContent = "";
-  $("repair-report").textContent = $("repair").checked
-    ? "Canon4 repair is queued before SR."
-    : "JPEG repair is off.";
+  $("download").textContent = repairOnly
+    ? "Download repaired PNG (1×) ↓"
+    : "Download full-size PNG ↓";
+  $("repair-report").textContent =
+    repairOnly || $("repair").checked
+      ? "Canon4 repair is queued before SR."
+      : "JPEG repair is off.";
   try {
-    await destination();
+    await destination(repairOnly);
     worker = new Worker("./worker.mjs", { type: "module" });
     $("cancel").disabled = false;
     worker.onerror = (e) => {
@@ -177,16 +189,16 @@ $("start").addEventListener("click", async () => {
       if (worker !== currentWorker) return;
       try {
         if (m.type === "decode") {
-          const child = new Worker("./decode-worker.mjs", { type: "module" }),
+          const child = new Worker("./jpeg-worker.mjs", { type: "module" }),
             channel = new MessageChannel();
           child.onerror = (e) => {
             if (worker === currentWorker) fail(e.message);
           };
           inferenceWorkers.push(child);
-          child.postMessage({ port: channel.port2, jpeg: m.jpeg }, [
-            channel.port2,
-            m.jpeg.buffer,
-          ]);
+          child.postMessage(
+            { port: channel.port2, jpeg: m.jpeg, operation: "decode" },
+            [channel.port2, m.jpeg.buffer],
+          );
           currentWorker.postMessage(
             { type: "ack", id: m.id, ports: [channel.port1] },
             [channel.port1],
@@ -206,7 +218,7 @@ $("start").addEventListener("click", async () => {
                 `JPEG repair · ${Math.floor((performance.now() - began) / 1000)} s · one CPU worker`,
               );
           }, 1000);
-          const child = new Worker("./repair-worker.mjs", { type: "module" }),
+          const child = new Worker("./jpeg-worker.mjs", { type: "module" }),
             channel = new MessageChannel();
           child.onerror = (e) => {
             if (worker === currentWorker) fail(e.message);
@@ -217,7 +229,7 @@ $("start").addEventListener("click", async () => {
               port: channel.port2,
               jpeg: m.jpeg,
               weights: m.weights,
-              math: $("repair-math").value,
+              operation: "repair",
             },
             [channel.port2, m.jpeg.buffer, m.weights.buffer],
           );
@@ -232,7 +244,7 @@ $("start").addEventListener("click", async () => {
           terminateInference();
           state.repairReport = m.report;
           $("repair-report").textContent =
-            `JPEG repair ${m.report.applied ? "applied" : "bypassed by automatic routing"} · ${m.report.seconds.toFixed(1)} s`;
+            `JPEG repair ${m.report.applied ? "applied" : "bypassed by automatic routing"} · ${m.report.seconds.toFixed(1)} s · ${m.report.math === "relaxed" ? "relaxed SIMD" : "unfused SIMD fallback"}`;
         }
         if (m.type === "pool") {
           const ports = [];
@@ -375,17 +387,18 @@ $("start").addEventListener("click", async () => {
     worker.postMessage({
       file: $("file").files[0],
       model: $("model").value,
-      scale: Number($("scale").value),
+      operation: repairOnly ? "repair" : "sr",
+      scale: repairOnly ? 1 : Number($("scale").value),
       backend: $("backend").value,
       cpuWorkers: Number($("cpu-workers").value),
       cpuBudgetMiB: Number($("cpu-memory").value),
       detailTiles: !!navigator.storage?.getDirectory,
-      repairEnabled: $("repair").checked,
+      repairEnabled: repairOnly || $("repair").checked,
     });
   } catch (error) {
     await fail(error.message || error);
   }
-});
+}
 const logical = navigator.hardwareConcurrency || 1;
 $("cpu-workers").options[0].textContent = `Auto (${logical} logical CPUs)`;
 for (let i = 1; i <= logical; i++)
@@ -394,14 +407,6 @@ $("cpu-memory").value = String(defaultCpuBudget(navigator.deviceMemory));
 $("backend").addEventListener("change", () => {
   $("cpu-options").hidden = $("backend").value !== "wasm";
 });
-try {
-  const response = await fetch("./models.json");
-  if (!response.ok) throw new Error("Model manifest unavailable");
-  const manifest = await response.json();
-  $("repair-math").options[1].disabled = !manifest.repair?.relaxed;
-} catch {
-  $("repair-math").options[1].disabled = true;
-}
 try {
   const adapter = await navigator.gpu?.requestAdapter({
     powerPreference: "high-performance",
