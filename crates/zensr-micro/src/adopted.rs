@@ -7,8 +7,8 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::simd::{
-    conv1x1_gen_dispatch, conv3x3_packed_dispatch, gate_all_dispatch, prelu_dispatch,
-    silu_all_dispatch,
+    conv1x1_gen_dispatch, conv3x3_packed_dispatch_with_scratch, conv3x3_wino_dispatch_with_scratch,
+    gate_all_dispatch, prelu_dispatch, silu_all_dispatch,
 };
 use crate::{nearest_add, pack_conv1x1, pack_conv3x3, pixel_shuffle_s_strided};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -216,17 +216,145 @@ impl AdoptedModel {
             wino: Vec::new(),
         })
     }
+}
 
+#[derive(Default, Debug)]
+struct TileScratch {
+    pin_buf: Vec<f32>,
+    wino_buf: Vec<f32>,
+    inp3: Vec<f32>,
+    cur: Vec<f32>,
+    nxt: Vec<f32>,
+    pre: Vec<f32>,
+    feat: Vec<f32>,
+    b_prev: Vec<f32>,
+    b1_keep: Vec<f32>,
+    b6_o1: Vec<f32>,
+    catd: Vec<f32>,
+    ext_in: Vec<f32>,
+    tile_out: Vec<f32>,
+}
+
+impl TileScratch {
+    fn reserve_for(&mut self, model: &AdoptedModel, eh: usize, ew: usize, tiled: bool) {
+        let plane = eh * ew;
+        if plane == 0 {
+            return;
+        }
+        let s2 = model.scale * model.scale;
+        let pwd = (ew + 18).max(32);
+        let pcs = 3 * pwd;
+        match model.arch {
+            Arch::Compact { nf, .. } => {
+                let cpad = (3 * s2).next_multiple_of(4);
+                let max_cin = nf.max(3);
+                ensure_len(&mut self.pin_buf, max_cin * pcs);
+                if model.wino.iter().any(|w| w.is_some()) && eh >= 3 && ew >= 3 {
+                    let nt = ew / 2 + 1;
+                    let ntp = nt.div_ceil(16) * 16;
+                    let half = ntp + 1;
+                    let wino_need = nf * 8 * half + 32 * nf * ntp;
+                    ensure_len(&mut self.wino_buf, wino_need);
+                }
+                ensure_len(&mut self.cur, nf * plane);
+                ensure_len(&mut self.nxt, nf * plane);
+                ensure_len(&mut self.pre, cpad * plane);
+            }
+            Arch::Span48 => {
+                let fc = SPAN_FC;
+                ensure_len(&mut self.pin_buf, fc * pcs);
+                ensure_len(&mut self.inp3, 3 * plane);
+                ensure_len(&mut self.feat, fc * plane);
+                ensure_len(&mut self.b_prev, fc * plane);
+                ensure_len(&mut self.b1_keep, fc * plane);
+                ensure_len(&mut self.b6_o1, fc * plane);
+                ensure_len(&mut self.cur, fc * plane);
+                ensure_len(&mut self.nxt, fc * plane);
+                ensure_len(&mut self.catd, fc * plane);
+                ensure_len(&mut self.pre, 3 * s2 * plane);
+            }
+        }
+        if tiled {
+            ensure_len(&mut self.ext_in, 3 * plane);
+            ensure_len(&mut self.tile_out, 3 * plane * s2);
+        }
+    }
+}
+
+#[inline]
+fn ensure_len(buf: &mut Vec<f32>, len: usize) -> &mut [f32] {
+    if buf.len() < len {
+        buf.resize(len, 0.0);
+    }
+    &mut buf[..len]
+}
+
+/// Reusable scratch buffers for zero-allocation [`AdoptedModel`] inference.
+///
+/// Once warmed on a given tile or image extent (or pre-sized with
+/// [`ModelWorkspace::with_tile_capacity`]), single-threaded calls to
+/// [`AdoptedModel::forward_with_workspace`] and
+/// [`AdoptedModel::upscale_tiled_into`] at equal or smaller tile sizes perform
+/// zero heap allocations.
+#[derive(Default, Debug)]
+pub struct ModelWorkspace {
+    primary: TileScratch,
+    workers: Vec<TileScratch>,
+}
+
+impl ModelWorkspace {
+    /// Creates an empty workspace that allocates lazily on first use.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pre-allocates single-thread scratch for tiles up to `max_tile_h × max_tile_w`
+    /// (plus `2 * model.halo()` when `tiled` halo extraction may be used).
+    #[must_use]
+    pub fn with_tile_capacity(model: &AdoptedModel, max_tile_h: usize, max_tile_w: usize) -> Self {
+        let mut ws = Self::new();
+        let halo = model.halo();
+        let eh = max_tile_h.saturating_add(2 * halo);
+        let ew = max_tile_w.saturating_add(2 * halo);
+        ws.primary.reserve_for(model, eh, ew, true);
+        ws
+    }
+}
+
+impl AdoptedModel {
     /// Whole-tile forward: input [3,h,w] tight -> out [3,s*h,s*w] tight.
     pub fn forward(&self, input: &[f32], h: usize, w: usize, out: &mut [f32]) {
-        self.forward_at(input, h, w, out, 0, 0);
+        let mut ws = ModelWorkspace::new();
+        self.forward_with_workspace(input, h, w, out, &mut ws);
+    }
+
+    /// Whole-tile forward reusing `ws` scratch buffers.
+    pub fn forward_with_workspace(
+        &self,
+        input: &[f32],
+        h: usize,
+        w: usize,
+        out: &mut [f32],
+        ws: &mut ModelWorkspace,
+    ) {
+        self.forward_at_with_scratch(input, h, w, out, 0, 0, &mut ws.primary);
     }
 
     /// `forward` on a window whose column 0 / row 0 sit at image x / y parity
     /// `ox` / `oy`. Only the Winograd layers use it: they anchor their 2x2 tile
     /// grid to the image, so a tile window and the whole image compute every
     /// kept pixel the same way.
-    fn forward_at(&self, input: &[f32], h: usize, w: usize, out: &mut [f32], ox: usize, oy: usize) {
+    fn forward_at_with_scratch(
+        &self,
+        input: &[f32],
+        h: usize,
+        w: usize,
+        out: &mut [f32],
+        ox: usize,
+        oy: usize,
+        sc: &mut TileScratch,
+    ) {
         let plane = h * w;
         let cs = plane; // identity stride (padding measured 2x slower — see PLAN appendix)
         let s = self.scale;
@@ -240,72 +368,79 @@ impl AdoptedModel {
         match self.arch {
             Arch::Compact { nf, nc } => {
                 let s2 = s * s;
-                let mut inp3 = vec![0.0f32; 3 * cs];
-                for c in 0..3 {
-                    inp3[c * cs..c * cs + plane]
-                        .copy_from_slice(&input[c * plane..(c + 1) * plane]);
-                }
-                let mut cur = vec![0.0f32; nf * cs];
-                let mut nxt = vec![0.0f32; nf * cs];
                 let span3 = 2 * cs + plane;
                 let span_nf = (nf - 1) * cs + plane;
-                conv3x3_packed_dispatch(
-                    &inp3[..span3],
+                let TileScratch {
+                    pin_buf,
+                    wino_buf,
+                    cur: cur_vec,
+                    nxt: nxt_vec,
+                    pre: pre_vec,
+                    ..
+                } = sc;
+                let mut cur = ensure_len(cur_vec, nf * cs);
+                let mut nxt = ensure_len(nxt_vec, nf * cs);
+                conv3x3_packed_dispatch_with_scratch(
+                    &input[..span3],
                     3,
                     &self.packed[0],
                     &self.biases[0],
-                    &mut cur,
+                    cur,
                     nf,
                     h,
                     w,
                     cs,
+                    pin_buf,
                 );
                 prelu_dispatch(&mut cur[..span_nf], &self.slopes[0], nf, plane, cs);
                 for i in 0..nc {
                     match self.wino.get(1 + i).and_then(|o| o.as_ref()) {
-                        Some((u, raw)) => crate::simd::conv3x3_wino_dispatch(
+                        Some((u, raw)) => conv3x3_wino_dispatch_with_scratch(
                             &cur[..span_nf],
                             nf,
                             u,
                             raw,
                             &self.biases[1 + i],
-                            &mut nxt,
+                            nxt,
                             nf,
                             h,
                             w,
                             cs,
                             ox,
                             oy,
+                            wino_buf,
                         ),
-                        None => conv3x3_packed_dispatch(
+                        None => conv3x3_packed_dispatch_with_scratch(
                             &cur[..span_nf],
                             nf,
                             &self.packed[1 + i],
                             &self.biases[1 + i],
-                            &mut nxt,
+                            nxt,
                             nf,
                             h,
                             w,
                             cs,
+                            pin_buf,
                         ),
                     }
                     prelu_dispatch(&mut nxt[..span_nf], &self.slopes[1 + i], nf, plane, cs);
                     core::mem::swap(&mut cur, &mut nxt);
                 }
                 let cpad = (3 * s2).next_multiple_of(4);
-                let mut pre = vec![0.0f32; cpad * cs];
-                conv3x3_packed_dispatch(
+                let pre = ensure_len(pre_vec, cpad * cs);
+                conv3x3_packed_dispatch_with_scratch(
                     &cur[..span_nf],
                     nf,
                     &self.packed[1 + nc],
                     &self.biases[1 + nc],
-                    &mut pre,
+                    pre,
                     cpad,
                     h,
                     w,
                     cs,
+                    pin_buf,
                 );
-                pixel_shuffle_s_strided(&pre, cs, out, h, w, s);
+                pixel_shuffle_s_strided(pre, cs, out, h, w, s);
                 nearest_add(input, out, h, w, s);
             }
             Arch::Span48 => {
@@ -316,7 +451,20 @@ impl AdoptedModel {
                 // norm into conv_1 gets borders wrong — measured 0.32; don't re-attempt).
                 const SPAN_MEAN: [f32; 3] = [0.4488, 0.4371, 0.4040];
                 const SPAN_IMG_RANGE: f32 = 255.0;
-                let mut inp3 = vec![0.0f32; 3 * cs];
+                let TileScratch {
+                    pin_buf,
+                    inp3: inp3_vec,
+                    feat: feat_vec,
+                    b_prev: b_prev_vec,
+                    b1_keep: b1_keep_vec,
+                    b6_o1: b6_o1_vec,
+                    cur: t1_vec,
+                    nxt: t2_vec,
+                    catd: catd_vec,
+                    pre: pre_vec,
+                    ..
+                } = sc;
+                let inp3 = ensure_len(inp3_vec, 3 * cs);
                 for c in 0..3 {
                     for (d, sv) in inp3[c * cs..c * cs + plane]
                         .iter_mut()
@@ -327,37 +475,39 @@ impl AdoptedModel {
                 }
                 let span3 = 2 * cs + plane;
                 let span_fc = (fc - 1) * cs + plane;
-                let mut feat = vec![0.0f32; fc * cs];
-                conv3x3_packed_dispatch(
+                let feat = ensure_len(feat_vec, fc * cs);
+                conv3x3_packed_dispatch_with_scratch(
                     &inp3[..span3],
                     3,
                     &self.packed[0],
                     &self.biases[0],
-                    &mut feat,
+                    feat,
                     fc,
                     h,
                     w,
                     cs,
+                    pin_buf,
                 );
 
-                let mut b_prev = vec![0.0f32; fc * cs];
+                let mut b_prev = ensure_len(b_prev_vec, fc * cs);
                 b_prev[..span_fc].copy_from_slice(&feat[..span_fc]);
-                let mut b1_keep = vec![0.0f32; fc * cs];
-                let mut b6_o1 = vec![0.0f32; fc * cs];
-                let mut t1 = vec![0.0f32; fc * cs];
-                let mut t2 = vec![0.0f32; fc * cs];
+                let b1_keep = ensure_len(b1_keep_vec, fc * cs);
+                let b6_o1 = ensure_len(b6_o1_vec, fc * cs);
+                let t1 = ensure_len(t1_vec, fc * cs);
+                let mut t2 = ensure_len(t2_vec, fc * cs);
                 for blk in 0..6 {
                     let base = 1 + blk * 3;
-                    conv3x3_packed_dispatch(
+                    conv3x3_packed_dispatch_with_scratch(
                         &b_prev[..span_fc],
                         fc,
                         &self.packed[base],
                         &self.biases[base],
-                        &mut t1,
+                        t1,
                         fc,
                         h,
                         w,
                         cs,
+                        pin_buf,
                     );
                     silu_all_dispatch(&mut t1[..span_fc]);
                     // official SPAB uses SiLU(inplace=True): the out1 returned to the
@@ -365,28 +515,30 @@ impl AdoptedModel {
                     if blk == 5 {
                         b6_o1[..span_fc].copy_from_slice(&t1[..span_fc]);
                     }
-                    conv3x3_packed_dispatch(
+                    conv3x3_packed_dispatch_with_scratch(
                         &t1[..span_fc],
                         fc,
                         &self.packed[base + 1],
                         &self.biases[base + 1],
-                        &mut t2,
+                        t2,
                         fc,
                         h,
                         w,
                         cs,
+                        pin_buf,
                     );
                     silu_all_dispatch(&mut t2[..span_fc]);
-                    conv3x3_packed_dispatch(
+                    conv3x3_packed_dispatch_with_scratch(
                         &t2[..span_fc],
                         fc,
                         &self.packed[base + 2],
                         &self.biases[base + 2],
-                        &mut t1,
+                        t1,
                         fc,
                         h,
                         w,
                         cs,
+                        pin_buf,
                     );
                     // gate: out = (o3 + x) * (sigmoid(o3) - 0.5)   (always, official SPAB)
                     gate_all_dispatch(&t1[..span_fc], &b_prev[..span_fc], &mut t2[..span_fc]);
@@ -396,19 +548,20 @@ impl AdoptedModel {
                     }
                 }
                 // conv_2 on b6
-                conv3x3_packed_dispatch(
+                conv3x3_packed_dispatch_with_scratch(
                     &b_prev[..span_fc],
                     fc,
                     &self.packed[19],
                     &self.biases[19],
-                    &mut t1,
+                    t1,
                     fc,
                     h,
                     w,
                     cs,
+                    pin_buf,
                 );
                 // cat [feat, conv_2(b6), b1, b6_o1] -> conv1x1 -> upsampler
-                let mut catd = vec![0.0f32; fc * cs];
+                let catd = ensure_len(catd_vec, fc * cs);
                 conv1x1_gen_dispatch(
                     &[
                         (&feat[..span_fc], fc),
@@ -418,39 +571,31 @@ impl AdoptedModel {
                     ],
                     &self.packed[20],
                     &self.biases[20],
-                    &mut catd,
+                    catd,
                     fc,
                     4 * fc,
                     plane,
                     cs,
                 );
-                let mut pre = vec![0.0f32; 3 * s2 * cs];
-                conv3x3_packed_dispatch(
+                let pre = ensure_len(pre_vec, 3 * s2 * cs);
+                conv3x3_packed_dispatch_with_scratch(
                     &catd[..span_fc],
                     fc,
                     &self.packed[21],
                     &self.biases[21],
-                    &mut pre,
+                    pre,
                     3 * s2,
                     h,
                     w,
                     cs,
+                    pin_buf,
                 );
-                pixel_shuffle_s_strided(&pre, cs, out, h, w, s);
+                pixel_shuffle_s_strided(pre, cs, out, h, w, s);
             }
         }
     }
 
-    /// Multithreaded exact-halo tiled upscale (same guarantees as spanf_x4_tiled).
-    pub fn upscale_tiled(
-        &self,
-        input: &[f32],
-        h: usize,
-        w: usize,
-        threads: usize,
-        tile: usize,
-    ) -> Vec<f32> {
-        let s = self.scale;
+    fn choose_tile_size(&self, h: usize, w: usize, threads: usize, tile: usize) -> usize {
         let halo = self.halo();
         // tile == 0 asks for the default, which is chosen from the thread count.
         //
@@ -594,67 +739,145 @@ impl AdoptedModel {
             tile
         };
         assert!(tile >= 32);
+        tile
+    }
+
+    /// Multithreaded exact-halo tiled upscale (same guarantees as spanf_x4_tiled).
+    pub fn upscale_tiled(
+        &self,
+        input: &[f32],
+        h: usize,
+        w: usize,
+        threads: usize,
+        tile: usize,
+    ) -> Vec<f32> {
+        let s = self.scale;
+        let mut out = vec![0.0f32; 3 * (s * h) * (s * w)];
+        let mut ws = ModelWorkspace::new();
+        self.upscale_tiled_into(input, h, w, threads, tile, &mut out, &mut ws);
+        out
+    }
+
+    /// Exact-halo tiled upscale writing into caller-supplied `out` (`[3, s*h, s*w]`)
+    /// and reusing `ws` scratch buffers.
+    ///
+    /// When `threads <= 1` and `ws` is already warmed for the chosen tile size,
+    /// this method performs zero heap allocations.
+    pub fn upscale_tiled_into(
+        &self,
+        input: &[f32],
+        h: usize,
+        w: usize,
+        threads: usize,
+        tile: usize,
+        out: &mut [f32],
+        ws: &mut ModelWorkspace,
+    ) {
+        let s = self.scale;
+        let halo = self.halo();
+        let tile = self.choose_tile_size(h, w, threads, tile);
         assert_eq!(input.len(), 3 * h * w);
         let (oh, ow) = (s * h, s * w);
+        assert_eq!(out.len(), 3 * oh * ow);
+        if h == 0 || w == 0 {
+            return;
+        }
         let tiles_x = w.div_ceil(tile);
         let tiles_y = h.div_ceil(tile);
         let n_tiles = tiles_x * tiles_y;
+        if n_tiles == 1 {
+            self.forward_at_with_scratch(input, h, w, out, 0, 0, &mut ws.primary);
+            return;
+        }
         let threads = threads.max(1).min(n_tiles);
-        let out = Mutex::new(vec![0.0f32; 3 * oh * ow]);
-        let next = AtomicUsize::new(0);
+        let run_tile = |idx: usize,
+                        sc: &mut TileScratch|
+         -> (usize, usize, usize, usize, usize, usize, usize, usize) {
+            let (tx, ty) = (idx % tiles_x, idx / tiles_x);
+            let x0 = tx * tile;
+            let y0 = ty * tile;
+            let x1 = (x0 + tile).min(w);
+            let y1 = (y0 + tile).min(h);
+            let ex0 = x0.saturating_sub(halo);
+            let ey0 = y0.saturating_sub(halo);
+            let ex1 = (x1 + halo).min(w);
+            let ey1 = (y1 + halo).min(h);
+            let (ew, eh) = (ex1 - ex0, ey1 - ey0);
+            let ext_len = 3 * eh * ew;
+            if sc.ext_in.len() < ext_len {
+                sc.ext_in.resize(ext_len, 0.0);
+            }
+            for c in 0..3 {
+                for y in 0..eh {
+                    let src = &input[c * h * w + (ey0 + y) * w + ex0..][..ew];
+                    sc.ext_in[c * eh * ew + y * ew..][..ew].copy_from_slice(src);
+                }
+            }
+            let tile_out_len = 3 * eh * ew * s * s;
+            if sc.tile_out.len() < tile_out_len {
+                sc.tile_out.resize(tile_out_len, 0.0);
+            }
+            let ext_in = core::mem::take(&mut sc.ext_in);
+            let mut tile_out = core::mem::take(&mut sc.tile_out);
+            self.forward_at_with_scratch(
+                &ext_in[..ext_len],
+                eh,
+                ew,
+                &mut tile_out[..tile_out_len],
+                ex0 % 2,
+                ey0 % 2,
+                sc,
+            );
+            sc.ext_in = ext_in;
+            sc.tile_out = tile_out;
+            let (cx, cy) = ((x0 - ex0) * s, (y0 - ey0) * s);
+            let (cw, ch) = ((x1 - x0) * s, (y1 - y0) * s);
+            (x0, y0, ew, eh, cx, cy, cw, ch)
+        };
 
-        let worker = || {
-            let mut ext_in: Vec<f32> = Vec::new();
-            let mut tile_out: Vec<f32> = Vec::new();
-            loop {
+        if threads == 1 {
+            for idx in 0..n_tiles {
+                let (x0, y0, ew, eh, cx, cy, cw, ch) = run_tile(idx, &mut ws.primary);
+                for c in 0..3 {
+                    for y in 0..ch {
+                        let src = &ws.primary.tile_out
+                            [c * (s * eh) * (s * ew) + (cy + y) * (s * ew) + cx..][..cw];
+                        out[c * oh * ow + (y0 * s + y) * ow + x0 * s..][..cw].copy_from_slice(src);
+                    }
+                }
+            }
+        } else {
+            let extra = threads - 1;
+            if ws.workers.len() < extra {
+                ws.workers.resize_with(extra, TileScratch::default);
+            }
+            let out_mu = Mutex::new(out);
+            let next = AtomicUsize::new(0);
+            let worker_loop = |sc: &mut TileScratch| loop {
                 let idx = next.fetch_add(1, Ordering::Relaxed);
                 if idx >= n_tiles {
                     break;
                 }
-                let (tx, ty) = (idx % tiles_x, idx / tiles_x);
-                let x0 = tx * tile;
-                let y0 = ty * tile;
-                let x1 = (x0 + tile).min(w);
-                let y1 = (y0 + tile).min(h);
-                let ex0 = x0.saturating_sub(halo);
-                let ey0 = y0.saturating_sub(halo);
-                let ex1 = (x1 + halo).min(w);
-                let ey1 = (y1 + halo).min(h);
-                let (ew, eh) = (ex1 - ex0, ey1 - ey0);
-                ext_in.clear();
-                ext_in.resize(3 * eh * ew, 0.0);
-                for c in 0..3 {
-                    for y in 0..eh {
-                        let src = &input[c * h * w + (ey0 + y) * w + ex0..][..ew];
-                        ext_in[c * eh * ew + y * ew..][..ew].copy_from_slice(src);
-                    }
-                }
-                tile_out.clear();
-                tile_out.resize(3 * eh * ew * s * s, 0.0);
-                self.forward_at(&ext_in, eh, ew, &mut tile_out, ex0 % 2, ey0 % 2);
-                let (cx, cy) = ((x0 - ex0) * s, (y0 - ey0) * s);
-                let (cw, ch) = ((x1 - x0) * s, (y1 - y0) * s);
-                let mut guard = out.lock().unwrap();
+                let (x0, y0, ew, eh, cx, cy, cw, ch) = run_tile(idx, sc);
+                let mut guard = out_mu.lock().unwrap();
                 for c in 0..3 {
                     for y in 0..ch {
-                        let src =
-                            &tile_out[c * (s * eh) * (s * ew) + (cy + y) * (s * ew) + cx..][..cw];
+                        let src = &sc.tile_out
+                            [c * (s * eh) * (s * ew) + (cy + y) * (s * ew) + cx..][..cw];
                         guard[c * oh * ow + (y0 * s + y) * ow + x0 * s..][..cw]
                             .copy_from_slice(src);
                     }
                 }
-            }
-        };
-        if threads == 1 {
-            worker();
-        } else {
-            std::thread::scope(|sc| {
-                for _ in 0..threads {
-                    sc.spawn(worker);
+            };
+            let primary = &mut ws.primary;
+            let extras = &mut ws.workers[..extra];
+            std::thread::scope(|sc_scope| {
+                for worker_sc in extras.iter_mut() {
+                    sc_scope.spawn(move || worker_loop(worker_sc));
                 }
+                worker_loop(primary);
             });
         }
-        out.into_inner().unwrap()
     }
 }
 
