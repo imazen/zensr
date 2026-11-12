@@ -327,7 +327,7 @@ rest of the zen stack (zenpng, zenresize, zensim). See `LICENSE-AGPL3` and
 
 Nothing here is released. The measured record lives in `SYSTEMS.md`, the
 forward plan and the falsification registry in `ROADMAP.md`, and the proposed
-public surface in `docs/API_DESIGN.md`.
+public surface in `the historical API proposal (current guide: docs/API.md)`.
 
 Numbers predating 2026-07-31 were measured against a partly JPEG-sourced eval
 split, and on 2026-08-02 the file selection was found to admit training images

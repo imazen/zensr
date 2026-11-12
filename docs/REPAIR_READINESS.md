@@ -1,79 +1,100 @@
-# JPEG repair readiness — 2026-11-07
+# Integration status — 2026-11-12
 
-The agreed ×1 implementation is committed and its production code passed CI.
-The project is a locked-source integration with explicit measurement limits;
-it is not a packaged release or a fully validated general-resolution deployment.
+The engine, browser workbench and corrected coefficient projection are on
+zensr main. This is an unreleased source integration, not a claim of production
+or publication readiness. The native zenjpeg adapter is still a draft.
 
-November 9 update: `a01962d6` corrects binary16 subnormal weight expansion.
-Exhaustive conversion and product tests pass. The quality/routing observations
-below describe the earlier executable; a full corrected-weight routing replay
-has not been performed. Existing numeric predictor goldens are not a substitute
-for rescoring delivered pixels.
+## Delivery and PR disposition
 
-## What is complete
+| Work | Status | Revision / review |
+|---|---|---|
+| Codec-independent engine, browser fixes, retained SR studies, partial-block projection | Merged to zensr main | `5042bccd10027964c25d86a13cdc46ef926e6dbe`, [PR 4](https://github.com/imazen/zensr/pull/4) |
+| Single-file models and CLI loading | Reconciled with current main; CI running | [PR 1](https://github.com/imazen/zensr/pull/1) |
+| JPEG encoder strip-edge padding | Merged to zenjpeg main | `a9c34a865424c0b33b5b313ce0eca49869c82fd6`, [PR 262](https://github.com/imazen/zenjpeg/pull/262) |
+| Small-bank corpus registry | Metadata only; final documentation review | [imazen-26 PR 4](https://github.com/imazen/imazen-26/pull/4) |
+| Native decoder repair adapter | Keep draft; conflicts with current main | [zenjpeg PR 261](https://github.com/imazen/zenjpeg/pull/261) |
 
-- Owner-approved 34-input routing default, excluding file bpp and dimensions.
-  Source: `5a8fb79bc5f6`; approval documentation: `d3cb0725918f`.
-- Actual model inference, native-size windows, caller routing overrides,
-  coefficient projection, tiny/odd sampling geometry fixes and decode reuse.
-- Independent sklearn prediction replays for all 140,940 vectors of both the
-  original and active routers. Baseline expectations remain preserved.
-- Real-JPEG feature replay, selected-output pixel parity, cached/fresh float-bit
-  and report parity, model goldens, whole/tiled checks, metadata invariance and
-  feature-off checks. External-data diagnostics are explicitly caller-selected.
-- Source CI passed every job: Linux x86 and ARM, Windows x86 and ARM, macOS ARM,
-  i686 via cross, formatting and Clippy. Verified directly in
-  [run 42205004428](https://github.com/imazen/zensr/actions/runs/42205004428)
-  for implementation commit `5a8fb79bc5f6`.
-- [README](../README.md), [default routing contract](DEFAULT_ROUTING.md),
-  [dependency chain](PRODUCTION_DEPENDENCIES.md),
-  [feature comparison](../benchmarks/routing_feature_ablation_2026-11-06.md)
-  and [delivered-pixel projection diagnostic](../benchmarks/projection_diagnostic_2026-11-06.md).
+The obsolete native restoration proposal [zenjpeg PR 191](https://github.com/imazen/zenjpeg/pull/191)
+is superseded by PR 261's codec-owned integration. Existing commits remain
+available; no implementation was discarded. Other zenjpeg API/dependency PRs
+are separate work and are not merged as part of this cleanup.
 
-## Production limits
+## What is verified
 
-The source can be integrated using the committed lockfile and caller-loaded
-canon4 weights. Distribution still needs a dependency/publication plan:
-`zensr-micro` is `publish = false`, the integration uses git dependencies/root
-patches, and fresh consumer lockfiles can resolve different analysis revisions.
-No crate release was published by this work.
+The engine/browser head `921d4878` passed all 12 jobs in
+[CI run 42757405497](https://github.com/imazen/zensr/actions/runs/42757405497),
+including Linux x86/ARM, macOS ARM, Windows x86/ARM and i686 via cross.
+The model-container merge retained both CI contracts. Its local default and
+no-chooser suites pass (61/44 cases, five existing explicit publication tests
+unselected in the default suite), with six packer tests, both strict Clippy
+configurations, doctests and scoped formatting. The wrapper recorded rc=0,
+52 seconds, peak RSS 0.67 GiB, minimum available 21,241 MiB on i265.
 
-Arbitrary-size execution does not establish routing quality across sizes.
-Native feature checks extend through 4096×2160, but the reported quality frontier
-is 512-pixel only. Deployment latency, representative request cost and resource
-behavior at production image sizes have not been established by a controlled
-end-to-end measurement. Those are the remaining production validation tasks.
+The corrected projection replays 16,104 JPEG cases from 244 origins; all 4,928
+fully visible cases remain RGB8-identical. Both old and new image/scalar
+identities are preserved. The 136 native preview comparisons match corrected
+compatibility pixels and routing; strict native/WASM parity, EXIF permutations,
+identity/malformed ICC and relaxed-first/unfused fallback browser checks pass.
+See [the qualification and quality tails](../benchmarks/projection_fix_2026-11-10.md).
 
-Projection is a family-calibrated coefficient constraint. It does not certify
-exact JPEG re-encoding, final RGB8 coefficient bounds or perceptual improvement.
-`Consistency::Certified` records that projection was applied to all three
-components; `require_consistency` requires that availability, not a final-pixel
-bounds check. The worst observed reserved loss remains 18.5344 SSIM2.
+The focused encoder PR has independent plane/coefficient references, native
+and cross-platform hash checks and libjpeg-turbo decoding. Its coverage and
+remaining oracle limits belong to
+[zenjpeg's report](https://github.com/imazen/zenjpeg/blob/a9c34a865424c0b33b5b313ce0eca49869c82fd6/benchmarks/encode_strip_padding_2026-11-10.md).
 
-## Publication scope
+## Remaining native integration work
 
-The current 34-input policy was selected on development inputs. Its secondary
-comparison reuses the already-inspected reserved cohort: 140,940 cells,
-290 references and 269 origins, yielding +2.4173 origin-balanced mean SSIM2,
-0.5662% observed harm and 79.75% cell restoration coverage. Harm follows the
-stated quality-dependent curve. These are cohort observations, not guarantees.
+PR 261 is the concrete next integration task. Reconcile its adapter onto
+current zenjpeg main, preserving the already-merged encoder fixes. Review the
+new public API, then cover admitted pixel layouts, borrowed/owned rows,
+`decode_into`, crop, arbitrary ICC profiles, cancellation/error propagation and
+memory limits. Review repeated parsing/entropy decoding and allocations.
+Required-platform integration CI must pass before that draft is merge-ready.
+The 136-case RGB8 comparison and identity ICC fixtures do not establish those
+missing paths. Do not merge the conflicting historical branch merely to close it.
 
-The reports support a scoped technical account with those disclosures. A claim
-of fresh held-out validation for the final policy requires fresh independent
-evaluation; a claim of general-resolution quality also requires corresponding
-size-generalization evidence. Corpus composition and historical training-pair
-provenance limits remain part of the methods discussion.
+The preview intentionally pins zenjpeg `06d0e6f4` and engine `0bb29cf6`.
+The compatibility/model-container path still pins historical zenjpeg `24b6d3fb`.
+Neither pin tracks current zenjpeg main. See [the dependency graph](PRODUCTION_DEPENDENCIES.md)
+and [API boundaries](API.md). Container loading has not migrated into the new
+codec-independent engine. No new public API or release is implied by the docs.
 
-Pixel-artifact auditing was explicitly cancelled by the owner. Its incomplete
-status must remain disclosed; this readiness review does not restart it or
-pretend it passed. Spatial-window alternatives and local-guard proposals remain
-experimental and are not included in the active policy's quality claims.
+## Quality and publication limits
 
-The 2026-11-10 edge investigation confirmed severe amplification from partial-
-block padding on two tiny 420 witnesses. The shared runtime now reconstructs
-hidden samples from the stored block rather than replicating candidate edges.
-Decoded partial-block invariance, unclipped hidden samples and error controls
-pass. This correction does not establish general-resolution routing quality;
-new runtime measurements are reported separately from the frozen old bank.
-The separate JPEG input-generation padding fix is on zenjpeg PR 261. See
-[the mechanism and controls](../benchmarks/chroma_edges_2026-11-10.md).
+The approved metadata-independent router's reported +2.4173 mean SSIM2,
+0.5662% observed harm and 79.75% restoration coverage describe the previously
+inspected 512-pixel cohort. Those scores predate both the binary16 weight-loader
+and partial-block projection corrections. The full final router has not been
+rescored with the corrected pixels, and this is not fresh held-out evidence.
+The historical worst reserved loss is 18.5344 SSIM2.
+
+The new projection study is forced repair, not the router's operating point:
+33 old-to-new losses exceed 0.5 SSIM2; worst loss 2.41581. Whole-frame execution
+supports arbitrary dimensions; resolution-generalized quality and deployment
+latency remain unestablished. `Consistency::Certified` records projection
+application, not exact re-encoding, final RGB8 bounds or perceptual safety.
+The owner cancelled pixel-artifact auditing; this cleanup does not restart it.
+
+The original small-bank JPEGs contain the old encoder tint, and its old repair
+outputs contain the old projection behavior. They remain historical controls.
+The fresh corrected SR witnesses isolate projection while retaining those same
+JPEG inputs. SPANF/DSCF retain their measured small grayscale color bias; no
+model-padding change or learned blend selector was adopted. Historical canon4
+training exposure and [split provenance](SPLIT_DEFINITIONS.md) remain disclosed.
+
+## Retained artifacts and reproduction
+
+Use [model loading](MODEL_CONTAINER.md), [browser build/test recipes](BROWSER_DEMO.md),
+[the small-bank tool contract](../tools/sr-bank/README.md) and the owning
+benchmark reports. Source/models/data previews remain unpublished drafts;
+no crate or release was published by this cleanup.
+
+The small bank is under `sr-bank-20261110/` in the retained zensr output tree.
+Original bank/scalar archive: 7,749,263,360 bytes, SHA-256
+`35689212375377ed1bd479c952db1248d52f769158872faa9f971b7e45b6f56d`.
+Corrected projection/browser supplement: 188,467,200 bytes, SHA-256
+`11e7b9fa581e47419ec22aded9eb66d1ac3b68fc2b951c2e9b6a9ddc41095c98`.
+Transfer hashes, server synchronization and seeded member readbacks were
+verified at generation time; local receipts and reports retain the identities.
+No source images, candidates, scores, model files or failed probes were deleted.
+Only superseded prose/API dumps were removed; Git history retains them.

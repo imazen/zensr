@@ -52,7 +52,7 @@ rescored. [Projection fix and qualification](benchmarks/projection_fix_2026-11-1
 Arbitrary input resolutions are supported, but quality across resolutions and
 end-to-end deployment latency remain unmeasured. Coefficient projection does
 not guarantee exact re-encoding or better perceptual quality.
-[Routing behavior](docs/DEFAULT_ROUTING.md) · [Readiness](docs/REPAIR_READINESS.md).
+[Routing behavior](docs/DEFAULT_ROUTING.md) · [Integration status and remaining work](docs/REPAIR_READINESS.md).
 
 ## Super-resolution
 
@@ -81,8 +81,8 @@ supports zoom, pan, flicker and native output tiles; 12 MP inputs are supported.
 ## Development
 
 ```sh
-cargo test --locked -p zensr-micro -p zensr-zenjpeg
-cargo clippy --locked -p zensr-micro -p zensr-zenjpeg --all-targets -- -D warnings
+cargo test --locked -p zensr -p zensr-micro -p zensr-zenjpeg
+cargo clippy --locked -p zensr -p zensr-micro -p zensr-zenjpeg --all-targets -- -D warnings
 ```
 
 [Documentation](docs/README.md) · [Changelog](CHANGELOG.md).

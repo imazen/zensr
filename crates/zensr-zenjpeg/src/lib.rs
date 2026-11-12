@@ -290,7 +290,7 @@ pub struct RestoreReport {
     /// Luma-relative chroma geometry: `Some(true)` for 4:4:4, `Some(false)`
     /// for 4:2:0, `None` for anything else. Recorded because the near-pristine
     /// threshold depends on it — 4:4:4 at q90 decodes as cleanly as 4:2:0 at
-    /// q94, so a quality-only policy is unsafe (see docs/API_DESIGN.md F9).
+    /// q94, so a quality-only policy is unsafe (see docs/DEFAULT_ROUTING.md).
     pub chroma_full: Option<bool>,
     /// True when the high-q identity gate skipped the model (output is the
     /// plain decode).

@@ -13,7 +13,9 @@ could be zero or stale. At larger grayscale sizes a preceding full strip can
 leave neutral rows and conceal the defect. Width 32 itself is not the trigger.
 Independent libjpeg-turbo decoding exactly matches the original native decode.
 
-The fix is in zenjpeg draft PR 261, `0fee09ca8f7523306da392ac2a2714cd4c783b7e`.
+The original fix `0fee09ca8f7523306da392ac2a2714cd4c783b7e` was extracted
+and expanded in [zenjpeg PR 262](https://github.com/imazen/zenjpeg/pull/262),
+merged to main as `a9c34a865424c0b33b5b313ce0eca49869c82fd6`.
 It pads the actual DCT inputs, including the correct horizontal stride for
 pre-subsampled input. A synthetic 32×8 neutral regression fails before the fix.
 The partial-geometry, gamma-aware, packed/strided planar controls and library
@@ -82,8 +84,8 @@ projection:   rc=0 0s | peak-RSS 0.01GiB | min-avail 23596MiB | peak-load 0.48
 ```
 
 No speed extrapolation, full-resolution quality claim or production selector
-follows from these small witnesses. The next runtime constraint change needs
-mixed-color partial-block tests and compatibility/quality replay; regenerated
+follows from these small witnesses. The subsequent shared-runtime correction and its 16,104-case replay are
+reported in [the qualification](projection_fix_2026-11-10.md). Regenerated
 input banks must get a new identity rather than overwrite this study.
 
 Retained mirror (SSH streaming, no NFS):

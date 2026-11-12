@@ -66,9 +66,10 @@ serving inference.
 ## Distribution constraints
 
 The tree is not a crates.io release: `zensr-micro` is `publish = false`, and
-JPEG integration uses git dependencies and root patches. The zenjpeg revision
-is the encode-record work associated with its PR 253; this task does not alter
-or merge that PR. Application builds can use this locked source tree. A crate
+JPEG integration uses git dependencies and root patches. The compatibility integration still pins the historical encode-record revision
+`24b6d3fb`; it does not acquire later encoder fixes just because zenjpeg main
+advances. In particular, that pin predates the padding correction merged in
+zenjpeg PR 262. Application builds can use this locked source tree. A crate
 release requires a separate dependency/publication plan and release approval.
 The model artifact is 86,406 bytes of f16 weights; runtime code and dependencies
 are additional and have not been size-measured in this task.
@@ -87,5 +88,7 @@ browser repair binding / native codec caller
 Pins are in `tools/browser-demo/repair/Cargo.toml` and
 `tools/codec-integration/Cargo.toml`; resolve them with
 `cargo tree --locked --manifest-path tools/browser-demo/repair/Cargo.toml -e normal`.
-The shared projection correction adds no public signatures. Both review PRs
-remain unmerged. [Correction and validation](../benchmarks/projection_fix_2026-11-10.md).
+The shared projection correction adds no public signatures. The engine and
+browser work merged in zensr PR 4 (`5042bccd`). The pinned zenjpeg adapter
+remains draft PR 261 and conflicts with current main; it is a review preview,
+not the current zenjpeg release. [Correction and validation](../benchmarks/projection_fix_2026-11-10.md).

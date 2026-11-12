@@ -269,7 +269,7 @@ Monotone, no crossover anywhere in the grid. So the composite crossovers above
 are the model degrading while the projection increasingly offsets it, and
 restoration survives as far up the scale as it does *because* the
 quantisation box constrains it. Direct support for `require_consistency` in
-`docs/API_DESIGN.md` being load-bearing rather than merely a safety property.
+`the historical API proposal (current guide: docs/API.md)` being load-bearing rather than merely a safety property.
 
 **What changed (SHIPPED):** `policy_high_q_identity` now takes chroma
 subsampling into account — 4:4:4 gates at q88 (IJG/mozjpeg scale) and at
@@ -535,7 +535,7 @@ estimated quality — the identity gate, the deblock policy, the tier choice. On
 downscaled input that estimate is systematically optimistic, so the gate will
 skip files that would benefit. A detail-density signal is cheap (one
 downscale-upscale roundtrip on Y) and is a concrete candidate for the damage
-estimator `Budget::Adaptive` needs in `docs/API_DESIGN.md`.
+estimator `Budget::Adaptive` needs in `the historical API proposal (current guide: docs/API.md)`.
 
 Also worth noting for corpus building: these files probe as encoder family
 `Unknown`, so `slack_for` falls back to the 0.15 round-to-nearest assumption.

@@ -12,9 +12,11 @@
 - [Pair provenance](PAIR_PROVENANCE.md): reconstruct and verify saved crop identities.
 - [Train from the preview](TRAINING_PREVIEW.md): assemble pairs from published imazen-26 training IDs.
 - [Split authorities](SPLIT_DEFINITIONS.md): imazen-26 membership, zensr reassignment and internal validation.
-- [Public API inventories](api/PUBLIC_API.md): historical API snapshots.
+- [Repair APIs](API.md): application containers, codec-supplied samples and result semantics.
 
 ## Evidence
+
+- [Corrected edge projection](../benchmarks/projection_fix_2026-11-10.md): full small-bank replay, quality tails and native/browser checks.
 
 - [Canon4 followed by ×4 SR](../benchmarks/sr_cascade_2026-11-09.md): matched
   direct/repair-first SPANF and DSCF quality, routing coverage and retained PNGs.
@@ -38,5 +40,4 @@
 - [Canon4 INT8 QAT](CANON4_QAT.md): controlled weight-compression experiment and measured limits.
 - [Quality model integer inference](QUALITY_INT8.md): frozen float/INT8 speed and RGB-precision comparison.
 - [VSR source review](VSR_REVIEW.md).
-- [API design proposal](API_DESIGN.md), retained as historical design context.
 - [ARM kernel audit](engineering/ARM_AUDIT_2026-08-01.md).

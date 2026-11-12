@@ -9,7 +9,10 @@ Source: zensr `0bb29cf63a4ab8fa8864994acc659e61c890c5e6`.
 
 The native decoder pins the correction through zenjpeg
 `06d0e6f468285cd9fccbf7abae195ef31a6bc4fa`; relaxed, unfused and strict browser
-builds use that same dependency chain. Review PRs remain unmerged.
+builds use that same dependency chain. The zensr engine/runtime/browser work
+merged through [PR 4](https://github.com/imazen/zensr/pull/4) at `5042bccd`.
+The pinned zenjpeg decoder integration remains draft PR 261; its separate
+encoder-padding correction reached main through PR 262.
 
 ## Delivered pixels and quality
 

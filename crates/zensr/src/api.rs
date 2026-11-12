@@ -5,7 +5,7 @@
 //! no way to reason about one — they cannot know whether a projection slack of
 //! 0.15 is right, but they can know whether they just encoded the file.
 //!
-//! Design and the measurements forcing each decision: `docs/API_DESIGN.md`.
+//! Current entry points and result semantics: `docs/API.md`.
 
 use crate::calibration::*;
 use crate::{Projection, RestoreConfig, RestoreError};
