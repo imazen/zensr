@@ -20,6 +20,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
+  # System Git handles nested dependency submodules without Cargo libgit2 TLS.
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   browser-unit:
