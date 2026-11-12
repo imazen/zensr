@@ -9,9 +9,9 @@ or publication readiness. The native zenjpeg adapter is still a draft.
 | Work | Status | Revision / review |
 |---|---|---|
 | Codec-independent engine, browser fixes, retained SR studies, partial-block projection | Merged to zensr main | `5042bccd10027964c25d86a13cdc46ef926e6dbe`, [PR 4](https://github.com/imazen/zensr/pull/4) |
-| Single-file models and CLI loading | Reconciled with current main; CI running | [PR 1](https://github.com/imazen/zensr/pull/1) |
+| Single-file models, CLI loading and documentation cleanup | Merged to zensr main | `3d964681a1b5469c8e35f65e29513ee94384ec9e`, [PR 1](https://github.com/imazen/zensr/pull/1) |
 | JPEG encoder strip-edge padding | Merged to zenjpeg main | `a9c34a865424c0b33b5b313ce0eca49869c82fd6`, [PR 262](https://github.com/imazen/zenjpeg/pull/262) |
-| Small-bank corpus registry | Metadata only; final documentation review | [imazen-26 PR 4](https://github.com/imazen/imazen-26/pull/4) |
+| Small-bank corpus registry | Merged metadata; original artifacts remain frozen | `21009633b62610415b7dcaccdec7806726d9e10c`, [imazen-26 PR 4](https://github.com/imazen/imazen-26/pull/4) |
 | Native decoder repair adapter | Keep draft; conflicts with current main | [zenjpeg PR 261](https://github.com/imazen/zenjpeg/pull/261) |
 
 The obsolete native restoration proposal [zenjpeg PR 191](https://github.com/imazen/zenjpeg/pull/191)
@@ -23,7 +23,20 @@ are separate work and are not merged as part of this cleanup.
 
 The engine/browser head `921d4878` passed all 12 jobs in
 [CI run 42757405497](https://github.com/imazen/zensr/actions/runs/42757405497),
-including Linux x86/ARM, macOS ARM, Windows x86/ARM and i686 via cross.
+including Linux x64/ARM64, macOS ARM64, Windows x64/ARM64 and i686 via cross.
+The combined loader/engine head `5da3eb238debcf3c9c4056eee5004b188355a45b`
+also passed all 12 jobs in [CI run 43163821130](https://github.com/imazen/zensr/actions/runs/43163821130).
+The main merge tree was verified byte-identical to that tested head.
+
+Two standalone evaluation locks initially missed the loader dependency. All
+five standalone consumers now resolve with `--locked`; the exactness product
+root also mirrors the required codec patches. Existing QAT/storage and integer
+regression checks plus strict lint pass (wrapper rc=0, 60 seconds, peak RSS
+2.67 GiB, minimum available 19,202 MiB). No pixel expectations changed.
+
+macOS dependency fetching initially failed in Cargo libgit2 while cloning the
+nested `skcms` submodule, before tests. CI now uses system Git transport; the
+retry passed on `aarch64-apple-darwin`. No assertion or threshold was relaxed.
 The model-container merge retained both CI contracts. Its local default and
 no-chooser suites pass (61/44 cases, five existing explicit publication tests
 unselected in the default suite), with six packer tests, both strict Clippy
@@ -57,7 +70,10 @@ The preview intentionally pins zenjpeg `06d0e6f4` and engine `0bb29cf6`.
 The compatibility/model-container path still pins historical zenjpeg `24b6d3fb`.
 Neither pin tracks current zenjpeg main. See [the dependency graph](PRODUCTION_DEPENDENCIES.md)
 and [API boundaries](API.md). Container loading has not migrated into the new
-codec-independent engine. No new public API or release is implied by the docs.
+codec-independent engine. The independently pinned local/Git micro crates
+also have distinct Cargo type identities; align sources or provide an explicit
+bridge before sharing loaded models across these APIs. No release is implied
+by the documentation.
 
 ## Quality and publication limits
 
@@ -86,7 +102,7 @@ training exposure and [split provenance](SPLIT_DEFINITIONS.md) remain disclosed.
 
 Use [model loading](MODEL_CONTAINER.md), [browser build/test recipes](BROWSER_DEMO.md),
 [the small-bank tool contract](../tools/sr-bank/README.md) and the owning
-benchmark reports. Source/models/data previews remain unpublished drafts;
+benchmark reports. Model/data release previews remain unpublished drafts;
 no crate or release was published by this cleanup.
 
 The small bank is under `sr-bank-20261110/` in the retained zensr output tree.

@@ -11,6 +11,11 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- Reconcile the single-file loader with the codec engine, resolve standalone
+  tool locks and use system Git for CI submodule fetching (`9904e2cc`,
+  `ae979771`, `5da3eb23`). Replace superseded API guidance and record merged
+  versus draft integration status. [Readiness](docs/REPAIR_READINESS.md).
+
 - Partial-block coefficient projection reconstructs hidden samples from the
   stored block instead of replicating candidate edges, avoiding the observed
   tiny-image chroma amplification (`1472cf5d` regression).

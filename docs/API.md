@@ -37,6 +37,9 @@ all native layouts/row entry points, arbitrary ICC, crop, cancellation and
 resource limits have not been qualified. The old `zensr-zenjpeg` path remains
 supported; completing its replacement is outside the delivered extraction.
 Container loading currently belongs to `zensr-zenjpeg`, not the new engine.
+The preview also resolves local and Git copies of `zensr-micro`; their model
+types are distinct Cargo identities. Sharing a loaded model across these APIs
+requires aligned sources or an explicit bridge.
 
 ## Meaning of the result
 

@@ -11,5 +11,7 @@ current usage instructions or a list of promised features.
 - [VSR review](../VSR_REVIEW.md): the recent source review and follow-up work.
 
 For the active repair behavior, use the [routing contract](../DEFAULT_ROUTING.md).
-For measured current-policy results, see the
+For the historical 512-pixel policy comparison, see the
 [feature comparison](../../benchmarks/routing_feature_ablation_2026-11-06.md).
+It predates the weight-loader and edge-projection corrections. Current merge
+status and remaining measurement limits are in [readiness](../REPAIR_READINESS.md).
