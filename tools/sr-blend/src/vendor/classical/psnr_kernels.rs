@@ -122,7 +122,7 @@ fn luma_sqdiff_f64(a: &[u8], b: &[u8], cr: f64, cg: f64, cb: f64) -> f64 {
 /// f64 expression — element-wise ops are bit-identical); the sum keeps
 /// the scalar left-to-right order, so the result is bit-exact vs the
 /// reference `luma_mse` numerator.
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, f64x8))]
 fn luma_sqerr_inner(token: Token, a: &[u8], b: &[u8], cr: f64, cg: f64, cb: f64) -> f64 {
     let n = a.len() / 3;
     let vcr = f64x8::splat_t(token, cr);
@@ -132,30 +132,19 @@ fn luma_sqerr_inner(token: Token, a: &[u8], b: &[u8], cr: f64, cg: f64, cb: f64)
     let mut px = 0usize;
     while px + 8 <= n {
         let base = px * 3;
-        let ya = vcr
-            * f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(a[base + 3 * j])))
-            + vcg
-                * f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(a[base + 3 * j + 1])),
-                )
-            + vcb
-                * f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(a[base + 3 * j + 2])),
-                );
-        let yb = vcr
-            * f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(b[base + 3 * j])))
-            + vcg
-                * f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(b[base + 3 * j + 1])),
-                )
-            + vcb
-                * f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(b[base + 3 * j + 2])),
-                );
+        let load_rgb = |p: &[u8]| {
+            let (r, g, b) =
+                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            (
+                f64x8::from_array_t(token, r.to_array().map(f64::from)),
+                f64x8::from_array_t(token, g.to_array().map(f64::from)),
+                f64x8::from_array_t(token, b.to_array().map(f64::from)),
+            )
+        };
+        let (ra, ga, ba) = load_rgb(a);
+        let (rb, gb, bb) = load_rgb(b);
+        let ya = vcr * ra + vcg * ga + vcb * ba;
+        let yb = vcr * rb + vcg * gb + vcb * bb;
         let d = ya - yb;
         // Ordered accumulation: same bits as the scalar iterator sum.
         for v in (d * d).to_array() {
@@ -193,50 +182,48 @@ fn studio601_y_code(x: &[u8]) -> u8 {
 /// The conversion runs lane-wise with the scalar f32 op order; the code
 /// error is integer, so the i32 lane accumulation drained into u64 is
 /// bit-exact vs the scalar f64 sum (caller guards the 2^53 bound).
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x16, i32x16))]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, i32x8))]
 fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
     let n = a.len() / 3;
-    let c0 = f32x16::splat_t(token, 65.481);
-    let c1 = f32x16::splat_t(token, 128.553);
-    let c2 = f32x16::splat_t(token, 24.966);
-    let inv255 = f32x16::splat_t(token, 255.0);
-    let off = f32x16::splat_t(token, 16.0);
-    let half = f32x16::splat_t(token, 0.5);
-    let lo = f32x16::splat_t(token, 0.0);
-    let hi = f32x16::splat_t(token, 255.0);
+    let c0 = f32x8::splat_t(token, 65.481);
+    let c1 = f32x8::splat_t(token, 128.553);
+    let c2 = f32x8::splat_t(token, 24.966);
+    let inv255 = f32x8::splat_t(token, 255.0);
+    let off = f32x8::splat_t(token, 16.0);
+    let half = f32x8::splat_t(token, 0.5);
+    let lo = f32x8::splat_t(token, 0.0);
+    let hi = f32x8::splat_t(token, 255.0);
     let mut total = 0u64;
-    let mut block = i32x16::zero_t(token);
+    let mut block = i32x8::zero_t(token);
     let mut iters = 0usize;
     let mut px = 0usize;
-    while px + 16 <= n {
+    while px + 8 <= n {
         let base = px * 3;
-        let ra = f32x16::from_array_t(token, core::array::from_fn(|j| a[base + 3 * j] as f32));
-        let ga = f32x16::from_array_t(token, core::array::from_fn(|j| a[base + 3 * j + 1] as f32));
-        let ba = f32x16::from_array_t(token, core::array::from_fn(|j| a[base + 3 * j + 2] as f32));
-        let rb = f32x16::from_array_t(token, core::array::from_fn(|j| b[base + 3 * j] as f32));
-        let gb = f32x16::from_array_t(token, core::array::from_fn(|j| b[base + 3 * j + 1] as f32));
-        let bb = f32x16::from_array_t(token, core::array::from_fn(|j| b[base + 3 * j + 2] as f32));
+        let (ra, ga, ba) = f32x8::load_8_rgb_u8_t(token, (&a[base..base + 24]).try_into().unwrap());
+        let (rb, gb, bb) = f32x8::load_8_rgb_u8_t(token, (&b[base..base + 24]).try_into().unwrap());
         // floor(t + 0.5) == round-half-away for t in [16, 235] (see module
         // docs); the result is already inside the clamp range.
         let ca = ((off + (c0 * ra + c1 * ga + c2 * ba) / inv255) + half)
             .floor()
-            .clamp(lo, hi)
-            .to_i32();
+            .min_fast(hi)
+            .max_fast(lo)
+            .to_i32_fast();
         let cbv = ((off + (c0 * rb + c1 * gb + c2 * bb) / inv255) + half)
             .floor()
-            .clamp(lo, hi)
-            .to_i32();
+            .min_fast(hi)
+            .max_fast(lo)
+            .to_i32_fast();
         let d = ca - cbv;
         // Codes lie in [16, 235], so d² ≤ 219² = 47961 per lane per step;
         // 16384 steps reach 785_793_024, well under i32::MAX.
         block += d * d;
         iters += 1;
-        px += 16;
+        px += 8;
         if iters == 16384 {
             for v in block.to_array() {
                 total += v as u64;
             }
-            block = i32x16::zero_t(token);
+            block = i32x8::zero_t(token);
             iters = 0;
         }
     }
@@ -293,7 +280,7 @@ fn libvmaf_y_code(x: &[u8]) -> u8 {
 /// division — no reciprocal multiply). Codes are integral, so `diff`,
 /// `diff²` and the lane-wise f64 sums stay exact; `reduce_add`'s pairing
 /// is immaterial for integer values below 2^53 (caller-guarded).
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, f64x8))]
 fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
     let n = a.len() / 3;
     let c0 = f64x8::splat_t(token, 0.2126);
@@ -310,18 +297,13 @@ fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
     while px + 8 <= n {
         let base = px * 3;
         let luma = |p: &[u8]| {
-            c0 * (f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(p[base + 3 * j])))
-                / inv255)
-                + c1 * (f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(p[base + 3 * j + 1])),
-                ) / inv255)
-                + c2 * (f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(p[base + 3 * j + 2])),
-                ) / inv255)
+            let (r, g, b) =
+                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            c0 * (f64x8::from_array_t(token, r.to_array().map(f64::from)) / inv255)
+                + c1 * (f64x8::from_array_t(token, g.to_array().map(f64::from)) / inv255)
+                + c2 * (f64x8::from_array_t(token, b.to_array().map(f64::from)) / inv255)
         };
-        let code = |l: f64x8| (off + scale * l + half).floor().clamp(lo, hi);
+        let code = |l: f64x8| (off + scale * l + half).floor().min_fast(hi).max_fast(lo);
         let d = code(luma(a)) - code(luma(b));
         acc += d * d;
         px += 8;
@@ -381,7 +363,7 @@ fn studio601_plane_code(x: &[u8], plane: usize) -> f64 {
 /// Coefficients are baked per plane by the caller (`pick` in the scalar
 /// version also discarded the other two linear parts); lanes run the
 /// scalar expression and the integral accumulation is exact.
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, f64x8))]
 fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> f64 {
     let n = a.len() / 3;
     let (c0, c1, c2) = match plane {
@@ -403,20 +385,14 @@ fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> 
     while px + 8 <= n {
         let base = px * 3;
         let lin = |p: &[u8]| {
-            (vc0 * f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(p[base + 3 * j])))
-                + vc1
-                    * f64x8::from_array_t(
-                        token,
-                        core::array::from_fn(|j| f64::from(p[base + 3 * j + 1])),
-                    )
-                + vc2
-                    * f64x8::from_array_t(
-                        token,
-                        core::array::from_fn(|j| f64::from(p[base + 3 * j + 2])),
-                    ))
+            let (r, g, b) =
+                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            (vc0 * f64x8::from_array_t(token, r.to_array().map(f64::from))
+                + vc1 * f64x8::from_array_t(token, g.to_array().map(f64::from))
+                + vc2 * f64x8::from_array_t(token, b.to_array().map(f64::from)))
                 / inv255
         };
-        let code = |l: f64x8| (voff + l + half).floor().clamp(lo, hi);
+        let code = |l: f64x8| (voff + l + half).floor().min_fast(hi).max_fast(lo);
         let d = code(lin(a)) - code(lin(b));
         acc += d * d;
         px += 8;
@@ -460,7 +436,7 @@ pub(crate) fn studio601_chroma_sse(a: &[u8], b: &[u8], plane: usize) -> f64 {
 ///
 /// Returns the three exact integer sums as integral f64s; the caller
 /// keeps the scalar per-plane division and 6:1:1 weighting.
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, f64x8))]
 fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) {
     let n = a.len() / 3;
     let inv255 = f64x8::splat_t(token, 255.0);
@@ -491,21 +467,17 @@ fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) 
     while px + 8 <= n {
         let base = px * 3;
         let rgb = |p: &[u8]| {
+            let (r, g, b) =
+                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
             (
-                f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(p[base + 3 * j]))),
-                f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(p[base + 3 * j + 1])),
-                ),
-                f64x8::from_array_t(
-                    token,
-                    core::array::from_fn(|j| f64::from(p[base + 3 * j + 2])),
-                ),
+                f64x8::from_array_t(token, r.to_array().map(f64::from)),
+                f64x8::from_array_t(token, g.to_array().map(f64::from)),
+                f64x8::from_array_t(token, b.to_array().map(f64::from)),
             )
         };
         let (ra, ga, ba) = rgb(a);
         let (rb, gb, bb) = rgb(b);
-        let code = |off: f64x8, l: f64x8| (off + l + half).floor().clamp(lo, hi);
+        let code = |off: f64x8, l: f64x8| (off + l + half).floor().min_fast(hi).max_fast(lo);
         let dy = code(off_y, (cy[0] * ra + cy[1] * ga + cy[2] * ba) / inv255)
             - code(off_y, (cy[0] * rb + cy[1] * gb + cy[2] * bb) / inv255);
         let dcb = code(off_c, (ccb[0] * ra + ccb[1] * ga + ccb[2] * ba) / inv255)
