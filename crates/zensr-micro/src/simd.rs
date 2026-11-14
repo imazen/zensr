@@ -1,5 +1,5 @@
-//! SIMD SPANF forward: one `#[magetypes]` family (f32x8: v4/v3/neon/wasm128/scalar)
-//! plus a hand `#[arcane]` `_v4x` variant on native 512-bit f32x16.
+//! SIMD SPANF forward: `#[attune]` multi-tier dispatch across `k8` (`f32x8`:
+//! `v3`/`neon`/`wasm128`/`scalar`) and `k16` (`f32x16`: `v4`/`v4x`).
 //!
 //! Kernels are macro-instantiated per width so both variants share one body.
 //! Interior columns run vector FMA (loads at x-1/x/x+1 are guarded by
@@ -14,7 +14,7 @@ macro_rules! cnn_madd {
     ($a:expr,$b:expr,$c:expr $(,)?) => {{
         #[cfg(all(target_arch = "wasm32", not(feature = "strict-fma")))]
         {
-            $a.mul_add($b, $c)
+            $a.mul_add_relaxed($b, $c)
         }
         #[cfg(any(not(target_arch = "wasm32"), feature = "strict-fma"))]
         {
@@ -34,20 +34,6 @@ macro_rules! define_kernels {
             /// in `conv3x3_row4`). `tile_complete` must use the same block.
             const IC_BLOCK: usize = 16;
 
-            /// `max` and `min` with x86 `maxps`/`minps` semantics on every
-            /// backend: `a` where it compares strictly greater (less) than `b`,
-            /// otherwise `b`. So a NaN `a` gives `b`, and ±0 against ±0 gives
-            /// `b`. The existing outputs were produced with these on x86; the
-            /// wasm and NEON `max`/`min` return NaN for a NaN operand instead.
-            #[inline(always)]
-            fn max_x86<T: Backend>(a: V<T>, b: V<T>) -> V<T> {
-                V::<T>::blend(a.simd_gt(b), a, b)
-            }
-            #[inline(always)]
-            fn min_x86<T: Backend>(a: V<T>, b: V<T>) -> V<T> {
-                V::<T>::blend(a.simd_lt(b), a, b)
-            }
-
             /// `exp(x)` with the algorithm of magetypes' `exp_midp`
             /// (0.9.30 `transcendentals`: `exp2_midp` of `x * log2(e)`,
             /// round-to-nearest split, degree-6 polynomial, clamp to
@@ -57,8 +43,8 @@ macro_rules! define_kernels {
             /// on the scalar backend, whose `mul_add` rounds twice,
             /// it is what makes them agree with the FMA tiers. WASM defaults to engine
             /// arithmetic; `strict-fma` retains this reference math. The clamps use
-            /// `max_x86`/`min_x86`, so a NaN input gives the same result as on
-            /// x86 (the low clamp) on every backend.
+            /// `max_fast`/`min_fast` (x86 `maxps`/`minps` semantics), so a NaN input
+            /// yields the second operand (`lo`) on every backend.
             #[inline(always)]
             pub(crate) fn exp_midp_portable<T: Backend>(token: T, v: V<T>) -> V<T> {
                 const C0: f32 = 1.0;
@@ -72,8 +58,8 @@ macro_rules! define_kernels {
                 let x = v * sp(core::f32::consts::LOG2_E);
                 let lo = sp(-126.0);
                 let hi = sp(128.0);
-                let c = min_x86(max_x86(x, lo), hi);
-                let xi = min_x86(c.round(), sp(127.0));
+                let c = x.max_fast(lo).min_fast(hi);
+                let xi = c.round().min_fast(sp(127.0));
                 let xf = c - xi;
                 let poly = cnn_madd!(sp(C6), xf, sp(C5));
                 let poly = cnn_madd!(poly, xf, sp(C4));
@@ -364,9 +350,9 @@ macro_rules! define_kernels {
                                 let l = V::<T>::from_slice_t(token, &irow[x - 1..]);
                                 let m = V::<T>::from_slice_t(token, &irow[x..]);
                                 let r = V::<T>::from_slice_t(token, &irow[x + 1..]);
-                                acc = l.mul_add(V::<T>::splat_t(token, w9[ky * 3]), acc);
-                                acc = m.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
-                                acc = r.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
+                                acc = cnn_madd!(l, V::<T>::splat_t(token, w9[ky * 3]), acc);
+                                acc = cnn_madd!(m, V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
+                                acc = cnn_madd!(r, V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
                                 [oc * cs + oy * wd + x..oc * cs + oy * wd + x + W])
@@ -383,9 +369,9 @@ macro_rules! define_kernels {
                                 let l = V::<T>::from_slice_t(token, &irow[xl - 1..]);
                                 let m = V::<T>::from_slice_t(token, &irow[xl..]);
                                 let r = V::<T>::from_slice_t(token, &irow[xl + 1..]);
-                                acc = l.mul_add(V::<T>::splat_t(token, w9[ky * 3]), acc);
-                                acc = m.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
-                                acc = r.mul_add(V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
+                                acc = cnn_madd!(l, V::<T>::splat_t(token, w9[ky * 3]), acc);
+                                acc = cnn_madd!(m, V::<T>::splat_t(token, w9[ky * 3 + 1]), acc);
+                                acc = cnn_madd!(r, V::<T>::splat_t(token, w9[ky * 3 + 2]), acc);
                             }
                             let dst: &mut [f32; W] = (&mut out
                                 [oc * cs + oy * wd + xl..oc * cs + oy * wd + xl + W])
@@ -544,7 +530,7 @@ macro_rules! define_kernels {
                     while x < n {
                         let v = V::<T>::from_slice_t(token, &ch[x..]);
                         let dst: &mut [f32; W] = (&mut ch[x..x + W]).try_into().unwrap();
-                        (max_x86(v, zero) + a * min_x86(v, zero)).store(dst);
+                        (v.max_fast(zero) + a * v.min_fast(zero)).store(dst);
                         x += W;
                     }
                     // Remainder through the same vector formula on padded lanes,
@@ -554,7 +540,7 @@ macro_rules! define_kernels {
                         let mut lanes = [0.0f32; W];
                         lanes[..rem].copy_from_slice(&ch[n..]);
                         let v = V::<T>::from_array_t(token, lanes);
-                        (max_x86(v, zero) + a * min_x86(v, zero)).store(&mut lanes);
+                        (v.max_fast(zero) + a * v.min_fast(zero)).store(&mut lanes);
                         ch[n..].copy_from_slice(&lanes[..rem]);
                     }
                 }
@@ -1134,26 +1120,259 @@ define_kernels!(k8, f32x8, F32x8Convert, 8);
 #[cfg(feature = "avx512")]
 define_kernels!(k16, f32x16, F32x16Convert, 16);
 
-// --- kernel-level dispatch shims for parity tests -------------------------
+mod sealed {
+    use super::*;
 
-#[magetypes(v3, neon, wasm128, scalar)]
-fn silu_only_impl(token: Token, data: &mut [f32]) {
-    k8::silu(token, data);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn silu_only_impl_v4x(token: X64V4xToken, data: &mut [f32]) {
-    k16::silu(token, data);
-}
-/// SiLU through the same dispatch the full forward uses (test/bisect entry).
-pub fn silu_dispatch(data: &mut [f32]) {
-    incant!(
-        silu_only_impl(data),
-        [v4x(cfg(avx512)), v3, neon, wasm128, scalar]
+    /// Bridges 8-wide (`k8`: v3/neon/wasm128/scalar) and 16-wide (`k16`: v4/v4x)
+    /// SPANF kernel instantiations so a single `#[attune]` body serves every tier.
+    pub(crate) trait SpanfTier: Copy {
+        fn silu(self, data: &mut [f32]);
+        fn prelu(self, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize);
+        #[allow(clippy::too_many_arguments)]
+        fn conv3x3(
+            self,
+            inp: &[f32],
+            cin: usize,
+            packed: &[f32],
+            bias: &[f32],
+            out: &mut [f32],
+            cout: usize,
+            h: usize,
+            wd: usize,
+            cs: usize,
+        );
+        fn gate(self, a: &[f32], skip: &[f32], out: &mut [f32]);
+        #[allow(clippy::too_many_arguments)]
+        fn conv1x1_multi(
+            self,
+            srcs: &[(&[f32], usize)],
+            wts: &[f32],
+            bias: &[f32],
+            out: &mut [f32],
+            cout: usize,
+            cin_total: usize,
+            plane: usize,
+            cs: usize,
+        );
+        #[allow(clippy::too_many_arguments)]
+        fn conv3x3_with_scratch(
+            self,
+            inp: &[f32],
+            cin: usize,
+            packed: &[f32],
+            bias: &[f32],
+            out: &mut [f32],
+            cout: usize,
+            h: usize,
+            wd: usize,
+            cs: usize,
+            pin_buf: &mut Vec<f32>,
+        );
+        #[cfg(test)]
+        #[allow(clippy::too_many_arguments)]
+        fn wino_mid(
+            self,
+            inp: &[f32],
+            cin: usize,
+            uq: &[f32],
+            raw: &[f32],
+            bias: &[f32],
+            out: &mut [f32],
+            cout: usize,
+            h: usize,
+            wd: usize,
+            cs: usize,
+            ox: usize,
+            oy: usize,
+        );
+        #[allow(clippy::too_many_arguments)]
+        fn wino_mid_with_scratch(
+            self,
+            inp: &[f32],
+            cin: usize,
+            uq: &[f32],
+            raw: &[f32],
+            bias: &[f32],
+            out: &mut [f32],
+            cout: usize,
+            h: usize,
+            wd: usize,
+            cs: usize,
+            ox: usize,
+            oy: usize,
+            wino_buf: &mut Vec<f32>,
+        );
+        #[allow(clippy::too_many_arguments)]
+        fn forward(
+            self,
+            input: &[f32],
+            h: usize,
+            wd: usize,
+            w: &SpanfWeights,
+            pk: &crate::SpanfModel,
+            sc: &mut crate::Scratch,
+            out: &mut [f32],
+        );
+    }
+
+    macro_rules! impl_spanf_tier {
+        ($mod:ident, $tok:ty $(, #[cfg($meta:meta)])?) => {
+            $(#[cfg($meta)])?
+            impl SpanfTier for $tok {
+                #[inline(always)]
+                fn silu(self, data: &mut [f32]) {
+                    $mod::silu(self, data);
+                }
+                #[inline(always)]
+                fn prelu(
+                    self,
+                    data: &mut [f32],
+                    slopes: &[f32],
+                    channels: usize,
+                    plane: usize,
+                    cs: usize,
+                ) {
+                    $mod::prelu(self, data, slopes, channels, plane, cs);
+                }
+                #[inline(always)]
+                fn conv3x3(
+                    self,
+                    inp: &[f32],
+                    cin: usize,
+                    packed: &[f32],
+                    bias: &[f32],
+                    out: &mut [f32],
+                    cout: usize,
+                    h: usize,
+                    wd: usize,
+                    cs: usize,
+                ) {
+                    $mod::conv3x3(self, inp, cin, packed, bias, out, cout, h, wd, cs);
+                }
+                #[inline(always)]
+                fn gate(self, a: &[f32], skip: &[f32], out: &mut [f32]) {
+                    $mod::gate(self, a, skip, out);
+                }
+                #[inline(always)]
+                fn conv1x1_multi(
+                    self,
+                    srcs: &[(&[f32], usize)],
+                    wts: &[f32],
+                    bias: &[f32],
+                    out: &mut [f32],
+                    cout: usize,
+                    cin_total: usize,
+                    plane: usize,
+                    cs: usize,
+                ) {
+                    $mod::conv1x1_multi(self, srcs, wts, bias, out, cout, cin_total, plane, cs);
+                }
+                #[inline(always)]
+                fn conv3x3_with_scratch(
+                    self,
+                    inp: &[f32],
+                    cin: usize,
+                    packed: &[f32],
+                    bias: &[f32],
+                    out: &mut [f32],
+                    cout: usize,
+                    h: usize,
+                    wd: usize,
+                    cs: usize,
+                    pin_buf: &mut Vec<f32>,
+                ) {
+                    $mod::conv3x3_with_scratch(
+                        self, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf,
+                    );
+                }
+                #[cfg(test)]
+                #[inline(always)]
+                fn wino_mid(
+                    self,
+                    inp: &[f32],
+                    cin: usize,
+                    uq: &[f32],
+                    raw: &[f32],
+                    bias: &[f32],
+                    out: &mut [f32],
+                    cout: usize,
+                    h: usize,
+                    wd: usize,
+                    cs: usize,
+                    ox: usize,
+                    oy: usize,
+                ) {
+                    $mod::wino_mid(self, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
+                }
+                #[inline(always)]
+                fn wino_mid_with_scratch(
+                    self,
+                    inp: &[f32],
+                    cin: usize,
+                    uq: &[f32],
+                    raw: &[f32],
+                    bias: &[f32],
+                    out: &mut [f32],
+                    cout: usize,
+                    h: usize,
+                    wd: usize,
+                    cs: usize,
+                    ox: usize,
+                    oy: usize,
+                    wino_buf: &mut Vec<f32>,
+                ) {
+                    $mod::wino_mid_with_scratch(
+                        self, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
+                    );
+                }
+                #[inline(always)]
+                fn forward(
+                    self,
+                    input: &[f32],
+                    h: usize,
+                    wd: usize,
+                    w: &SpanfWeights,
+                    pk: &crate::SpanfModel,
+                    sc: &mut crate::Scratch,
+                    out: &mut [f32],
+                ) {
+                    $mod::forward(self, input, h, wd, w, pk, sc, out);
+                }
+            }
+        };
+    }
+
+    impl_spanf_tier!(k8, ScalarToken);
+    impl_spanf_tier!(k8, X64V3Token, #[cfg(target_arch = "x86_64")]);
+    impl_spanf_tier!(k8, NeonToken, #[cfg(target_arch = "aarch64")]);
+    impl_spanf_tier!(k8, Wasm128Token, #[cfg(target_arch = "wasm32")]);
+    impl_spanf_tier!(
+        k16,
+        X64V4Token,
+        #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
+    );
+    impl_spanf_tier!(
+        k16,
+        X64V4xToken,
+        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     );
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+// --- kernel-level dispatch shims for parity tests -------------------------
+
+#[attune(_*_t, +v4x(cfg(avx512)))]
+fn silu_only_impl(token: Token, data: &mut [f32]) {
+    <Token as sealed::SpanfTier>::silu(token, data);
+}
+/// SiLU through the same dispatch the full forward uses (test/bisect entry).
+pub fn silu_dispatch(data: &mut [f32]) {
+    attuned!(
+        silu_only_impl(data),
+        [v4x_t(cfg(avx512)), v3_t, neon_t, wasm128_t, scalar_t]
+    );
+}
+
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 fn prelu_lay(
     token: Token,
     data: &mut [f32],
@@ -1162,31 +1381,7 @@ fn prelu_lay(
     plane: usize,
     cs: usize,
 ) {
-    k8::prelu(token, data, slopes, channels, plane, cs);
-}
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-fn prelu_lay_v4(
-    token: X64V4Token,
-    data: &mut [f32],
-    slopes: &[f32],
-    channels: usize,
-    plane: usize,
-    cs: usize,
-) {
-    k16::prelu(token, data, slopes, channels, plane, cs);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn prelu_lay_v4x(
-    token: X64V4xToken,
-    data: &mut [f32],
-    slopes: &[f32],
-    channels: usize,
-    plane: usize,
-    cs: usize,
-) {
-    k16::prelu(token, data, slopes, channels, plane, cs);
+    <Token as sealed::SpanfTier>::prelu(token, data, slopes, channels, plane, cs);
 }
 pub(crate) fn prelu_dispatch(
     data: &mut [f32],
@@ -1195,15 +1390,15 @@ pub(crate) fn prelu_dispatch(
     plane: usize,
     cs: usize,
 ) {
-    incant!(
+    attuned!(
         prelu_lay(data, slopes, channels, plane, cs),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
@@ -1211,7 +1406,7 @@ pub(crate) fn prelu_dispatch(
 // --- packed-weight kernel families for adopted graphs ----------------------
 
 #[cfg(test)]
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn conv3x3_lay(
     token: Token,
@@ -1225,59 +1420,15 @@ fn conv3x3_lay(
     wd: usize,
     cs: usize,
 ) {
-    k8::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
-}
-#[cfg(all(test, target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv3x3_lay_v4(
-    token: X64V4Token,
-    inp: &[f32],
-    cin: usize,
-    packed: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-) {
-    k16::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
-}
-#[cfg(all(test, target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv3x3_lay_v4x(
-    token: X64V4xToken,
-    inp: &[f32],
-    cin: usize,
-    packed: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-) {
-    k16::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
+    <Token as sealed::SpanfTier>::conv3x3(token, inp, cin, packed, bias, out, cout, h, wd, cs);
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 fn gate_lay(token: Token, a: &[f32], skip: &[f32], out: &mut [f32]) {
-    k8::gate(token, a, skip, out);
-}
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-fn gate_lay_v4(token: X64V4Token, a: &[f32], skip: &[f32], out: &mut [f32]) {
-    k16::gate(token, a, skip, out);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn gate_lay_v4x(token: X64V4xToken, a: &[f32], skip: &[f32], out: &mut [f32]) {
-    k16::gate(token, a, skip, out);
+    <Token as sealed::SpanfTier>::gate(token, a, skip, out);
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn conv1x1_gen_lay(
     token: Token,
@@ -1290,42 +1441,12 @@ fn conv1x1_gen_lay(
     plane: usize,
     cs: usize,
 ) {
-    k8::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
-}
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv1x1_gen_lay_v4(
-    token: X64V4Token,
-    srcs: &[(&[f32], usize)],
-    wts: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    cin_total: usize,
-    plane: usize,
-    cs: usize,
-) {
-    k16::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv1x1_gen_lay_v4x(
-    token: X64V4xToken,
-    srcs: &[(&[f32], usize)],
-    wts: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    cin_total: usize,
-    plane: usize,
-    cs: usize,
-) {
-    k16::conv1x1_multi(token, srcs, wts, bias, out, cout, cin_total, plane, cs);
+    <Token as sealed::SpanfTier>::conv1x1_multi(
+        token, srcs, wts, bias, out, cout, cin_total, plane, cs,
+    );
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn conv3x3_scratch_lay(
     token: Token,
@@ -1340,43 +1461,9 @@ fn conv3x3_scratch_lay(
     cs: usize,
     pin_buf: &mut Vec<f32>,
 ) {
-    k8::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
-}
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv3x3_scratch_lay_v4(
-    token: X64V4Token,
-    inp: &[f32],
-    cin: usize,
-    packed: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    pin_buf: &mut Vec<f32>,
-) {
-    k16::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv3x3_scratch_lay_v4x(
-    token: X64V4xToken,
-    inp: &[f32],
-    cin: usize,
-    packed: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    pin_buf: &mut Vec<f32>,
-) {
-    k16::conv3x3_with_scratch(token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf);
+    <Token as sealed::SpanfTier>::conv3x3_with_scratch(
+        token, inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1392,21 +1479,21 @@ pub(crate) fn conv3x3_packed_dispatch_with_scratch(
     cs: usize,
     pin_buf: &mut Vec<f32>,
 ) {
-    incant!(
+    attuned!(
         conv3x3_scratch_lay(inp, cin, packed, bias, out, cout, h, wd, cs, pin_buf),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
 
 #[cfg(test)]
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn wino_lay(
     token: Token,
@@ -1423,50 +1510,12 @@ fn wino_lay(
     ox: usize,
     oy: usize,
 ) {
-    k8::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
-}
-#[cfg(all(test, target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn wino_lay_v4(
-    token: X64V4Token,
-    inp: &[f32],
-    cin: usize,
-    uq: &[f32],
-    raw: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    ox: usize,
-    oy: usize,
-) {
-    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
-}
-#[cfg(all(test, target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn wino_lay_v4x(
-    token: X64V4xToken,
-    inp: &[f32],
-    cin: usize,
-    uq: &[f32],
-    raw: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    ox: usize,
-    oy: usize,
-) {
-    k16::wino_mid(token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy);
+    <Token as sealed::SpanfTier>::wino_mid(
+        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy,
+    );
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn wino_scratch_lay(
     token: Token,
@@ -1484,53 +1533,7 @@ fn wino_scratch_lay(
     oy: usize,
     wino_buf: &mut Vec<f32>,
 ) {
-    k8::wino_mid_with_scratch(
-        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
-    );
-}
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn wino_scratch_lay_v4(
-    token: X64V4Token,
-    inp: &[f32],
-    cin: usize,
-    uq: &[f32],
-    raw: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    ox: usize,
-    oy: usize,
-    wino_buf: &mut Vec<f32>,
-) {
-    k16::wino_mid_with_scratch(
-        token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
-    );
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn wino_scratch_lay_v4x(
-    token: X64V4xToken,
-    inp: &[f32],
-    cin: usize,
-    uq: &[f32],
-    raw: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-    cs: usize,
-    ox: usize,
-    oy: usize,
-    wino_buf: &mut Vec<f32>,
-) {
-    k16::wino_mid_with_scratch(
+    <Token as sealed::SpanfTier>::wino_mid_with_scratch(
         token, inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf,
     );
 }
@@ -1554,15 +1557,15 @@ pub(crate) fn conv3x3_wino_dispatch(
     ox: usize,
     oy: usize,
 ) {
-    incant!(
+    attuned!(
         wino_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
@@ -1583,36 +1586,36 @@ pub(crate) fn conv3x3_wino_dispatch_with_scratch(
     oy: usize,
     wino_buf: &mut Vec<f32>,
 ) {
-    incant!(
+    attuned!(
         wino_scratch_lay(inp, cin, uq, raw, bias, out, cout, h, wd, cs, ox, oy, wino_buf),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
 
 pub(crate) fn silu_all_dispatch(data: &mut [f32]) {
-    incant!(
+    attuned!(
         silu_only_impl(data),
-        [v4x(cfg(avx512)), v3, neon, wasm128, scalar]
+        [v4x_t(cfg(avx512)), v3_t, neon_t, wasm128_t, scalar_t]
     );
 }
 
 pub(crate) fn gate_all_dispatch(a: &[f32], skip: &[f32], out: &mut [f32]) {
-    incant!(
+    attuned!(
         gate_lay(a, skip, out),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
@@ -1628,20 +1631,21 @@ pub(crate) fn conv1x1_gen_dispatch(
     plane: usize,
     cs: usize,
 ) {
-    incant!(
+    attuned!(
         conv1x1_gen_lay(srcs, wts, bias, out, cout, cin_total, plane, cs),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
 
-#[magetypes(v3, neon, wasm128, scalar)]
+#[attune(_*_t, +v4x(cfg(avx512)))]
+#[allow(clippy::too_many_arguments)]
 fn conv3x3_only_impl(
     token: Token,
     inp: &[f32],
@@ -1654,24 +1658,7 @@ fn conv3x3_only_impl(
     wd: usize,
 ) {
     let packed = crate::pack_conv3x3(wts, cin, cout);
-    k8::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd, h * wd);
-}
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn conv3x3_only_impl_v4x(
-    token: X64V4xToken,
-    inp: &[f32],
-    cin: usize,
-    wts: &[f32],
-    bias: &[f32],
-    out: &mut [f32],
-    cout: usize,
-    h: usize,
-    wd: usize,
-) {
-    let packed = crate::pack_conv3x3(wts, cin, cout);
-    k16::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd, h * wd);
+    <Token as sealed::SpanfTier>::conv3x3(token, inp, cin, &packed, bias, out, cout, h, wd, h * wd);
 }
 /// conv3x3 through full dispatch (test/bisect entry; takes RAW layout weights).
 #[allow(clippy::too_many_arguments)]
@@ -1685,15 +1672,16 @@ pub fn conv3x3_dispatch(
     h: usize,
     wd: usize,
 ) {
-    incant!(
+    attuned!(
         conv3x3_only_impl(inp, cin, wts, bias, out, cout, h, wd),
-        [v4x(cfg(avx512)), v3, neon, wasm128, scalar]
+        [v4x_t(cfg(avx512)), v3_t, neon_t, wasm128_t, scalar_t]
     );
 }
 
 // f32x8 family: v3 = AVX2+FMA native 256-bit; neon/wasm128 polyfill 2x128;
-// scalar polyfills lane-wise. (v4/v4x are AVX-512 tiers — below on f32x16.)
-#[magetypes(v3, neon, wasm128, scalar)]
+// scalar polyfills lane-wise. v4/v4x use the f32x16 (`k16`) kernel body.
+#[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
+#[allow(clippy::too_many_arguments)]
 fn spanf_forward_impl(
     token: Token,
     input: &[f32],
@@ -1704,39 +1692,7 @@ fn spanf_forward_impl(
     sc: &mut crate::Scratch,
     out: &mut [f32],
 ) {
-    k8::forward(token, input, h, wd, w, pk, sc, out);
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn spanf_forward_impl_v4(
-    token: X64V4Token,
-    input: &[f32],
-    h: usize,
-    wd: usize,
-    w: &SpanfWeights,
-    pk: &crate::SpanfModel,
-    sc: &mut crate::Scratch,
-    out: &mut [f32],
-) {
-    k16::forward(token, input, h, wd, w, pk, sc, out);
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-#[allow(clippy::too_many_arguments)]
-fn spanf_forward_impl_v4x(
-    token: X64V4xToken,
-    input: &[f32],
-    h: usize,
-    wd: usize,
-    w: &SpanfWeights,
-    pk: &crate::SpanfModel,
-    sc: &mut crate::Scratch,
-    out: &mut [f32],
-) {
-    k16::forward(token, input, h, wd, w, pk, sc, out);
+    <Token as sealed::SpanfTier>::forward(token, input, h, wd, w, pk, sc, out);
 }
 
 /// Dispatching whole-forward on caller-provided model + scratch (tiling entry).
@@ -1749,15 +1705,15 @@ pub(crate) fn forward_dispatch(
     out: &mut [f32],
 ) {
     let w = model.weights();
-    incant!(
+    attuned!(
         spanf_forward_impl(input, h, wd, &w, model, sc, out),
         [
-            v4x(cfg(avx512)),
-            v4(cfg(tier_v4)),
-            v3,
-            neon,
-            wasm128,
-            scalar
+            v4x_t(cfg(avx512)),
+            v4_t(cfg(tier_v4)),
+            v3_t,
+            neon_t,
+            wasm128_t,
+            scalar_t
         ]
     );
 }
@@ -1800,7 +1756,7 @@ pub fn spanf_x4_simd_force_v4x(
     let token = X64V4xToken::summon()?;
     let (model, mut sc, mut out) = force_setup(w, h, wd);
     let wv = model.weights();
-    spanf_forward_impl_v4x(token, input, h, wd, &wv, &model, &mut sc, &mut out);
+    spanf_forward_impl_v4x_t(token, input, h, wd, &wv, &model, &mut sc, &mut out);
     Some(out)
 }
 
@@ -1815,7 +1771,7 @@ pub fn spanf_x4_simd_force_v4(
     let token = X64V4Token::summon()?;
     let (model, mut sc, mut out) = force_setup(w, h, wd);
     let wv = model.weights();
-    spanf_forward_impl_v4(token, input, h, wd, &wv, &model, &mut sc, &mut out);
+    spanf_forward_impl_v4_t(token, input, h, wd, &wv, &model, &mut sc, &mut out);
     Some(out)
 }
 
@@ -1828,9 +1784,9 @@ pub fn spanf_x4_simd_force_v3(
 ) -> Option<Vec<f32>> {
     let (model, mut sc, mut out) = force_setup(w, h, wd);
     let wv = model.weights();
-    incant!(
+    attuned!(
         spanf_forward_impl(input, h, wd, &wv, &model, &mut sc, &mut out),
-        [v3, scalar]
+        [v3_t, scalar_t]
     );
     Some(out)
 }

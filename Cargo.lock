@@ -160,7 +160,17 @@ version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
 dependencies = [
- "archmage-macros",
+ "archmage-macros 0.9.30",
+ "safe_unaligned_simd",
+ "winarm-cpufeatures",
+]
+
+[[package]]
+name = "archmage"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
+dependencies = [
+ "archmage-macros 0.9.31",
  "safe_unaligned_simd",
  "winarm-cpufeatures",
 ]
@@ -170,6 +180,16 @@ name = "archmage-macros"
 version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "archmage-macros"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -303,9 +323,9 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914c4086ea33acfef5c3ea38393c6f5c0ec99d32155377818f1723ec1bd565e3"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "imgref",
- "magetypes",
+ "magetypes 0.9.30",
  "rayon",
  "rgb",
 ]
@@ -1013,9 +1033,9 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dcca2000fbfa5923eb54b5bedddadbe5f7c83f7ef65285ebe0ed10daa78d0f0"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "imgref",
- "magetypes",
+ "magetypes 0.9.30",
  "num-traits",
  "thiserror 2.0.21",
  "yuvxyb",
@@ -1159,7 +1179,7 @@ version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "paste",
 ]
@@ -1312,10 +1332,10 @@ name = "heic"
 version = "0.2.0"
 source = "git+https://github.com/imazen/heic?rev=9e7f75617fb1e62e642ee34ee1ac21a5f068ab51#9e7f75617fb1e62e642ee34ee1ac21a5f068ab51"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "enough",
  "heic-core",
- "magetypes",
+ "magetypes 0.9.30",
  "memchr",
  "safe_unaligned_simd",
  "ultrahdr-core 0.5.0",
@@ -1327,9 +1347,9 @@ name = "heic-core"
 version = "0.2.0"
 source = "git+https://github.com/imazen/heic?rev=9e7f75617fb1e62e642ee34ee1ac21a5f068ab51#9e7f75617fb1e62e642ee34ee1ac21a5f068ab51"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "enough",
- "magetypes",
+ "magetypes 0.9.30",
  "safe_unaligned_simd",
  "whereat",
 ]
@@ -1531,9 +1551,9 @@ version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0e61c33d85bc56dcaf27cdf48ca32b8e34af7236584eb1d8a47316c49e0be1"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
- "magetypes",
+ "magetypes 0.9.30",
  "num-traits",
 ]
 
@@ -1576,8 +1596,17 @@ version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "libm",
+ "rustversion",
+]
+
+[[package]]
+name = "magetypes"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
+dependencies = [
+ "archmage 0.9.31",
  "rustversion",
 ]
 
@@ -3062,12 +3091,12 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d65bd22a90785bb7360076b599ffbc201aef2c5817d2e5f37f37357829d476e"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "enough",
  "half",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "thiserror 2.0.21",
  "wide",
  "zencodec 0.1.26",
@@ -3753,10 +3782,10 @@ name = "zenanalyze"
 version = "0.2.0"
 source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "garb",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "zenanalyze-api",
  "zenpixels 0.3.1",
  "zenpixels-convert 0.3.1",
@@ -3796,8 +3825,8 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d66daf1f95f9f3a3c7c4529ea1f993069e2691cc89a4f8b0f4002ced96179f68"
 dependencies = [
- "archmage",
- "magetypes",
+ "archmage 0.9.30",
+ "magetypes 0.9.30",
  "safe_unaligned_simd",
 ]
 
@@ -3833,7 +3862,7 @@ version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8409543ad469f954834da58409f0d9c463156f01cfaf8a8a03fe277c73b1e0f5"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "enough",
  "libm",
 ]
@@ -3992,14 +4021,14 @@ version = "0.9.0"
 source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
  "aligned-vec",
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "enough",
  "garb",
  "how-far",
  "imgref",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "memchr",
  "rgb",
  "safe_unaligned_simd",
@@ -4052,12 +4081,12 @@ version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c49c5c25ca3577cef11f12f594a9966297d949c1a801f3a79ca9f5df74a09fa2"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "garb",
  "linear-srgb",
  "lz4_flex",
- "magetypes",
+ "magetypes 0.9.30",
  "once_cell",
  "paste",
  "rgb",
@@ -4070,12 +4099,12 @@ name = "zenpixels-convert"
 version = "0.3.1"
 source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "garb",
  "libm",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "once_cell",
  "paste",
  "whereat",
@@ -4089,7 +4118,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ef0ff0cfac28ce74a9241dbe8ba3abe60f385819d55675c4daced1ac8ac4bd"
 dependencies = [
  "almost-enough",
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "enough",
  "imgref",
@@ -4112,10 +4141,10 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "440257260e03abacc233712332cd164f59afb98e8385e49ca5a0581ef0c7269d"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "imgref",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "num-traits",
  "rgb",
  "thiserror 2.0.21",
@@ -4127,11 +4156,11 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0703679da7af627f10429532d0633b3d32fa0fd10d2b48ca94b5fcd0dbfd6e5a"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "imgref",
  "libm",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "rgb",
  "safe_unaligned_simd",
  "whereat",
@@ -4145,11 +4174,11 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f46ead96f329b3f706ce66c8f36bf5b5bc1bb1fc5135c467079728379560b93c"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "bytemuck",
  "imgref",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "rayon",
  "rgb",
  "thiserror 2.0.21",
@@ -4202,9 +4231,9 @@ dependencies = [
 name = "zensr-micro"
 version = "0.0.1"
 dependencies = [
- "archmage",
+ "archmage 0.9.31",
  "bytemuck",
- "magetypes",
+ "magetypes 0.9.31",
  "zenbench",
  "zenpixels 0.3.1",
 ]
@@ -4236,10 +4265,10 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c602cc9010340287fd4ffcb2cd1ae9f6a665d37db59f0b9578352788cf8b304"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "libm",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
 ]
 
 [[package]]
@@ -4247,11 +4276,11 @@ name = "zenyuv"
 version = "0.1.3"
 source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
 dependencies = [
- "archmage",
+ "archmage 0.9.30",
  "imgref",
  "libm",
  "linear-srgb",
- "magetypes",
+ "magetypes 0.9.30",
  "safe_unaligned_simd",
 ]
 

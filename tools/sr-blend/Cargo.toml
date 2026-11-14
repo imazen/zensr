@@ -19,8 +19,8 @@ sha2 = "0.11.1"
 enough = "0.4.4"
 rgb = "0.8.52"
 imgref = "1.12.2"
-archmage = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["macros"] }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1" }
+archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["macros"] }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31" }
 rayon = "1.11.1"
 [profile.release]
 lto = "thin"

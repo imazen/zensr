@@ -76,18 +76,18 @@ fn conv(
 ) {
     match t {
         Tier::Scalar => {
-            conv3x3_lay_scalar(archmage::ScalarToken, inp, cin, p, b, out, cout, h, wd, cs)
+            conv3x3_lay_scalar_t(archmage::ScalarToken, inp, cin, p, b, out, cout, h, wd, cs)
         }
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => conv3x3_lay_v3(k, inp, cin, p, b, out, cout, h, wd, cs),
+        Tier::V3(k) => conv3x3_lay_v3_t(k, inp, cin, p, b, out, cout, h, wd, cs),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(k) => conv3x3_lay_v4(k, inp, cin, p, b, out, cout, h, wd, cs),
+        Tier::V4(k) => conv3x3_lay_v4_t(k, inp, cin, p, b, out, cout, h, wd, cs),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => conv3x3_lay_v4x(k, inp, cin, p, b, out, cout, h, wd, cs),
+        Tier::V4x(k) => conv3x3_lay_v4x_t(k, inp, cin, p, b, out, cout, h, wd, cs),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => conv3x3_lay_neon(k, inp, cin, p, b, out, cout, h, wd, cs),
+        Tier::Neon(k) => conv3x3_lay_neon_t(k, inp, cin, p, b, out, cout, h, wd, cs),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => conv3x3_lay_wasm128(k, inp, cin, p, b, out, cout, h, wd, cs),
+        Tier::Wasm(k) => conv3x3_lay_wasm128_t(k, inp, cin, p, b, out, cout, h, wd, cs),
     }
 }
 
@@ -104,7 +104,7 @@ fn conv1x1(
     cs: usize,
 ) {
     match t {
-        Tier::Scalar => conv1x1_gen_lay_scalar(
+        Tier::Scalar => conv1x1_gen_lay_scalar_t(
             archmage::ScalarToken,
             srcs,
             w,
@@ -116,64 +116,66 @@ fn conv1x1(
             cs,
         ),
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => conv1x1_gen_lay_v3(k, srcs, w, b, out, cout, cin_total, plane, cs),
+        Tier::V3(k) => conv1x1_gen_lay_v3_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(k) => conv1x1_gen_lay_v4(k, srcs, w, b, out, cout, cin_total, plane, cs),
+        Tier::V4(k) => conv1x1_gen_lay_v4_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => conv1x1_gen_lay_v4x(k, srcs, w, b, out, cout, cin_total, plane, cs),
+        Tier::V4x(k) => conv1x1_gen_lay_v4x_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => conv1x1_gen_lay_neon(k, srcs, w, b, out, cout, cin_total, plane, cs),
+        Tier::Neon(k) => conv1x1_gen_lay_neon_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => conv1x1_gen_lay_wasm128(k, srcs, w, b, out, cout, cin_total, plane, cs),
+        Tier::Wasm(k) => conv1x1_gen_lay_wasm128_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
     }
 }
 
 fn prelu(t: Tier, data: &mut [f32], slopes: &[f32], channels: usize, plane: usize, cs: usize) {
     match t {
-        Tier::Scalar => prelu_lay_scalar(archmage::ScalarToken, data, slopes, channels, plane, cs),
+        Tier::Scalar => {
+            prelu_lay_scalar_t(archmage::ScalarToken, data, slopes, channels, plane, cs)
+        }
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => prelu_lay_v3(k, data, slopes, channels, plane, cs),
+        Tier::V3(k) => prelu_lay_v3_t(k, data, slopes, channels, plane, cs),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(k) => prelu_lay_v4(k, data, slopes, channels, plane, cs),
+        Tier::V4(k) => prelu_lay_v4_t(k, data, slopes, channels, plane, cs),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => prelu_lay_v4x(k, data, slopes, channels, plane, cs),
+        Tier::V4x(k) => prelu_lay_v4x_t(k, data, slopes, channels, plane, cs),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => prelu_lay_neon(k, data, slopes, channels, plane, cs),
+        Tier::Neon(k) => prelu_lay_neon_t(k, data, slopes, channels, plane, cs),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => prelu_lay_wasm128(k, data, slopes, channels, plane, cs),
+        Tier::Wasm(k) => prelu_lay_wasm128_t(k, data, slopes, channels, plane, cs),
     }
 }
 
 fn gate(t: Tier, a: &[f32], skip: &[f32], out: &mut [f32]) {
     match t {
-        Tier::Scalar => gate_lay_scalar(archmage::ScalarToken, a, skip, out),
+        Tier::Scalar => gate_lay_scalar_t(archmage::ScalarToken, a, skip, out),
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => gate_lay_v3(k, a, skip, out),
+        Tier::V3(k) => gate_lay_v3_t(k, a, skip, out),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(k) => gate_lay_v4(k, a, skip, out),
+        Tier::V4(k) => gate_lay_v4_t(k, a, skip, out),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => gate_lay_v4x(k, a, skip, out),
+        Tier::V4x(k) => gate_lay_v4x_t(k, a, skip, out),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => gate_lay_neon(k, a, skip, out),
+        Tier::Neon(k) => gate_lay_neon_t(k, a, skip, out),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => gate_lay_wasm128(k, a, skip, out),
+        Tier::Wasm(k) => gate_lay_wasm128_t(k, a, skip, out),
     }
 }
 
 /// SiLU has no `_v4` kernel: the production dispatch sends that tier to v3.
 fn silu(t: Tier, data: &mut [f32]) {
     match t {
-        Tier::Scalar => silu_only_impl_scalar(archmage::ScalarToken, data),
+        Tier::Scalar => silu_only_impl_scalar_t(archmage::ScalarToken, data),
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => silu_only_impl_v3(k, data),
+        Tier::V3(k) => silu_only_impl_v3_t(k, data),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(_) => silu_only_impl_v3(archmage::X64V3Token::summon().unwrap(), data),
+        Tier::V4(_) => silu_only_impl_v3_t(archmage::X64V3Token::summon().unwrap(), data),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => silu_only_impl_v4x(k, data),
+        Tier::V4x(k) => silu_only_impl_v4x_t(k, data),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => silu_only_impl_neon(k, data),
+        Tier::Neon(k) => silu_only_impl_neon_t(k, data),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => silu_only_impl_wasm128(k, data),
+        Tier::Wasm(k) => silu_only_impl_wasm128_t(k, data),
     }
 }
 
@@ -545,6 +547,7 @@ fn elementwise_remainders_and_tiers_match_full_vectors() {
 /// FMA tiers (so the repair does not move their outputs), and must agree
 /// across all tiers including scalar.
 #[test]
+#[allow(deprecated)]
 fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
     #[magetypes(v3, neon, wasm128, scalar)]
     fn both(token: Token, xs: &[f32], portable: &mut [f32], midp: &mut [f32]) {
@@ -756,7 +759,7 @@ fn wino(
     oy: usize,
 ) {
     match t {
-        Tier::Scalar => wino_lay_scalar(
+        Tier::Scalar => wino_lay_scalar_t(
             archmage::ScalarToken,
             inp,
             c,
@@ -772,15 +775,15 @@ fn wino(
             oy,
         ),
         #[cfg(target_arch = "x86_64")]
-        Tier::V3(k) => wino_lay_v3(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        Tier::V3(k) => wino_lay_v3_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
         #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
-        Tier::V4(k) => wino_lay_v4(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        Tier::V4(k) => wino_lay_v4_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
         #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-        Tier::V4x(k) => wino_lay_v4x(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        Tier::V4x(k) => wino_lay_v4x_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
         #[cfg(target_arch = "aarch64")]
-        Tier::Neon(k) => wino_lay_neon(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        Tier::Neon(k) => wino_lay_neon_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
         #[cfg(target_arch = "wasm32")]
-        Tier::Wasm(k) => wino_lay_wasm128(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
+        Tier::Wasm(k) => wino_lay_wasm128_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
     }
 }
 

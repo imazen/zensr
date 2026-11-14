@@ -13,7 +13,7 @@ publish = false
 zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
 zensr-micro = { path = "../../../crates/zensr-micro" }
 # testable_dispatch lets ZENSR_EXACT_TIER force a tier process-wide.
-archmage = { version = "0.9.30", features = ["testable_dispatch"] }
+archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["testable_dispatch"] }
 
 # Mirror the workspace root: zenanalyze 0.2.x is unpublished.
 [patch.crates-io]

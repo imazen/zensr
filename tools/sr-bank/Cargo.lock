@@ -33,10 +33,10 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.31-beta.1"
-source = "git+https://github.com/imazen/archmage?rev=da0ed5deca40ac60df32dcf4f6e7602658b2f959#da0ed5deca40ac60df32dcf4f6e7602658b2f959"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
 dependencies = [
- "archmage-macros 0.9.31-beta.1",
+ "archmage-macros 0.9.31",
  "safe_unaligned_simd",
  "winarm-cpufeatures",
 ]
@@ -54,8 +54,8 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.31-beta.1"
-source = "git+https://github.com/imazen/archmage?rev=da0ed5deca40ac60df32dcf4f6e7602658b2f959#da0ed5deca40ac60df32dcf4f6e7602658b2f959"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -364,11 +364,10 @@ dependencies = [
 
 [[package]]
 name = "magetypes"
-version = "0.9.31-beta.1"
-source = "git+https://github.com/imazen/archmage?rev=da0ed5deca40ac60df32dcf4f6e7602658b2f959#da0ed5deca40ac60df32dcf4f6e7602658b2f959"
+version = "0.9.31"
+source = "git+https://github.com/imazen/archmage?rev=d2b6748369616828f9650ea0e307e913f3f8a268#d2b6748369616828f9650ea0e307e913f3f8a268"
 dependencies = [
- "archmage 0.9.31-beta.1",
- "libm",
+ "archmage 0.9.31",
  "rustversion",
 ]
 
@@ -1032,13 +1031,13 @@ dependencies = [
 name = "zensr-candidate-bank"
 version = "0.0.0"
 dependencies = [
- "archmage 0.9.31-beta.1",
+ "archmage 0.9.31",
  "enough",
  "fast-ssim2",
  "imgref",
  "imij",
  "imij-set",
- "magetypes 0.9.31-beta.1",
+ "magetypes 0.9.31",
  "rayon",
  "rgb",
  "serde",
@@ -1060,8 +1059,8 @@ dependencies = [
 name = "zensr-micro"
 version = "0.0.1"
 dependencies = [
- "archmage 0.9.30",
- "magetypes 0.9.30",
+ "archmage 0.9.31",
+ "magetypes 0.9.31",
 ]
 
 [[package]]
