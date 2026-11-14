@@ -1345,7 +1345,11 @@ mod sealed {
     impl_spanf_tier!(k8, ScalarToken);
     impl_spanf_tier!(k8, X64V3Token, #[cfg(target_arch = "x86_64")]);
     impl_spanf_tier!(k8, NeonToken, #[cfg(target_arch = "aarch64")]);
-    impl_spanf_tier!(k8, Wasm128Token, #[cfg(target_arch = "wasm32")]);
+    impl_spanf_tier!(
+        k8,
+        Wasm128Token,
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    );
     impl_spanf_tier!(
         k16,
         X64V4Token,
