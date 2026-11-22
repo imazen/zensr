@@ -5,7 +5,7 @@ accelerate==0.30.1
 antlr4-python3-runtime==4.9.3
 certifi==2026.10.18
 charset-normalizer==3.4.4
-diffusers==0.25.1
+diffusers==0.38.0
 einops==0.8.2
 filelock==4.2.1
 fsspec==2026.6.0
