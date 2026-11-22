@@ -28,7 +28,7 @@ requests==2.32.5
 safetensors==0.7.0
 scikit-image==0.26.0
 scipy==1.17.1
-setuptools==82.0.0
+setuptools==84.1.0
 tifffile==2026.2.24
 tokenizers==0.15.2
 tqdm==4.67.3
