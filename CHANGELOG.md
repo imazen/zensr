@@ -11,6 +11,12 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- External-model Python pins updated (`fsspec` 2026.6.0 in #6, `urllib3` 2.8.0
+  in #7, `idna` 3.15 in #8, `setuptools` 84.1.0 in #9, `diffusers` 0.38.0 in
+  #10, `transformers` 5.10.1 in #11) and compatible workspace crates.io
+  dependencies updated (`enough` 0.4.5, `imgref` 1.12.3, `rayon` 1.12.0,
+  `rgb` 0.8.53, `zenbench` 0.1.11).
+
 - CI `i686` job passes `CROSS_CONTAINER_OPTS: --security-opt seccomp=unconfined`
   to `cross test` for Rust 1.100 `clone3` compatibility under 32-bit container
   seccomp; external-model Python pins updated (`filelock` 4.2.1 in #2,

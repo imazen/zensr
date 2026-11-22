@@ -31,12 +31,12 @@ heic = { git = "https://github.com/imazen/heic", rev = "9e7f75617fb1e62e642ee34e
 zenresize = "0.3.1"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 butteraugli = "0.9.3"
-imgref = "1.12.2"
+imgref = "1.12.3"
 bytemuck = "1.25.2"
-enough = "0.4.4"
-rgb = "0.8.52"
+enough = "0.4.5"
+rgb = "0.8.53"
 zensim = "0.2.7"
-rayon = "1.11.1"
+rayon = "1.12.0"
 zenbench = { version = "0.1.11", default-features = false, optional = true }
 
 [features]
