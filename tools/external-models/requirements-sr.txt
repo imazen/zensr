@@ -32,6 +32,6 @@ setuptools==84.1.0
 tifffile==2026.2.24
 tokenizers==0.15.2
 tqdm==4.67.3
-transformers==4.35.2
+transformers==5.10.1
 urllib3==2.8.0
 zipp==3.23.0
