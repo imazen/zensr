@@ -291,12 +291,71 @@ pub fn rgb_to_ycbcr_planes(
     }
 }
 
+/// In-place JFIF full-range RGB -> YCbCr on a `[3, plane]` planar buffer.
+///
+/// Produces bit-identical results to [`rgb_to_ycbcr_planes`] without requiring
+/// a second `3 * plane` buffer.
+pub fn rgb_to_ycbcr_planes_inplace(planes: &mut [f32], plane: usize) {
+    assert!(planes.len() >= 3 * plane);
+    let (r_y, rest) = planes[..3 * plane].split_at_mut(plane);
+    let (g_cb, b_cr) = rest.split_at_mut(plane);
+    for i in 0..plane {
+        let (r, g, b) = (r_y[i], g_cb[i], b_cr[i]);
+        let yy = 0.299 * r + 0.587 * g + 0.114 * b;
+        r_y[i] = yy;
+        g_cb[i] = 0.5 - 0.168_735_9 * r - 0.331_264_1 * g + 0.5 * b;
+        b_cr[i] = 0.5 + 0.5 * r - 0.418_687_6 * g - 0.081_312_4 * b;
+    }
+}
+
 pub fn ycbcr_to_rgb_planes(y: &[f32], cb: &[f32], cr: &[f32], rgb: &mut [f32], plane: usize) {
     for i in 0..plane {
         let (yy, u, v) = (y[i], cb[i] - 0.5, cr[i] - 0.5);
         rgb[i] = (yy + 1.402 * v).clamp(0.0, 1.0);
         rgb[plane + i] = (yy - 0.344_136_3 * u - 0.714_136_2 * v).clamp(0.0, 1.0);
         rgb[2 * plane + i] = (yy + 1.772 * u).clamp(0.0, 1.0);
+    }
+}
+
+/// In-place JFIF full-range YCbCr -> RGB on a `[3, plane]` planar buffer.
+///
+/// Produces bit-identical results to [`ycbcr_to_rgb_planes`] without requiring
+/// a second `3 * plane` buffer.
+pub fn ycbcr_to_rgb_planes_inplace(planes: &mut [f32], plane: usize) {
+    assert!(planes.len() >= 3 * plane);
+    let (y_r, rest) = planes[..3 * plane].split_at_mut(plane);
+    let (cb_g, cr_b) = rest.split_at_mut(plane);
+    for i in 0..plane {
+        let (yy, u, v) = (y_r[i], cb_g[i] - 0.5, cr_b[i] - 0.5);
+        y_r[i] = (yy + 1.402 * v).clamp(0.0, 1.0);
+        cb_g[i] = (yy - 0.344_136_3 * u - 0.714_136_2 * v).clamp(0.0, 1.0);
+        cr_b[i] = (yy + 1.772 * u).clamp(0.0, 1.0);
+    }
+}
+
+/// Reusable scratch buffers for zero-allocation [`project_chroma_420_with_scratch`].
+#[derive(Default, Debug)]
+pub struct ChromaScratch {
+    down: Vec<f32>,
+    before: Vec<f32>,
+}
+
+impl ChromaScratch {
+    /// Creates an empty scratch workspace that allocates lazily on first use.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pre-allocates scratch capacity for half-resolution 4:2:0 chroma planes
+    /// up to `max_half_w × max_half_h`.
+    #[must_use]
+    pub fn with_capacity(max_half_w: usize, max_half_h: usize) -> Self {
+        let n = max_half_w.saturating_mul(max_half_h);
+        Self {
+            down: Vec::with_capacity(n),
+            before: Vec::with_capacity(n),
+        }
     }
 }
 
@@ -314,10 +373,34 @@ pub fn project_chroma_420(
     cv: &CoeffView<'_>,
     cfg: &ProjectionConfig,
 ) -> ProjectionReport {
+    let mut scratch = ChromaScratch::new();
+    project_chroma_420_with_scratch(plane, w, h, cv, cfg, &mut scratch)
+}
+
+/// Project a full-resolution 4:2:0 chroma plane reusing `scratch` buffers.
+pub fn project_chroma_420_with_scratch(
+    plane: &mut [f32],
+    w: usize,
+    h: usize,
+    cv: &CoeffView<'_>,
+    cfg: &ProjectionConfig,
+    scratch: &mut ChromaScratch,
+) -> ProjectionReport {
     assert_eq!(plane.len(), w * h);
+    if w == 0 || h == 0 {
+        return ProjectionReport::default();
+    }
     let (hw, hh) = (w.div_ceil(2), h.div_ceil(2));
+    let sub_len = hw * hh;
+    if scratch.down.len() < sub_len {
+        scratch.down.resize(sub_len, 0.0);
+    }
+    if scratch.before.len() < sub_len {
+        scratch.before.resize(sub_len, 0.0);
+    }
+    let down = &mut scratch.down[..sub_len];
+    let before = &mut scratch.before[..sub_len];
     // box 2x2 down (edge-replicated on odd dims) — the common encoder decimation
-    let mut down = vec![0.0f32; hw * hh];
     for y in 0..hh {
         let (y0, y1) = (2 * y, (2 * y + 1).min(h - 1));
         for x in 0..hw {
@@ -329,8 +412,8 @@ pub fn project_chroma_420(
                     + plane[y1 * w + x1]);
         }
     }
-    let before = down.clone();
-    let report = project_plane(&mut down, hw, hh, cv, cfg);
+    before.copy_from_slice(down);
+    let report = project_plane(down, hw, hh, cv, cfg);
     // Upsample the half-res correction by PIXEL REPLICATION and add: replication
     // is the exact right-inverse of the 2x2 box-down (box(replicate(c)) == c),
     // so the corrected plane satisfies the half-res constraint exactly in one

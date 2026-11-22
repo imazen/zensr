@@ -5,18 +5,18 @@ edition = "2024"
 publish = false
 [workspace]
 [dependencies]
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "06d0e6f468285cd9fccbf7abae195ef31a6bc4fa", features = ["restoration", "moxcms"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d566cba713522689c4940da7d24caeb09b01d05c", features = ["restoration", "moxcms"] }
 zensr = { git = "https://github.com/imazen/zensr", rev = "0bb29cf63a4ab8fa8864994acc659e61c890c5e6" }
 zensr-micro = { path = "../../crates/zensr-micro", default-features = false, features = ["canon4"] }
 legacy = { package = "zensr-zenjpeg", path = "../../crates/zensr-zenjpeg" }
 enough = "0.4.4"
 serde_json = "1.0.149"
 [patch.crates-io]
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
-zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "e676651eb1f3628a7f2854ce812d2cd10ed0d8fd" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "615a709a5257a7a1855bf5fedac039100053d335" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "615a709a5257a7a1855bf5fedac039100053d335" }
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e5112d5f0070aa7dda0d376bb867d3cdd1626410" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e5112d5f0070aa7dda0d376bb867d3cdd1626410" }
 [profile.release]
 lto = "thin"

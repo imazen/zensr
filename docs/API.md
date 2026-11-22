@@ -26,11 +26,44 @@ silently borrow canon4's fitted router.
 ## Codec engine
 
 A codec implements `Source` to provide `JpegInfo`, requested decoded RGB8 and
-borrowed coefficient views. `EncodedRgb8` includes width, height and byte
-stride. Samples are in physical JPEG orientation and coding color space;
-ICC conversion, orientation and crop belong to the codec after repair.
-`Restorer::restore(&mut source)` executes the existing repair policy.
+borrowed coefficient views. `EncodedRgb8` (`new`, `new_strided`) includes width,
+height and byte stride. Samples are in physical JPEG orientation and coding
+color space; ICC conversion, orientation and crop belong to the codec after
+repair. `Restorer::restore(&mut source)` executes the existing repair policy.
 The optional chooser consumes the existing `zenanalyze-api` feature contract.
+
+### Strided pixel, `zenpixels`, and DCT block views
+
+- **Pixel input (`zensr::source::EncodedRgb8`):** `EncodedRgb8::new` and
+  `EncodedRgb8::new_strided` validate packed or row-padded RGB8 slices. Under
+  the optional `zenpixels` feature (`zensr/zenpixels`), `EncodedRgb8` bridges
+  zero-copy with `zenpixels::PixelSlice` (`from_pixel_slice`, `From`/`TryFrom`),
+  tagging outgoing slices with `PixelDescriptor::RGB8` (`TransferFunction::Unknown`)
+  because samples remain in JPEG coding RGB prior to ICC conversion.
+- **Pixel output (`Pixels` and `PixelsRef`):** `write_rgb8_strided` and
+  `write_rgb_f32_strided` write interleaved output directly into caller-owned
+  strided slices without touching row padding or allocating on the heap. Under
+  `zenpixels`, `write_pixel_slice` writes into typed or type-erased
+  `PixelSliceMut` (`U8` or `F32`), and `to_pixel_buffer_rgb8` /
+  `to_pixel_buffer_rgb_f32` allocate owned `PixelBuffer`s.
+- **Borrowed JPEG DCT blocks (`JpegDctBlocks` and `CoefficientsView`):**
+  `zensr::source::JpegDctBlocks` (`{ coeffs: &[i16], blocks_wide, blocks_high, quant_table }`)
+  matches the zero-copy 64-element zigzag block layout used by `zenjpeg`
+  (`ComponentCoefficients`) and sibling vision crates (`zensally::JpegDctBlocks`).
+  `Coefficients::quant_tables` stores DQT tables in 8×8 natural (row-major)
+  order; `quant_table_natural` borrows natural order while `quant_table_zigzag`
+  permutes into 64-element zigzag order. Codecs can override
+  `Source::coefficients_view` (`CoefficientsView`) to return up to four
+  component views on the stack without allocating a `Vec<Component>`.
+- **Zero-allocation workspaces (`RepairWorkspace` and `ModelWorkspace`):**
+  `RepairWorkspace` (`new` or `with_capacity`) holds reusable planar buffers,
+  `zensr_micro::ModelWorkspace` tile scratch, `GuardScratch`, `ChromaScratch`,
+  router window scratch and report storage. `Request::run_into_workspace(&mut ws)`
+  returns a borrowed `WorkspaceOutcome` (`PixelsRef` + `&Report`) with zero
+  warm heap allocations on single-threaded execution (aside from external
+  `zenanalyze` `OwnedOffer` allocation when default `chooser` `Fidelity` routing
+  runs without an explicit `Routing` override); `Request::workspace(&mut ws).run()`
+  reuses the same internal scratch while returning an owned `Outcome`.
 
 The extracted engine is on zensr main. The full zenjpeg adapter remains a draft:
 all native layouts/row entry points, arbitrary ICC, crop, cancellation and

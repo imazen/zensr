@@ -64,37 +64,129 @@ pub struct GuardReport {
 
 /// Center-aligned source-coordinate table: for each output x, the two source
 /// columns and the interpolation weight.
+#[derive(Default, Debug)]
 struct XTab {
     x0: Vec<u32>,
     x1: Vec<u32>,
     tx: Vec<f32>,
 }
 
-fn xtab(src: usize, dst: usize, s: usize) -> XTab {
+fn fill_xtab(xt: &mut XTab, src: usize, dst: usize, s: usize) {
     let fs = s as f32;
-    let mut x0 = Vec::with_capacity(dst);
-    let mut x1 = Vec::with_capacity(dst);
-    let mut tx = Vec::with_capacity(dst);
+    xt.x0.clear();
+    xt.x1.clear();
+    xt.tx.clear();
+    xt.x0.reserve(dst);
+    xt.x1.reserve(dst);
+    xt.tx.reserve(dst);
     for ox in 0..dst {
         let fx = ((ox as f32 + 0.5) / fs - 0.5).max(0.0);
         let a = (fx as usize).min(src - 1);
-        x0.push(a as u32);
-        x1.push(((a + 1).min(src - 1)) as u32);
-        tx.push(fx - a as f32);
+        xt.x0.push(a as u32);
+        xt.x1.push(((a + 1).min(src - 1)) as u32);
+        xt.tx.push(fx - a as f32);
     }
-    XTab { x0, x1, tx }
 }
 
 /// Vertical source rows for each output row (y0, y1, ty).
-fn ytab(src: usize, dst: usize, s: usize) -> Vec<(usize, usize, f32)> {
+fn fill_ytab(yt: &mut Vec<(usize, usize, f32)>, src: usize, dst: usize, s: usize) {
     let fs = s as f32;
-    (0..dst)
-        .map(|oy| {
-            let fy = ((oy as f32 + 0.5) / fs - 0.5).max(0.0);
-            let a = (fy as usize).min(src - 1);
-            (a, (a + 1).min(src - 1), fy - a as f32)
-        })
-        .collect()
+    yt.clear();
+    yt.reserve(dst);
+    for oy in 0..dst {
+        let fy = ((oy as f32 + 0.5) / fs - 0.5).max(0.0);
+        let a = (fy as usize).min(src - 1);
+        yt.push((a, (a + 1).min(src - 1), fy - a as f32));
+    }
+}
+
+#[derive(Default, Debug)]
+struct CellTab {
+    i0: Vec<u32>,
+    i1: Vec<u32>,
+    tt: Vec<f32>,
+}
+
+fn fill_cell_tab(ct: &mut CellTab, dst: usize, cells: usize, s: usize) {
+    let fs = s as f32;
+    ct.i0.clear();
+    ct.i1.clear();
+    ct.tt.clear();
+    ct.i0.reserve(dst);
+    ct.i1.reserve(dst);
+    ct.tt.reserve(dst);
+    for o in 0..dst {
+        let f = ((((o as f32 + 0.5) / fs - 0.5) / 16.0) - 0.5).max(0.0);
+        let a = (f as usize).min(cells - 1);
+        ct.i0.push(a as u32);
+        ct.i1.push(((a + 1).min(cells - 1)) as u32);
+        ct.tt.push(f - a as f32);
+    }
+}
+
+/// Reusable scratch buffers for zero-allocation [`guarded_merge_with_scratch`].
+#[derive(Default, Debug)]
+pub struct GuardScratch {
+    tmap: Vec<f32>,
+    cnt: Vec<u32>,
+    luma: Vec<f32>,
+    xt: XTab,
+    yt: Vec<(usize, usize, f32)>,
+    cxt: CellTab,
+    cyt: CellTab,
+    h0: Vec<f32>,
+    h1: Vec<f32>,
+    base_row: Vec<f32>,
+    alpha_row: Vec<f32>,
+    arow0: Vec<f32>,
+    arow1: Vec<f32>,
+    rowacc: Vec<f32>,
+}
+
+impl GuardScratch {
+    /// Creates an empty scratch workspace that allocates lazily on first use.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pre-allocates scratch capacity for `x1` inputs up to `max_h × max_w`.
+    #[must_use]
+    pub fn with_capacity(max_h: usize, max_w: usize) -> Self {
+        Self::with_scale_capacity(max_h, max_w, 1)
+    }
+
+    /// Pre-allocates scratch capacity for inputs up to `max_h × max_w` at
+    /// upscale factor `max_scale`.
+    #[must_use]
+    pub fn with_scale_capacity(max_h: usize, max_w: usize, max_scale: usize) -> Self {
+        let mut sc = Self::default();
+        let cells = max_h.div_ceil(16).saturating_mul(max_w.div_ceil(16));
+        let plane = max_h.saturating_mul(max_w);
+        let oh = max_h.saturating_mul(max_scale.max(1));
+        let ow = max_w.saturating_mul(max_scale.max(1));
+        sc.tmap.reserve(cells);
+        sc.cnt.reserve(cells);
+        sc.luma.reserve(plane);
+        sc.xt.x0.reserve(ow);
+        sc.xt.x1.reserve(ow);
+        sc.xt.tx.reserve(ow);
+        sc.yt.reserve(oh);
+        sc.cxt.i0.reserve(ow);
+        sc.cxt.i1.reserve(ow);
+        sc.cxt.tt.reserve(ow);
+        sc.cyt.i0.reserve(oh);
+        sc.cyt.i1.reserve(oh);
+        sc.cyt.tt.reserve(oh);
+        sc.h0.reserve(ow);
+        sc.h1.reserve(ow);
+        sc.base_row.reserve(ow);
+        sc.alpha_row.reserve(ow);
+        sc.arow0.reserve(ow);
+        sc.arow1.reserve(ow);
+        sc.rowacc.reserve(ow);
+        sc
+    }
 }
 
 /// Horizontal bilinear interpolation of one LR row into width-`ow` `dst`.
@@ -110,8 +202,13 @@ fn hinterp_row(ip: &[f32], xt: &XTab, dst: &mut [f32]) {
 pub fn bilinear_up(lr: &[f32], h: usize, w: usize, s: usize) -> Vec<f32> {
     let (oh, ow) = (h * s, w * s);
     let mut out = vec![0.0f32; 3 * oh * ow];
-    let xt = xtab(w, ow, s);
-    let yt = ytab(h, oh, s);
+    if oh == 0 || ow == 0 {
+        return out;
+    }
+    let mut xt = XTab::default();
+    let mut yt = Vec::new();
+    fill_xtab(&mut xt, w, ow, s);
+    fill_ytab(&mut yt, h, oh, s);
     let mut h0 = vec![0.0f32; ow];
     let mut h1 = vec![0.0f32; ow];
     for c in 0..3 {
@@ -134,13 +231,32 @@ pub fn bilinear_up(lr: &[f32], h: usize, w: usize, s: usize) -> Vec<f32> {
 }
 
 /// Per-cell (16x16 LR) mean |laplacian| of luma — stochastic-texture proxy.
-fn texture_map(lr: &[f32], h: usize, w: usize) -> (Vec<f32>, usize, usize) {
+fn fill_texture_map(
+    lr: &[f32],
+    h: usize,
+    w: usize,
+    acc_vec: &mut Vec<f32>,
+    cnt_vec: &mut Vec<u32>,
+    luma_vec: &mut Vec<f32>,
+) -> (usize, usize) {
     const CELL: usize = 16;
     let (ch, cw) = (h.div_ceil(CELL), w.div_ceil(CELL));
+    let cells = ch * cw;
     let plane = h * w;
-    let mut acc = vec![0.0f32; ch * cw];
-    let mut cnt = vec![0u32; ch * cw];
-    let mut luma = vec![0.0f32; plane];
+    if acc_vec.len() < cells {
+        acc_vec.resize(cells, 0.0);
+    }
+    if cnt_vec.len() < cells {
+        cnt_vec.resize(cells, 0);
+    }
+    if luma_vec.len() < plane {
+        luma_vec.resize(plane, 0.0);
+    }
+    let acc = &mut acc_vec[..cells];
+    let cnt = &mut cnt_vec[..cells];
+    let luma = &mut luma_vec[..plane];
+    acc.fill(0.0);
+    cnt.fill(0);
     for i in 0..plane {
         luma[i] = 0.299 * lr[i] + 0.587 * lr[plane + i] + 0.114 * lr[2 * plane + i];
     }
@@ -159,7 +275,15 @@ fn texture_map(lr: &[f32], h: usize, w: usize) -> (Vec<f32>, usize, usize) {
             acc[i] /= cnt[i] as f32;
         }
     }
-    (acc, ch, cw)
+    (ch, cw)
+}
+
+#[inline]
+fn ensure_f32_slice(buf: &mut Vec<f32>, len: usize) -> &mut [f32] {
+    if buf.len() < len {
+        buf.resize(len, 0.0);
+    }
+    &mut buf[..len]
 }
 
 /// Apply guards in place on `sr` ([3, s*h, s*w]); `lr` is the [3,h,w] input.
@@ -171,57 +295,77 @@ pub fn guarded_merge(
     s: usize,
     cfg: &GuardConfig,
 ) -> GuardReport {
+    let mut scratch = GuardScratch::new();
+    guarded_merge_with_scratch(sr, lr, h, w, s, cfg, &mut scratch)
+}
+
+/// Apply guards in place on `sr` ([3, s*h, s*w]) reusing `scratch` buffers.
+pub fn guarded_merge_with_scratch(
+    sr: &mut [f32],
+    lr: &[f32],
+    h: usize,
+    w: usize,
+    s: usize,
+    cfg: &GuardConfig,
+    scratch: &mut GuardScratch,
+) -> GuardReport {
     let (oh, ow) = (h * s, w * s);
     let oplane = oh * ow;
     let mut report = GuardReport {
         mean_alpha: 1.0,
         ..Default::default()
     };
+    if oplane == 0 {
+        return report;
+    }
+
+    let GuardScratch {
+        tmap: tmap_vec,
+        cnt: cnt_vec,
+        luma: luma_vec,
+        xt,
+        yt,
+        cxt,
+        cyt,
+        h0: h0_vec,
+        h1: h1_vec,
+        base_row: base_row_vec,
+        alpha_row: alpha_row_vec,
+        arow0: arow0_vec,
+        arow1: arow1_vec,
+        rowacc: rowacc_vec,
+    } = scratch;
 
     // texture gate cell map (LR-resolution cells)
-    let (tmap, tch, tcw) = if cfg.texture_gate {
-        texture_map(lr, h, w)
+    let (tch, tcw) = if cfg.texture_gate {
+        fill_texture_map(lr, h, w, tmap_vec, cnt_vec, luma_vec)
     } else {
-        (Vec::new(), 0, 0)
+        (0, 0)
+    };
+    let tmap = if cfg.texture_gate {
+        &tmap_vec[..tch * tcw]
+    } else {
+        &[]
     };
 
     // Separable tables for base (LR -> output) and alpha (cell map -> output).
-    let xt = xtab(w, ow, s);
-    let yt = ytab(h, oh, s);
-    // cell-space coordinate of output pixel: ((o+0.5)/s - 0.5)/16 - 0.5, clamped
-    let (cxt, cyt) = if cfg.texture_gate {
-        let fs = s as f32;
-        let mk = |dst: usize, cells: usize| -> (Vec<u32>, Vec<u32>, Vec<f32>) {
-            let mut i0 = Vec::with_capacity(dst);
-            let mut i1 = Vec::with_capacity(dst);
-            let mut tt = Vec::with_capacity(dst);
-            for o in 0..dst {
-                let f = ((((o as f32 + 0.5) / fs - 0.5) / 16.0) - 0.5).max(0.0);
-                let a = (f as usize).min(cells - 1);
-                i0.push(a as u32);
-                i1.push(((a + 1).min(cells - 1)) as u32);
-                tt.push(f - a as f32);
-            }
-            (i0, i1, tt)
-        };
-        (mk(ow, tcw), mk(oh, tch))
-    } else {
-        (
-            (Vec::new(), Vec::new(), Vec::new()),
-            (Vec::new(), Vec::new(), Vec::new()),
-        )
-    };
+    fill_xtab(xt, w, ow, s);
+    fill_ytab(yt, h, oh, s);
+    if cfg.texture_gate {
+        fill_cell_tab(cxt, ow, tcw, s);
+        fill_cell_tab(cyt, oh, tch, s);
+    }
 
     let tau = cfg.residual_clamp;
     let mut clamped = 0usize;
     let mut alpha_sum = 0.0f64;
-    let mut h0 = vec![0.0f32; ow];
-    let mut h1 = vec![0.0f32; ow];
-    let mut base_row = vec![0.0f32; ow];
-    let mut alpha_row = vec![1.0f32; ow];
-    // horizontal-interped tmap rows (tiny: tcw cells wide -> ow)
-    let mut arow0 = vec![0.0f32; ow];
-    let mut arow1 = vec![0.0f32; ow];
+    let h0 = ensure_f32_slice(h0_vec, ow);
+    let h1 = ensure_f32_slice(h1_vec, ow);
+    let base_row = ensure_f32_slice(base_row_vec, ow);
+    let alpha_row = ensure_f32_slice(alpha_row_vec, ow);
+    alpha_row.fill(1.0);
+    let arow0 = ensure_f32_slice(arow0_vec, ow);
+    let arow1 = ensure_f32_slice(arow1_vec, ow);
 
     for c in 0..3 {
         let ip = &lr[c * h * w..(c + 1) * h * w];
@@ -230,24 +374,24 @@ pub fn guarded_merge(
         let mut acached: (usize, usize) = (usize::MAX, usize::MAX);
         for (oy, &(y0, y1, ty)) in yt.iter().enumerate() {
             if cached != (y0, y1) {
-                hinterp_row(&ip[y0 * w..y0 * w + w], &xt, &mut h0);
-                hinterp_row(&ip[y1 * w..y1 * w + w], &xt, &mut h1);
+                hinterp_row(&ip[y0 * w..y0 * w + w], xt, h0);
+                hinterp_row(&ip[y1 * w..y1 * w + w], xt, h1);
                 cached = (y0, y1);
             }
             for i in 0..ow {
                 base_row[i] = h0[i] * (1.0 - ty) + h1[i] * ty;
             }
             if cfg.texture_gate {
-                let cy0 = cyt.0[oy] as usize;
-                let cy1 = cyt.1[oy] as usize;
-                let cty = cyt.2[oy];
+                let cy0 = cyt.i0[oy] as usize;
+                let cy1 = cyt.i1[oy] as usize;
+                let cty = cyt.tt[oy];
                 if acached != (cy0, cy1) {
                     for i in 0..ow {
-                        let t = cxt.2[i];
-                        arow0[i] = tmap[cy0 * tcw + cxt.0[i] as usize] * (1.0 - t)
-                            + tmap[cy0 * tcw + cxt.1[i] as usize] * t;
-                        arow1[i] = tmap[cy1 * tcw + cxt.0[i] as usize] * (1.0 - t)
-                            + tmap[cy1 * tcw + cxt.1[i] as usize] * t;
+                        let t = cxt.tt[i];
+                        arow0[i] = tmap[cy0 * tcw + cxt.i0[i] as usize] * (1.0 - t)
+                            + tmap[cy0 * tcw + cxt.i1[i] as usize] * t;
+                        arow1[i] = tmap[cy1 * tcw + cxt.i0[i] as usize] * (1.0 - t)
+                            + tmap[cy1 * tcw + cxt.i1[i] as usize] * t;
                     }
                     acached = (cy0, cy1);
                 }
@@ -283,7 +427,7 @@ pub fn guarded_merge(
         let mut mae = 0.0f64;
         let inv = 1.0 / (s * s) as f32;
         let plane = h * w;
-        let mut rowacc = vec![0.0f32; w];
+        let rowacc = ensure_f32_slice(rowacc_vec, w);
         for c in 0..3 {
             let sp = &sr[c * oplane..(c + 1) * oplane];
             for y in 0..h {
@@ -312,9 +456,24 @@ pub fn guarded_merge(
             // blend toward base proportionally to the excess (full fallback at 2x threshold)
             let t = ((mae - cfg.roundtrip_mae_max) / cfg.roundtrip_mae_max).min(1.0);
             report.fallback_blend = t;
-            let base = bilinear_up(lr, h, w, s);
-            for i in 0..sr.len() {
-                sr[i] = sr[i] * (1.0 - t) + base[i] * t;
+            for c in 0..3 {
+                let ip = &lr[c * h * w..(c + 1) * h * w];
+                let sp = &mut sr[c * oplane..(c + 1) * oplane];
+                let mut cached: (usize, usize) = (usize::MAX, usize::MAX);
+                for (oy, &(y0, y1, ty)) in yt.iter().enumerate() {
+                    if cached != (y0, y1) {
+                        hinterp_row(&ip[y0 * w..y0 * w + w], xt, h0);
+                        hinterp_row(&ip[y1 * w..y1 * w + w], xt, h1);
+                        cached = (y0, y1);
+                    }
+                    for i in 0..ow {
+                        base_row[i] = h0[i] * (1.0 - ty) + h1[i] * ty;
+                    }
+                    let dst = &mut sp[oy * ow..oy * ow + ow];
+                    for i in 0..ow {
+                        dst[i] = dst[i] * (1.0 - t) + base_row[i] * t;
+                    }
+                }
             }
         }
     }

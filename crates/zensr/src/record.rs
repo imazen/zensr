@@ -1,6 +1,6 @@
 //! The codec authenticates metadata; zensr retains the calibrated policy.
 use crate::source::JpegInfo;
-pub(crate) fn apply_record(probe: &mut JpegInfo) -> bool {
+pub(crate) fn is_recorded(probe: &JpegInfo) -> bool {
     probe.recorded
 }
 pub(crate) fn aq_off_gain_delta(probe: &JpegInfo) -> f32 {

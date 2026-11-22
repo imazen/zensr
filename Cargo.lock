@@ -156,9 +156,9 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.30"
+version = "0.9.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
+checksum = "2261f8722a6b01db495cddca47194ddcb293747025192ae189ab5412e724e358"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -167,9 +167,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.30"
+version = "0.9.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
+checksum = "4cbd5e93a65bd3c08bc1f8fdddc1eff1f42a39bf2b4395f11281eb939d097ba8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1572,12 +1572,11 @@ checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
 
 [[package]]
 name = "magetypes"
-version = "0.9.30"
+version = "0.9.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
+checksum = "c97530899f0a93eebffd5e8a9ce8e733e35236e7349ada63ad4126142014bf45"
 dependencies = [
  "archmage",
- "libm",
  "rustversion",
 ]
 
@@ -3751,7 +3750,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
+source = "git+https://github.com/imazen/zenanalyze?rev=615a709a5257a7a1855bf5fedac039100053d335#615a709a5257a7a1855bf5fedac039100053d335"
 dependencies = [
  "archmage",
  "garb",
@@ -3765,7 +3764,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze-api"
 version = "0.1.1"
-source = "git+https://github.com/imazen/zenanalyze#e676651eb1f3628a7f2854ce812d2cd10ed0d8fd"
+source = "git+https://github.com/imazen/zenanalyze?rev=615a709a5257a7a1855bf5fedac039100053d335#615a709a5257a7a1855bf5fedac039100053d335"
 
 [[package]]
 name = "zenbench"
@@ -3989,7 +3988,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
+source = "git+https://github.com/imazen/zenjpeg?rev=d566cba713522689c4940da7d24caeb09b01d05c#d566cba713522689c4940da7d24caeb09b01d05c"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -4038,7 +4037,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
+source = "git+https://github.com/imazen/zenpixels?rev=e5112d5f0070aa7dda0d376bb867d3cdd1626410#e5112d5f0070aa7dda0d376bb867d3cdd1626410"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -4068,7 +4067,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=f23ac7535be1144a22d0dc6b71f866a08b151f34#f23ac7535be1144a22d0dc6b71f866a08b151f34"
+source = "git+https://github.com/imazen/zenpixels?rev=e5112d5f0070aa7dda0d376bb867d3cdd1626410#e5112d5f0070aa7dda0d376bb867d3cdd1626410"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -4159,8 +4158,11 @@ dependencies = [
 name = "zensr"
 version = "0.0.1"
 dependencies = [
+ "rgb",
  "zenanalyze",
  "zenanalyze-api",
+ "zenbench",
+ "zenpixels 0.3.1",
  "zensr-micro",
 ]
 
@@ -4242,7 +4244,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=24b6d3fb#24b6d3fbd9a7fb1368904756cda715f8623c9cd9"
+source = "git+https://github.com/imazen/zenjpeg?rev=d566cba713522689c4940da7d24caeb09b01d05c#d566cba713522689c4940da7d24caeb09b01d05c"
 dependencies = [
  "archmage",
  "imgref",
