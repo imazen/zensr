@@ -113,6 +113,9 @@ jobs:
       - name: Install cross
         run: cargo install cross --locked
       - name: Test
+        env:
+          # Required for Rust 1.100 clone3 under 32-bit container seccomp.
+          CROSS_CONTAINER_OPTS: --security-opt seccomp=unconfined
         run: cross test --target i686-unknown-linux-gnu -p zensr -p zensr-micro -p zensr-zenjpeg
 
   lint:

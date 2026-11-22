@@ -11,6 +11,11 @@ None queued by the canon4 update.
 
 ### Fixed
 
+- CI `i686` job passes `CROSS_CONTAINER_OPTS: --security-opt seccomp=unconfined`
+  to `cross test` for Rust 1.100 `clone3` compatibility under 32-bit container
+  seccomp; external-model Python pins updated (`filelock` 4.2.1 in #2,
+  `certifi` 2026.10.18 in #3).
+
 - Reconcile the single-file loader with the codec engine, resolve standalone
   tool locks and use system Git for CI submodule fetching (`9904e2cc`,
   `ae979771`, `5da3eb23`). Replace superseded API guidance and record merged
