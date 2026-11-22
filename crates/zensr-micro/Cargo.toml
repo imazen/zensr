@@ -6,8 +6,8 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 
 [dependencies]
-archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31" }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["std"], default-features = false }
+archmage = "0.9.33"
+magetypes = { version = "0.9.33", features = ["std"], default-features = false }
 zenpixels = { version = ">=0.2.14, <0.4.0", optional = true }
 bytemuck = { version = "1.25.2", optional = true }
 
@@ -59,7 +59,7 @@ name = "sat_probe"
 # lets benches/kernel_tiers.rs disable the baseline SIMD token so the NEON
 # kernels can be compared against a real forced-scalar arm.
 zenbench = { version = "0.1.11", features = ["heap-profiling"] }
-archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["testable_dispatch"] }
+archmage = { version = "0.9.33", features = ["testable_dispatch"] }
 
 [[bench]]
 name = "kernel_tiers"

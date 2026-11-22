@@ -30,7 +30,7 @@ enum Tier {
     V4x(archmage::X64V4xToken),
     #[cfg(target_arch = "aarch64")]
     Neon(archmage::NeonToken),
-    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    #[cfg(target_arch = "wasm32")]
     Wasm(archmage::Wasm128Token),
 }
 
@@ -54,7 +54,7 @@ fn tiers() -> Vec<Tier> {
     if let Some(t) = archmage::NeonToken::summon() {
         v.push(Tier::Neon(t));
     }
-    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    #[cfg(target_arch = "wasm32")]
     if let Some(t) = archmage::Wasm128Token::summon() {
         v.push(Tier::Wasm(t));
     }
@@ -86,7 +86,7 @@ fn conv(
         Tier::V4x(k) => conv3x3_lay_v4x_t(k, inp, cin, p, b, out, cout, h, wd, cs),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => conv3x3_lay_neon_t(k, inp, cin, p, b, out, cout, h, wd, cs),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => conv3x3_lay_wasm128_t(k, inp, cin, p, b, out, cout, h, wd, cs),
     }
 }
@@ -123,7 +123,7 @@ fn conv1x1(
         Tier::V4x(k) => conv1x1_gen_lay_v4x_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => conv1x1_gen_lay_neon_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => conv1x1_gen_lay_wasm128_t(k, srcs, w, b, out, cout, cin_total, plane, cs),
     }
 }
@@ -141,7 +141,7 @@ fn prelu(t: Tier, data: &mut [f32], slopes: &[f32], channels: usize, plane: usiz
         Tier::V4x(k) => prelu_lay_v4x_t(k, data, slopes, channels, plane, cs),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => prelu_lay_neon_t(k, data, slopes, channels, plane, cs),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => prelu_lay_wasm128_t(k, data, slopes, channels, plane, cs),
     }
 }
@@ -157,7 +157,7 @@ fn gate(t: Tier, a: &[f32], skip: &[f32], out: &mut [f32]) {
         Tier::V4x(k) => gate_lay_v4x_t(k, a, skip, out),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => gate_lay_neon_t(k, a, skip, out),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => gate_lay_wasm128_t(k, a, skip, out),
     }
 }
@@ -174,7 +174,7 @@ fn silu(t: Tier, data: &mut [f32]) {
         Tier::V4x(k) => silu_only_impl_v4x_t(k, data),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => silu_only_impl_neon_t(k, data),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => silu_only_impl_wasm128_t(k, data),
     }
 }
@@ -595,7 +595,7 @@ fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
             Tier::V4x(k) => both_v4x(k, &xs, &mut p, &mut m),
             #[cfg(target_arch = "aarch64")]
             Tier::Neon(k) => both_neon(k, &xs, &mut p, &mut m),
-            #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+            #[cfg(target_arch = "wasm32")]
             Tier::Wasm(k) => both_wasm128(k, &xs, &mut p, &mut m),
         }
         (p, m)
@@ -604,20 +604,14 @@ fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
     for t in tiers() {
         let (p, m) = run(t);
         let fma_tier = !matches!(t, Tier::Scalar);
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         let fma_tier = fma_tier && !matches!(t, Tier::Wasm(_));
-        // On x86, where the existing outputs come from, the portable exp must
-        // equal magetypes' exp_midp for every input, NaN included. NEON's
-        // magetypes max/min return NaN for a NaN operand, so its exp_midp(NaN)
-        // is NaN while the portable exp keeps x86's clamp: there the comparison
-        // covers the non-NaN inputs, and NaN is held to the scalar/x86 value by
-        // the cross-tier check below.
-        #[cfg(target_arch = "aarch64")]
-        let nan_too = !matches!(t, Tier::Neon(_));
-        #[cfg(not(target_arch = "aarch64"))]
-        let nan_too = true;
+        // magetypes 0.9.32+ preserves quiet NaN in exp_midp across all
+        // backends, whereas exp_midp_portable keeps x.max_fast(lo).min_fast(hi)
+        // (NaN -> 2^-126). Compare non-NaN inputs against magetypes' exp_midp,
+        // and hold NaN to the scalar/x86 value via the cross-tier check below.
         if fma_tier {
-            let keep: Vec<usize> = (0..n).filter(|&i| nan_too || !xs[i].is_nan()).collect();
+            let keep: Vec<usize> = (0..n).filter(|&i| !xs[i].is_nan()).collect();
             let pk: Vec<f32> = keep.iter().map(|&i| p[i]).collect();
             let mk: Vec<f32> = keep.iter().map(|&i| m[i]).collect();
             assert_same(&pk, &mk, &format!("{t:?}: exp_midp_portable vs exp_midp"));
@@ -782,7 +776,7 @@ fn wino(
         Tier::V4x(k) => wino_lay_v4x_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
         #[cfg(target_arch = "aarch64")]
         Tier::Neon(k) => wino_lay_neon_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        #[cfg(target_arch = "wasm32")]
         Tier::Wasm(k) => wino_lay_wasm128_t(k, inp, c, u, raw, b, out, c, h, wd, cs, ox, oy),
     }
 }

@@ -19,8 +19,7 @@ zenpixels = ">=0.2.14, <0.3.0" # the zenpng 0.1 line; pixelbuffer_to_rgb8 takes 
 zenpng = "0.1.4"
 # Pin the APP10 encode-record implementation used by restoration/calibration.
 # Root patches below supply this revision's zencodec/zenpixels graph.
-# This task does not merge zenjpeg PR 253 or change the dependency revision.
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d566cba713522689c4940da7d24caeb09b01d05c" }
 # HEIC decode for the clean-reference corpus: 90 of the corpus's photographic
 # sources are HEIC, and they are the CHEAP clean references — decode and they
 # are pristine, no downscale-to-pristine treatment needed. Git-pinned because

@@ -133,8 +133,7 @@ fn luma_sqerr_inner(token: Token, a: &[u8], b: &[u8], cr: f64, cg: f64, cb: f64)
     while px + 8 <= n {
         let base = px * 3;
         let load_rgb = |p: &[u8]| {
-            let (r, g, b) =
-                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            let (r, g, b) = f32x8::load_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
             (
                 f64x8::from_array_t(token, r.to_array().map(f64::from)),
                 f64x8::from_array_t(token, g.to_array().map(f64::from)),
@@ -199,8 +198,8 @@ fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
     let mut px = 0usize;
     while px + 8 <= n {
         let base = px * 3;
-        let (ra, ga, ba) = f32x8::load_8_rgb_u8_t(token, (&a[base..base + 24]).try_into().unwrap());
-        let (rb, gb, bb) = f32x8::load_8_rgb_u8_t(token, (&b[base..base + 24]).try_into().unwrap());
+        let (ra, ga, ba) = f32x8::load_rgb_u8_t(token, (&a[base..base + 24]).try_into().unwrap());
+        let (rb, gb, bb) = f32x8::load_rgb_u8_t(token, (&b[base..base + 24]).try_into().unwrap());
         // floor(t + 0.5) == round-half-away for t in [16, 235] (see module
         // docs); the result is already inside the clamp range.
         let ca = ((off + (c0 * ra + c1 * ga + c2 * ba) / inv255) + half)
@@ -297,8 +296,7 @@ fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
     while px + 8 <= n {
         let base = px * 3;
         let luma = |p: &[u8]| {
-            let (r, g, b) =
-                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            let (r, g, b) = f32x8::load_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
             c0 * (f64x8::from_array_t(token, r.to_array().map(f64::from)) / inv255)
                 + c1 * (f64x8::from_array_t(token, g.to_array().map(f64::from)) / inv255)
                 + c2 * (f64x8::from_array_t(token, b.to_array().map(f64::from)) / inv255)
@@ -385,8 +383,7 @@ fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> 
     while px + 8 <= n {
         let base = px * 3;
         let lin = |p: &[u8]| {
-            let (r, g, b) =
-                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            let (r, g, b) = f32x8::load_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
             (vc0 * f64x8::from_array_t(token, r.to_array().map(f64::from))
                 + vc1 * f64x8::from_array_t(token, g.to_array().map(f64::from))
                 + vc2 * f64x8::from_array_t(token, b.to_array().map(f64::from)))
@@ -467,8 +464,7 @@ fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) 
     while px + 8 <= n {
         let base = px * 3;
         let rgb = |p: &[u8]| {
-            let (r, g, b) =
-                f32x8::load_8_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
+            let (r, g, b) = f32x8::load_rgb_u8_t(token, (&p[base..base + 24]).try_into().unwrap());
             (
                 f64x8::from_array_t(token, r.to_array().map(f64::from)),
                 f64x8::from_array_t(token, g.to_array().map(f64::from)),

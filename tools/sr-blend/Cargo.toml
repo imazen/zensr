@@ -12,23 +12,21 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 zensim = { git = "https://github.com/imazen/zensim", rev = "6060039d8c0ace71d47c722ea76233bb2d745a22", default-features = false, features = ["avx512"] }
 zenresize = "=0.3.1"
 zenpng = { version = "=0.1.4", default-features = false }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "24b6d3fb" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d566cba713522689c4940da7d24caeb09b01d05c" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.1"
 enough = "0.4.4"
 rgb = "0.8.52"
 imgref = "1.12.2"
-archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["macros"] }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31" }
+archmage = { version = "0.9.33", features = ["macros"] }
+magetypes = "0.9.33"
 rayon = "1.11.1"
 [profile.release]
 lto = "thin"
 [patch.crates-io]
-# zenjpeg 24b6d3fb (PR #253, the APP10 encode record) needs the zencodec 0.2
-# family and a zenpixels rev that are not on crates.io yet; this mirrors
-# zenjpeg's own patch table (dependency patches do not propagate). Drop when
-# those publish. zenanalyze keeps crates.io zencodec 0.1 — different major.
+# zenjpeg d566cba7 (zensr-decoder-integration, 0.9.33 cohort) paired with zencodec
+# 61fb96f1 and zenpixels e5112d5f; dependency patches do not propagate.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e5112d5f0070aa7dda0d376bb867d3cdd1626410" }

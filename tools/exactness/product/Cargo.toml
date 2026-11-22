@@ -13,18 +13,18 @@ publish = false
 zensr-zenjpeg = { path = "../../../crates/zensr-zenjpeg" }
 zensr-micro = { path = "../../../crates/zensr-micro" }
 # testable_dispatch lets ZENSR_EXACT_TIER force a tier process-wide.
-archmage = { git = "https://github.com/imazen/archmage", rev = "d2b6748369616828f9650ea0e307e913f3f8a268", version = "0.9.31", features = ["testable_dispatch"] }
+archmage = { version = "0.9.33", features = ["testable_dispatch"] }
 
 # Mirror the workspace root: zenanalyze 0.2.x is unpublished.
 [patch.crates-io]
-zenanalyze = { git = "https://github.com/imazen/zenanalyze" }
-zenanalyze-api = { git = "https://github.com/imazen/zenanalyze" }
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "615a709a5257a7a1855bf5fedac039100053d335" }
+zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "615a709a5257a7a1855bf5fedac039100053d335" }
 
 # The compatibility codec also requires the root zencodec/zenpixels patches.
 zencodec = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "61fb96f1c8c89d4c8d2210eed8679372d66f8aa7" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f23ac7535be1144a22d0dc6b71f866a08b151f34" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e5112d5f0070aa7dda0d376bb867d3cdd1626410" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e5112d5f0070aa7dda0d376bb867d3cdd1626410" }
 
 [profile.release]
 lto = "thin"
