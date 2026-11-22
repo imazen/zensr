@@ -549,8 +549,23 @@ fn elementwise_remainders_and_tiers_match_full_vectors() {
 #[test]
 #[allow(deprecated)]
 fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
-    #[magetypes(v3, neon, wasm128, scalar)]
-    fn both(token: Token, xs: &[f32], portable: &mut [f32], midp: &mut [f32]) {
+    #[magetypes(neon, wasm128, scalar)]
+    fn both4(token: Token, xs: &[f32], portable: &mut [f32], midp: &mut [f32]) {
+        for ((x, p), m) in xs
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(portable.as_chunks_mut::<4>().0.iter_mut())
+            .zip(midp.as_chunks_mut::<4>().0.iter_mut())
+        {
+            let v = magetypes::simd::generic::f32x4::from_slice_t(token, x);
+            k4::exp_midp_portable(token, v).store(p);
+            v.exp_midp().store(m);
+        }
+    }
+    #[cfg(target_arch = "x86_64")]
+    #[arcane]
+    fn both_v3(token: archmage::X64V3Token, xs: &[f32], portable: &mut [f32], midp: &mut [f32]) {
         for ((x, p), m) in xs
             .as_chunks::<8>()
             .0
@@ -586,7 +601,7 @@ fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
     let run = |t: Tier| -> (Vec<f32>, Vec<f32>) {
         let (mut p, mut m) = (vec![0.0f32; n], vec![0.0f32; n]);
         match t {
-            Tier::Scalar => both_scalar(archmage::ScalarToken, &xs, &mut p, &mut m),
+            Tier::Scalar => both4_scalar(archmage::ScalarToken, &xs, &mut p, &mut m),
             #[cfg(target_arch = "x86_64")]
             Tier::V3(k) => both_v3(k, &xs, &mut p, &mut m),
             #[cfg(all(target_arch = "x86_64", feature = "tier_v4"))]
@@ -594,9 +609,9 @@ fn portable_exp_matches_exp_midp_on_fma_tiers_and_agrees_across_tiers() {
             #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
             Tier::V4x(k) => both_v4x(k, &xs, &mut p, &mut m),
             #[cfg(target_arch = "aarch64")]
-            Tier::Neon(k) => both_neon(k, &xs, &mut p, &mut m),
+            Tier::Neon(k) => both4_neon(k, &xs, &mut p, &mut m),
             #[cfg(target_arch = "wasm32")]
-            Tier::Wasm(k) => both_wasm128(k, &xs, &mut p, &mut m),
+            Tier::Wasm(k) => both4_wasm128(k, &xs, &mut p, &mut m),
         }
         (p, m)
     };

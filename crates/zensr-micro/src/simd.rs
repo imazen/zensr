@@ -1,5 +1,5 @@
-//! SIMD SPANF forward: `#[attune]` multi-tier dispatch across `k8` (`f32x8`:
-//! `v3`/`neon`/`wasm128`/`scalar`) and `k16` (`f32x16`: `v4`/`v4x`).
+//! SIMD SPANF forward: `#[attune]` multi-tier dispatch across `k4` (`f32x4`:
+//! `neon`/`wasm128`/`scalar`), `k8` (`f32x8`: `v3`), and `k16` (`f32x16`: `v4`/`v4x`).
 //!
 //! Kernels are macro-instantiated per width so both variants share one body.
 //! Interior columns run vector FMA (loads at x-1/x/x+1 are guarded by
@@ -1116,14 +1116,16 @@ macro_rules! define_kernels {
     };
 }
 
+define_kernels!(k4, f32x4, F32x4Convert, 4);
+#[cfg(target_arch = "x86_64")]
 define_kernels!(k8, f32x8, F32x8Convert, 8);
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 define_kernels!(k16, f32x16, F32x16Convert, 16);
 
 mod sealed {
     use super::*;
 
-    /// Bridges 8-wide (`k8`: v3/neon/wasm128/scalar) and 16-wide (`k16`: v4/v4x)
+    /// Bridges 4-wide (`k4`: neon/wasm128/scalar), 8-wide (`k8`: v3), and 16-wide (`k16`: v4/v4x)
     /// SPANF kernel instantiations so a single `#[attune]` body serves every tier.
     pub(crate) trait SpanfTier: Copy {
         fn silu(self, data: &mut [f32]);
@@ -1342,10 +1344,10 @@ mod sealed {
         };
     }
 
-    impl_spanf_tier!(k8, ScalarToken);
+    impl_spanf_tier!(k4, ScalarToken);
     impl_spanf_tier!(k8, X64V3Token, #[cfg(target_arch = "x86_64")]);
-    impl_spanf_tier!(k8, NeonToken, #[cfg(target_arch = "aarch64")]);
-    impl_spanf_tier!(k8, Wasm128Token, #[cfg(target_arch = "wasm32")]);
+    impl_spanf_tier!(k4, NeonToken, #[cfg(target_arch = "aarch64")]);
+    impl_spanf_tier!(k4, Wasm128Token, #[cfg(target_arch = "wasm32")]);
     impl_spanf_tier!(
         k16,
         X64V4Token,
@@ -1678,8 +1680,7 @@ pub fn conv3x3_dispatch(
     );
 }
 
-// f32x8 family: v3 = AVX2+FMA native 256-bit; neon/wasm128 polyfill 2x128;
-// scalar polyfills lane-wise. v4/v4x use the f32x16 (`k16`) kernel body.
+// k4 (`f32x4`) on neon/wasm128/scalar; k8 (`f32x8`) on v3; k16 (`f32x16`) on v4/v4x.
 #[attune(_*_t, +v4x(cfg(avx512)), +v4(cfg(tier_v4)))]
 #[allow(clippy::too_many_arguments)]
 fn spanf_forward_impl(
